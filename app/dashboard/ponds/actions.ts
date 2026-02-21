@@ -80,3 +80,15 @@ export async function closeBatch(batchId: string) {
   if (error) throw new Error(error.message)
   revalidatePath('/dashboard/ponds')
 }
+export async function updateBatchPrice(batchId: string, price: number) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('batches')
+    .update({ sale_price_per_kg: price })
+    .eq('id', batchId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/dashboard/costs')
+  revalidatePath('/dashboard/ponds')
+}
