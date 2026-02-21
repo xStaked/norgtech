@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DollarSign, TrendingUp, Droplets, FlaskConical, ArrowDownRight, Fish, Scale, Calculator, Info } from 'lucide-react'
 import { formatCOP, getColombianMarketPrices } from '@/lib/market-data'
 import { FishPriceModal } from '@/components/fish-price-modal'
+import { SyncMarketPricesButton } from '@/components/sync-market-prices-button'
 
 // Precio de referencia por litro de producto (configurable)
 const PRICE_PER_LITER = 52500 // Ajustado a COP aproximado para bioremediacion
@@ -162,8 +163,11 @@ export default async function CostsPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Gestión de Ventas y Utilidades</h1>
           <p className="mt-1 text-muted-foreground">Monitoreo de ingresos proyectados y efectividad operativa en Colombia</p>
         </div>
-        <div className="flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-1.5 border border-primary/20">
-          <span className="text-xs font-semibold uppercase text-primary">Moneda: COP</span>
+        <div className="flex items-center gap-2">
+          <SyncMarketPricesButton />
+          <div className="flex items-center gap-2 rounded-lg bg-primary/5 px-3 py-1.5 border border-primary/20">
+            <span className="text-xs font-semibold uppercase text-primary">Moneda: COP</span>
+          </div>
         </div>
       </div>
 
@@ -230,21 +234,28 @@ export default async function CostsPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle>Precios de Referencia (SIPSA - Colombia)</CardTitle>
-                  <CardDescription>Valores promedio en centrales de abastos hoy</CardDescription>
+                  <CardDescription>
+                    Valores promedio en centrales de abastos
+                    {marketPrices[0]?.market_date ? ` · ${new Date(marketPrices[0].market_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
+                  </CardDescription>
                 </div>
-                <Badge variant="outline" className="gap-1">
+                <Badge
+                  variant="outline"
+                  className={`gap-1 ${marketPrices[0]?.source?.includes('referencia') ? 'border-amber-400/50 text-amber-600' : 'border-green-500/50 text-green-600'}`}
+                >
                   <Info className="h-3 w-3" />
-                  Datos de Mercado
+                  {marketPrices[0]?.source?.includes('referencia') ? 'Datos de referencia' : 'Datos en vivo'}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
                 {marketPrices.map((mp) => (
-                  <div key={mp.species} className="flex flex-col gap-1 p-3 rounded-lg border bg-muted/30">
+                  <div key={`${mp.species}-${mp.city}`} className="flex flex-col gap-1 p-3 rounded-lg border bg-muted/30">
                     <span className="text-xs font-semibold text-primary uppercase">{mp.species}</span>
-                    <span className="text-lg font-bold">{formatCOP(mp.price_avg)}</span>
-                    <span className="text-[10px] text-muted-foreground">Rango: {formatCOP(mp.price_min)} - {formatCOP(mp.price_max)}</span>
+                    <span className="text-lg font-bold">{formatCOP(mp.price_avg)}/kg</span>
+                    <span className="text-[10px] text-muted-foreground">Rango: {formatCOP(mp.price_min)} – {formatCOP(mp.price_max)}</span>
+                    {mp.city && <span className="text-[10px] text-muted-foreground capitalize">{mp.city.toLowerCase()}</span>}
                   </div>
                 ))}
               </div>
