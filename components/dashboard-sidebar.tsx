@@ -115,7 +115,7 @@ export function DashboardSidebar() {
         <div
           className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
-          onKeyDown={() => {}}
+          onKeyDown={() => { }}
           role="presentation"
         />
       )}

@@ -1,22 +1,21 @@
 import { createClient } from '@/lib/supabase/server'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DollarSign, TrendingUp, Droplets, FlaskConical, ArrowDownRight, Fish, Scale, Calculator, Info } from 'lucide-react'
-import { formatCOP, getColombianMarketPrices } from '@/lib/market-data'
-import { FishPriceModal } from '@/components/fish-price-modal'
+import { DollarSign, FlaskConical, Fish, Scale, Target, Wheat } from 'lucide-react'
+import { getColombianMarketPrices } from '@/lib/market-data'
 import { SyncMarketPricesButton } from '@/components/sync-market-prices-button'
-
-// Precio de referencia por litro de producto (configurable)
-const PRICE_PER_LITER = 52500 // Ajustado a COP aproximado para bioremediacion
+import { InvestmentTab } from './_tabs/investment-tab'
+import { HarvestTab } from './_tabs/harvest-tab'
+import { FeedTab } from './_tabs/feed-tab'
+import { FishTab } from './_tabs/fish-tab'
+import { BioTab } from './_tabs/bio-tab'
+import {
+  PRICE_PER_LITER,
+  type Treatment,
+  type BatchSummary,
+  type Concentrate,
+  type FeedRecord,
+  type HarvestRecord,
+} from './types'
 
 export default async function CostsPage() {
   const supabase = await createClient()
@@ -28,42 +27,24 @@ export default async function CostsPage() {
     .eq('id', user!.id)
     .single()
 
-  let treatments: Array<{
-    id: string
-    pond_name: string
-    treatment_date: string
-    product_name: string
-    dose_liters: number
-    ammonia_before: number | null
-    ammonia_after: number | null
-    notes: string | null
-    revenue: number
-    effectiveness: number | null
-  }> = []
-
-  let fishSales: Array<{
-    id: string
-    pond_name: string
-    species: string
-    population: number
-    avg_weight: number
-    biomass_kg: number
-    sale_price: number
-    projected_revenue: number
-    total_costs: number
-    utility: number
-    status: string
-  }> = []
-
   const marketPrices = await getColombianMarketPrices()
 
+  let treatments: Treatment[] = []
+  let batches: BatchSummary[] = []
+  let concentrates: Concentrate[] = []
+  let feedRecords: FeedRecord[] = []
+  let harvests: HarvestRecord[] = []
+
   if (profile?.organization_id) {
-    // 1. Fetch Bioremediation Treatments
-    const [{ data: ponds }, { data: rawTreatments }, { data: rawBatches }] = await Promise.all([
-      supabase
-        .from('ponds')
-        .select('id, name, species')
-        .eq('organization_id', profile.organization_id),
+    const [
+      { data: ponds },
+      { data: rawTreatments },
+      { data: rawBatches },
+      { data: rawConcentrates },
+      { data: rawFeedRecords },
+      { data: rawHarvests },
+    ] = await Promise.all([
+      supabase.from('ponds').select('id, name, species').eq('organization_id', profile.organization_id),
       supabase
         .from('bioremediation_treatments')
         .select('id, pond_id, treatment_date, product_name, dose_liters, ammonia_before, ammonia_after, notes')
@@ -72,25 +53,36 @@ export default async function CostsPage() {
       supabase
         .from('batches')
         .select(`
-          id, 
-          pond_id, 
-          status, 
-          current_population, 
-          sale_price_per_kg,
-          production_records (
-            avg_weight_g,
-            feed_cost,
-            other_cost,
-            record_date
-          )
+          id, pond_id, status, start_date,
+          initial_population, current_population,
+          avg_weight_at_seeding_g, fingerling_cost_per_unit,
+          sale_price_per_kg, target_profitability_pct,
+          labor_cost_per_month,
+          production_records (avg_weight_g, record_date),
+          monthly_feed_records (kg_used, cost_per_kg)
         `)
-        .eq('status', 'active')
+        .eq('status', 'active'),
+      supabase
+        .from('feed_concentrates')
+        .select('id, name, brand, price_per_kg, protein_pct, is_active')
+        .eq('organization_id', profile.organization_id)
+        .order('name'),
+      supabase
+        .from('monthly_feed_records')
+        .select('id, batch_id, concentrate_name, year, month, kg_used, cost_per_kg')
+        .order('year', { ascending: false })
+        .order('month', { ascending: false }),
+      supabase
+        .from('harvest_records')
+        .select('id, batch_id, harvest_date, total_animals, avg_weight_whole_g, avg_weight_eviscerated_g, labor_cost, notes')
+        .order('harvest_date', { ascending: false }),
     ])
 
     const pondMap: Record<string, { name: string; species: string }> = {}
     for (const p of ponds ?? []) pondMap[p.id] = { name: p.name, species: p.species || 'Pescado' }
 
-    treatments = (rawTreatments ?? []).map((t) => {
+    // ── bioremediation ──────────────────────────────────────────
+    treatments = (rawTreatments ?? []).map(t => {
       const dose = Number(t.dose_liters) || 0
       const before = t.ammonia_before != null ? Number(t.ammonia_before) : null
       const after = t.ammonia_after != null ? Number(t.ammonia_after) : null
@@ -112,28 +104,44 @@ export default async function CostsPage() {
       }
     })
 
-    // 2. Process Fish Sales Projections
-    fishSales = (rawBatches ?? []).map((b: any) => {
-      const records = b.production_records || []
-      // Último peso registrado
+    // ── batches investment summary ──────────────────────────────
+    batches = (rawBatches ?? []).map((b: any) => {
+      const pondInfo = pondMap[b.pond_id]
+      const records: any[] = b.production_records || []
+      const feedRecs: any[] = b.monthly_feed_records || []
+
       const latestRecord = [...records].sort((x, y) =>
         new Date(y.record_date).getTime() - new Date(x.record_date).getTime()
       )[0]
-
       const avgWeight = latestRecord?.avg_weight_g || 0
       const population = b.current_population || 0
       const biomassKg = (population * avgWeight) / 1000
 
-      // Si no hay precio definido, buscar el promedio de mercado para la especie
-      const pondInfo = pondMap[b.pond_id]
       const marketRef = marketPrices.find(mp =>
         pondInfo?.species.toLowerCase().includes(mp.species.toLowerCase().split(' ')[0])
       )
-
       const salePrice = b.sale_price_per_kg || marketRef?.price_avg || 9000
-
       const projectedRevenue = biomassKg * salePrice
-      const totalCosts = records.reduce((sum: number, r: any) => sum + (Number(r.feed_cost) || 0) + (Number(r.other_cost) || 0), 0)
+
+      const totalFeedCost = feedRecs.reduce((s: number, r: any) =>
+        s + (Number(r.kg_used) || 0) * (Number(r.cost_per_kg) || 0), 0)
+
+      const startDate = new Date(b.start_date)
+      const daysActive = Math.floor((Date.now() - startDate.getTime()) / 86_400_000)
+      const monthsActive = daysActive / 30
+
+      const fingerlingCostTotal = (b.fingerling_cost_per_unit || 0) * (b.initial_population || 0)
+      const laborCostTotal = (b.labor_cost_per_month || 0) * Math.max(monthsActive, 1)
+      const bioCostTotal = treatments
+        .filter(t => ponds?.find(p => p.name === t.pond_name)?.id === b.pond_id)
+        .reduce((s, t) => s + t.dose_liters * PRICE_PER_LITER, 0)
+
+      const totalCosts = totalFeedCost + fingerlingCostTotal + laborCostTotal + bioCostTotal
+      const utility = projectedRevenue - totalCosts
+      const profitabilityPct = projectedRevenue > 0 ? (utility / projectedRevenue) * 100 : 0
+      const targetPct = b.target_profitability_pct ?? 30
+      const maxInvestment = projectedRevenue * (1 - targetPct / 100)
+      const remainingBudget = maxInvestment - totalCosts
 
       return {
         id: b.id,
@@ -144,24 +152,82 @@ export default async function CostsPage() {
         biomass_kg: biomassKg,
         sale_price: salePrice,
         projected_revenue: projectedRevenue,
+        total_feed_cost: totalFeedCost,
+        total_labor_cost: laborCostTotal,
+        total_fingerling_cost: fingerlingCostTotal,
+        total_bio_cost: bioCostTotal,
         total_costs: totalCosts,
-        utility: projectedRevenue - totalCosts,
-        status: b.status
+        utility,
+        profitability_pct: profitabilityPct,
+        target_pct: targetPct,
+        remaining_budget: remainingBudget,
+        days_active: daysActive,
       }
     })
+
+    // ── concentrates ────────────────────────────────────────────
+    concentrates = (rawConcentrates ?? []).map(c => ({
+      id: c.id,
+      name: c.name,
+      brand: c.brand,
+      price_per_kg: Number(c.price_per_kg),
+      protein_pct: c.protein_pct != null ? Number(c.protein_pct) : null,
+      is_active: c.is_active,
+    }))
+
+    // ── feed records with pond name ─────────────────────────────
+    const batchPondMap: Record<string, string> = {}
+    for (const b of rawBatches ?? []) batchPondMap[b.id] = pondMap[b.pond_id]?.name ?? 'S/E'
+
+    feedRecords = (rawFeedRecords ?? []).map(r => ({
+      id: r.id,
+      batch_id: r.batch_id,
+      pond_name: batchPondMap[r.batch_id] ?? 'S/E',
+      concentrate_name: r.concentrate_name,
+      year: r.year,
+      month: r.month,
+      kg_used: Number(r.kg_used),
+      cost_per_kg: Number(r.cost_per_kg),
+    }))
+
+    // ── harvests with pond name ─────────────────────────────────
+    harvests = (rawHarvests ?? []).map(h => ({
+      id: h.id,
+      batch_id: h.batch_id,
+      pond_name: batchPondMap[h.batch_id] ?? 'S/E',
+      harvest_date: h.harvest_date,
+      total_animals: h.total_animals,
+      avg_weight_whole_g: Number(h.avg_weight_whole_g),
+      avg_weight_eviscerated_g: h.avg_weight_eviscerated_g != null ? Number(h.avg_weight_eviscerated_g) : null,
+      labor_cost: Number(h.labor_cost),
+      notes: h.notes,
+    }))
   }
 
+  // ── aggregated KPIs ─────────────────────────────────────────
   const totalBioRevenue = treatments.reduce((s, t) => s + t.revenue, 0)
-  const totalFishRevenue = fishSales.reduce((s, b) => s + b.projected_revenue, 0)
-  const totalFishCosts = fishSales.reduce((s, b) => s + b.total_costs, 0)
+  const totalFishRevenue = batches.reduce((s, b) => s + b.projected_revenue, 0)
+  const totalFishCosts = batches.reduce((s, b) => s + b.total_costs, 0)
   const totalFishUtility = totalFishRevenue - totalFishCosts
+  const overallProfitability = totalFishRevenue > 0 ? (totalFishUtility / totalFishRevenue) * 100 : 0
+  const totalFeedCostAll = batches.reduce((s, b) => s + b.total_feed_cost, 0)
+  const totalLaborCostAll = batches.reduce((s, b) => s + b.total_labor_cost, 0)
+  const totalFingerlingCostAll = batches.reduce((s, b) => s + b.total_fingerling_cost, 0)
+
+  const batchesForForms = batches.map(b => ({
+    id: b.id,
+    pond_name: b.pond_name,
+    species: b.species,
+    initial_population: b.population,
+  }))
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Header */}
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Gestión de Ventas y Utilidades</h1>
-          <p className="mt-1 text-muted-foreground">Monitoreo de ingresos proyectados y efectividad operativa en Colombia</p>
+          <p className="mt-1 text-muted-foreground">Control de inversión, costos y rentabilidad por lote</p>
         </div>
         <div className="flex items-center gap-2">
           <SyncMarketPricesButton />
@@ -171,234 +237,67 @@ export default async function CostsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="fish" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-2">
-          <TabsTrigger value="fish" className="gap-2">
-            <Fish className="h-4 w-4" />
-            Ventas de Pescado
+      <Tabs defaultValue="investment" className="w-full">
+        <TabsList className="flex w-full flex-wrap gap-1 h-auto sm:grid sm:grid-cols-5 sm:max-w-3xl">
+          <TabsTrigger value="investment" className="gap-1.5 text-xs sm:text-sm">
+            <Target className="h-3.5 w-3.5" />
+            Inversión
           </TabsTrigger>
-          <TabsTrigger value="bio" className="gap-2">
-            <FlaskConical className="h-4 w-4" />
+          <TabsTrigger value="harvest" className="gap-1.5 text-xs sm:text-sm">
+            <Scale className="h-3.5 w-3.5" />
+            Cosecha
+          </TabsTrigger>
+          <TabsTrigger value="feed" className="gap-1.5 text-xs sm:text-sm">
+            <Wheat className="h-3.5 w-3.5" />
+            Alimentación
+          </TabsTrigger>
+          <TabsTrigger value="fish" className="gap-1.5 text-xs sm:text-sm">
+            <Fish className="h-3.5 w-3.5" />
+            Ventas
+          </TabsTrigger>
+          <TabsTrigger value="bio" className="gap-1.5 text-xs sm:text-sm">
+            <FlaskConical className="h-3.5 w-3.5" />
             Bioremediación
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="fish" className="mt-6 flex flex-col gap-6">
-          {/* Fish KPIs */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Card className="transition-all hover:shadow-md border-primary/20 bg-primary/5">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Ventas Proyectadas</CardTitle>
-                <DollarSign className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{formatCOP(totalFishRevenue)}</div>
-                <p className="text-xs text-muted-foreground">Basado en biomasa actual</p>
-              </CardContent>
-            </Card>
-            <Card className="transition-all hover:shadow-md border-destructive/20 bg-destructive/5">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Costos Acumulados</CardTitle>
-                <Calculator className="h-4 w-4 text-destructive" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{formatCOP(totalFishCosts)}</div>
-                <p className="text-xs text-muted-foreground">Alimento y otros rubros</p>
-              </CardContent>
-            </Card>
-            <Card className="transition-all hover:shadow-md border-green-500/20 bg-green-500/5">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Utilidad Esperada</CardTitle>
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-700">{formatCOP(totalFishUtility)}</div>
-                <p className="text-xs text-muted-foreground">Margen: {totalFishRevenue > 0 ? ((totalFishUtility / totalFishRevenue) * 100).toFixed(1) : 0}%</p>
-              </CardContent>
-            </Card>
-            <Card className="transition-all hover:shadow-md">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Biomasa Total</CardTitle>
-                <Scale className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{fishSales.reduce((s, b) => s + b.biomass_kg, 0).toFixed(0)} <span className="text-sm font-normal">kg</span></div>
-                <p className="text-xs text-muted-foreground">{fishSales.length} lotes activos</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Market References */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle>Precios de Referencia (SIPSA - Colombia)</CardTitle>
-                  <CardDescription>
-                    Valores promedio en centrales de abastos
-                    {marketPrices[0]?.market_date ? ` · ${new Date(marketPrices[0].market_date + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
-                  </CardDescription>
-                </div>
-                <Badge
-                  variant="outline"
-                  className={`gap-1 ${marketPrices[0]?.source?.includes('referencia') ? 'border-amber-400/50 text-amber-600' : 'border-green-500/50 text-green-600'}`}
-                >
-                  <Info className="h-3 w-3" />
-                  {marketPrices[0]?.source?.includes('referencia') ? 'Datos de referencia' : 'Datos en vivo'}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {marketPrices.map((mp) => (
-                  <div key={`${mp.species}-${mp.city}`} className="flex flex-col gap-1 p-3 rounded-lg border bg-muted/30">
-                    <span className="text-xs font-semibold text-primary uppercase">{mp.species}</span>
-                    <span className="text-lg font-bold">{formatCOP(mp.price_avg)}/kg</span>
-                    <span className="text-[10px] text-muted-foreground">Rango: {formatCOP(mp.price_min)} – {formatCOP(mp.price_max)}</span>
-                    {mp.city && <span className="text-[10px] text-muted-foreground capitalize">{mp.city.toLowerCase()}</span>}
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Batches Table */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Proyección por Lote</CardTitle>
-              <CardDescription>Detalle de ingresos y costos por estanque activo</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Estanque / Lote</TableHead>
-                    <TableHead>Biomasa (kg)</TableHead>
-                    <TableHead>Precio/kg</TableHead>
-                    <TableHead>Ingreso Proyectado</TableHead>
-                    <TableHead>Costo Total</TableHead>
-                    <TableHead>Utilidad</TableHead>
-                    <TableHead className="text-right">Acciones</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {fishSales.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                        No hay lotes activos para proyectar ventas.
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    fishSales.map((b) => (
-                      <TableRow key={b.id}>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span className="font-medium">{b.pond_name}</span>
-                            <span className="text-xs text-muted-foreground">{b.species} • {b.population.toLocaleString()} ind.</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-col">
-                            <span>{b.biomass_kg.toFixed(1)} kg</span>
-                            <span className="text-xs text-muted-foreground">Avg: {b.avg_weight}g</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <span>{formatCOP(b.sale_price)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="font-semibold">{formatCOP(b.projected_revenue)}</TableCell>
-                        <TableCell className="text-destructive">{formatCOP(b.total_costs)}</TableCell>
-                        <TableCell className={b.utility >= 0 ? 'text-green-600 font-bold' : 'text-destructive font-bold'}>
-                          {formatCOP(b.utility)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <FishPriceModal batchId={b.id} currentPrice={b.sale_price} species={`${b.pond_name} - ${b.species}`} />
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="investment" className="mt-6">
+          <InvestmentTab
+            batches={batches}
+            totalFishRevenue={totalFishRevenue}
+            totalFishCosts={totalFishCosts}
+            totalFishUtility={totalFishUtility}
+            overallProfitability={overallProfitability}
+            totalFeedCostAll={totalFeedCostAll}
+            totalLaborCostAll={totalLaborCostAll}
+            totalFingerlingCostAll={totalFingerlingCostAll}
+          />
         </TabsContent>
 
-        <TabsContent value="bio" className="mt-6 flex flex-col gap-6">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Ingresos Bioremediación</CardTitle>
-                <DollarSign className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">{formatCOP(totalBioRevenue)}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Producto Vendido</CardTitle>
-                <Droplets className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-foreground">
-                  {treatments.reduce((s, t) => s + t.dose_liters, 0).toFixed(1)} <span className="text-sm font-normal">L</span>
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Efectividad Promedio</CardTitle>
-                <FlaskConical className="h-4 w-4 text-primary" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-primary">
-                  {(() => {
-                    const valid = treatments.filter((t) => t.effectiveness != null)
-                    if (valid.length === 0) return '—'
-                    return `${(valid.reduce((s, t) => s + t.effectiveness!, 0) / valid.length).toFixed(0)}%`
-                  })()}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+        <TabsContent value="harvest" className="mt-6">
+          <HarvestTab harvests={harvests} batchesForForms={batchesForForms} />
+        </TabsContent>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Historial de Tratamientos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Fecha</TableHead>
-                    <TableHead>Estanque</TableHead>
-                    <TableHead>Dosis (L)</TableHead>
-                    <TableHead>Ingreso</TableHead>
-                    <TableHead>Efectividad</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {treatments.map((t) => (
-                    <TableRow key={t.id}>
-                      <TableCell>{new Date(t.treatment_date + 'T12:00:00').toLocaleDateString('es-CO')}</TableCell>
-                      <TableCell className="font-medium">{t.pond_name}</TableCell>
-                      <TableCell>{t.dose_liters.toFixed(1)}</TableCell>
-                      <TableCell className="font-medium text-primary">{formatCOP(t.revenue)}</TableCell>
-                      <TableCell>
-                        {t.effectiveness != null ? (
-                          <Badge variant="outline" className={t.effectiveness >= 60 ? 'border-primary/30 text-primary' : 'border-amber-500/30 text-amber-600'}>
-                            {t.effectiveness.toFixed(0)}%
-                          </Badge>
-                        ) : '—'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+        <TabsContent value="feed" className="mt-6">
+          <FeedTab
+            concentrates={concentrates}
+            batchesForForms={batchesForForms}
+            feedRecords={feedRecords}
+          />
+        </TabsContent>
+
+        <TabsContent value="fish" className="mt-6">
+          <FishTab
+            batches={batches}
+            marketPrices={marketPrices}
+            totalFishRevenue={totalFishRevenue}
+            totalFishCosts={totalFishCosts}
+            totalFishUtility={totalFishUtility}
+          />
+        </TabsContent>
+
+        <TabsContent value="bio" className="mt-6">
+          <BioTab treatments={treatments} totalBioRevenue={totalBioRevenue} />
         </TabsContent>
       </Tabs>
     </div>

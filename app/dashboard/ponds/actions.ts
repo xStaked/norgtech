@@ -92,3 +92,28 @@ export async function updateBatchPrice(batchId: string, price: number) {
   revalidatePath('/dashboard/costs')
   revalidatePath('/dashboard/ponds')
 }
+
+export async function updateBatchFinancialConfig(batchId: string, data: {
+  sale_price_per_kg: number | null
+  target_profitability_pct: number
+  fingerling_cost_per_unit: number
+  avg_weight_at_seeding_g: number | null
+  labor_cost_per_month: number
+}) {
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('batches')
+    .update({
+      sale_price_per_kg: data.sale_price_per_kg || null,
+      target_profitability_pct: data.target_profitability_pct,
+      fingerling_cost_per_unit: data.fingerling_cost_per_unit,
+      avg_weight_at_seeding_g: data.avg_weight_at_seeding_g || null,
+      labor_cost_per_month: data.labor_cost_per_month,
+    })
+    .eq('id', batchId)
+
+  if (error) throw new Error(error.message)
+  revalidatePath('/dashboard/costs')
+  revalidatePath('/dashboard/ponds')
+}
