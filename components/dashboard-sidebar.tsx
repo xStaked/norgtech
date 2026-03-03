@@ -19,7 +19,7 @@ import {
   Menu,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const navItems = [
   { href: '/dashboard', label: 'Panel', icon: LayoutDashboard },
@@ -36,6 +36,25 @@ export function DashboardSidebar() {
   const pathname = usePathname()
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [farmName, setFarmName] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchFarmName = async () => {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('organizations(name)')
+        .eq('id', user.id)
+        .single()
+
+      const org = data?.organizations as { name: string } | null
+      if (org?.name) setFarmName(org.name)
+    }
+    fetchFarmName()
+  }, [])
 
   const handleLogout = async () => {
     const supabase = createClient()
@@ -54,9 +73,16 @@ export function DashboardSidebar() {
         <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sidebar-primary/15">
           <Fish className="h-5 w-5 text-sidebar-primary" />
         </div>
-        <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
-          AquaData
-        </span>
+        <div className="flex flex-col">
+          <span className="text-lg font-bold tracking-tight text-sidebar-foreground">
+            AquaData
+          </span>
+          {farmName && (
+            <span className="text-xs text-sidebar-foreground/60 truncate max-w-[140px]">
+              {farmName}
+            </span>
+          )}
+        </div>
       </div>
 
       <nav className="flex-1 px-3 py-2">
