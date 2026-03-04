@@ -19,6 +19,7 @@ import { useState } from 'react'
 import { Fish, Waves } from 'lucide-react'
 
 export default function SignUpPage() {
+  const [inviteCode, setInviteCode] = useState('')
   const [farmName, setFarmName] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
@@ -35,13 +36,32 @@ export default function SignUpPage() {
     setError(null)
 
     if (password !== repeatPassword) {
-      setError('Las contrasenas no coinciden')
+      setError('Las contraseñas no coinciden')
+      setIsLoading(false)
+      return
+    }
+
+    // Validate invitation code
+    const { data: codeData, error: codeError } = await supabase
+      .from('invitation_codes')
+      .select('id, used')
+      .eq('code', inviteCode.trim().toUpperCase())
+      .single()
+
+    if (codeError || !codeData) {
+      setError('Código de invitación inválido')
+      setIsLoading(false)
+      return
+    }
+
+    if (codeData.used) {
+      setError('Este código de invitación ya fue utilizado')
       setIsLoading(false)
       return
     }
 
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -54,7 +74,18 @@ export default function SignUpPage() {
           },
         },
       })
-      if (error) throw error
+      if (signUpError) throw signUpError
+
+      // Mark invitation code as used
+      await supabase
+        .from('invitation_codes')
+        .update({
+          used: true,
+          used_by: signUpData.user?.id,
+          used_at: new Date().toISOString(),
+        })
+        .eq('id', codeData.id)
+
       router.push('/auth/sign-up-success')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'Ocurrio un error')
@@ -93,6 +124,17 @@ export default function SignUpPage() {
             <CardContent>
               <form onSubmit={handleSignUp}>
                 <div className="flex flex-col gap-5">
+                  <div className="grid gap-2">
+                    <Label htmlFor="inviteCode">Código de invitación</Label>
+                    <Input
+                      id="inviteCode"
+                      type="text"
+                      placeholder="AQUA-XXXX-XXXX"
+                      required
+                      value={inviteCode}
+                      onChange={(e) => setInviteCode(e.target.value)}
+                    />
+                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="farmName">Nombre de la granja</Label>
                     <Input
