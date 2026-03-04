@@ -19,6 +19,7 @@ import { useState } from 'react'
 import { Fish, Waves } from 'lucide-react'
 
 export default function SignUpPage() {
+  const [farmName, setFarmName] = useState('')
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -49,6 +50,7 @@ export default function SignUpPage() {
             `${window.location.origin}/dashboard`,
           data: {
             full_name: fullName,
+            farm_name: farmName,
           },
         },
       })
@@ -91,6 +93,17 @@ export default function SignUpPage() {
             <CardContent>
               <form onSubmit={handleSignUp}>
                 <div className="flex flex-col gap-5">
+                  <div className="grid gap-2">
+                    <Label htmlFor="farmName">Nombre de la granja</Label>
+                    <Input
+                      id="farmName"
+                      type="text"
+                      placeholder="Granja Acuicola Los Peces"
+                      required
+                      value={farmName}
+                      onChange={(e) => setFarmName(e.target.value)}
+                    />
+                  </div>
                   <div className="grid gap-2">
                     <Label htmlFor="fullName">Nombre completo</Label>
                     <Input
