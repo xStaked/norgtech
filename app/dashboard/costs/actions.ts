@@ -100,6 +100,32 @@ export async function createMonthlyFeedRecord(data: {
   revalidatePath('/dashboard/costs')
 }
 
+export async function updateMonthlyFeedRecord(id: string, data: {
+  batch_id: string
+  concentrate_id: string
+  concentrate_name: string
+  year: number
+  month: number
+  kg_used: number
+  cost_per_kg: number
+}) {
+  const { supabase } = await getOrgId()
+  const { error } = await supabase
+    .from('monthly_feed_records')
+    .update({
+      batch_id: data.batch_id,
+      concentrate_id: data.concentrate_id,
+      concentrate_name: data.concentrate_name,
+      year: data.year,
+      month: data.month,
+      kg_used: data.kg_used,
+      cost_per_kg: data.cost_per_kg,
+    })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+  revalidatePath('/dashboard/costs')
+}
+
 export async function deleteMonthlyFeedRecord(id: string) {
   const { supabase } = await getOrgId()
   const { error } = await supabase.from('monthly_feed_records').delete().eq('id', id)

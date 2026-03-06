@@ -46,6 +46,7 @@ export type Concentrate = {
 export type FeedRecord = {
   id: string
   batch_id: string
+  concentrate_id: string | null
   pond_name: string
   concentrate_name: string
   year: number
