@@ -47,7 +47,9 @@ export default async function AlertsPage() {
       supabase
         .from('ponds')
         .select('id, name')
-        .eq('organization_id', profile.organization_id),
+        .eq('organization_id', profile.organization_id)
+        .order('sort_order', { ascending: true })
+        .order('name'),
     ])
 
     alerts = (data ?? []) as typeof alerts

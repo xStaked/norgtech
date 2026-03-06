@@ -44,7 +44,12 @@ export default async function CostsPage() {
       { data: rawFeedRecords },
       { data: rawHarvests },
     ] = await Promise.all([
-      supabase.from('ponds').select('id, name, species').eq('organization_id', profile.organization_id),
+      supabase
+        .from('ponds')
+        .select('id, name, species')
+        .eq('organization_id', profile.organization_id)
+        .order('sort_order', { ascending: true })
+        .order('name'),
       supabase
         .from('bioremediation_treatments')
         .select('id, pond_id, treatment_date, product_name, dose_liters, ammonia_before, ammonia_after, notes')
@@ -79,7 +84,24 @@ export default async function CostsPage() {
     ])
 
     const pondMap: Record<string, { name: string; species: string }> = {}
-    for (const p of ponds ?? []) pondMap[p.id] = { name: p.name, species: p.species || 'Pescado' }
+    const pondOrderMap: Record<string, number> = {}
+    for (const [index, p] of (ponds ?? []).entries()) {
+      pondMap[p.id] = { name: p.name, species: p.species || 'Pescado' }
+      pondOrderMap[p.id] = index
+    }
+    const sortedRawBatches = [...(rawBatches ?? [])].sort((a: any, b: any) => {
+      const aExists = pondOrderMap[a.pond_id] != null
+      const bExists = pondOrderMap[b.pond_id] != null
+      if (!aExists && !bExists) return 0
+      if (!aExists) return 1
+      if (!bExists) return -1
+      const aOrder = pondOrderMap[a.pond_id] ?? Number.MAX_SAFE_INTEGER
+      const bOrder = pondOrderMap[b.pond_id] ?? Number.MAX_SAFE_INTEGER
+      if (aOrder !== bOrder) return aOrder - bOrder
+      return new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+    })
+    const orgRawBatches = sortedRawBatches.filter((b: any) => pondOrderMap[b.pond_id] != null)
+    const orgBatchIds = new Set(orgRawBatches.map((b: any) => b.id))
 
     // ── bioremediation ──────────────────────────────────────────
     treatments = (rawTreatments ?? []).map(t => {
@@ -105,7 +127,7 @@ export default async function CostsPage() {
     })
 
     // ── batches investment summary ──────────────────────────────
-    batches = (rawBatches ?? []).map((b: any) => {
+    batches = orgRawBatches.map((b: any) => {
       const pondInfo = pondMap[b.pond_id]
       const records: any[] = b.production_records || []
       const feedRecs: any[] = b.monthly_feed_records || []
@@ -178,9 +200,11 @@ export default async function CostsPage() {
 
     // ── feed records with pond name ─────────────────────────────
     const batchPondMap: Record<string, string> = {}
-    for (const b of rawBatches ?? []) batchPondMap[b.id] = pondMap[b.pond_id]?.name ?? 'S/E'
+    for (const b of orgRawBatches) batchPondMap[b.id] = pondMap[b.pond_id]?.name ?? 'S/E'
 
-    feedRecords = (rawFeedRecords ?? []).map(r => ({
+    feedRecords = (rawFeedRecords ?? [])
+      .filter(r => orgBatchIds.has(r.batch_id))
+      .map(r => ({
       id: r.id,
       batch_id: r.batch_id,
       concentrate_id: r.concentrate_id,
@@ -193,7 +217,9 @@ export default async function CostsPage() {
     }))
 
     // ── harvests with pond name ─────────────────────────────────
-    harvests = (rawHarvests ?? []).map(h => ({
+    harvests = (rawHarvests ?? [])
+      .filter(h => orgBatchIds.has(h.batch_id))
+      .map(h => ({
       id: h.id,
       batch_id: h.batch_id,
       pond_name: batchPondMap[h.batch_id] ?? 'S/E',

@@ -52,6 +52,8 @@ export default async function RecordsPage() {
       .from('ponds')
       .select('id, name')
       .eq('organization_id', profile.organization_id)
+      .order('sort_order', { ascending: true })
+      .order('name')
 
     if (ponds && ponds.length > 0) {
       const pondIds = ponds.map(p => p.id)

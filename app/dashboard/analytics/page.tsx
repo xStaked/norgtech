@@ -31,6 +31,7 @@ export default async function AnalyticsPage({
     supabase
       .from('ponds')
       .select('id, name')
+      .order('sort_order', { ascending: true })
       .order('name'),
   ])
 

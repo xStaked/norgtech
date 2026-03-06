@@ -25,8 +25,15 @@ export default async function UploadPage() {
       .from('ponds')
       .select('id, name')
       .eq('organization_id', profile.organization_id)
+      .order('sort_order', { ascending: true })
+      .order('name')
 
     if (ponds && ponds.length > 0) {
+      const pondOrderMap: Record<string, number> = {}
+      for (const [index, pond] of ponds.entries()) {
+        pondOrderMap[pond.id] = index
+      }
+
       const pondIds = ponds.map(p => p.id)
       const { data: activeBatches } = await supabase
         .from('batches')
@@ -35,7 +42,14 @@ export default async function UploadPage() {
         .eq('status', 'active')
 
       if (activeBatches) {
-        batches = activeBatches.map(b => ({
+        const sortedBatches = [...activeBatches].sort((a, b) => {
+          const aOrder = pondOrderMap[a.pond_id] ?? Number.MAX_SAFE_INTEGER
+          const bOrder = pondOrderMap[b.pond_id] ?? Number.MAX_SAFE_INTEGER
+          if (aOrder !== bOrder) return aOrder - bOrder
+          return new Date(b.start_date).getTime() - new Date(a.start_date).getTime()
+        })
+
+        batches = sortedBatches.map(b => ({
           id: b.id,
           pond_name: ponds.find(p => p.id === b.pond_id)?.name ?? 'Estanque',
           start_date: b.start_date,
