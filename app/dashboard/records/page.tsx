@@ -13,7 +13,14 @@ import { ClipboardList } from 'lucide-react'
 import { format } from 'date-fns'
 import { RecordsExport, SingleRecordExport } from '@/components/records-export'
 
-export default async function RecordsPage() {
+export default async function RecordsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ pond?: string; from?: string; to?: string; page?: string }>
+}) {
+  const { pond: pondFilter, from: fromDateFilter, to: toDateFilter, page: pageParam } = await searchParams
+  const currentPage = Number(pageParam) > 0 ? Math.floor(Number(pageParam)) : 1
+  const pageSize = 100
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -46,17 +53,22 @@ export default async function RecordsPage() {
   }> = []
 
   let batchPondMap: Record<string, string> = {}
+  let ponds: Array<{ id: string; name: string }> = []
+  let totalRecords = 0
 
   if (profile?.organization_id) {
-    const { data: ponds } = await supabase
+    const { data: organizationPonds } = await supabase
       .from('ponds')
       .select('id, name')
       .eq('organization_id', profile.organization_id)
       .order('sort_order', { ascending: true })
       .order('name')
 
+    ponds = organizationPonds ?? []
+
     if (ponds && ponds.length > 0) {
-      const pondIds = ponds.map(p => p.id)
+      const selectedPondId = pondFilter && ponds.some((p) => p.id === pondFilter) ? pondFilter : null
+      const pondIds = selectedPondId ? [selectedPondId] : ponds.map((p) => p.id)
       const { data: allBatches } = await supabase
         .from('batches')
         .select('id, pond_id')
@@ -70,17 +82,49 @@ export default async function RecordsPage() {
 
         const batchIds = allBatches.map(b => b.id)
         if (batchIds.length > 0) {
-          const { data: recs } = await supabase
+          let recordsQuery = supabase
             .from('production_records')
-            .select('*')
+            .select('*', { count: 'exact' })
             .in('batch_id', batchIds)
             .order('record_date', { ascending: false })
-            .limit(100)
+            .order('created_at', { ascending: false })
+
+          if (fromDateFilter) {
+            recordsQuery = recordsQuery.gte('record_date', fromDateFilter)
+          }
+
+          if (toDateFilter) {
+            recordsQuery = recordsQuery.lte('record_date', toDateFilter)
+          }
+
+          const from = (currentPage - 1) * pageSize
+          const to = from + pageSize - 1
+          const { data: recs, count } = await recordsQuery.range(from, to)
 
           records = (recs as typeof records) ?? []
+          totalRecords = count ?? 0
         }
       }
     }
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalRecords / pageSize))
+  const safeCurrentPage = Math.min(currentPage, totalPages)
+  const hasPrevPage = safeCurrentPage > 1
+  const hasNextPage = safeCurrentPage < totalPages
+  const startItem = totalRecords === 0 ? 0 : (safeCurrentPage - 1) * pageSize + 1
+  const endItem = totalRecords === 0 ? 0 : startItem + records.length - 1
+  const activePondFilter =
+    pondFilter && ponds.some((pond) => pond.id === pondFilter) ? pondFilter : undefined
+
+  const buildPageHref = (page: number) => {
+    const params = new URLSearchParams()
+    if (activePondFilter) params.set('pond', activePondFilter)
+    if (fromDateFilter) params.set('from', fromDateFilter)
+    if (toDateFilter) params.set('to', toDateFilter)
+    if (page > 1) params.set('page', String(page))
+    const query = params.toString()
+    return query ? `/dashboard/records?${query}` : '/dashboard/records'
   }
 
   return (
@@ -112,6 +156,66 @@ export default async function RecordsPage() {
           }))}
         />
       </div>
+      <Card>
+        <CardContent className="pt-6">
+          <form method="GET" className="flex flex-wrap items-end gap-3">
+            <div className="flex min-w-[220px] flex-col gap-1">
+              <label htmlFor="pond" className="text-sm font-medium text-foreground">
+                Estanque
+              </label>
+              <select
+                id="pond"
+                name="pond"
+                defaultValue={pondFilter && ponds.some((pond) => pond.id === pondFilter) ? pondFilter : 'all'}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="all">Todos</option>
+                {ponds.map((pond) => (
+                  <option key={pond.id} value={pond.id}>
+                    {pond.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex min-w-[180px] flex-col gap-1">
+              <label htmlFor="from" className="text-sm font-medium text-foreground">
+                Desde
+              </label>
+              <input
+                id="from"
+                name="from"
+                type="date"
+                defaultValue={fromDateFilter ?? ''}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex min-w-[180px] flex-col gap-1">
+              <label htmlFor="to" className="text-sm font-medium text-foreground">
+                Hasta
+              </label>
+              <input
+                id="to"
+                name="to"
+                type="date"
+                defaultValue={toDateFilter ?? ''}
+                className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <button
+              type="submit"
+              className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+            >
+              Filtrar
+            </button>
+            <a
+              href="/dashboard/records"
+              className="rounded-md border border-input px-3 py-2 text-sm font-medium text-foreground"
+            >
+              Limpiar
+            </a>
+          </form>
+        </CardContent>
+      </Card>
 
       {records.length === 0 ? (
         <Card className="border-dashed">
@@ -129,7 +233,7 @@ export default async function RecordsPage() {
         <Card>
           <CardHeader>
             <CardTitle className="text-foreground">
-              {records.length} registros
+              {totalRecords} registros
             </CardTitle>
           </CardHeader>
           <CardContent className="overflow-x-auto">
@@ -166,7 +270,9 @@ export default async function RecordsPage() {
                     </TableCell>
                     <TableCell className="text-right">{rec.fish_count ?? '-'}</TableCell>
                     <TableCell className="text-right">{rec.feed_kg?.toFixed(1) ?? '-'}</TableCell>
-                    <TableCell className="text-right">{rec.avg_weight_g?.toFixed(1) ?? '-'}</TableCell>
+                    <TableCell className="text-right">
+                      {rec.avg_weight_kg != null ? (rec.avg_weight_kg * 1000).toFixed(1) : '-'}
+                    </TableCell>
                     <TableCell className="text-right">
                       {rec.mortality_count > 0 ? (
                         <span className="text-destructive">{rec.mortality_count}</span>
@@ -215,6 +321,40 @@ export default async function RecordsPage() {
                 ))}
               </TableBody>
             </Table>
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <p className="text-sm text-muted-foreground">
+                Mostrando {startItem}-{endItem} de {totalRecords}
+              </p>
+              <div className="flex items-center gap-2">
+                {hasPrevPage ? (
+                  <a
+                    href={buildPageHref(safeCurrentPage - 1)}
+                    className="rounded-md border border-input px-3 py-2 text-sm font-medium text-foreground"
+                  >
+                    Anterior
+                  </a>
+                ) : (
+                  <span className="rounded-md border border-input px-3 py-2 text-sm font-medium text-muted-foreground">
+                    Anterior
+                  </span>
+                )}
+                <span className="text-sm text-muted-foreground">
+                  Pagina {safeCurrentPage} de {totalPages}
+                </span>
+                {hasNextPage ? (
+                  <a
+                    href={buildPageHref(safeCurrentPage + 1)}
+                    className="rounded-md border border-input px-3 py-2 text-sm font-medium text-foreground"
+                  >
+                    Siguiente
+                  </a>
+                ) : (
+                  <span className="rounded-md border border-input px-3 py-2 text-sm font-medium text-muted-foreground">
+                    Siguiente
+                  </span>
+                )}
+              </div>
+            </div>
           </CardContent>
         </Card>
       )}

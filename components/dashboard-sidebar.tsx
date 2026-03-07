@@ -18,10 +18,18 @@ import {
   LogOut,
   Menu,
   X,
+  ShieldCheck,
 } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type ComponentType } from 'react'
 
-const navItems = [
+type NavItem = {
+  href: string
+  label: string
+  icon: ComponentType<{ className?: string }>
+  adminOnly?: boolean
+}
+
+const navItems: NavItem[] = [
   { href: '/dashboard', label: 'Panel', icon: LayoutDashboard },
   { href: '/dashboard/ponds', label: 'Estanques', icon: Waves },
   { href: '/dashboard/upload', label: 'Nuevo Reporte', icon: Camera },
@@ -30,6 +38,7 @@ const navItems = [
   { href: '/dashboard/costs', label: 'Ventas', icon: DollarSign },
   { href: '/dashboard/alerts', label: 'Alertas', icon: Bell },
   { href: '/dashboard/bioremediation', label: 'Bioremediacion', icon: Calculator },
+  { href: '/admin', label: 'Admin', icon: ShieldCheck, adminOnly: true },
 ]
 
 export function DashboardSidebar() {
@@ -37,6 +46,7 @@ export function DashboardSidebar() {
   const router = useRouter()
   const [mobileOpen, setMobileOpen] = useState(false)
   const [farmName, setFarmName] = useState<string | null>(null)
+  const [userRole, setUserRole] = useState<string | null>(null)
 
   useEffect(() => {
     const fetchFarmName = async () => {
@@ -46,12 +56,13 @@ export function DashboardSidebar() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('organizations(name)')
+        .select('role, organizations(name)')
         .eq('id', user.id)
         .single()
 
       const org = data?.organizations as unknown as { name: string } | null
       if (org?.name) setFarmName(org.name)
+      if (data?.role) setUserRole(data.role)
     }
     fetchFarmName()
   }, [])
@@ -87,7 +98,9 @@ export function DashboardSidebar() {
 
       <nav className="flex-1 px-3 py-2">
         <ul className="flex flex-col gap-1">
-          {navItems.map((item) => {
+          {navItems
+            .filter((item) => !item.adminOnly || userRole === 'admin')
+            .map((item) => {
             const Icon = item.icon
             const active = isActive(item.href)
             return (
@@ -107,7 +120,7 @@ export function DashboardSidebar() {
                 </Link>
               </li>
             )
-          })}
+            })}
         </ul>
       </nav>
 

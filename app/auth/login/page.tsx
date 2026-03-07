@@ -32,12 +32,22 @@ export default function LoginPage() {
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       })
       if (error) throw error
-      router.push('/dashboard')
+
+      const userId = authData.user?.id
+      if (!userId) throw new Error('No se pudo obtener el usuario autenticado')
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+      router.replace(profile?.role === 'admin' ? '/admin' : '/dashboard')
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : 'Ocurrio un error')
     } finally {

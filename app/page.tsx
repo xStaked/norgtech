@@ -7,7 +7,13 @@ export default async function Home() {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (user) {
-      redirect('/dashboard')
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+      redirect(profile?.role === 'admin' ? '/admin' : '/dashboard')
     }
   } catch (error: unknown) {
     // redirect() throws a NEXT_REDIRECT error — re-throw it so Next.js handles it

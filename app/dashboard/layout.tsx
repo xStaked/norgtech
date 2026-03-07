@@ -15,6 +15,16 @@ export default async function DashboardLayout({
     redirect('/auth/login')
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .single()
+
+  if (profile?.role === 'admin') {
+    redirect('/admin')
+  }
+
   return (
     <div className="flex min-h-svh bg-background">
       <DashboardSidebar />

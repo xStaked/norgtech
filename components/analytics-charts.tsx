@@ -17,7 +17,7 @@ import {
   ReferenceLine,
 } from 'recharts'
 
-interface Record {
+interface ProductionRecord {
   id: string
   record_date: string
   feed_kg: number | null
@@ -74,7 +74,7 @@ function downsample<T extends { date: string }>(
   return result
 }
 
-export function WeightChart({ records, targetWeight }: { records: Record[]; targetWeight?: number }) {
+export function WeightChart({ records, targetWeight }: { records: ProductionRecord[]; targetWeight?: number }) {
   const data = useMemo(() => {
     const raw = records
       .filter((r) => r.avg_weight_kg !== null)
@@ -127,7 +127,7 @@ export function WeightChart({ records, targetWeight }: { records: Record[]; targ
   )
 }
 
-export function FeedConsumptionChart({ records }: { records: Record[] }) {
+export function FeedConsumptionChart({ records }: { records: ProductionRecord[] }) {
   const data = useMemo(() => {
     const raw = records
       .filter((r) => r.feed_kg !== null)
@@ -169,7 +169,7 @@ export function FeedConsumptionChart({ records }: { records: Record[] }) {
   )
 }
 
-export function WaterQualityChart({ records }: { records: Record[] }) {
+export function WaterQualityChart({ records }: { records: ProductionRecord[] }) {
   const data = useMemo(() => {
     const raw = records
       .filter((r) => r.temperature_c !== null || r.oxygen_mg_l !== null)
@@ -234,7 +234,7 @@ export function WaterQualityChart({ records }: { records: Record[] }) {
   )
 }
 
-export function NitrogenChart({ records }: { records: Record[] }) {
+export function NitrogenChart({ records }: { records: ProductionRecord[] }) {
   const data = useMemo(() => {
     const raw = records
       .filter((r) => r.ammonia_mg_l !== null || r.nitrite_mg_l !== null || r.nitrate_mg_l !== null)
@@ -277,7 +277,7 @@ export function NitrogenChart({ records }: { records: Record[] }) {
   )
 }
 
-export function MortalityChart({ records }: { records: Record[] }) {
+export function MortalityChart({ records }: { records: ProductionRecord[] }) {
   const data = useMemo(() => {
     const sorted = [...records].sort((a, b) => a.record_date.localeCompare(b.record_date))
     let cumulative = 0
@@ -374,7 +374,7 @@ export function TreatmentEffectivenessChart({ treatments }: { treatments: Treatm
   )
 }
 
-export function FcaChart({ records }: { records: Record[] }) {
+export function FcaChart({ records }: { records: ProductionRecord[] }) {
   const data = useMemo(() => {
     const raw = records
       .filter((r) => r.calculated_fca !== null)
