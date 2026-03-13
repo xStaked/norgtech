@@ -55,6 +55,7 @@ interface FeedRecord {
   concentrate_id: string | null
   pond_name: string
   concentrate_name: string
+  production_stage: 'levante' | 'engorde'
   year: number
   month: number
   kg_used: number
@@ -76,6 +77,7 @@ const now = new Date()
 const emptyForm = {
   batch_id: '',
   concentrate_id: '',
+  production_stage: 'engorde' as const,
   year: String(now.getFullYear()),
   month: String(now.getMonth() + 1),
   kg_used: '',
@@ -185,6 +187,7 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
           batch_id: form.batch_id,
           concentrate_id: form.concentrate_id || null,
           concentrate_name: concentrate?.name ?? form.concentrate_id,
+          production_stage: form.production_stage,
           year: Number(form.year),
           month: Number(form.month),
           kg_used: Number(form.kg_used),
@@ -208,6 +211,7 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
     setEditForm({
       batch_id: record.batch_id,
       concentrate_id: record.concentrate_id ?? fallbackConcentrateId,
+      production_stage: record.production_stage,
       year: String(record.year),
       month: String(record.month),
       kg_used: String(record.kg_used),
@@ -235,6 +239,7 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
           batch_id: editForm.batch_id,
           concentrate_id: editForm.concentrate_id,
           concentrate_name: concentrate?.name ?? editForm.concentrate_id,
+          production_stage: editForm.production_stage,
           year: Number(editForm.year),
           month: Number(editForm.month),
           kg_used: Number(editForm.kg_used),
@@ -254,6 +259,15 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
     acc[key].totalCost += r.kg_used * r.cost_per_kg
     return acc
   }, {})
+
+  const byStage = feedRecords.reduce<Record<'levante' | 'engorde', { totalKg: number; totalCost: number }>>((acc, r) => {
+    acc[r.production_stage].totalKg += r.kg_used
+    acc[r.production_stage].totalCost += r.kg_used * r.cost_per_kg
+    return acc
+  }, {
+    levante: { totalKg: 0, totalCost: 0 },
+    engorde: { totalKg: 0, totalCost: 0 },
+  })
 
   return (
     <div className="flex flex-col gap-4">
@@ -417,6 +431,25 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
                 </div>
 
                 <div className="flex flex-col gap-1.5">
+                  <Label>Etapa del costo *</Label>
+                  <Select
+                    value={form.production_stage}
+                    onValueChange={v => setForm(f => ({ ...f, production_stage: v as 'levante' | 'engorde' }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="levante">Levante</SelectItem>
+                      <SelectItem value="engorde">Engorde</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Usa levante si ese consumo debe sumarse al costo histórico del lote antes del engorde.
+                  </p>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
                   <Label htmlFor="f-kg">Kg usados *</Label>
                   <Input
                     id="f-kg"
@@ -467,6 +500,7 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
           <TableRow>
             <TableHead>Período</TableHead>
             <TableHead>Lote</TableHead>
+            <TableHead>Etapa</TableHead>
             <TableHead>Concentrado</TableHead>
             <TableHead>Kg usados</TableHead>
             <TableHead>Precio/kg</TableHead>
@@ -477,7 +511,7 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
         <TableBody>
           {feedRecords.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
+              <TableCell colSpan={8} className="h-20 text-center text-muted-foreground">
                 No hay registros de alimentación. Agrega el consumo mensual de cada lote.
               </TableCell>
             </TableRow>
@@ -488,6 +522,15 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
                   {MONTHS[r.month - 1]} {r.year}
                 </TableCell>
                 <TableCell>{r.pond_name}</TableCell>
+                <TableCell>
+                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+                    r.production_stage === 'levante'
+                      ? 'bg-sky-100 text-sky-700'
+                      : 'bg-amber-100 text-amber-700'
+                  }`}>
+                    {r.production_stage === 'levante' ? 'Levante' : 'Engorde'}
+                  </span>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{r.concentrate_name}</TableCell>
                 <TableCell>{r.kg_used.toLocaleString()} kg</TableCell>
                 <TableCell>{formatCOP(r.cost_per_kg)}</TableCell>
@@ -567,6 +610,21 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
                               </Select>
                             </div>
                             <div className="flex flex-col gap-1.5">
+                              <Label>Etapa del costo *</Label>
+                              <Select
+                                value={editForm.production_stage}
+                                onValueChange={v => setEditForm(f => ({ ...f, production_stage: v as 'levante' | 'engorde' }))}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="levante">Levante</SelectItem>
+                                  <SelectItem value="engorde">Engorde</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex flex-col gap-1.5">
                               <Label>Kg usados *</Label>
                               <Input
                                 type="number"
@@ -626,6 +684,18 @@ export function MonthlyFeedForm({ batches, concentrates, feedRecords }: MonthlyF
       {/* Monthly summary */}
       {Object.keys(byMonth).length > 0 && (
         <div className="rounded-lg border bg-muted/30 p-4">
+          <div className="mb-4 grid gap-2 md:grid-cols-2">
+            {([
+              ['levante', 'Levante'],
+              ['engorde', 'Engorde'],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="rounded border bg-background p-3 text-sm">
+                <div className="text-muted-foreground">{label}</div>
+                <div className="mt-1 font-bold text-primary">{formatCOP(byStage[key].totalCost)}</div>
+                <div className="text-xs text-muted-foreground">{byStage[key].totalKg.toFixed(1)} kg acumulados</div>
+              </div>
+            ))}
+          </div>
           <p className="mb-3 text-sm font-semibold">Resumen por mes</p>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
             {Object.entries(byMonth)

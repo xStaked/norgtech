@@ -76,6 +76,7 @@ export async function createMonthlyFeedRecord(data: {
   batch_id: string
   concentrate_id: string | null
   concentrate_name: string
+  production_stage: 'levante' | 'engorde'
   year: number
   month: number
   kg_used: number
@@ -88,13 +89,14 @@ export async function createMonthlyFeedRecord(data: {
       batch_id: data.batch_id,
       concentrate_id: data.concentrate_id || null,
       concentrate_name: data.concentrate_name,
+      production_stage: data.production_stage,
       year: data.year,
       month: data.month,
       kg_used: data.kg_used,
       cost_per_kg: data.cost_per_kg,
       notes: data.notes || null,
     },
-    { onConflict: 'batch_id,concentrate_id,year,month' }
+    { onConflict: 'batch_id,concentrate_id,year,month,production_stage' }
   )
   if (error) throw new Error(error.message)
   revalidatePath('/dashboard/costs')
@@ -104,6 +106,7 @@ export async function updateMonthlyFeedRecord(id: string, data: {
   batch_id: string
   concentrate_id: string
   concentrate_name: string
+  production_stage: 'levante' | 'engorde'
   year: number
   month: number
   kg_used: number
@@ -116,6 +119,7 @@ export async function updateMonthlyFeedRecord(id: string, data: {
       batch_id: data.batch_id,
       concentrate_id: data.concentrate_id,
       concentrate_name: data.concentrate_name,
+      production_stage: data.production_stage,
       year: data.year,
       month: data.month,
       kg_used: data.kg_used,

@@ -10,75 +10,81 @@
 
 @layer base {
   :root {
-    /* Paleta basada en logo Aquavet */
-    /* Navy: #1A3A9F | Cyan: #1BB8D8 | Green: #2DB566 | Yellow: #F5C800 | Red: #D92B2B */
-    --background: 220 20% 97%;
-    --foreground: 224 40% 12%;
+    /* Paleta oficial Aquavet */
+    --aquavet-blue: #234085;
+    --aquavet-yellow: #FCE63A;
+    --aquavet-red: #FC031C;
+    --aquavet-cyan: #2AA6D1;
+    --aquavet-green: #21A150;
+    --aquavet-light: #F2F2F2;
+
+    --background: 0 0% 94.9%;
+    --foreground: 222 58.3% 20%;
     --card: 0 0% 100%;
-    --card-foreground: 224 40% 12%;
+    --card-foreground: 222 58.3% 20%;
     --popover: 0 0% 100%;
-    --popover-foreground: 224 40% 12%;
-    --primary: 224 67% 33%;          /* Navy Aquavet #1A3A9F */
+    --popover-foreground: 222 58.3% 20%;
+    --primary: 222 58.3% 32.9%;      /* #234085 */
     --primary-foreground: 0 0% 100%;
-    --secondary: 220 15% 93%;
-    --secondary-foreground: 224 40% 15%;
-    --muted: 220 12% 94%;
-    --muted-foreground: 220 10% 45%;
-    --accent: 190 72% 42%;           /* Cyan Aquavet #1BB8D8 */
+    --secondary: 0 0% 98%;
+    --secondary-foreground: 222 58.3% 24%;
+    --muted: 210 20% 97%;
+    --muted-foreground: 222 20% 38%;
+    --accent: 195 66.5% 49.2%;       /* #2AA6D1 */
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 68% 51%;        /* Rojo Aquavet #D92B2B */
+    --destructive: 354 97.6% 50%;    /* #FC031C */
     --destructive-foreground: 0 0% 98%;
-    --border: 220 15% 88%;
-    --input: 220 15% 88%;
-    --ring: 224 67% 33%;
-    --chart-1: 224 67% 33%;          /* Navy */
-    --chart-2: 190 72% 48%;          /* Cyan */
-    --chart-3: 145 60% 44%;          /* Verde #2DB566 */
-    --chart-4: 48 100% 48%;          /* Amarillo #F5C800 */
-    --chart-5: 0 68% 51%;            /* Rojo */
+    --border: 220 28% 86%;
+    --input: 220 28% 86%;
+    --ring: 195 66.5% 49.2%;
+    --chart-1: 222 58.3% 32.9%;      /* Blue */
+    --chart-2: 195 66.5% 49.2%;      /* Cyan */
+    --chart-3: 142 66% 38%;          /* Green */
+    --chart-4: 53 97% 60.8%;         /* Yellow */
+    --chart-5: 354 97.6% 50%;        /* Red */
     --radius: 0.625rem;
-    --sidebar-background: 225 62% 14%;   /* Navy oscuro para sidebar */
-    --sidebar-foreground: 220 15% 85%;
-    --sidebar-primary: 190 72% 48%;      /* Cyan en sidebar */
+    --sidebar-background: 222 58.3% 22%;
+    --sidebar-foreground: 210 20% 94%;
+    --sidebar-primary: 195 66.5% 49.2%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 225 55% 20%;
-    --sidebar-accent-foreground: 220 15% 90%;
-    --sidebar-border: 225 50% 20%;
-    --sidebar-ring: 190 72% 48%;
+    --sidebar-accent: 222 46% 30%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 222 45% 28%;
+    --sidebar-ring: 53 97% 60.8%;
   }
   .dark {
-    --background: 224 35% 7%;
-    --foreground: 220 15% 93%;
-    --card: 224 30% 10%;
-    --card-foreground: 220 15% 93%;
-    --popover: 224 30% 10%;
-    --popover-foreground: 220 15% 93%;
-    --primary: 224 67% 50%;          /* Navy más brillante en dark */
+    --background: 222 42% 9%;
+    --foreground: 210 20% 94%;
+    --card: 222 42% 12%;
+    --card-foreground: 210 20% 94%;
+    --popover: 222 42% 12%;
+    --popover-foreground: 210 20% 94%;
+    --primary: 195 66.5% 49.2%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 224 20% 15%;
-    --secondary-foreground: 220 15% 90%;
-    --muted: 224 18% 14%;
-    --muted-foreground: 220 10% 55%;
-    --accent: 190 72% 50%;           /* Cyan Aquavet */
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 35%;
+    --secondary: 222 36% 18%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 222 30% 16%;
+    --muted-foreground: 210 10% 68%;
+    --accent: 53 97% 60.8%;
+    --accent-foreground: 222 58.3% 20%;
+    --destructive: 354 97.6% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 224 18% 18%;
-    --input: 224 18% 18%;
-    --ring: 224 67% 50%;
-    --chart-1: 224 67% 55%;          /* Navy claro */
-    --chart-2: 190 72% 52%;          /* Cyan */
-    --chart-3: 145 60% 50%;          /* Verde */
-    --chart-4: 48 100% 52%;          /* Amarillo */
-    --chart-5: 0 68% 55%;            /* Rojo */
-    --sidebar-background: 225 62% 9%;
-    --sidebar-foreground: 220 15% 85%;
-    --sidebar-primary: 190 72% 48%;
+    --border: 222 24% 22%;
+    --input: 222 24% 22%;
+    --ring: 53 97% 60.8%;
+    --chart-1: 195 66.5% 49.2%;
+    --chart-2: 53 97% 60.8%;
+    --chart-3: 142 66% 38%;
+    --chart-4: 354 97.6% 50%;
+    --chart-5: 222 58.3% 32.9%;
+    --sidebar-background: 222 52% 10%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 53 97% 60.8%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 225 50% 14%;
-    --sidebar-accent-foreground: 220 15% 90%;
-    --sidebar-border: 225 45% 15%;
-    --sidebar-ring: 190 72% 48%;
+    --sidebar-accent: 222 40% 18%;
+    --sidebar-accent-foreground: 210 20% 96%;
+    --sidebar-border: 222 28% 20%;
+    --sidebar-ring: 195 66.5% 49.2%;
   }
 }
 

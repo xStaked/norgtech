@@ -78,7 +78,8 @@ export function FeedTab({ concentrates, batchesForForms, feedRecords }: FeedTabP
         <CardHeader>
           <CardTitle>Alimento consumido por mes</CardTitle>
           <CardDescription>
-            Registra cuánto concentrado usó en cada lote por mes. El costo se calcula automáticamente.
+            Registra cuánto concentrado usó en cada lote por mes y marca si el costo corresponde a levante o engorde.
+            El costo se calcula automáticamente y así puedes acumular el levante dentro de la rentabilidad final del lote.
             {concentrates.length === 0 && (
               <span className="block mt-1 text-amber-600 font-medium">
                 Puedes crear un concentrado directamente desde el formulario de registro.

@@ -49,6 +49,7 @@ export type FeedRecord = {
   concentrate_id: string | null
   pond_name: string
   concentrate_name: string
+  production_stage: 'levante' | 'engorde'
   year: number
   month: number
   kg_used: number

@@ -74,7 +74,7 @@ export default async function CostsPage() {
         .order('name'),
       supabase
         .from('monthly_feed_records')
-        .select('id, batch_id, concentrate_id, concentrate_name, year, month, kg_used, cost_per_kg')
+        .select('id, batch_id, concentrate_id, concentrate_name, production_stage, year, month, kg_used, cost_per_kg')
         .order('year', { ascending: false })
         .order('month', { ascending: false }),
       supabase
@@ -210,6 +210,7 @@ export default async function CostsPage() {
       concentrate_id: r.concentrate_id,
       pond_name: batchPondMap[r.batch_id] ?? 'S/E',
       concentrate_name: r.concentrate_name,
+      production_stage: r.production_stage === 'levante' ? 'levante' : 'engorde',
       year: r.year,
       month: r.month,
       kg_used: Number(r.kg_used),
