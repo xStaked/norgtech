@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ChevronLeft, FileText, MapPin, PencilLine, Sprout } from 'lucide-react'
+import { ArrowUpRight, ChevronLeft, FileText, MapPin, PencilLine, Plus, Sprout } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -57,12 +57,26 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
             </div>
           </div>
 
-          <Button asChild>
-            <Link href={`/admin/clients/${client.id}/edit`}>
-              <PencilLine className="size-4" />
-              Editar productor
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-3">
+            <Button asChild variant="outline" className="border-primary/20">
+              <Link href={`/admin/visits?clientId=${client.id}`}>
+                <ArrowUpRight className="size-4" />
+                Ver visitas
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="border-primary/20">
+              <Link href={`/admin/visits/new?clientId=${client.id}`}>
+                <Plus className="size-4" />
+                Registrar visita
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href={`/admin/clients/${client.id}/edit`}>
+                <PencilLine className="size-4" />
+                Editar productor
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <section className="grid gap-4 lg:grid-cols-4">
@@ -124,6 +138,16 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                     <p className="mt-3 text-sm text-muted-foreground">
                       Capacidad: {farm.capacity ? farm.capacity.toLocaleString('es-CO') : 'Sin dato'}
                     </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Button asChild variant="ghost" size="sm" className="h-8 px-2">
+                        <Link href={`/admin/farms/${farm.id}`}>Abrir granja</Link>
+                      </Button>
+                      <Button asChild variant="ghost" size="sm" className="h-8 px-2">
+                        <Link href={`/admin/visits?clientId=${client.id}&farmId=${farm.id}`}>
+                          Ver visitas
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -191,6 +215,13 @@ export default async function ClientDetailPage({ params }: ClientDetailPageProps
                           </p>
                         </div>
                         <Badge variant="outline">{item.status}</Badge>
+                      </div>
+                      <div className="mt-3">
+                        <Button asChild variant="ghost" size="sm" className="h-8 px-2">
+                          <Link href={`/admin/visits/new?clientId=${client.id}&caseId=${item.id}`}>
+                            Registrar visita sobre este caso
+                          </Link>
+                        </Button>
                       </div>
                     </div>
                   ))

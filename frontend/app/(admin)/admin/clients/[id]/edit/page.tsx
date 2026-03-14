@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { ChevronLeft, PencilLine } from 'lucide-react'
 import { ClientForm } from '@/components/admin/client-form'
+import { fetchAdvisorOptions } from '../../../_lib/server-advisors'
 import { fetchClient } from '../../_lib/server-clients'
 
 interface EditClientPageProps {
@@ -9,7 +10,7 @@ interface EditClientPageProps {
 
 export default async function EditClientPage({ params }: EditClientPageProps) {
   const { id } = await params
-  const client = await fetchClient(id)
+  const [client, advisors] = await Promise.all([fetchClient(id), fetchAdvisorOptions()])
 
   return (
     <div className="min-h-full bg-[linear-gradient(180deg,_rgba(255,255,255,0.96),_rgba(240,253,244,0.74))] p-6">
@@ -37,7 +38,7 @@ export default async function EditClientPage({ params }: EditClientPageProps) {
           </div>
 
           <div className="mt-8">
-            <ClientForm mode="edit" client={client} />
+            <ClientForm advisors={advisors} mode="edit" client={client} />
           </div>
         </section>
       </div>

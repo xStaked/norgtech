@@ -85,12 +85,17 @@ export function ClientCard({ client }: ClientCardProps) {
           <div className="text-muted-foreground">
             {client.phone || 'Sin teléfono'} {client.address ? `· ${client.address}` : ''}
           </div>
-          <Button asChild variant="outline" className="border-primary/20 bg-background/60">
-            <Link href={`/admin/clients/${client.id}`}>
-              Abrir perfil
-              <ArrowUpRight className="size-4" />
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="ghost" className="h-9 px-3">
+              <Link href={`/admin/visits?clientId=${client.id}`}>Visitas</Link>
+            </Button>
+            <Button asChild variant="outline" className="border-primary/20 bg-background/60">
+              <Link href={`/admin/clients/${client.id}`}>
+                Abrir perfil
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

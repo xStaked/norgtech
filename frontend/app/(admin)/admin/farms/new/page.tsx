@@ -3,8 +3,15 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FarmForm } from '@/components/admin/farm-form'
+import { fetchClients } from '../../clients/_lib/server-clients'
+import { fetchAdvisorOptions } from '../../_lib/server-advisors'
 
-export default function NewFarmPage() {
+export default async function NewFarmPage() {
+  const [clients, advisors] = await Promise.all([
+    fetchClients({ limit: 100, status: 'active' }),
+    fetchAdvisorOptions(),
+  ])
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-wrap items-center gap-3">
@@ -31,7 +38,7 @@ export default function NewFarmPage() {
           </div>
         </CardHeader>
         <CardContent className="p-6">
-          <FarmForm mode="create" />
+          <FarmForm advisors={advisors} clients={clients.items} mode="create" />
         </CardContent>
       </Card>
     </div>

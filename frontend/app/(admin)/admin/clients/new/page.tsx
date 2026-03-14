@@ -1,8 +1,11 @@
 import Link from 'next/link'
 import { ChevronLeft, Sprout } from 'lucide-react'
 import { ClientForm } from '@/components/admin/client-form'
+import { fetchAdvisorOptions } from '../../_lib/server-advisors'
 
-export default function NewClientPage() {
+export default async function NewClientPage() {
+  const advisors = await fetchAdvisorOptions()
+
   return (
     <div className="min-h-full bg-[linear-gradient(180deg,_rgba(240,253,244,0.82),_rgba(255,255,255,0.94))] p-6">
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
@@ -29,7 +32,7 @@ export default function NewClientPage() {
           </div>
 
           <div className="mt-8">
-            <ClientForm mode="create" />
+            <ClientForm advisors={advisors} mode="create" />
           </div>
         </section>
       </div>

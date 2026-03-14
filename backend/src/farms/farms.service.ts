@@ -16,11 +16,14 @@ export class FarmsService {
 
   async findAll(user: AuthUser, query: ListFarmsQueryDto) {
     const organizationId = this.requireOrganizationId(user);
+    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
 
     const items = await this.prisma.farm.findMany({
       where: {
         organizationId,
-        ...(query.clientId ? { clientId: query.clientId } : {}),
+        ...(scopedClientId || query.clientId
+          ? { clientId: scopedClientId ?? query.clientId }
+          : {}),
         ...(query.speciesType ? { speciesType: query.speciesType } : {}),
         ...(query.advisorId ? { assignedAdvisorId: query.advisorId } : {}),
       },
@@ -93,10 +96,12 @@ export class FarmsService {
 
   async findOne(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
+    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
     const farm = await this.prisma.farm.findFirst({
       where: {
         id,
         organizationId,
+        ...(scopedClientId ? { clientId: scopedClientId } : {}),
       },
       include: {
         client: {
@@ -176,7 +181,8 @@ export class FarmsService {
 
   async getStats(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
-    const farm = await this.ensureFarmBelongsToOrganization(id, organizationId);
+    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const farm = await this.ensureFarmBelongsToOrganization(id, organizationId, scopedClientId);
 
     const [openCases, totalCases, totalVisits, lastVisit] =
       await this.prisma.$transaction([
@@ -254,11 +260,13 @@ export class FarmsService {
   private async ensureFarmBelongsToOrganization(
     id: string,
     organizationId: string,
+    clientId?: string | null,
   ) {
     const farm = await this.prisma.farm.findFirst({
       where: {
         id,
         organizationId,
+        ...(clientId ? { clientId } : {}),
       },
       select: {
         id: true,
@@ -284,6 +292,49 @@ export class FarmsService {
     }
 
     return user.organizationId;
+  }
+
+  private async resolveScopedClientId(user: AuthUser, organizationId: string) {
+    if (user.role !== 'cliente') {
+      return null;
+    }
+
+    const email = user.email?.trim().toLowerCase();
+    if (email) {
+      const client = await this.prisma.client.findFirst({
+        where: {
+          organizationId,
+          email,
+          status: 'active',
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (client) {
+        return client.id;
+      }
+    }
+
+    const activeClients = await this.prisma.client.findMany({
+      where: {
+        organizationId,
+        status: 'active',
+      },
+      select: {
+        id: true,
+      },
+      take: 2,
+    });
+
+    if (activeClients.length === 1) {
+      return activeClients[0].id;
+    }
+
+    throw new ForbiddenException(
+      'No existe un productor activo asociado al usuario autenticado',
+    );
   }
 
   private cleanOptional(value?: string | null) {

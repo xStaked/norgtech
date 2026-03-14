@@ -1,83 +1,51 @@
-'use client'
-
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
-import { useEffect, useState, useTransition } from 'react'
-import { ArrowLeft, Bird, CalendarClock, MapPinned, PiggyBank, ShieldAlert } from 'lucide-react'
+import { ArrowLeft, ArrowUpRight, Bird, CalendarClock, MapPinned, PencilLine, PiggyBank, Plus, ShieldAlert } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { getFarm, getFarmSpeciesLabel, getFarmStats, type FarmDetail, type FarmStats } from '@/lib/api/farms'
+import { getFarmSpeciesLabel } from '@/lib/api/farms'
+import { fetchFarm, fetchFarmStats } from '../_lib/server-farms'
 
-export default function FarmDetailPage() {
-  const params = useParams<{ id: string }>()
-  const [isPending, startTransition] = useTransition()
-  const [farm, setFarm] = useState<FarmDetail | null>(null)
-  const [stats, setStats] = useState<FarmStats | null>(null)
-  const [error, setError] = useState<string | null>(null)
+interface FarmDetailPageProps {
+  params: Promise<{ id: string }>
+}
 
-  useEffect(() => {
-    if (!params.id) return
-
-    let active = true
-
-    startTransition(() => {
-      void (async () => {
-        try {
-          const [farmResponse, statsResponse] = await Promise.all([
-            getFarm(params.id),
-            getFarmStats(params.id),
-          ])
-
-          if (!active) return
-          setFarm(farmResponse)
-          setStats(statsResponse)
-        } catch (loadError) {
-          if (!active) return
-          setError(
-            loadError instanceof Error
-              ? loadError.message
-              : 'No se pudo cargar la ficha de la granja.',
-          )
-        }
-      })()
-    })
-
-    return () => {
-      active = false
-    }
-  }, [params.id])
-
-  if (error) {
-    return (
-      <div className="p-6">
-        <div className="rounded-2xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      </div>
-    )
-  }
-
-  if (isPending || !farm || !stats) {
-    return (
-      <div className="p-6">
-        <div className="rounded-[1.75rem] border border-border bg-card p-8 text-sm text-muted-foreground">
-          Cargando ficha operativa de la granja...
-        </div>
-      </div>
-    )
-  }
-
+export default async function FarmDetailPage({ params }: FarmDetailPageProps) {
+  const { id } = await params
+  const [farm, stats] = await Promise.all([fetchFarm(id), fetchFarmStats(id)])
   const SpeciesIcon = farm.speciesType === 'swine' ? PiggyBank : Bird
 
   return (
     <div className="space-y-6 p-6">
-      <Button asChild variant="ghost" className="pl-0">
-        <Link href="/admin/farms">
-          <ArrowLeft className="size-4" />
-          Volver a granjas
-        </Link>
-      </Button>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <Button asChild variant="ghost" className="pl-0">
+          <Link href="/admin/farms">
+            <ArrowLeft className="size-4" />
+            Volver a granjas
+          </Link>
+        </Button>
+
+        <div className="flex flex-wrap gap-3">
+          <Button asChild variant="outline" className="border-primary/20">
+            <Link href={`/admin/visits?farmId=${farm.id}&clientId=${farm.clientId}`}>
+              <ArrowUpRight className="size-4" />
+              Ver visitas
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="border-primary/20">
+            <Link href={`/admin/visits/new?farmId=${farm.id}&clientId=${farm.clientId}`}>
+              <Plus className="size-4" />
+              Registrar visita
+            </Link>
+          </Button>
+          <Button asChild>
+            <Link href={`/admin/farms/${farm.id}/edit`}>
+              <PencilLine className="size-4" />
+              Editar granja
+            </Link>
+          </Button>
+        </div>
+      </div>
 
       <section className="rounded-[2rem] border border-primary/10 bg-gradient-to-br from-primary/10 via-background to-accent/10 p-6 shadow-sm">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
@@ -157,7 +125,14 @@ export default function FarmDetailPage() {
                         day: 'numeric',
                       })}
                     </div>
-                    <Badge variant="outline">Asesor {visit.advisorId.slice(0, 8)}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">Asesor {visit.advisorId.slice(0, 8)}</Badge>
+                      <Button asChild variant="ghost" size="sm" className="h-8 px-2">
+                        <Link href={`/admin/visits/${visit.id}`}>
+                          Ver detalle
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                   <p className="mt-3 text-sm text-muted-foreground">
                     {visit.observations || 'Sin observaciones registradas.'}
@@ -197,6 +172,12 @@ export default function FarmDetailPage() {
                   </p>
                 </div>
               </div>
+              <Button asChild variant="outline" className="w-full border-primary/20">
+                <Link href={`/admin/visits?farmId=${farm.id}&clientId=${farm.clientId}`}>
+                  Ir al historial técnico
+                  <ArrowUpRight className="size-4" />
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 

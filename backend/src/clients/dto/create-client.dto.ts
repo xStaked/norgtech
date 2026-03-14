@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsEmail, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 export class CreateClientDto {
   @ApiProperty({ description: 'Nombre completo del productor' })
@@ -33,7 +33,7 @@ export class CreateClientDto {
 
   @ApiPropertyOptional({ description: 'Asesor asignado' })
   @IsOptional()
-  @IsString()
+  @IsUUID()
   assignedAdvisorId?: string;
 
   @ApiPropertyOptional({ description: 'Notas internas del productor' })

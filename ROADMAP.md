@@ -357,8 +357,8 @@ model KnowledgeArticle {
 **Dependencias:** Fase 0, Fase 1
 
 #### Módulo Auth (`backend/src/auth/`)
-- [ ] `AuthController`: `GET /auth/me` → retorna perfil del usuario autenticado
-- [ ] Integración con tabla `profiles` de Supabase para obtener rol + organizationId
+- [x] `AuthController`: `GET /auth/me` → retorna perfil del usuario autenticado
+- [x] Integración con tabla `profiles` de Supabase para obtener rol + organizationId
 
 #### Módulo Clients (`backend/src/clients/`)
 
@@ -427,9 +427,9 @@ app/(admin)/farms/
   [id]/page.tsx
 ```
 
-- [ ] `components/admin/farm-form.tsx` (selector especie avícola/porcino)
-- [ ] `components/admin/advisor-select.tsx`
-- [ ] `frontend/lib/api/farms.ts`
+- [x] `components/admin/farm-form.tsx` (selector especie avícola/porcino)
+- [x] `components/admin/advisor-select.tsx`
+- [x] `frontend/lib/api/farms.ts`
 - [x] `app/(admin)/clients/page.tsx` — lista de productores con búsqueda y filtros
 - [x] `app/(admin)/clients/new/page.tsx`
 - [x] `app/(admin)/clients/[id]/page.tsx` — perfil del productor
@@ -445,7 +445,7 @@ app/(admin)/farms/
 **Agente:** 1-2 agentes en paralelo (3A: backend · 3B: frontend)
 **Dependencias:** Fase 1, Fase 2
 
-#### NestJS `CasesModule`
+#### Backend 3A — NestJS `CasesModule`
 
 **Endpoints:**
 ```
@@ -484,7 +484,17 @@ AddCaseMessageDto {
 - Al cambiar status → crear automáticamente un `CaseMessage` de tipo `status_change`
 - `closedAt` se llena automáticamente al pasar a `closed`
 
-#### Frontend
+- [x] Crear `backend/src/cases/` con `CasesModule`, `CasesController`, `CasesService` y DTOs validados
+- [x] Implementar `GET /cases` con filtros por `status`, `severity`, `assignedTechId`, `clientId` y `farmId`
+- [x] Implementar `POST /cases`, `GET /cases/:id` y `PUT /cases/:id`
+- [x] Implementar `POST /cases/:id/messages` para timeline interno del caso
+- [x] Implementar `GET /cases/stats` con conteos por estado para dashboard
+- [x] Resolver numeración visible `CASO-0001` a partir de `caseNumber` por organización
+- [x] Crear mensaje automático `status_change` al actualizar estado
+- [x] Asignar `closedAt` automáticamente cuando el caso pase a `closed`
+- [x] Aplicar aislamiento multi-tenant por `organizationId` en todos los endpoints
+
+#### Frontend 3B
 ```
 app/(admin)/cases/
   page.tsx             → lista con filtros + badges de severidad/status
@@ -492,10 +502,15 @@ app/(admin)/cases/
   [id]/page.tsx        → detalle: info del caso + timeline cronológico + formulario añadir nota
 ```
 
-- [ ] `components/admin/case-form.tsx`
-- [ ] `components/admin/case-timeline.tsx` — historial con íconos por tipo de mensaje
-- [ ] `components/admin/case-status-badge.tsx` — colores: rojo=critical, naranja=high, etc.
-- [ ] `components/admin/severity-selector.tsx`
+- [x] `app/(admin)/cases/page.tsx` — lista con filtros por estado, severidad, técnico y productor
+- [x] `app/(admin)/cases/new/page.tsx`
+- [x] `app/(admin)/cases/[id]/page.tsx` — detalle con timeline y panel de seguimiento
+- [x] `components/admin/case-form.tsx`
+- [x] `components/admin/case-timeline.tsx` — historial con íconos por tipo de mensaje
+- [x] `components/admin/case-status-badge.tsx` — colores: rojo=critical, naranja=high, etc.
+- [x] `components/admin/severity-selector.tsx`
+- [x] `components/admin/case-detail-actions.tsx` — actualización de estado/severidad/asignación y nota interna
+- [x] `frontend/lib/api/cases.ts` y `app/(admin)/cases/_lib/server-cases.ts`
 
 ---
 
@@ -523,8 +538,8 @@ app/(admin)/visits/
   [id]/page.tsx
 ```
 
-- [ ] `components/admin/visit-form.tsx` — campos condicionales por especie (avícola vs porcino)
-- [ ] `components/admin/visit-summary-card.tsx`
+- [x] `components/admin/visit-form.tsx` — campos condicionales por especie (avícola vs porcino)
+- [x] `components/admin/visit-summary-card.tsx`
 
 ---
 
@@ -533,16 +548,22 @@ app/(admin)/visits/
 **Agente:** 2 agentes en paralelo (5A: backend+FCA · 5B: ROI+simulador)
 **Dependencias:** Fase 1
 
+**Avance actual:**
+- [x] 5A — backend + frontend FCA
+- [x] 5B — ROI + simulador
+
 #### NestJS `CalculatorsModule`
 
 **Endpoints:**
 ```
-POST   /calculators/fca          → calcular FCA + guardar historial
-GET    /calculators/fca          → historial de cálculos FCA del usuario
-POST   /calculators/roi          → calcular ROI + guardar
-GET    /calculators/roi          → historial ROI
-POST   /calculators/production-sim → simulación (sin guardar, solo calcular)
+- [x] POST   /calculators/fca            → calcular FCA + guardar historial
+- [x] GET    /calculators/fca            → historial de cálculos FCA del usuario
+- [x] POST   /calculators/roi            → calcular ROI + guardar
+- [x] GET    /calculators/roi            → historial ROI
+- [x] POST   /calculators/production-sim → simulación (sin guardar, solo calcular)
 ```
+
+- [x] `backend/src/calculators/*` — módulo NestJS con `POST /calculators/fca` y `GET /calculators/fca`
 
 **Lógica FCA:**
 ```typescript
@@ -567,11 +588,14 @@ app/(admin)/calculators/
   production-sim/page.tsx
 ```
 
-- [ ] `components/calculators/fca-form.tsx` — formulario con validaciones
-- [ ] `components/calculators/fca-result.tsx` — resultado con gráfico de comparación benchmark
-- [ ] `components/calculators/roi-result.tsx` — gauge de ROI + tabla de desglose
-- [ ] `components/calculators/production-sim-form.tsx` — selector programa (broiler/ponedora/cerdo)
-- [ ] `components/calculators/simulation-chart.tsx` — proyección semanal (Recharts LineChart)
+- [x] `app/(admin)/admin/calculators/fca/page.tsx` — vista FCA con historial server-side
+- [x] `components/calculators/fca-form.tsx` — formulario con validaciones
+- [x] `components/calculators/fca-result.tsx` — resultado con gráfico de comparación benchmark
+- [x] `app/(admin)/admin/calculators/roi/page.tsx` — ROI con historial server-side
+- [x] `app/(admin)/admin/calculators/production-sim/page.tsx` — simulador operativo
+- [x] `components/calculators/roi-result.tsx` — gauge de ROI + tabla de desglose
+- [x] `components/calculators/production-sim-form.tsx` — selector programa (broiler/ponedora/cerdo)
+- [x] `components/calculators/simulation-chart.tsx` — proyección semanal (Recharts LineChart)
 
 ---
 
@@ -585,6 +609,9 @@ app/(admin)/calculators/
 GET    /dashboard/admin-stats    → KPIs globales de la organización
 GET    /dashboard/advisor-stats  → KPIs del asesor autenticado
 ```
+
+- [x] Implementar `GET /dashboard/admin-stats`
+- [x] Implementar `GET /dashboard/advisor-stats`
 
 **Admin stats response:**
 ```typescript
@@ -604,10 +631,10 @@ app/(admin)/dashboard/
   page.tsx             → Dashboard admin (default para admin/asesores)
 ```
 
-- [ ] `components/admin/stats-card.tsx`
-- [ ] `components/admin/cases-donut-chart.tsx` (Recharts)
-- [ ] `components/admin/advisor-table.tsx`
-- [ ] `components/admin/recent-activity-feed.tsx`
+- [x] `components/admin/stats-card.tsx`
+- [x] `components/admin/cases-donut-chart.tsx` (Recharts)
+- [x] `components/admin/advisor-table.tsx`
+- [x] `components/admin/recent-activity-feed.tsx`
 
 ---
 
@@ -629,9 +656,9 @@ app/(portal)/
 
 **Restricciones:** El cliente solo ve datos asociados a su `clientId`. RLS en NestJS nivel servicio.
 
-- [ ] `components/portal/case-status-timeline.tsx` — versión simplificada para cliente
-- [ ] `components/portal/farm-overview.tsx`
-- [ ] `components/portal/visit-history-card.tsx`
+- [x] `components/portal/case-status-timeline.tsx` — versión simplificada para cliente
+- [x] `components/portal/farm-overview.tsx`
+- [x] `components/portal/visit-history-card.tsx`
 
 ---
 
@@ -661,9 +688,9 @@ app/(admin)/knowledge/
   [id]/edit/page.tsx
 ```
 
-- [ ] `components/admin/article-form.tsx` — editor con textarea markdown + preview
-- [ ] `components/admin/article-card.tsx`
-- [ ] `components/admin/knowledge-filters.tsx`
+- [x] `components/admin/article-form.tsx` — editor con textarea markdown + preview
+- [x] `components/admin/article-card.tsx`
+- [x] `components/admin/knowledge-filters.tsx`
 
 ---
 

@@ -57,7 +57,6 @@ export interface FarmStats {
     name: string
     speciesType: string
     capacity: number | null
-    createdAt: string
   } | null
   kpis: {
     totalVisits: number
@@ -72,16 +71,12 @@ export interface FarmStats {
 export interface FarmListResponse {
   items: FarmListItem[]
   meta: {
-    page: number
-    pageSize: number
     total: number
-    totalPages: number
+    filters: ListFarmsParams
   }
 }
 
 export interface ListFarmsParams {
-  page?: number
-  pageSize?: number
   clientId?: string
   speciesType?: string
   advisorId?: string

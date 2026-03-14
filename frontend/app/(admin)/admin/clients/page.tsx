@@ -3,11 +3,13 @@ import { Plus, Search, Sprout, Users } from 'lucide-react'
 import { ClientCard } from '@/components/admin/client-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { fetchAdvisorOptions } from '../_lib/server-advisors'
 import { fetchClients } from './_lib/server-clients'
 
 interface ClientsPageProps {
   searchParams: Promise<{
     page?: string
+    advisorId?: string
     status?: string
     speciesType?: string
     search?: string
@@ -16,6 +18,7 @@ interface ClientsPageProps {
 
 function buildFilterHref(searchParams: {
   page?: string
+  advisorId?: string
   status?: string
   speciesType?: string
   search?: string
@@ -34,13 +37,19 @@ function buildFilterHref(searchParams: {
 
 export default async function ClientsPage({ searchParams }: ClientsPageProps) {
   const params = await searchParams
-  const response = await fetchClients({
-    page: params.page ? Number(params.page) : 1,
-    limit: 12,
-    status: params.status,
-    speciesType: params.speciesType,
-    search: params.search,
-  })
+  const selectedAdvisorId =
+    params.advisorId && params.advisorId !== 'all' ? params.advisorId : undefined
+  const [response, advisors] = await Promise.all([
+    fetchClients({
+      page: params.page ? Number(params.page) : 1,
+      limit: 12,
+      advisorId: selectedAdvisorId,
+      status: params.status,
+      speciesType: params.speciesType,
+      search: params.search,
+    }),
+    fetchAdvisorOptions(),
+  ])
 
   return (
     <div className="min-h-full bg-[radial-gradient(circle_at_top_left,_rgba(45,106,79,0.14),_transparent_35%),linear-gradient(180deg,_rgba(255,255,255,0.92),_rgba(240,253,244,0.72))] p-6">
@@ -77,7 +86,7 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
 
         <section className="rounded-[2rem] border border-border bg-card/90 p-5 shadow-sm">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-            <form className="flex flex-1 flex-col gap-3 md:flex-row" action="/admin/clients">
+            <form className="grid flex-1 gap-3 xl:grid-cols-[1.2fr_0.9fr_auto]" action="/admin/clients">
               <div className="relative flex-1">
                 <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -87,9 +96,25 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
                   placeholder="Buscar por nombre, empresa o correo"
                 />
               </div>
-              <Button type="submit" variant="outline" className="border-primary/20">
-                Aplicar búsqueda
-              </Button>
+
+              <select
+                name="advisorId"
+                defaultValue={params.advisorId ?? 'all'}
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground shadow-sm outline-none transition-colors focus:border-ring"
+              >
+                <option value="all">Todos los asesores</option>
+                {advisors.map((advisor) => (
+                  <option key={advisor.id} value={advisor.id}>
+                    {advisor.fullName || advisor.email || advisor.id}
+                  </option>
+                ))}
+              </select>
+
+              <div className="flex gap-3">
+                <Button type="submit" variant="outline" className="border-primary/20">
+                  Aplicar filtros
+                </Button>
+              </div>
             </form>
 
             <Button asChild>
@@ -102,31 +127,31 @@ export default async function ClientsPage({ searchParams }: ClientsPageProps) {
 
           <div className="mt-4 flex flex-wrap gap-2">
             <Link
-              href={buildFilterHref(params, { status: undefined })}
+              href={buildFilterHref(params, { advisorId: params.advisorId, status: undefined })}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${!params.status ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/20 hover:text-foreground'}`}
             >
               Todos
             </Link>
             <Link
-              href={buildFilterHref(params, { status: 'active' })}
+              href={buildFilterHref(params, { advisorId: params.advisorId, status: 'active' })}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${params.status === 'active' ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/20 hover:text-foreground'}`}
             >
               Activos
             </Link>
             <Link
-              href={buildFilterHref(params, { status: 'inactive' })}
+              href={buildFilterHref(params, { advisorId: params.advisorId, status: 'inactive' })}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${params.status === 'inactive' ? 'border-primary/20 bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-primary/20 hover:text-foreground'}`}
             >
               Inactivos
             </Link>
             <Link
-              href={buildFilterHref(params, { speciesType: 'poultry' })}
+              href={buildFilterHref(params, { advisorId: params.advisorId, speciesType: 'poultry' })}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${params.speciesType === 'poultry' ? 'border-accent/30 bg-accent/10 text-foreground' : 'border-border text-muted-foreground hover:border-accent/30 hover:text-foreground'}`}
             >
               Avícola
             </Link>
             <Link
-              href={buildFilterHref(params, { speciesType: 'swine' })}
+              href={buildFilterHref(params, { advisorId: params.advisorId, speciesType: 'swine' })}
               className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${params.speciesType === 'swine' ? 'border-accent/30 bg-accent/10 text-foreground' : 'border-border text-muted-foreground hover:border-accent/30 hover:text-foreground'}`}
             >
               Porcino

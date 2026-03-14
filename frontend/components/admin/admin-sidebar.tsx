@@ -48,7 +48,7 @@ const NAV_ITEMS = [
   {
     group: 'Herramientas',
     items: [
-      { label: 'Calculadoras', href: '/admin/calculators/fca', icon: Calculator },
+      { label: 'Calculadoras', href: '/admin/calculators/roi', icon: Calculator },
       { label: 'Base de Conocimiento', href: '/admin/knowledge', icon: BookOpen },
       { label: 'Asistente AI', href: '/admin/assistant', icon: Bot },
     ],

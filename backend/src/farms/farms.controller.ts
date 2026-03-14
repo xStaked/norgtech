@@ -16,7 +16,6 @@ import { FarmsService } from './farms.service';
 @ApiTags('Farms')
 @ApiBearerAuth()
 @Controller('farms')
-@Roles('admin', 'asesor_tecnico', 'asesor_comercial')
 export class FarmsController {
   constructor(private readonly farmsService: FarmsService) {}
 
@@ -25,6 +24,7 @@ export class FarmsController {
   @ApiQuery({ name: 'clientId', required: false })
   @ApiQuery({ name: 'speciesType', required: false, enum: ['poultry', 'swine'] })
   @ApiQuery({ name: 'advisorId', required: false })
+  @Roles('admin', 'asesor_tecnico', 'asesor_comercial', 'cliente')
   findAll(
     @CurrentUser() user: AuthUser,
     @Query() query: ListFarmsQueryDto,
@@ -34,6 +34,7 @@ export class FarmsController {
 
   @Post()
   @ApiOperation({ summary: 'Crear granja' })
+  @Roles('admin', 'asesor_tecnico', 'asesor_comercial')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateFarmDto) {
     return this.farmsService.create(user, dto);
   }
@@ -41,6 +42,7 @@ export class FarmsController {
   @Get(':id')
   @ApiOperation({ summary: 'Obtener detalle de la granja con historial de visitas' })
   @ApiParam({ name: 'id', description: 'ID de la granja' })
+  @Roles('admin', 'asesor_tecnico', 'asesor_comercial', 'cliente')
   findOne(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.farmsService.findOne(user, id);
   }
@@ -48,6 +50,7 @@ export class FarmsController {
   @Put(':id')
   @ApiOperation({ summary: 'Actualizar granja' })
   @ApiParam({ name: 'id', description: 'ID de la granja' })
+  @Roles('admin', 'asesor_tecnico', 'asesor_comercial')
   update(
     @CurrentUser() user: AuthUser,
     @Param('id') id: string,
@@ -59,6 +62,7 @@ export class FarmsController {
   @Get(':id/stats')
   @ApiOperation({ summary: 'Obtener métricas de la granja' })
   @ApiParam({ name: 'id', description: 'ID de la granja' })
+  @Roles('admin', 'asesor_tecnico', 'asesor_comercial', 'cliente')
   getStats(@CurrentUser() user: AuthUser, @Param('id') id: string) {
     return this.farmsService.getStats(user, id);
   }

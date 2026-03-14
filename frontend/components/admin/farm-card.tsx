@@ -68,12 +68,17 @@ export function FarmCard({ farm }: FarmCardProps) {
           <div className="text-muted-foreground">
             {farm.location || 'Ubicación pendiente'} {farm.assignedAdvisorId ? `· Asesor ${farm.assignedAdvisorId.slice(0, 8)}` : ''}
           </div>
-          <Button asChild variant="outline" className="border-primary/20 bg-background/60">
-            <Link href={`/admin/farms/${farm.id}`}>
-              Abrir ficha
-              <ArrowUpRight className="size-4" />
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="ghost" className="h-9 px-3">
+              <Link href={`/admin/visits?farmId=${farm.id}&clientId=${farm.clientId}`}>Visitas</Link>
+            </Button>
+            <Button asChild variant="outline" className="border-primary/20 bg-background/60">
+              <Link href={`/admin/farms/${farm.id}`}>
+                Abrir ficha
+                <ArrowUpRight className="size-4" />
+              </Link>
+            </Button>
+          </div>
         </div>
       </CardContent>
     </Card>

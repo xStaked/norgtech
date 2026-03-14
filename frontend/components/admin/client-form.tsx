@@ -3,10 +3,12 @@
 import { useRouter } from 'next/navigation'
 import { FormEvent, useState, useTransition } from 'react'
 import { Loader2, Save } from 'lucide-react'
+import type { AdvisorOption } from '@/lib/admin/advisors'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { AdvisorSelect } from '@/components/admin/advisor-select'
 import {
   ClientDetail,
   ClientPayload,
@@ -15,6 +17,7 @@ import {
 } from '@/lib/api/clients'
 
 interface ClientFormProps {
+  advisors: AdvisorOption[]
   mode: 'create' | 'edit'
   client?: ClientDetail
 }
@@ -53,7 +56,7 @@ function normalizePayload(values: ClientFormState): ClientPayload {
   }
 }
 
-export function ClientForm({ mode, client }: ClientFormProps) {
+export function ClientForm({ advisors, mode, client }: ClientFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [values, setValues] = useState<ClientFormState>(() => toInitialState(client))
@@ -162,16 +165,17 @@ export function ClientForm({ mode, client }: ClientFormProps) {
 
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="assignedAdvisorId">Asesor asignado</Label>
-          <Input
-            id="assignedAdvisorId"
+          <AdvisorSelect
+            advisors={advisors}
             value={values.assignedAdvisorId}
-            onChange={(event) =>
+            onValueChange={(assignedAdvisorId) =>
               setValues((current) => ({
                 ...current,
-                assignedAdvisorId: event.target.value,
+                assignedAdvisorId,
               }))
             }
-            placeholder="ID del perfil del asesor"
+            disabled={isPending}
+            placeholder="Selecciona el responsable comercial o técnico"
           />
         </div>
       </div>

@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState, useTransition, type FormEvent } from 'react'
+import { useState, useTransition, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Save } from 'lucide-react'
-import { listClients, type ClientListItem } from '@/lib/api/clients'
+import type { AdvisorOption } from '@/lib/admin/advisors'
+import type { ClientListItem } from '@/lib/api/clients'
 import {
   createFarmRecord,
   updateFarmRecord,
@@ -11,6 +12,7 @@ import {
   type FarmPayload,
   type FarmSpecies,
 } from '@/lib/api/farms'
+import { AdvisorSelect } from '@/components/admin/advisor-select'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -23,6 +25,8 @@ import {
 } from '@/components/ui/select'
 
 interface FarmFormProps {
+  advisors: AdvisorOption[]
+  clients: ClientListItem[]
   mode: 'create' | 'edit'
   farm?: FarmDetail
 }
@@ -58,40 +62,11 @@ function normalizePayload(values: FarmFormState): FarmPayload {
   }
 }
 
-export function FarmForm({ mode, farm }: FarmFormProps) {
+export function FarmForm({ advisors, clients, mode, farm }: FarmFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [clients, setClients] = useState<ClientListItem[]>([])
-  const [loadingClients, setLoadingClients] = useState(true)
   const [values, setValues] = useState<FarmFormState>(() => toInitialState(farm))
   const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-
-    void (async () => {
-      try {
-        const response = await listClients({ limit: 100, status: 'active' })
-        if (!active) return
-        setClients(response.items)
-      } catch (loadError) {
-        if (!active) return
-        setError(
-          loadError instanceof Error
-            ? loadError.message
-            : 'No se pudieron cargar los productores.',
-        )
-      } finally {
-        if (active) {
-          setLoadingClients(false)
-        }
-      }
-    })()
-
-    return () => {
-      active = false
-    }
-  }, [])
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -139,11 +114,15 @@ export function FarmForm({ mode, farm }: FarmFormProps) {
             onValueChange={(clientId) =>
               setValues((current) => ({ ...current, clientId }))
             }
-            disabled={loadingClients || isPending}
+            disabled={clients.length === 0 || isPending}
           >
             <SelectTrigger id="clientId">
               <SelectValue
-                placeholder={loadingClients ? 'Cargando productores...' : 'Selecciona un productor'}
+                placeholder={
+                  clients.length === 0
+                    ? 'No hay productores disponibles'
+                    : 'Selecciona un productor'
+                }
               />
             </SelectTrigger>
             <SelectContent>
@@ -215,16 +194,17 @@ export function FarmForm({ mode, farm }: FarmFormProps) {
 
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="assignedAdvisorId">Asesor asignado</Label>
-          <Input
-            id="assignedAdvisorId"
+          <AdvisorSelect
+            advisors={advisors}
             value={values.assignedAdvisorId}
-            onChange={(event) =>
+            onValueChange={(assignedAdvisorId) =>
               setValues((current) => ({
                 ...current,
-                assignedAdvisorId: event.target.value,
+                assignedAdvisorId,
               }))
             }
-            placeholder="UUID del asesor responsable"
+            disabled={isPending}
+            placeholder="Selecciona el asesor responsable"
           />
         </div>
       </div>
@@ -250,7 +230,7 @@ export function FarmForm({ mode, farm }: FarmFormProps) {
           >
             Cancelar
           </Button>
-          <Button type="submit" disabled={isPending || loadingClients}>
+          <Button type="submit" disabled={isPending || clients.length === 0}>
             {isPending ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             {mode === 'create' ? 'Crear granja' : 'Guardar cambios'}
           </Button>
