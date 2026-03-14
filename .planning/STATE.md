@@ -1,3 +1,18 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+current_phase: `07.1-portal-operativo-del-productor`
+status: in_progress
+stopped_at: Completed 07.1-01-PLAN.md
+last_updated: "2026-03-14T13:20:30.541Z"
+progress:
+  total_phases: 1
+  completed_phases: 0
+  total_plans: 5
+  completed_plans: 2
+---
+
 # STATE.md
 
 ## Project Reference
@@ -17,20 +32,23 @@ See: `.planning/PROJECT.md` (updated 2026-03-13)
 ## Execution Status
 
 - **Current phase:** `07.1-portal-operativo-del-productor`
-- **Last completed plan:** `07.1-03-PLAN.md`
-- **Plan progress in phase:** 1/5 summaries creados
-- **Last session:** 2026-03-14T13:15:38Z
-- **Stopped at:** Completed 07.1-03-PLAN.md
+- **Last completed plan:** `07.1-01-PLAN.md`
+- **Plan progress in phase:** 2/5 summaries creados
+- **Last session:** 2026-03-14T13:20:30.541Z
+- **Stopped at:** Completed 07.1-01-PLAN.md
 
 ## Decisions
 
+- [Phase 07.1-portal-operativo-del-productor]: Producer ownership now resolves in the auth guard via a unique active client match and is exposed as request.user.clientId.
 - El portal productor adopta el shell compartido de sidebar para alinear la navegación con el workspace admin y evitar lógica de navegación duplicada en las páginas.
 - Las rutas canónicas del portal productor pasan a ser `/portal/cases` y `/portal/farms`; `my-cases` y `my-farm` quedan como compatibilidad vía redirect.
+- [Phase 07.1-portal-operativo-del-productor]: Farm remains the site-level entity and OperatingUnit is the new child entity for galpones or species-specific equivalents.
 
 ## Performance Metrics
 
 | Phase | Plan | Duration | Tasks | Files | Completed |
 |-------|------|----------|-------|-------|-----------|
+| 07.1-portal-operativo-del-productor | 01 | 20 min | 2 | 7 | 2026-03-14 |
 | 07.1-portal-operativo-del-productor | 03 | 11min | 2 | 12 | 2026-03-14 |
 
 ## Issues
@@ -50,4 +68,4 @@ See: `.planning/PROJECT.md` (updated 2026-03-13)
 - Definir si la analítica del productor se alimenta solo de backend existente o requiere nuevos agregados dedicados.
 
 ---
-*Last updated: 2026-03-14 after executing 07.1-03*
+*Last updated: 2026-03-14 after executing 07.1-01*

@@ -21,15 +21,15 @@
 - [ ] **PORT-01**: El productor puede acceder a un dashboard de su operación.
 - [ ] **PORT-02**: El productor puede consultar casos, visitas y granjas asociadas.
 - [x] **PORT-03**: El portal productor debe evolucionar a una navegación persistente tipo sidebar.
-- [ ] **PORT-04**: El productor puede registrar y administrar sus granjas o unidades equivalentes.
-- [ ] **PORT-05**: El productor puede registrar galpones, naves o la unidad operativa equivalente para porcino.
+- [x] **PORT-04**: El productor puede registrar y administrar sus granjas o unidades equivalentes.
+- [x] **PORT-05**: El productor puede registrar galpones, naves o la unidad operativa equivalente para porcino.
 - [ ] **PORT-06**: El productor dispone de módulos de reportes, registros, analíticas, ventas, alertas y calculadoras.
 
 ### Swine Domain
 
 - [ ] **SWINE-01**: El dominio debe soportar operaciones porcinas además de avícolas.
 - [ ] **SWINE-02**: Las etiquetas, formularios y navegación deben adaptarse a terminología por especie.
-- [ ] **SWINE-03**: La estructura operativa debe admitir jerarquía productor -> granja/predio -> galpón o equivalente.
+- [x] **SWINE-03**: La estructura operativa debe admitir jerarquía productor -> granja/predio -> galpón o equivalente.
 
 ## v2 Requirements
 
@@ -58,12 +58,12 @@
 | PORT-01 | Phase 7 | Complete |
 | PORT-02 | Phase 7 | Complete |
 | PORT-03 | Phase 7.1 | Complete |
-| PORT-04 | Phase 7.1 | Pending |
-| PORT-05 | Phase 7.1 | Pending |
+| PORT-04 | Phase 7.1 | Complete |
+| PORT-05 | Phase 7.1 | Complete |
 | PORT-06 | Phase 7.1 | Pending |
 | SWINE-01 | Phase 1/2 | Complete |
 | SWINE-02 | Phase 7.1 | Pending |
-| SWINE-03 | Phase 7.1 | Pending |
+| SWINE-03 | Phase 7.1 | Complete |
 
 **Coverage:**
 - v1 requirements: 14 total

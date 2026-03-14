@@ -43,11 +43,11 @@
 **Objetivo:** Evolucionar el portal productor desde consulta básica a workspace operativo con sidebar persistente, estructura por granja/galpón y módulos de operación.
 **Dependencias:** Fases 2, 4, 5, 6, 7
 
-**Progreso de planes:** 1/5 completados
+**Progreso de planes:** 2/5 completados
 
 | Plan | Estado | Resumen |
 |------|--------|---------|
-| 07.1-01 | Pendiente | Sin ejecutar |
+| 07.1-01 | Completado | Ownership productor explícito y jerarquía `farm -> operating unit` en backend |
 | 07.1-02 | Pendiente | Sin ejecutar |
 | 07.1-03 | Completado | Shell persistente con sidebar y migración canónica de rutas `cases` / `farms` |
 | 07.1-04 | Pendiente | Sin ejecutar |
