@@ -4,15 +4,192 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { AuthUser } from '../common/decorators/current-user.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateFarmDto } from './dto/create-farm.dto';
+import { CreateOperatingUnitDto } from './dto/create-operating-unit.dto';
+import { CreateProducerFarmDto } from './dto/create-producer-farm.dto';
 import { ListFarmsQueryDto } from './dto/list-farms-query.dto';
+import { ListProducerFarmsQueryDto } from './dto/list-producer-farms-query.dto';
+import { ListProducerOperatingUnitsQueryDto } from './dto/list-producer-operating-units-query.dto';
 import { UpdateFarmDto } from './dto/update-farm.dto';
+import { UpdateOperatingUnitDto } from './dto/update-operating-unit.dto';
+import { UpdateProducerFarmDto } from './dto/update-producer-farm.dto';
 
 @Injectable()
 export class FarmsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  async findProducerFarms(user: AuthUser, query: ListProducerFarmsQueryDto) {
+    const organizationId = this.requireOrganizationId(user);
+    const clientId = this.getScopedClientId(user);
+
+    const items = await this.prisma.farm.findMany({
+      where: {
+        organizationId,
+        clientId,
+        ...(query.speciesType ? { speciesType: query.speciesType } : {}),
+      },
+      include: this.getProducerFarmInclude(),
+      orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+    });
+
+    return {
+      items,
+      meta: {
+        total: items.length,
+        filters: query,
+      },
+    };
+  }
+
+  async createProducerFarm(user: AuthUser, dto: CreateProducerFarmDto) {
+    return this.create(user, {
+      ...dto,
+      clientId: this.getScopedClientId(user),
+    });
+  }
+
+  async findProducerFarm(user: AuthUser, id: string) {
+    const farm = await this.findOne(user, id);
+    const operatingUnits = await this.prisma.operatingUnit.findMany({
+      where: {
+        organizationId: farm.organizationId,
+        clientId: farm.clientId,
+        farmId: farm.id,
+      },
+      include: this.getProducerOperatingUnitInclude(),
+      orderBy: [{ updatedAt: 'desc' }, { displayName: 'asc' }, { name: 'asc' }],
+    });
+
+    return {
+      ...farm,
+      operatingUnits,
+    };
+  }
+
+  async updateProducerFarm(user: AuthUser, id: string, dto: UpdateProducerFarmDto) {
+    return this.update(user, id, dto);
+  }
+
+  async listProducerOperatingUnits(
+    user: AuthUser,
+    query: ListProducerOperatingUnitsQueryDto,
+  ) {
+    const organizationId = this.requireOrganizationId(user);
+    const clientId = this.getScopedClientId(user);
+
+    if (query.farmId) {
+      await this.ensureFarmBelongsToOrganization(query.farmId, organizationId, clientId);
+    }
+
+    const items = await this.prisma.operatingUnit.findMany({
+      where: {
+        organizationId,
+        clientId,
+        ...(query.farmId ? { farmId: query.farmId } : {}),
+        ...(query.status ? { status: query.status } : {}),
+      },
+      include: this.getProducerOperatingUnitInclude(),
+      orderBy: [{ updatedAt: 'desc' }, { displayName: 'asc' }, { name: 'asc' }],
+    });
+
+    return {
+      items,
+      meta: {
+        total: items.length,
+        filters: query,
+      },
+    };
+  }
+
+  async createProducerOperatingUnit(user: AuthUser, dto: CreateOperatingUnitDto) {
+    const organizationId = this.requireOrganizationId(user);
+    const clientId = this.getScopedClientId(user);
+    const farm = await this.ensureFarmBelongsToOrganization(dto.farmId, organizationId, clientId);
+
+    return this.prisma.operatingUnit.create({
+      data: {
+        organizationId,
+        clientId,
+        farmId: farm.id,
+        name: dto.name.trim(),
+        displayName: this.cleanOptional(dto.displayName),
+        speciesType: farm.speciesType,
+        unitType: this.cleanOptional(dto.unitType),
+        capacity: dto.capacity,
+        status: dto.status ?? 'active',
+        ...(dto.metadata !== undefined
+          ? { metadata: dto.metadata as Prisma.InputJsonValue }
+          : {}),
+      },
+      include: this.getProducerOperatingUnitInclude(),
+    });
+  }
+
+  async findProducerOperatingUnit(user: AuthUser, id: string) {
+    const organizationId = this.requireOrganizationId(user);
+    const clientId = this.getScopedClientId(user);
+
+    const operatingUnit = await this.prisma.operatingUnit.findFirst({
+      where: {
+        id,
+        organizationId,
+        clientId,
+      },
+      include: {
+        ...this.getProducerOperatingUnitInclude(),
+        visits: {
+          orderBy: [{ visitDate: 'desc' }],
+          take: 10,
+        },
+      },
+    });
+
+    if (!operatingUnit) {
+      throw new NotFoundException('Unidad operativa no encontrada');
+    }
+
+    return operatingUnit;
+  }
+
+  async updateProducerOperatingUnit(
+    user: AuthUser,
+    id: string,
+    dto: UpdateOperatingUnitDto,
+  ) {
+    const organizationId = this.requireOrganizationId(user);
+    const clientId = this.getScopedClientId(user);
+    const operatingUnit = await this.ensureOperatingUnitBelongsToOrganization(
+      id,
+      organizationId,
+      clientId,
+    );
+
+    await this.ensureFarmBelongsToOrganization(
+      operatingUnit.farmId,
+      organizationId,
+      clientId,
+    );
+
+    return this.prisma.operatingUnit.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.displayName !== undefined
+          ? { displayName: this.cleanOptional(dto.displayName) }
+          : {}),
+        ...(dto.unitType !== undefined ? { unitType: this.cleanOptional(dto.unitType) } : {}),
+        ...(dto.capacity !== undefined ? { capacity: dto.capacity } : {}),
+        ...(dto.status !== undefined ? { status: dto.status } : {}),
+        ...(dto.metadata !== undefined
+          ? { metadata: dto.metadata as Prisma.InputJsonValue }
+          : {}),
+      },
+      include: this.getProducerOperatingUnitInclude(),
+    });
+  }
 
   async findAll(user: AuthUser, query: ListFarmsQueryDto) {
     const organizationId = this.requireOrganizationId(user);
@@ -189,6 +366,45 @@ export class FarmsService {
     });
   }
 
+  private getProducerFarmInclude() {
+    return {
+      client: {
+        select: {
+          id: true,
+          fullName: true,
+          companyName: true,
+          phone: true,
+          email: true,
+        },
+      },
+      _count: {
+        select: {
+          visits: true,
+          cases: true,
+          operatingUnits: true,
+        },
+      },
+    } satisfies Prisma.FarmInclude;
+  }
+
+  private getProducerOperatingUnitInclude() {
+    return {
+      farm: {
+        select: {
+          id: true,
+          name: true,
+          speciesType: true,
+        },
+      },
+      _count: {
+        select: {
+          visits: true,
+          cases: true,
+        },
+      },
+    } satisfies Prisma.OperatingUnitInclude;
+  }
+
   async getStats(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
     const scopedClientId = this.getScopedClientId(user);
@@ -293,6 +509,33 @@ export class FarmsService {
     }
 
     return farm;
+  }
+
+  private async ensureOperatingUnitBelongsToOrganization(
+    id: string,
+    organizationId: string,
+    clientId?: string | null,
+  ) {
+    const operatingUnit = await this.prisma.operatingUnit.findFirst({
+      where: {
+        id,
+        organizationId,
+        ...(clientId ? { clientId } : {}),
+      },
+      select: {
+        id: true,
+        farmId: true,
+        clientId: true,
+        speciesType: true,
+        status: true,
+      },
+    });
+
+    if (!operatingUnit) {
+      throw new NotFoundException('Unidad operativa no encontrada');
+    }
+
+    return operatingUnit;
   }
 
   private requireOrganizationId(user: AuthUser) {
