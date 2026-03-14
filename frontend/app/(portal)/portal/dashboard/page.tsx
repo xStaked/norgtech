@@ -34,13 +34,13 @@ export default async function PortalDashboardPage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Button asChild className="rounded-full bg-white text-primary hover:bg-white/90">
-                <Link href="/portal/my-cases">
-                  Ver mis casos
+                <Link href="/portal/cases">
+                  Ver casos
                   <ArrowRight className="size-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline" className="rounded-full border-white/20 bg-white/5 text-white hover:bg-white/10">
-                <Link href="/portal/my-farm">Ver mi granja</Link>
+                <Link href="/portal/farms">Ver granjas</Link>
               </Button>
             </div>
           </div>
@@ -128,7 +128,7 @@ export default async function PortalDashboardPage() {
               latestCases.map((item) => (
                 <Link
                   key={item.id}
-                  href={`/portal/my-cases/${item.id}`}
+                  href={`/portal/cases/${item.id}`}
                   className="block rounded-[1.5rem] border border-border/70 bg-background p-4 transition-colors hover:border-primary/20"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">

@@ -1,4 +1,4 @@
-import { redirect } from 'next/navigation'
+import { PortalCaseDetailView } from '@/components/portal/portal-case-detail-view'
 
 interface PortalCaseDetailPageProps {
   params: Promise<{ id: string }>
@@ -6,5 +6,6 @@ interface PortalCaseDetailPageProps {
 
 export default async function PortalCaseDetailPage({ params }: PortalCaseDetailPageProps) {
   const { id } = await params
-  redirect(`/portal/cases/${id}`)
+
+  return <PortalCaseDetailView id={id} />
 }
