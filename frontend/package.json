@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "node scripts/lint-portal-contracts.mjs"
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.37",

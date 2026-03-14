@@ -1,13 +1,13 @@
 import { Bird, PiggyBank, Sprout, Warehouse } from 'lucide-react'
-import type { FarmListItem } from '@/lib/api/farms'
+import type { ProducerFarmListItem } from '@/lib/api/portal-farms'
 import type { VisitListItem } from '@/lib/api/visits'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { getFarmSpeciesLabel } from '@/lib/api/farms'
+import { getFarmSpeciesLabel } from '@/lib/api/portal-farms'
 import { VisitHistoryCard } from '@/components/portal/visit-history-card'
 
 interface FarmOverviewProps {
-  farms: FarmListItem[]
+  farms: ProducerFarmListItem[]
   visits: VisitListItem[]
 }
 

@@ -1,6 +1,11 @@
 import type { CaseDetail, CaseListResponse } from '@/lib/api/cases'
 import type { PortalDashboardStats } from '@/lib/api/dashboard'
-import type { FarmListResponse } from '@/lib/api/farms'
+import type {
+  ProducerFarmDetail,
+  ProducerFarmListResponse,
+  ProducerOperatingUnitDetail,
+  ProducerOperatingUnitListResponse,
+} from '@/lib/api/portal-farms'
 import type { VisitListResponse } from '@/lib/api/visits'
 import { fetchBackend } from '@/app/(admin)/admin/_lib/backend-api'
 
@@ -17,7 +22,20 @@ export async function fetchPortalCase(id: string) {
 }
 
 export async function fetchPortalFarms() {
-  return fetchBackend<FarmListResponse>('/farms')
+  return fetchBackend<ProducerFarmListResponse>('/portal/farms')
+}
+
+export async function fetchPortalFarm(id: string) {
+  return fetchBackend<ProducerFarmDetail>(`/portal/farms/${id}`)
+}
+
+export async function fetchPortalOperatingUnits(farmId?: string) {
+  const query = farmId ? `?farmId=${encodeURIComponent(farmId)}` : ''
+  return fetchBackend<ProducerOperatingUnitListResponse>(`/portal/operating-units${query}`)
+}
+
+export async function fetchPortalOperatingUnit(id: string) {
+  return fetchBackend<ProducerOperatingUnitDetail>(`/portal/operating-units/${id}`)
 }
 
 export async function fetchPortalVisits() {
