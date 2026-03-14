@@ -8,12 +8,14 @@ import { Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { createClient } from '@supabase/supabase-js';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class SupabaseAuthGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private configService: ConfigService,
+    private prisma: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -51,12 +53,19 @@ export class SupabaseAuthGuard implements CanActivate {
         .eq('id', user.id)
         .single();
 
+      const clientId = await this.resolveProducerClientId(
+        profile?.role || 'cliente',
+        profile?.organization_id || null,
+        user.email,
+      );
+
       // Inyectar usuario en el request
       request.user = {
         id: user.id,
         email: user.email,
         role: profile?.role || 'cliente',
         organizationId: profile?.organization_id || null,
+        clientId,
       };
 
       return true;
@@ -72,5 +81,48 @@ export class SupabaseAuthGuard implements CanActivate {
       return authHeader.substring(7);
     }
     return null;
+  }
+
+  private async resolveProducerClientId(
+    role: string,
+    organizationId: string | null,
+    email: string | undefined,
+  ): Promise<string | null> {
+    if (role !== 'cliente') {
+      return null;
+    }
+
+    if (!organizationId) {
+      throw new UnauthorizedException(
+        'El productor autenticado no tiene organización asociada.',
+      );
+    }
+
+    const normalizedEmail = email?.trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new UnauthorizedException(
+        'El productor autenticado no tiene un email válido para resolver su acceso.',
+      );
+    }
+
+    const matchingClients = await this.prisma.client.findMany({
+      where: {
+        organizationId,
+        email: normalizedEmail,
+        status: 'active',
+      },
+      select: {
+        id: true,
+      },
+      take: 2,
+    });
+
+    if (matchingClients.length !== 1) {
+      throw new UnauthorizedException(
+        'No existe una asociación única entre el productor autenticado y su ficha de cliente.',
+      );
+    }
+
+    return matchingClients[0].id;
   }
 }

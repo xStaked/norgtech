@@ -18,7 +18,7 @@ export class CasesService {
 
   async findAll(user: AuthUser, query: ListCasesQueryDto) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const page = query.page ?? 1;
     const limit = query.limit ?? 10;
     const skip = (page - 1) * limit;
@@ -87,16 +87,17 @@ export class CasesService {
 
   async create(user: AuthUser, dto: CreateCaseDto) {
     const organizationId = this.requireOrganizationId(user);
-    await this.ensureClientBelongsToOrganization(dto.clientId, organizationId);
+    const clientId = this.resolveMutationClientId(user, dto.clientId);
+    await this.ensureClientBelongsToOrganization(clientId, organizationId);
 
     if (dto.farmId) {
-      await this.ensureFarmBelongsToOrganization(dto.farmId, organizationId, dto.clientId);
+      await this.ensureFarmBelongsToOrganization(dto.farmId, organizationId, clientId);
     }
 
     const created = await this.prisma.case.create({
       data: {
         organizationId,
-        clientId: dto.clientId,
+        clientId,
         farmId: this.cleanOptional(dto.farmId),
         title: dto.title.trim(),
         description: this.cleanOptional(dto.description),
@@ -132,7 +133,7 @@ export class CasesService {
 
   async findOne(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const caseRecord = await this.prisma.case.findFirst({
       where: {
         id,
@@ -218,15 +219,21 @@ export class CasesService {
 
   async update(user: AuthUser, id: string, dto: UpdateCaseDto) {
     const organizationId = this.requireOrganizationId(user);
-    const existingCase = await this.ensureCaseBelongsToOrganization(id, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
+    const existingCase = await this.ensureCaseBelongsToOrganization(
+      id,
+      organizationId,
+      scopedClientId,
+    );
 
-    const nextClientId = dto.clientId ?? existingCase.clientId;
+    const nextClientId =
+      dto.clientId !== undefined
+        ? this.resolveMutationClientId(user, dto.clientId)
+        : existingCase.clientId;
     const nextFarmId =
       dto.farmId !== undefined ? this.cleanOptional(dto.farmId) : existingCase.farmId;
 
-    if (dto.clientId) {
-      await this.ensureClientBelongsToOrganization(dto.clientId, organizationId);
-    }
+    await this.ensureClientBelongsToOrganization(nextClientId, organizationId);
 
     if (nextFarmId) {
       await this.ensureFarmBelongsToOrganization(nextFarmId, organizationId, nextClientId);
@@ -238,7 +245,9 @@ export class CasesService {
       const caseRecord = await tx.case.update({
         where: { id },
         data: {
-          ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
+          ...(dto.clientId !== undefined || nextClientId !== existingCase.clientId
+            ? { clientId: nextClientId }
+            : {}),
           ...(dto.farmId !== undefined ? { farmId: nextFarmId } : {}),
           ...(dto.title !== undefined ? { title: dto.title.trim() } : {}),
           ...(dto.description !== undefined
@@ -298,7 +307,11 @@ export class CasesService {
 
   async addMessage(user: AuthUser, id: string, dto: AddCaseMessageDto) {
     const organizationId = this.requireOrganizationId(user);
-    await this.ensureCaseBelongsToOrganization(id, organizationId);
+    await this.ensureCaseBelongsToOrganization(
+      id,
+      organizationId,
+      this.getScopedClientId(user),
+    );
 
     return this.prisma.caseMessage.create({
       data: {
@@ -312,7 +325,7 @@ export class CasesService {
 
   async getStats(user: AuthUser) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const grouped = await this.prisma.case.groupBy({
       by: ['status'],
       where: {
@@ -355,11 +368,16 @@ export class CasesService {
     return `CASO-${String(caseNumber).padStart(4, '0')}`;
   }
 
-  private async ensureCaseBelongsToOrganization(id: string, organizationId: string) {
+  private async ensureCaseBelongsToOrganization(
+    id: string,
+    organizationId: string,
+    clientId?: string | null,
+  ) {
     const caseRecord = await this.prisma.case.findFirst({
       where: {
         id,
         organizationId,
+        ...(clientId ? { clientId } : {}),
       },
       select: {
         id: true,
@@ -440,46 +458,36 @@ export class CasesService {
     return user.organizationId;
   }
 
-  private async resolveScopedClientId(user: AuthUser, organizationId: string) {
+  private getScopedClientId(user: AuthUser) {
     if (user.role !== 'cliente') {
       return null;
     }
 
-    const email = user.email?.trim().toLowerCase();
-    if (email) {
-      const client = await this.prisma.client.findFirst({
-        where: {
-          organizationId,
-          email,
-          status: 'active',
-        },
-        select: {
-          id: true,
-        },
-      });
+    if (!user.clientId) {
+      throw new ForbiddenException(
+        'El productor autenticado no tiene una relación de propiedad válida.',
+      );
+    }
 
-      if (client) {
-        return client.id;
+    return user.clientId;
+  }
+
+  private resolveMutationClientId(user: AuthUser, requestedClientId?: string) {
+    const scopedClientId = this.getScopedClientId(user);
+    if (!scopedClientId) {
+      if (!requestedClientId) {
+        throw new BadRequestException('Debe indicar el productor asociado al caso.');
       }
+
+      return requestedClientId;
     }
 
-    const activeClients = await this.prisma.client.findMany({
-      where: {
-        organizationId,
-        status: 'active',
-      },
-      select: {
-        id: true,
-      },
-      take: 2,
-    });
-
-    if (activeClients.length === 1) {
-      return activeClients[0].id;
+    if (requestedClientId && requestedClientId !== scopedClientId) {
+      throw new ForbiddenException(
+        'No puedes crear o reasignar casos a otro productor.',
+      );
     }
 
-    throw new ForbiddenException(
-      'No existe un productor activo asociado al usuario autenticado',
-    );
+    return scopedClientId;
   }
 }

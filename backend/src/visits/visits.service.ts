@@ -33,7 +33,7 @@ export class VisitsService {
 
   async findAll(user: AuthUser, query: ListVisitsQueryDto) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const where: Prisma.TechnicalVisitWhereInput = {
       organizationId,
       ...(query.advisorId ? { advisorId: query.advisorId } : {}),
@@ -68,15 +68,16 @@ export class VisitsService {
 
   async create(user: AuthUser, dto: CreateVisitDto) {
     const organizationId = this.requireOrganizationId(user);
-    const farm = await this.ensureFarmContext(dto.farmId, organizationId);
+    const clientId = this.resolveMutationClientId(user, dto.clientId);
+    const farm = await this.ensureFarmContext(dto.farmId, organizationId, clientId);
 
-    if (farm.clientId !== dto.clientId) {
+    if (farm.clientId !== clientId) {
       throw new BadRequestException(
         'La granja seleccionada no pertenece al productor indicado.',
       );
     }
 
-    await this.ensureClientBelongsToOrganization(dto.clientId, organizationId);
+    await this.ensureClientBelongsToOrganization(clientId, organizationId);
     await this.ensureAdvisorBelongsToOrganization(dto.advisorId, organizationId);
 
     const linkedCase = dto.caseId
@@ -84,14 +85,14 @@ export class VisitsService {
       : null;
 
     if (linkedCase) {
-      this.assertCaseMatchesVisit(linkedCase, dto.clientId, dto.farmId);
+      this.assertCaseMatchesVisit(linkedCase, clientId, dto.farmId);
     }
 
     const created = await this.prisma.technicalVisit.create({
       data: {
         organizationId,
         caseId: this.cleanOptional(dto.caseId),
-        clientId: dto.clientId,
+        clientId,
         farmId: dto.farmId,
         advisorId: dto.advisorId,
         visitDate: new Date(dto.visitDate),
@@ -107,7 +108,7 @@ export class VisitsService {
 
   async findOne(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const visit = await this.prisma.technicalVisit.findFirst({
       where: {
         id,
@@ -126,15 +127,23 @@ export class VisitsService {
 
   async update(user: AuthUser, id: string, dto: UpdateVisitDto) {
     const organizationId = this.requireOrganizationId(user);
-    const existingVisit = await this.ensureVisitBelongsToOrganization(id, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
+    const existingVisit = await this.ensureVisitBelongsToOrganization(
+      id,
+      organizationId,
+      scopedClientId,
+    );
 
-    const nextClientId = dto.clientId ?? existingVisit.clientId;
+    const nextClientId =
+      dto.clientId !== undefined
+        ? this.resolveMutationClientId(user, dto.clientId)
+        : existingVisit.clientId;
     const nextFarmId = dto.farmId ?? existingVisit.farmId;
     const nextAdvisorId = dto.advisorId ?? existingVisit.advisorId;
     const nextCaseId =
       dto.caseId !== undefined ? this.cleanOptional(dto.caseId) : existingVisit.caseId;
 
-    const farm = await this.ensureFarmContext(nextFarmId, organizationId);
+    const farm = await this.ensureFarmContext(nextFarmId, organizationId, nextClientId);
 
     if (farm.clientId !== nextClientId) {
       throw new BadRequestException(
@@ -204,7 +213,7 @@ export class VisitsService {
 
   async findByFarm(user: AuthUser, farmId: string) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     await this.ensureFarmContext(farmId, organizationId, scopedClientId);
 
     const visits = await this.prisma.technicalVisit.findMany({
@@ -324,11 +333,16 @@ export class VisitsService {
     }
   }
 
-  private async ensureVisitBelongsToOrganization(id: string, organizationId: string) {
+  private async ensureVisitBelongsToOrganization(
+    id: string,
+    organizationId: string,
+    clientId?: string | null,
+  ) {
     const visit = await this.prisma.technicalVisit.findFirst({
       where: {
         id,
         organizationId,
+        ...(clientId ? { clientId } : {}),
       },
     });
 
@@ -443,45 +457,37 @@ export class VisitsService {
     return user.organizationId;
   }
 
-  private async resolveScopedClientId(user: AuthUser, organizationId: string) {
+  private getScopedClientId(user: AuthUser) {
     if (user.role !== 'cliente') {
       return null;
     }
 
-    const email = user.email?.trim().toLowerCase();
-    if (email) {
-      const client = await this.prisma.client.findFirst({
-        where: {
-          organizationId,
-          email,
-          status: 'active',
-        },
-        select: { id: true },
-      });
+    if (!user.clientId) {
+      throw new ForbiddenException(
+        'El productor autenticado no tiene una relación de propiedad válida.',
+      );
+    }
 
-      if (client) {
-        return client.id;
+    return user.clientId;
+  }
+
+  private resolveMutationClientId(user: AuthUser, requestedClientId?: string) {
+    const scopedClientId = this.getScopedClientId(user);
+    if (!scopedClientId) {
+      if (!requestedClientId) {
+        throw new BadRequestException('Debe indicar el productor asociado a la visita.');
       }
+
+      return requestedClientId;
     }
 
-    const activeClients = await this.prisma.client.findMany({
-      where: {
-        organizationId,
-        status: 'active',
-      },
-      select: {
-        id: true,
-      },
-      take: 2,
-    });
-
-    if (activeClients.length === 1) {
-      return activeClients[0].id;
+    if (requestedClientId && requestedClientId !== scopedClientId) {
+      throw new ForbiddenException(
+        'No puedes crear o reasignar visitas a otro productor.',
+      );
     }
 
-    throw new ForbiddenException(
-      'No existe un productor activo asociado al usuario autenticado.',
-    );
+    return scopedClientId;
   }
 
   private cleanOptional(value?: string | null) {

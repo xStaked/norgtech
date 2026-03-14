@@ -16,7 +16,7 @@ export class FarmsService {
 
   async findAll(user: AuthUser, query: ListFarmsQueryDto) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
 
     const items = await this.prisma.farm.findMany({
       where: {
@@ -60,12 +60,13 @@ export class FarmsService {
 
   async create(user: AuthUser, dto: CreateFarmDto) {
     const organizationId = this.requireOrganizationId(user);
-    await this.ensureClientBelongsToOrganization(dto.clientId, organizationId);
+    const clientId = this.resolveMutationClientId(user, dto.clientId);
+    await this.ensureClientBelongsToOrganization(clientId, organizationId);
 
     return this.prisma.farm.create({
       data: {
         organizationId,
-        clientId: dto.clientId,
+        clientId,
         name: dto.name.trim(),
         speciesType: dto.speciesType,
         location: this.cleanOptional(dto.location),
@@ -96,7 +97,7 @@ export class FarmsService {
 
   async findOne(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const farm = await this.prisma.farm.findFirst({
       where: {
         id,
@@ -139,16 +140,25 @@ export class FarmsService {
 
   async update(user: AuthUser, id: string, dto: UpdateFarmDto) {
     const organizationId = this.requireOrganizationId(user);
-    await this.ensureFarmBelongsToOrganization(id, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
+    const existingFarm = await this.ensureFarmBelongsToOrganization(
+      id,
+      organizationId,
+      scopedClientId,
+    );
+    const nextClientId =
+      dto.clientId !== undefined
+        ? this.resolveMutationClientId(user, dto.clientId)
+        : existingFarm.clientId;
 
-    if (dto.clientId) {
-      await this.ensureClientBelongsToOrganization(dto.clientId, organizationId);
-    }
+    await this.ensureClientBelongsToOrganization(nextClientId, organizationId);
 
     return this.prisma.farm.update({
       where: { id },
       data: {
-        ...(dto.clientId !== undefined ? { clientId: dto.clientId } : {}),
+        ...(dto.clientId !== undefined || nextClientId !== existingFarm.clientId
+          ? { clientId: nextClientId }
+          : {}),
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.speciesType !== undefined ? { speciesType: dto.speciesType } : {}),
         ...(dto.location !== undefined ? { location: this.cleanOptional(dto.location) } : {}),
@@ -181,7 +191,7 @@ export class FarmsService {
 
   async getStats(user: AuthUser, id: string) {
     const organizationId = this.requireOrganizationId(user);
-    const scopedClientId = await this.resolveScopedClientId(user, organizationId);
+    const scopedClientId = this.getScopedClientId(user);
     const farm = await this.ensureFarmBelongsToOrganization(id, organizationId, scopedClientId);
 
     const [openCases, totalCases, totalVisits, lastVisit] =
@@ -270,6 +280,7 @@ export class FarmsService {
       },
       select: {
         id: true,
+        clientId: true,
         name: true,
         speciesType: true,
         capacity: true,
@@ -294,47 +305,37 @@ export class FarmsService {
     return user.organizationId;
   }
 
-  private async resolveScopedClientId(user: AuthUser, organizationId: string) {
+  private getScopedClientId(user: AuthUser) {
     if (user.role !== 'cliente') {
       return null;
     }
 
-    const email = user.email?.trim().toLowerCase();
-    if (email) {
-      const client = await this.prisma.client.findFirst({
-        where: {
-          organizationId,
-          email,
-          status: 'active',
-        },
-        select: {
-          id: true,
-        },
-      });
+    if (!user.clientId) {
+      throw new ForbiddenException(
+        'El productor autenticado no tiene una relación de propiedad válida.',
+      );
+    }
 
-      if (client) {
-        return client.id;
+    return user.clientId;
+  }
+
+  private resolveMutationClientId(user: AuthUser, requestedClientId?: string) {
+    const scopedClientId = this.getScopedClientId(user);
+    if (!scopedClientId) {
+      if (!requestedClientId) {
+        throw new BadRequestException('Debe indicar el productor asociado a la granja.');
       }
+
+      return requestedClientId;
     }
 
-    const activeClients = await this.prisma.client.findMany({
-      where: {
-        organizationId,
-        status: 'active',
-      },
-      select: {
-        id: true,
-      },
-      take: 2,
-    });
-
-    if (activeClients.length === 1) {
-      return activeClients[0].id;
+    if (requestedClientId && requestedClientId !== scopedClientId) {
+      throw new ForbiddenException(
+        'No puedes crear o reasignar granjas a otro productor.',
+      );
     }
 
-    throw new ForbiddenException(
-      'No existe un productor activo asociado al usuario autenticado',
-    );
+    return scopedClientId;
   }
 
   private cleanOptional(value?: string | null) {
