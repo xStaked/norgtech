@@ -43,6 +43,7 @@ model Client {
   updatedAt         DateTime         @updatedAt @map("updated_at")
   cases             Case[]
   farms             Farm[]
+  operatingUnits    OperatingUnit[]
   visits            TechnicalVisit[]
 
   @@index([organizationId])
@@ -64,6 +65,7 @@ model Farm {
   cases             Case[]
   client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
   fcaCalcs          FcaCalculation[]
+  operatingUnits    OperatingUnit[]
   roiCalcs          RoiCalculation[]
   visits            TechnicalVisit[]
 
@@ -73,11 +75,42 @@ model Farm {
   @@map("farms")
 }
 
+model OperatingUnit {
+  id             String            @id @default(uuid()) @db.Uuid
+  farmId         String            @db.Uuid @map("farm_id")
+  clientId       String            @db.Uuid @map("client_id")
+  organizationId String            @db.Uuid @map("organization_id")
+  name           String
+  displayName    String?           @map("display_name")
+  speciesType    String            @map("species_type")
+  unitType       String?           @map("unit_type")
+  capacity       Int?
+  status         String            @default("active")
+  metadata       Json?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  cases          Case[]
+  client         Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  farm           Farm              @relation(fields: [farmId], references: [id], onDelete: Cascade)
+  fcaCalcs       FcaCalculation[]
+  roiCalcs       RoiCalculation[]
+  visits         TechnicalVisit[]
+
+  @@unique([farmId, name])
+  @@index([organizationId])
+  @@index([clientId])
+  @@index([farmId])
+  @@index([status])
+  @@index([speciesType])
+  @@map("operating_units")
+}
+
 model Case {
   id             String        @id @default(uuid()) @db.Uuid
   organizationId String        @db.Uuid @map("organization_id")
   clientId       String        @db.Uuid @map("client_id")
   farmId         String?       @db.Uuid @map("farm_id")
+  operatingUnitId String?      @db.Uuid @map("operating_unit_id")
   caseNumber     Int           @default(autoincrement()) @unique @map("case_number")
   title          String
   description    String?
@@ -91,12 +124,14 @@ model Case {
   messages       CaseMessage[]
   client         Client        @relation(fields: [clientId], references: [id])
   farm           Farm?         @relation(fields: [farmId], references: [id])
+  operatingUnit  OperatingUnit? @relation(fields: [operatingUnitId], references: [id])
   visits         TechnicalVisit[]
 
   @@index([organizationId])
   @@index([status])
   @@index([clientId])
   @@index([farmId])
+  @@index([operatingUnitId])
   @@index([assignedTechId])
   @@map("cases")
 }
@@ -121,6 +156,7 @@ model TechnicalVisit {
   caseId          String?  @db.Uuid @map("case_id")
   clientId        String   @db.Uuid @map("client_id")
   farmId          String   @db.Uuid @map("farm_id")
+  operatingUnitId String?  @db.Uuid @map("operating_unit_id")
   advisorId       String   @db.Uuid @map("advisor_id")
   visitDate       DateTime @map("visit_date")
   birdCount       Int?     @map("bird_count")
@@ -136,11 +172,13 @@ model TechnicalVisit {
   case            Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
   client          Client   @relation(fields: [clientId], references: [id])
   farm            Farm     @relation(fields: [farmId], references: [id])
+  operatingUnit   OperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([caseId])
   @@index([clientId])
   @@index([farmId])
+  @@index([operatingUnitId])
   @@index([advisorId])
   @@map("technical_visits")
 }
@@ -150,6 +188,7 @@ model FcaCalculation {
   userId           String   @db.Uuid @map("user_id")
   organizationId   String   @db.Uuid @map("organization_id")
   farmId           String?  @db.Uuid @map("farm_id")
+  operatingUnitId  String?  @db.Uuid @map("operating_unit_id")
   feedConsumedKg   Float    @map("feed_consumed_kg")
   birdWeightKg     Float    @map("bird_weight_kg")
   mortalityCount   Int      @map("mortality_count")
@@ -161,9 +200,11 @@ model FcaCalculation {
   potentialSavings Float    @map("potential_savings")
   createdAt        DateTime @default(now()) @map("created_at")
   farm             Farm?    @relation(fields: [farmId], references: [id])
+  operatingUnit    OperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([farmId])
+  @@index([operatingUnitId])
   @@index([userId])
   @@map("fca_calculations")
 }
@@ -173,6 +214,7 @@ model RoiCalculation {
   userId          String   @db.Uuid @map("user_id")
   organizationId  String   @db.Uuid @map("organization_id")
   farmId          String?  @db.Uuid @map("farm_id")
+  operatingUnitId String?  @db.Uuid @map("operating_unit_id")
   feedSavings     Float    @map("feed_savings")
   weightGainValue Float    @map("weight_gain_value")
   additiveCost    Float    @map("additive_cost")
@@ -181,9 +223,11 @@ model RoiCalculation {
   breakEven       Float    @map("break_even")
   createdAt       DateTime @default(now()) @map("created_at")
   farm            Farm?    @relation(fields: [farmId], references: [id])
+  operatingUnit   OperatingUnit? @relation(fields: [operatingUnitId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([farmId])
+  @@index([operatingUnitId])
   @@index([userId])
   @@map("roi_calculations")
 }
