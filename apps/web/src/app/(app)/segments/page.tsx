@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { apiFetch } from "@/lib/api.server";
 
 interface Segment {
@@ -22,6 +23,20 @@ export default async function SegmentsPage() {
         }}
       >
         <h1 style={{ margin: 0 }}>Segmentos de cliente</h1>
+        <Link
+          href="/segments/new"
+          style={{
+            padding: "0.5rem 1rem",
+            borderRadius: "0.5rem",
+            backgroundColor: "#10233f",
+            color: "#ffffff",
+            textDecoration: "none",
+            fontWeight: 600,
+            fontSize: "0.875rem",
+          }}
+        >
+          Nuevo segmento
+        </Link>
       </div>
 
       {segments.length === 0 ? (
