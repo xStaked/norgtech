@@ -1,4 +1,11 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 
 interface ActivityItem {
@@ -10,6 +17,15 @@ interface ActivityItem {
   createdAt: string;
 }
 
+interface QueueItem {
+  id: string;
+  kind: "task" | "visit";
+  title: string;
+  customerName: string;
+  scheduledAt: string;
+  status: string;
+}
+
 interface DashboardSummary {
   openQuotes: number;
   pipelineValue: number;
@@ -17,182 +33,232 @@ interface DashboardSummary {
   activeOrders: number;
   weeklyVisits: number;
   pendingFollowUps: number;
+  overdueFollowUps: number;
+  todayVisits: number;
+  myQueue: QueueItem[];
   recentActivity: ActivityItem[];
 }
 
 const kpiCards = [
-  {
-    key: "openQuotes" as const,
-    label: "Cotizaciones abiertas",
-    color: "#3498db",
-  },
-  {
-    key: "pipelineValue" as const,
-    label: "Valor pipeline",
-    color: "#27ae60",
-    format: (v: number) => `$${Math.round(v).toLocaleString("es-CO")}`,
-  },
-  {
-    key: "closedDeals" as const,
-    label: "Ventas cerradas (30d)",
-    color: "#9b59b6",
-  },
-  {
-    key: "activeOrders" as const,
-    label: "Pedidos activos",
-    color: "#e67e22",
-  },
-  {
-    key: "weeklyVisits" as const,
-    label: "Visitas esta semana",
-    color: "#1abc9c",
-  },
-  {
-    key: "pendingFollowUps" as const,
-    label: "Seguimientos pendientes",
-    color: "#c0392b",
-  },
-];
+  { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const },
+  { key: "pipelineValue" as const, label: "Valor pipeline", tone: "success" as const },
+  { key: "closedDeals" as const, label: "Ventas cerradas 30d", tone: "success" as const },
+  { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const },
+  { key: "weeklyVisits" as const, label: "Visitas esta semana", tone: "info" as const },
+  { key: "pendingFollowUps" as const, label: "Seguimientos pendientes", tone: "danger" as const },
+] as const;
 
 const quickLinks = [
   { href: "/customers/new", label: "Nuevo cliente" },
   { href: "/opportunities/new", label: "Nueva oportunidad" },
   { href: "/quotes/new", label: "Nueva cotización" },
   { href: "/orders/new", label: "Nuevo pedido" },
-];
+] as const;
 
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("es-CO", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+const currencyFormatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
+
+const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+const timeFormatter = new Intl.DateTimeFormat("es-CO", {
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+function formatDateTime(value: string) {
+  return dateTimeFormatter.format(new Date(value));
 }
+
+function formatKpiValue(
+  summary: DashboardSummary | null,
+  key: (typeof kpiCards)[number]["key"],
+) {
+  const value = summary?.[key] ?? 0;
+
+  if (key === "pipelineValue") {
+    return currencyFormatter.format(Math.round(value));
+  }
+
+  return value.toLocaleString("es-CO");
+}
+
+const queueStatusTone: Record<string, CrmStatusTone> = {
+  programada: "warning",
+  pendiente: "warning",
+  vencida: "danger",
+  completada: "success",
+  no_realizada: "neutral",
+  cancelada: "danger",
+};
 
 export default async function DashboardPage() {
   const response = await apiFetch("/dashboard/summary");
-  const summary: DashboardSummary | null = response.ok
-    ? await response.json()
-    : null;
+  const summary: DashboardSummary | null = response.ok ? await response.json() : null;
 
   return (
-    <div>
-      <h1 style={{ margin: 0, marginBottom: "1.5rem" }}>Dashboard</h1>
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Centro operativo"
+        title="Dashboard operativo"
+        description="Resumen comercial, actividad reciente y próximas acciones del equipo."
+        actions={
+          <>
+            <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>
+            <ButtonLink href="/agenda" variant="secondary">
+              Ver agenda
+            </ButtonLink>
+          </>
+        }
+      />
 
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-          gap: "1rem",
-          marginBottom: "2rem",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16,
         }}
       >
-        {kpiCards.map((card) => {
-          const value = summary ? (summary[card.key] as number) : 0;
-          return (
-            <div
-              key={card.key}
-              style={{
-                backgroundColor: "#ffffff",
-                borderRadius: "0.75rem",
-                boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-                padding: "1.25rem",
-                borderLeft: `4px solid ${card.color}`,
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "1.75rem",
-                  fontWeight: 700,
-                  color: "#10233f",
-                  lineHeight: 1.2,
-                }}
-              >
-                {card.format ? card.format(value) : value}
-              </div>
-              <div
-                style={{
-                  fontSize: "0.875rem",
-                  color: "#52637a",
-                  marginTop: "0.25rem",
-                }}
-              >
-                {card.label}
-              </div>
-            </div>
-          );
-        })}
+        {kpiCards.map((card) => (
+          <StatCard
+            key={card.key}
+            label={card.label}
+            tone={card.tone}
+            value={formatKpiValue(summary, card.key)}
+          />
+        ))}
       </div>
 
-      <div style={{ marginBottom: "2rem" }}>
-        <h2 style={{ fontSize: "1.125rem", margin: 0, marginBottom: "1rem", color: "#10233f" }}>
-          Acceso rápido
-        </h2>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
-          {quickLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              style={{
-                padding: "0.5rem 1rem",
-                borderRadius: "0.5rem",
-                backgroundColor: "#10233f",
-                color: "#ffffff",
-                textDecoration: "none",
-                fontWeight: 600,
-                fontSize: "0.875rem",
-              }}
-            >
-              {link.label}
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <h2 style={{ fontSize: "1.125rem", margin: 0, marginBottom: "1rem", color: "#10233f" }}>
-          Actividad reciente
-        </h2>
-        {summary && summary.recentActivity.length > 0 ? (
-          <div style={{ display: "grid", gap: "0.75rem" }}>
-            {summary.recentActivity.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  backgroundColor: "#ffffff",
-                  padding: "1rem 1.25rem",
-                  borderRadius: "0.75rem",
-                  boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-                }}
-              >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(0, 1.5fr) minmax(320px, 1fr)",
+          gap: 16,
+        }}
+      >
+        <SectionCard
+          title="Actividad reciente"
+          description="Eventos relevantes generados por cotizaciones, pedidos, visitas y seguimiento."
+        >
+          {summary && summary.recentActivity.length > 0 ? (
+            <div style={{ display: "grid", gap: 12 }}>
+              {summary.recentActivity.map((item) => (
                 <div
+                  key={item.id}
                   style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "flex-start",
-                    flexWrap: "wrap",
-                    gap: "0.25rem",
+                    display: "grid",
+                    gap: 6,
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    background: "rgba(238, 243, 248, 0.62)",
                   }}
                 >
-                  <div style={{ fontWeight: 600, color: "#10233f" }}>
-                    {item.entityType} — {item.action}
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <strong>{item.entityType} · {item.action}</strong>
+                    <span style={{ color: "#6b7c93", fontSize: 13 }}>
+                      {formatDateTime(item.createdAt)}
+                    </span>
                   </div>
-                  <div style={{ fontSize: "0.8125rem", color: "#6b7c93", whiteSpace: "nowrap" }}>
-                    {formatDateTime(item.createdAt)}
-                  </div>
+                  <span style={{ color: "#52637a", fontSize: 14 }}>
+                    Usuario: {item.actorName}
+                  </span>
                 </div>
-                <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                  Usuario: {item.actorName}
-                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="Sin actividad reciente"
+              description="Cuando el equipo registre movimientos comerciales, aparecerán aquí."
+            />
+          )}
+        </SectionCard>
+
+        <div style={{ display: "grid", gap: 16 }}>
+          <SectionCard
+            title="Mi cola de trabajo"
+            description="Próximas visitas y tareas asignadas a ti, ordenadas por urgencia."
+            actions={
+              <ButtonLink href="/agenda" variant="ghost" size="sm">
+                Ver agenda
+              </ButtonLink>
+            }
+          >
+            {summary && summary.myQueue.length > 0 ? (
+              <div style={{ display: "grid", gap: 12 }}>
+                {summary.myQueue.map((item) => {
+                  const href = item.kind === "visit" ? `/visits/${item.id}` : `/follow-ups/${item.id}`;
+                  return (
+                    <Link
+                      key={`${item.kind}-${item.id}`}
+                      href={href}
+                      style={{
+                        display: "grid",
+                        gap: 8,
+                        padding: "12px 14px",
+                        borderRadius: crmTheme.radius.md,
+                        background: crmTheme.colors.surfaceMuted,
+                        border: `1px solid ${crmTheme.colors.border}`,
+                        textDecoration: "none",
+                        color: "inherit",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: item.kind === "visit" ? crmTheme.colors.info : crmTheme.colors.textMuted }}>
+                          {item.kind === "visit" ? "Visita" : "Seguimiento"}
+                        </span>
+                        <StatusBadge tone={queueStatusTone[item.status] ?? "neutral"}>
+                          {item.status.replace(/_/g, " ")}
+                        </StatusBadge>
+                      </div>
+                      <strong style={{ fontSize: 14, color: crmTheme.colors.text }}>{item.title}</strong>
+                      <span style={{ fontSize: 13, color: crmTheme.colors.textMuted }}>{item.customerName}</span>
+                      <span style={{ fontSize: 12, color: crmTheme.colors.textSubtle }}>{timeFormatter.format(new Date(item.scheduledAt))}</span>
+                    </Link>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        ) : (
-          <p style={{ color: "#52637a" }}>No hay actividad reciente.</p>
-        )}
+            ) : (
+              <EmptyState
+                title="Sin elementos asignados"
+                description="No tienes visitas ni tareas pendientes asignadas a tu usuario."
+              />
+            )}
+          </SectionCard>
+
+          <SectionCard
+            title="Acciones rápidas"
+            description="Atajos a los flujos que más se repiten en la operación diaria."
+          >
+            <div style={{ display: "grid", gap: 10 }}>
+              {quickLinks.map((link) => (
+                <ButtonLink
+                  key={link.href}
+                  href={link.href}
+                  variant="secondary"
+                  style={{ justifyContent: "space-between" }}
+                  trailing={<span aria-hidden="true">›</span>}
+                >
+                  {link.label}
+                </ButtonLink>
+              ))}
+            </div>
+          </SectionCard>
+        </div>
       </div>
     </div>
   );

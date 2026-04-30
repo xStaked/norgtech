@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { FollowUpTaskForm } from "@/components/follow-ups/follow-up-task-form";
 
@@ -22,23 +24,24 @@ export default async function NewFollowUpPage() {
   const opportunities: Opportunity[] = opportunitiesRes.ok ? await opportunitiesRes.json() : [];
 
   return (
-    <div>
-      <Link
-        href="/follow-ups"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Seguimientos"
+        title="Nueva tarea de seguimiento"
+        description="Crea una acción comercial con fecha, tipo y relación directa con cliente u oportunidad."
+        actions={
+          <ButtonLink href="/follow-ups" variant="secondary">
+            Volver a seguimientos
+          </ButtonLink>
+        }
+      />
+
+      <SectionCard
+        title="Tarea operativa"
+        description="Define el compromiso, su vencimiento y el contexto comercial asociado."
       >
-        ← Volver a seguimientos
-      </Link>
-
-      <h1 style={{ marginTop: 0 }}>Nueva tarea de seguimiento</h1>
-
-      <FollowUpTaskForm customers={customers} opportunities={opportunities} />
+        <FollowUpTaskForm customers={customers} opportunities={opportunities} />
+      </SectionCard>
     </div>
   );
 }

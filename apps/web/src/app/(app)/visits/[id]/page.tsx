@@ -1,7 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiFetch } from "@/lib/api.server";
 import { VisitActions } from "@/components/visits/visit-actions";
+import { ReportGenerateButton } from "@/components/reports/report-generate-button";
+import { ButtonLink } from "@/components/ui/button-link";
+import { DetailSection } from "@/components/ui/detail-section";
+import { InlineMetric } from "@/components/ui/inline-metric";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { CrmStatusTone } from "@/components/ui/theme";
+import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
   id: string;
@@ -32,12 +40,23 @@ const statusLabels: Record<string, string> = {
   no_realizada: "No realizada",
 };
 
-const statusColors: Record<string, string> = {
-  programada: "#f39c12",
-  completada: "#27ae60",
-  cancelada: "#c0392b",
-  no_realizada: "#6b7c93",
+const statusTones: Record<string, CrmStatusTone> = {
+  programada: "warning",
+  completada: "success",
+  cancelada: "danger",
+  no_realizada: "neutral",
 };
+
+const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const linkStyle = {
+  color: "#10233f",
+  fontWeight: 700,
+  textDecoration: "none",
+} as const;
 
 export default async function VisitDetailPage({
   params,
@@ -52,91 +71,107 @@ export default async function VisitDetailPage({
   }
 
   const visit: Visit = await response.json();
+  const scheduledAt = dateTimeFormatter.format(new Date(visit.scheduledAt));
+  const createdAt = dateTimeFormatter.format(new Date(visit.createdAt));
 
   return (
-    <div>
-      <Link
-        href="/visits"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
-      >
-        ← Volver a visitas
-      </Link>
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Operacion en campo"
+        title={visit.summary}
+        description="Detalle operativo de la visita, su contexto comercial y el siguiente movimiento esperado."
+        actions={
+          <>
+            <StatusBadge tone={statusTones[visit.status] ?? "neutral"}>
+              {statusLabels[visit.status] ?? visit.status}
+            </StatusBadge>
+            <ButtonLink href="/visits" variant="ghost" size="sm">
+              Volver a visitas
+            </ButtonLink>
+          </>
+        }
+      />
 
       <div
         style={{
-          backgroundColor: "#ffffff",
-          padding: "1.5rem",
-          borderRadius: "0.75rem",
-          boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-          <h1 style={{ margin: 0 }}>{visit.summary}</h1>
-          <span
-            style={{
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              padding: "0.375rem 0.75rem",
-              borderRadius: "0.375rem",
-              backgroundColor: statusColors[visit.status] || "#6b7c93",
-              color: "#ffffff",
-            }}
-          >
-            {statusLabels[visit.status] || visit.status}
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "1rem",
-            marginTop: "1.5rem",
-          }}
-        >
-          <Info label="Cliente" value={visit.customer?.displayName} />
-          <Info label="Oportunidad" value={visit.opportunity?.title} />
-          <Info
-            label="Fecha programada"
-            value={
-              new Date(visit.scheduledAt).toLocaleString("es-CO", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })
-            }
-          />
-          <Info label="Siguiente paso" value={visit.nextStep} />
-        </div>
-
-        {visit.notes && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>Notas</div>
-            <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{visit.notes}</div>
-          </div>
-        )}
-
-        {visit.status === "programada" && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <VisitActions visitId={visit.id} />
-          </div>
-        )}
+        <InlineMetric label="Agenda" value={scheduledAt} tone={statusTones[visit.status] ?? "info"} />
+        <InlineMetric label="Registro" value={`#${visit.id.slice(-6)}`} />
       </div>
-    </div>
-  );
-}
 
-function Info({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div>
-      <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>{label}</div>
-      <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{value}</div>
+      <DetailSection
+        title="Contexto de la visita"
+        description="Consulta el cliente vinculado, la oportunidad asociada y los hitos básicos para ejecutar o auditar la visita."
+        fields={[
+          {
+            label: "Cliente",
+            value: visit.customer ? (
+              <Link href={`/customers/${visit.customer.id}`} style={linkStyle}>
+                {visit.customer.displayName}
+              </Link>
+            ) : (
+              "Sin cliente"
+            ),
+          },
+          {
+            label: "Oportunidad",
+            value: visit.opportunity ? (
+              <Link href={`/opportunities/${visit.opportunity.id}`} style={linkStyle}>
+                {visit.opportunity.title}
+              </Link>
+            ) : (
+              "Sin oportunidad"
+            ),
+          },
+          {
+            label: "Fecha programada",
+            value: scheduledAt,
+          },
+          {
+            label: "Siguiente paso",
+            value: visit.nextStep ?? "Sin siguiente paso definido",
+          },
+          {
+            label: "Estado",
+            value: statusLabels[visit.status] ?? visit.status,
+          },
+          {
+            label: "Creada",
+            value: createdAt,
+          },
+        ]}
+      />
+
+      {visit.notes ? (
+        <SectionCard
+          title="Notas"
+          description="Registro cualitativo capturado durante la preparacion o ejecucion de la visita."
+        >
+          <p style={{ margin: 0, color: "#10233f", lineHeight: 1.7 }}>{visit.notes}</p>
+        </SectionCard>
+      ) : null}
+
+      {visit.status === "programada" ? (
+        <SectionCard
+          title="Acciones"
+          description="Actualiza el resultado de la visita sin salir del detalle."
+        >
+          <VisitActions visitId={visit.id} />
+        </SectionCard>
+      ) : null}
+
+      {visit.status === "completada" ? (
+        <SectionCard
+          title="Reporte ejecutivo"
+          description="Genera un documento ejecutivo con diagnóstico, costos, ROI y cotización a partir de esta visita."
+        >
+          <ReportGenerateButton visitId={visit.id} />
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiFetch } from "@/lib/api.server";
 import { FollowUpActions } from "@/components/follow-ups/follow-up-actions";
+import { ButtonLink } from "@/components/ui/button-link";
+import { DetailSection } from "@/components/ui/detail-section";
+import { InlineMetric } from "@/components/ui/inline-metric";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { CrmStatusTone } from "@/components/ui/theme";
+import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
   id: string;
@@ -31,20 +38,31 @@ const statusLabels: Record<string, string> = {
   vencida: "Vencida",
 };
 
-const statusColors: Record<string, string> = {
-  pendiente: "#f39c12",
-  completada: "#27ae60",
-  vencida: "#c0392b",
+const statusTones: Record<string, CrmStatusTone> = {
+  pendiente: "warning",
+  completada: "success",
+  vencida: "danger",
 };
 
 const typeLabels: Record<string, string> = {
   llamada: "Llamada",
   email: "Email",
   whatsapp: "WhatsApp",
-  reunion: "Reunión",
+  reunion: "Reunion",
   recordatorio: "Recordatorio",
   otro: "Otro",
 };
+
+const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
+  dateStyle: "medium",
+  timeStyle: "short",
+});
+
+const linkStyle = {
+  color: "#10233f",
+  fontWeight: 700,
+  textDecoration: "none",
+} as const;
 
 export default async function FollowUpDetailPage({
   params,
@@ -59,91 +77,99 @@ export default async function FollowUpDetailPage({
   }
 
   const task: FollowUpTask = await response.json();
+  const dueAt = dateTimeFormatter.format(new Date(task.dueAt));
+  const createdAt = dateTimeFormatter.format(new Date(task.createdAt));
 
   return (
-    <div>
-      <Link
-        href="/follow-ups"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
-      >
-        ← Volver a seguimientos
-      </Link>
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Gestion comercial"
+        title={task.title}
+        description="Detalle de la tarea, su canal de seguimiento y el contexto comercial asociado para decidir la siguiente accion."
+        actions={
+          <>
+            <StatusBadge tone={statusTones[task.status] ?? "neutral"}>
+              {statusLabels[task.status] ?? task.status}
+            </StatusBadge>
+            <ButtonLink href="/follow-ups" variant="ghost" size="sm">
+              Volver a seguimientos
+            </ButtonLink>
+          </>
+        }
+      />
 
       <div
         style={{
-          backgroundColor: "#ffffff",
-          padding: "1.5rem",
-          borderRadius: "0.75rem",
-          boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-          <h1 style={{ margin: 0 }}>{task.title}</h1>
-          <span
-            style={{
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              padding: "0.375rem 0.75rem",
-              borderRadius: "0.375rem",
-              backgroundColor: statusColors[task.status] || "#6b7c93",
-              color: "#ffffff",
-            }}
-          >
-            {statusLabels[task.status] || task.status}
-          </span>
-        </div>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "1rem",
-            marginTop: "1.5rem",
-          }}
-        >
-          <Info label="Cliente" value={task.customer?.displayName} />
-          <Info label="Oportunidad" value={task.opportunity?.title} />
-          <Info label="Tipo" value={typeLabels[task.type] || task.type} />
-          <Info
-            label="Fecha de vencimiento"
-            value={
-              new Date(task.dueAt).toLocaleString("es-CO", {
-                dateStyle: "medium",
-                timeStyle: "short",
-              })
-            }
-          />
-        </div>
-
-        {task.notes && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>Notas</div>
-            <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{task.notes}</div>
-          </div>
-        )}
-
-        {task.status !== "completada" && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <FollowUpActions taskId={task.id} />
-          </div>
-        )}
+        <InlineMetric label="Vence" value={dueAt} tone={statusTones[task.status] ?? "info"} />
+        <InlineMetric label="Canal" value={typeLabels[task.type] ?? task.type} />
+        <InlineMetric label="Registro" value={`#${task.id.slice(-6)}`} />
       </div>
-    </div>
-  );
-}
 
-function Info({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div>
-      <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>{label}</div>
-      <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{value}</div>
+      <DetailSection
+        title="Contexto del seguimiento"
+        description="Mantiene visible la relacion entre la tarea, el cliente y la oportunidad para ejecutar priorizacion diaria."
+        fields={[
+          {
+            label: "Cliente",
+            value: task.customer ? (
+              <Link href={`/customers/${task.customer.id}`} style={linkStyle}>
+                {task.customer.displayName}
+              </Link>
+            ) : (
+              "Sin cliente"
+            ),
+          },
+          {
+            label: "Oportunidad",
+            value: task.opportunity ? (
+              <Link href={`/opportunities/${task.opportunity.id}`} style={linkStyle}>
+                {task.opportunity.title}
+              </Link>
+            ) : (
+              "Sin oportunidad"
+            ),
+          },
+          {
+            label: "Tipo",
+            value: typeLabels[task.type] ?? task.type,
+          },
+          {
+            label: "Fecha de vencimiento",
+            value: dueAt,
+          },
+          {
+            label: "Estado",
+            value: statusLabels[task.status] ?? task.status,
+          },
+          {
+            label: "Creada",
+            value: createdAt,
+          },
+        ]}
+      />
+
+      {task.notes ? (
+        <SectionCard
+          title="Notas"
+          description="Observaciones y contexto operativo registrados para resolver la tarea."
+        >
+          <p style={{ margin: 0, color: "#10233f", lineHeight: 1.7 }}>{task.notes}</p>
+        </SectionCard>
+      ) : null}
+
+      {task.status !== "completada" ? (
+        <SectionCard
+          title="Acciones"
+          description="Ejecuta el cambio de estado o completa la tarea desde este detalle."
+        >
+          <FollowUpActions taskId={task.id} />
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

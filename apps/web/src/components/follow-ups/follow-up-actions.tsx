@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
 
 interface FollowUpActionsProps {
@@ -27,20 +28,22 @@ export function FollowUpActions({ taskId }: FollowUpActionsProps) {
   }
 
   return (
-    <div style={{ display: "flex", gap: "0.75rem" }}>
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
       <button
+        type="button"
         onClick={markComplete}
         disabled={loading}
         style={{
-          padding: "0.625rem 1.25rem",
-          borderRadius: "0.5rem",
-          border: "none",
-          backgroundColor: "#27ae60",
+          minHeight: 44,
+          padding: "0 16px",
+          borderRadius: crmTheme.radius.md,
+          border: 0,
+          background: crmTheme.colors.success,
           color: "#ffffff",
-          fontSize: "1rem",
-          fontWeight: 600,
+          fontSize: 14,
+          fontWeight: 700,
           cursor: loading ? "not-allowed" : "pointer",
-          opacity: loading ? 0.7 : 1,
+          opacity: loading ? 0.72 : 1,
         }}
       >
         Marcar como completada

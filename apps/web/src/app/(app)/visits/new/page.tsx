@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { VisitForm } from "@/components/visits/visit-form";
 
@@ -22,23 +24,24 @@ export default async function NewVisitPage() {
   const opportunities: Opportunity[] = opportunitiesRes.ok ? await opportunitiesRes.json() : [];
 
   return (
-    <div>
-      <Link
-        href="/visits"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Visitas"
+        title="Nueva visita"
+        description="Programa una visita comercial con contexto de cliente, oportunidad y siguiente paso esperado."
+        actions={
+          <ButtonLink href="/visits" variant="secondary">
+            Volver a visitas
+          </ButtonLink>
+        }
+      />
+
+      <SectionCard
+        title="Programación de visita"
+        description="Registra fecha, resumen y contexto comercial de la gestión en campo."
       >
-        ← Volver a visitas
-      </Link>
-
-      <h1 style={{ marginTop: 0 }}>Nueva visita</h1>
-
-      <VisitForm customers={customers} opportunities={opportunities} />
+        <VisitForm customers={customers} opportunities={opportunities} />
+      </SectionCard>
     </div>
   );
 }

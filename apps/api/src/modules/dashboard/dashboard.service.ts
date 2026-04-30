@@ -1,11 +1,13 @@
 import { Injectable } from "@nestjs/common";
+import { FollowUpTaskStatus, VisitStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuthUser } from "../auth/types/authenticated-request";
 
 @Injectable()
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary() {
+  async getSummary(user: AuthUser) {
     const now = new Date();
 
     const thirtyDaysAgo = new Date(now);
@@ -21,6 +23,9 @@ export class DashboardService {
     endOfWeek.setDate(startOfWeek.getDate() + 6);
     endOfWeek.setHours(23, 59, 59, 999);
 
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
     const [
       openQuotes,
       pipelineAgg,
@@ -28,6 +33,10 @@ export class DashboardService {
       activeOrders,
       weeklyVisits,
       pendingFollowUps,
+      overdueFollowUps,
+      todayVisits,
+      myUpcomingTasks,
+      myUpcomingVisits,
       recentLogs,
     ] = await Promise.all([
       this.prisma.quote.count({
@@ -59,9 +68,39 @@ export class DashboardService {
       }),
       this.prisma.followUpTask.count({
         where: {
-          status: "pendiente",
+          status: FollowUpTaskStatus.pendiente,
           dueAt: { lte: now },
         },
+      }),
+      this.prisma.followUpTask.count({
+        where: {
+          status: FollowUpTaskStatus.vencida,
+        },
+      }),
+      this.prisma.visit.count({
+        where: {
+          scheduledAt: { gte: todayStart, lte: todayEnd },
+          status: VisitStatus.programada,
+        },
+      }),
+      this.prisma.followUpTask.findMany({
+        where: {
+          assignedToUserId: user.id,
+          status: { in: [FollowUpTaskStatus.pendiente, FollowUpTaskStatus.vencida] },
+        },
+        orderBy: { dueAt: "asc" },
+        take: 5,
+        include: { customer: true },
+      }),
+      this.prisma.visit.findMany({
+        where: {
+          assignedToUserId: user.id,
+          status: VisitStatus.programada,
+          scheduledAt: { gte: now },
+        },
+        orderBy: { scheduledAt: "asc" },
+        take: 5,
+        include: { customer: true },
       }),
       this.prisma.auditLog.findMany({
         orderBy: { createdAt: "desc" },
@@ -89,6 +128,27 @@ export class DashboardService {
       createdAt: log.createdAt,
     }));
 
+    const myQueue = [
+      ...myUpcomingTasks.map((t) => ({
+        id: t.id,
+        kind: "task" as const,
+        title: t.title,
+        customerName: t.customer?.displayName ?? "Sin cliente",
+        scheduledAt: t.dueAt,
+        status: t.status,
+      })),
+      ...myUpcomingVisits.map((v) => ({
+        id: v.id,
+        kind: "visit" as const,
+        title: v.summary || "Visita programada",
+        customerName: v.customer?.displayName ?? "Sin cliente",
+        scheduledAt: v.scheduledAt,
+        status: v.status,
+      })),
+    ].sort(
+      (a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime(),
+    ).slice(0, 5);
+
     return {
       openQuotes,
       pipelineValue: Number(pipelineAgg._sum.estimatedValue ?? 0),
@@ -96,6 +156,9 @@ export class DashboardService {
       activeOrders,
       weeklyVisits,
       pendingFollowUps,
+      overdueFollowUps,
+      todayVisits,
+      myQueue,
       recentActivity,
     };
   }

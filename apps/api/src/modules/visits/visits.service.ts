@@ -12,6 +12,14 @@ import { CompleteVisitDto } from "./dto/complete-visit.dto";
 import { CreateVisitDto } from "./dto/create-visit.dto";
 import { UpdateVisitStatusDto } from "./dto/update-visit-status.dto";
 
+export interface VisitFilters {
+  status?: VisitStatus;
+  today?: boolean;
+  thisWeek?: boolean;
+  assignedToMe?: boolean;
+  userId?: string;
+}
+
 const allowedStatusTransitions: Record<VisitStatus, VisitStatus[]> = {
   programada: ["completada", "cancelada", "no_realizada"],
   completada: [],
@@ -175,6 +183,44 @@ export class VisitsService {
     });
   }
 
+  findWithFilters(filters: VisitFilters) {
+    const where: Record<string, unknown> = {};
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.assignedToMe && filters.userId) {
+      where.assignedToUserId = filters.userId;
+    }
+
+    if (filters.today) {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      where.scheduledAt = { gte: start, lte: end };
+    }
+
+    if (filters.thisWeek) {
+      const now = new Date();
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const start = new Date(now);
+      start.setDate(now.getDate() + diffToMonday);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      where.scheduledAt = { gte: start, lte: end };
+    }
+
+    return this.prisma.visit.findMany({
+      where,
+      include: { customer: true },
+      orderBy: { scheduledAt: "desc" },
+    });
+  }
+
   findAll() {
     return this.prisma.visit.findMany({
       include: { customer: true },
@@ -207,6 +253,18 @@ export class VisitsService {
     if (!opportunity) {
       throw new NotFoundException("Opportunity not found");
     }
+  }
+
+  async canGenerateReport(visitId: string): Promise<boolean> {
+    const visit = await this.prisma.visit.findUnique({
+      where: { id: visitId },
+    });
+
+    if (!visit) {
+      return false;
+    }
+
+    return visit.status === VisitStatus.completada && !!visit.summary;
   }
 
   private isStatusTransitionAllowed(

@@ -11,6 +11,15 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateFollowUpTaskDto } from "./dto/create-follow-up-task.dto";
 import { UpdateTaskStatusDto } from "./dto/update-task-status.dto";
 
+export interface FollowUpTaskFilters {
+  status?: FollowUpTaskStatus;
+  dueToday?: boolean;
+  overdue?: boolean;
+  assignedToMe?: boolean;
+  thisWeek?: boolean;
+  userId?: string;
+}
+
 const allowedStatusTransitions: Record<FollowUpTaskStatus, FollowUpTaskStatus[]> = {
   pendiente: ["completada", "vencida"],
   completada: [],
@@ -169,6 +178,63 @@ export class FollowUpTasksService {
       );
 
       return updatedTask;
+    });
+  }
+
+  async markOverdue() {
+    const now = new Date();
+    return this.prisma.followUpTask.updateMany({
+      where: {
+        dueAt: { lt: now },
+        status: FollowUpTaskStatus.pendiente,
+      },
+      data: {
+        status: FollowUpTaskStatus.vencida,
+      },
+    });
+  }
+
+  findWithFilters(filters: FollowUpTaskFilters) {
+    const where: Record<string, unknown> = {};
+
+    if (filters.status) {
+      where.status = filters.status;
+    }
+
+    if (filters.assignedToMe && filters.userId) {
+      where.assignedToUserId = filters.userId;
+    }
+
+    if (filters.dueToday) {
+      const now = new Date();
+      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      where.dueAt = { gte: start, lte: end };
+    }
+
+    if (filters.overdue) {
+      const now = new Date();
+      where.dueAt = { lt: now };
+      where.status = FollowUpTaskStatus.pendiente;
+    }
+
+    if (filters.thisWeek) {
+      const now = new Date();
+      const day = now.getDay();
+      const diffToMonday = day === 0 ? -6 : 1 - day;
+      const start = new Date(now);
+      start.setDate(now.getDate() + diffToMonday);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setDate(start.getDate() + 6);
+      end.setHours(23, 59, 59, 999);
+      where.dueAt = { gte: start, lte: end };
+    }
+
+    return this.prisma.followUpTask.findMany({
+      where,
+      include: { customer: true },
+      orderBy: { dueAt: "asc" },
     });
   }
 
