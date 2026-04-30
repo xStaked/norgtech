@@ -10,6 +10,8 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -71,6 +73,8 @@ export default async function VisitDetailPage({
   }
 
   const visit: Visit = await response.json();
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
   const scheduledAt = dateTimeFormatter.format(new Date(visit.scheduledAt));
   const createdAt = dateTimeFormatter.format(new Date(visit.createdAt));
 
@@ -164,7 +168,7 @@ export default async function VisitDetailPage({
         </SectionCard>
       ) : null}
 
-      {visit.status === "completada" ? (
+      {visit.status === "completada" && canCreate(userRole, "report") ? (
         <SectionCard
           title="Reporte ejecutivo"
           description="Genera un documento ejecutivo con diagnóstico, costos, ROI y cotización a partir de esta visita."
