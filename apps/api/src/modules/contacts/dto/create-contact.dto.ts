@@ -1,7 +1,16 @@
-import { IsBoolean, IsEmail, IsOptional, IsString } from "class-validator";
+import {
+  IsBoolean,
+  IsEmail,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+} from "class-validator";
 
 export class CreateContactDto {
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   fullName!: string;
 
   @IsOptional()

@@ -21,6 +21,7 @@ model User {
   active       Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+  assignedCustomers Customer[] @relation("CustomerAssignedUser")
 }
 
 model AuditLog {
@@ -43,6 +44,7 @@ model CustomerSegment {
   updatedBy   String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  customers   Customer[]
 }
 
 model Customer {
@@ -63,6 +65,8 @@ model Customer {
   updatedBy        String
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
+  segment          CustomerSegment @relation(fields: [segmentId], references: [id])
+  assignedToUser   User?     @relation("CustomerAssignedUser", fields: [assignedToUserId], references: [id])
   contacts         Contact[]
 }
 

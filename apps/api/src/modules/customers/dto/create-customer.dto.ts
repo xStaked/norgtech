@@ -2,17 +2,24 @@ import { Type } from "class-transformer";
 import {
   ArrayMinSize,
   IsArray,
+  IsEmail,
+  IsNotEmpty,
   IsOptional,
   IsString,
+  Matches,
   ValidateNested,
 } from "class-validator";
 import { CreateContactDto } from "../../contacts/dto/create-contact.dto";
 
 export class CreateCustomerDto {
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   legalName!: string;
 
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   displayName!: string;
 
   @IsOptional()
@@ -24,7 +31,7 @@ export class CreateCustomerDto {
   phone?: string;
 
   @IsOptional()
-  @IsString()
+  @IsEmail()
   email?: string;
 
   @IsOptional()
