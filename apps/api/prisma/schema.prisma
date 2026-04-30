@@ -12,6 +12,17 @@ enum UserRole {
   comercial
 }
 
+enum OpportunityStage {
+  prospecto
+  contacto
+  visita
+  cotizacion
+  negociacion
+  orden_facturacion
+  venta_cerrada
+  perdida
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -68,6 +79,7 @@ model Customer {
   segment          CustomerSegment @relation(fields: [segmentId], references: [id])
   assignedToUser   User?     @relation("CustomerAssignedUser", fields: [assignedToUserId], references: [id])
   contacts         Contact[]
+  opportunities    Opportunity[]
 }
 
 model Contact {
@@ -84,4 +96,17 @@ model Contact {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
   customer   Customer @relation(fields: [customerId], references: [id])
+}
+
+model Opportunity {
+  id             String           @id @default(cuid())
+  customerId     String
+  title          String
+  stage          OpportunityStage
+  estimatedValue Int?
+  createdBy      String
+  updatedBy      String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  customer       Customer         @relation(fields: [customerId], references: [id])
 }

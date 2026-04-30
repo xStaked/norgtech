@@ -5,6 +5,7 @@ import { AuthModule } from "./modules/auth/auth.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
 import { CustomerSegmentsModule } from "./modules/customer-segments/customer-segments.module";
 import { CustomersModule } from "./modules/customers/customers.module";
+import { OpportunitiesModule } from "./modules/opportunities/opportunities.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -15,6 +16,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     ContactsModule,
     AuditModule,
     CustomersModule,
+    OpportunitiesModule,
   ],
   controllers: [HealthController],
 })
