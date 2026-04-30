@@ -7,7 +7,9 @@ import { CustomerSegmentsModule } from "./modules/customer-segments/customer-seg
 import { CustomersModule } from "./modules/customers/customers.module";
 import { OpportunitiesModule } from "./modules/opportunities/opportunities.module";
 import { ProductsModule } from "./modules/products/products.module";
+import { FollowUpTasksModule } from "./modules/follow-up-tasks/follow-up-tasks.module";
 import { QuotesModule } from "./modules/quotes/quotes.module";
+import { VisitsModule } from "./modules/visits/visits.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -21,6 +23,8 @@ import { PrismaModule } from "./prisma/prisma.module";
     OpportunitiesModule,
     ProductsModule,
     QuotesModule,
+    VisitsModule,
+    FollowUpTasksModule,
   ],
   controllers: [HealthController],
 })

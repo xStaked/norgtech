@@ -30,6 +30,28 @@ enum QuoteStatus {
   perdida
 }
 
+enum VisitStatus {
+  programada
+  completada
+  cancelada
+  no_realizada
+}
+
+enum FollowUpTaskStatus {
+  pendiente
+  completada
+  vencida
+}
+
+enum FollowUpTaskType {
+  llamada
+  email
+  whatsapp
+  reunion
+  recordatorio
+  otro
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -88,6 +110,8 @@ model Customer {
   contacts         Contact[]
   opportunities    Opportunity[]
   quotes           Quote[]
+  visits           Visit[]
+  followUpTasks    FollowUpTask[]
 }
 
 model Contact {
@@ -123,6 +147,8 @@ model Opportunity {
   updatedAt      DateTime         @updatedAt
   customer       Customer         @relation(fields: [customerId], references: [id])
   quotes         Quote[]
+  visits         Visit[]
+  followUpTasks  FollowUpTask[]
 }
 
 model Product {
@@ -172,4 +198,42 @@ model QuoteItem {
   notes               String?
   quote               Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product             Product? @relation(fields: [productId], references: [id])
+}
+
+model Visit {
+  id             String      @id @default(cuid())
+  customerId     String
+  opportunityId  String?
+  scheduledAt    DateTime
+  completedAt    DateTime?
+  status         VisitStatus @default(programada)
+  summary        String?
+  notes          String?
+  nextStep       String?
+  assignedToUserId String?
+  createdBy      String
+  updatedBy      String
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  customer       Customer    @relation(fields: [customerId], references: [id])
+  opportunity    Opportunity? @relation(fields: [opportunityId], references: [id])
+}
+
+model FollowUpTask {
+  id             String             @id @default(cuid())
+  customerId     String
+  opportunityId  String?
+  type           FollowUpTaskType
+  title          String
+  dueAt          DateTime
+  status         FollowUpTaskStatus @default(pendiente)
+  notes          String?
+  assignedToUserId String?
+  completedAt    DateTime?
+  createdBy      String
+  updatedBy      String
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  customer       Customer           @relation(fields: [customerId], references: [id])
+  opportunity    Opportunity?        @relation(fields: [opportunityId], references: [id])
 }

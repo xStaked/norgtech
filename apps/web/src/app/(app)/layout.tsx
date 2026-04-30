@@ -8,6 +8,9 @@ const navItems = [
   { href: "/quotes", label: "Cotizaciones" },
   { href: "/products", label: "Productos" },
   { href: "/segments", label: "Segmentos" },
+  { href: "/visits", label: "Visitas" },
+  { href: "/follow-ups", label: "Seguimientos" },
+  { href: "/agenda", label: "Agenda" },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
