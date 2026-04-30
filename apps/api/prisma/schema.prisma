@@ -44,3 +44,40 @@ model CustomerSegment {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+model Customer {
+  id               String    @id @default(cuid())
+  legalName        String
+  displayName      String
+  taxId            String?   @unique
+  phone            String?
+  email            String?
+  address          String?
+  city             String?
+  department       String?
+  notes            String?
+  segmentId        String
+  assignedToUserId String?
+  active           Boolean   @default(true)
+  createdBy        String
+  updatedBy        String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  contacts         Contact[]
+}
+
+model Contact {
+  id         String   @id @default(cuid())
+  customerId String
+  fullName   String
+  roleTitle  String?
+  phone      String?
+  email      String?
+  isPrimary  Boolean  @default(false)
+  notes      String?
+  createdBy  String
+  updatedBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id])
+}
