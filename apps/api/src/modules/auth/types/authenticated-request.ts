@@ -7,6 +7,12 @@ export interface AuthenticatedUser {
   role: UserRole;
 }
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  role: UserRole;
+}
+
 export interface AuthenticatedRequest extends Request {
   user?: AuthenticatedUser;
 }
