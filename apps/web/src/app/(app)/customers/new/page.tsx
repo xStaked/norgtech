@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api.server";
 import { CustomerForm } from "@/components/customers/customer-form";
 
 interface Segment {

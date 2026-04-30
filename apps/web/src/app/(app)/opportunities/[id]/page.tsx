@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { apiFetch } from "@/lib/api";
+import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
   id: string;

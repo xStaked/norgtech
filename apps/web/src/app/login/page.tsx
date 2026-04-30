@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetchClient } from "@/lib/api";
+import { apiFetchClient } from "@/lib/api.client";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
 
 export default function LoginPage() {

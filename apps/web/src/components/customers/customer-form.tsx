@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { apiFetchClient } from "@/lib/api";
+import { apiFetchClient } from "@/lib/api.client";
 
 interface Segment {
   id: string;
