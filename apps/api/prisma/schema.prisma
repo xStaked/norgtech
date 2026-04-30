@@ -23,6 +23,13 @@ enum OpportunityStage {
   perdida
 }
 
+enum QuoteStatus {
+  abierta
+  en_negociacion
+  cerrada
+  perdida
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -80,6 +87,7 @@ model Customer {
   assignedToUser   User?     @relation("CustomerAssignedUser", fields: [assignedToUserId], references: [id])
   contacts         Contact[]
   opportunities    Opportunity[]
+  quotes           Quote[]
 }
 
 model Contact {
@@ -114,4 +122,54 @@ model Opportunity {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   customer       Customer         @relation(fields: [customerId], references: [id])
+  quotes         Quote[]
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  sku         String   @unique
+  name        String
+  description String?
+  unit        String
+  presentation String?
+  basePrice   Decimal  @db.Decimal(14, 2)
+  active      Boolean  @default(true)
+  createdBy   String
+  updatedBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  quoteItems  QuoteItem[]
+}
+
+model Quote {
+  id            String      @id @default(cuid())
+  customerId    String
+  opportunityId String?
+  status        QuoteStatus @default(abierta)
+  validUntil    DateTime?
+  notes         String?
+  subtotal      Decimal     @db.Decimal(14, 2)
+  total         Decimal     @db.Decimal(14, 2)
+  createdBy     String
+  updatedBy     String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  customer      Customer    @relation(fields: [customerId], references: [id])
+  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
+  items         QuoteItem[]
+}
+
+model QuoteItem {
+  id                  String  @id @default(cuid())
+  quoteId             String
+  productId           String?
+  productSnapshotName String
+  productSnapshotSku  String
+  unit                String
+  quantity            Decimal @db.Decimal(14, 4)
+  unitPrice           Decimal @db.Decimal(14, 2)
+  subtotal            Decimal @db.Decimal(14, 2)
+  notes               String?
+  quote               Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  product             Product? @relation(fields: [productId], references: [id])
 }
