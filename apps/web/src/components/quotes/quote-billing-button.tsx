@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
 
 interface QuoteBillingButtonProps {
@@ -34,36 +35,45 @@ export function QuoteBillingButton({ quoteId }: QuoteBillingButtonProps) {
     }
   }
 
+  const isError = Boolean(message?.includes("Error"));
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-start" }}>
+    <div style={{ display: "grid", gap: 10, justifyItems: "start" }}>
       <button
+        type="button"
         onClick={handleClick}
         disabled={loading}
         style={{
-          padding: "0.625rem 1.25rem",
-          borderRadius: "0.5rem",
-          border: "none",
-          backgroundColor: "#10233f",
+          minHeight: 44,
+          padding: "0 16px",
+          borderRadius: crmTheme.radius.md,
+          border: 0,
+          background: crmTheme.colors.primary,
           color: "#ffffff",
-          fontSize: "1rem",
-          fontWeight: 600,
+          fontSize: 14,
+          fontWeight: 700,
           cursor: loading ? "not-allowed" : "pointer",
-          opacity: loading ? 0.7 : 1,
+          opacity: loading ? 0.72 : 1,
+          boxShadow: crmTheme.shadow.card,
         }}
       >
         {loading ? "Generando..." : "Generar solicitud de facturación"}
       </button>
-      {message && (
+
+      {message ? (
         <div
           style={{
-            fontSize: "0.875rem",
-            color: message.includes("Error") ? "#c0392b" : "#27ae60",
-            fontWeight: 500,
+            padding: "10px 12px",
+            borderRadius: crmTheme.radius.md,
+            background: isError ? "rgba(186, 58, 47, 0.08)" : "rgba(31, 143, 95, 0.08)",
+            color: isError ? crmTheme.colors.danger : crmTheme.colors.success,
+            fontSize: 14,
+            fontWeight: 600,
           }}
         >
           {message}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

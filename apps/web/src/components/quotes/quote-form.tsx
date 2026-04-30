@@ -250,7 +250,7 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
                 <input
                   type="number"
                   min={0.0001}
-                  step={0.01}
+                  step={0.0001}
                   value={item.quantity}
                   onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
                   style={{
