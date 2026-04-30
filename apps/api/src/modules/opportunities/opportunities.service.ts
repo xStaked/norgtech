@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -66,13 +67,30 @@ export class OpportunitiesService {
         throw new BadRequestException("Invalid opportunity stage transition");
       }
 
-      const updatedOpportunity = await tx.opportunity.update({
-        where: { id: opportunityId },
+      const updatedCount = await tx.opportunity.updateMany({
+        where: {
+          id: opportunityId,
+          stage: opportunity.stage,
+        },
         data: {
           stage: dto.stage,
           updatedBy: user.id,
         },
       });
+
+      if (updatedCount.count !== 1) {
+        throw new ConflictException(
+          "Opportunity stage changed before update",
+        );
+      }
+
+      const updatedOpportunity = await tx.opportunity.findUnique({
+        where: { id: opportunityId },
+      });
+
+      if (!updatedOpportunity) {
+        throw new NotFoundException("Opportunity not found");
+      }
 
       await this.auditService.record(
         {

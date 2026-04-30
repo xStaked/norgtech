@@ -22,6 +22,7 @@ describe("Opportunities", () => {
   const customerId = "customer-id";
   const auditLogs: Array<Record<string, unknown>> = [];
   const opportunities: Array<Record<string, unknown>> = [];
+  const staleWriteIds = new Set<string>();
 
   beforeAll(async () => {
     const user = {
@@ -76,8 +77,8 @@ describe("Opportunities", () => {
         findUnique: async () => {
           throw new Error("opportunity.findUnique must be implemented");
         },
-        update: async () => {
-          throw new Error("opportunity.update must run inside a transaction");
+        updateMany: async () => {
+          throw new Error("opportunity.updateMany must run inside a transaction");
         },
       },
       auditLog: {
@@ -111,13 +112,16 @@ describe("Opportunities", () => {
             findUnique: (args: {
               where: { id: string };
             }) => Promise<Record<string, unknown> | null>;
-            update: (args: {
-              where: { id: string };
+            updateMany: (args: {
+              where: {
+                id: string;
+                stage: OpportunityStage;
+              };
               data: {
                 stage: OpportunityStage;
                 updatedBy: string;
               };
-            }) => Promise<Record<string, unknown>>;
+            }) => Promise<{ count: number }>;
           };
           auditLog: {
             create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
@@ -152,19 +156,54 @@ describe("Opportunities", () => {
                 updatedAt: new Date("2026-04-29T00:00:00.000Z"),
               };
 
+              if (data.title === "Simular carrera") {
+                staleWriteIds.add(opportunity.id);
+              }
+
               pendingOpportunities.push(opportunity);
               return opportunity;
             },
             findUnique: async ({ where: { id } }) => findOpportunityById(id),
-            update: async ({ where: { id }, data }) => {
+            updateMany: async ({ where, data }) => {
+              const { id, stage } = where;
               const existing = findOpportunityById(id);
 
               if (!existing) {
-                throw new Error("Opportunity not found");
+                return { count: 0 };
+              }
+
+              if (staleWriteIds.has(id)) {
+                const raced = {
+                  ...existing,
+                  stage: "perdida",
+                  updatedBy: "external-user-id",
+                  updatedAt: new Date("2026-04-29T00:00:01.000Z"),
+                };
+
+                const pendingRaceIndex = pendingOpportunities.findIndex(
+                  (entry) => entry.id === id,
+                );
+
+                if (pendingRaceIndex >= 0) {
+                  pendingOpportunities[pendingRaceIndex] = raced;
+                } else {
+                  const committedRaceIndex = opportunities.findIndex((entry) => entry.id === id);
+                  if (committedRaceIndex >= 0) {
+                    opportunities[committedRaceIndex] = raced;
+                  }
+                }
+
+                staleWriteIds.delete(id);
+              }
+
+              const current = findOpportunityById(id);
+
+              if (!current || current.stage !== stage) {
+                return { count: 0 };
               }
 
               const updated = {
-                ...existing,
+                ...current,
                 stage: data.stage,
                 updatedBy: data.updatedBy,
                 updatedAt: new Date("2026-04-29T00:00:00.000Z"),
@@ -183,7 +222,7 @@ describe("Opportunities", () => {
                 }
               }
 
-              return updated;
+              return { count: 1 };
             },
           },
           auditLog: {
@@ -259,5 +298,24 @@ describe("Opportunities", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({ stage: "venta_cerrada" })
       .expect(400);
+  });
+
+  it("rejects stale stage updates when the row changes before persistence", async () => {
+    const created = await request(globalThis.__APP__)
+      .post("/opportunities")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: globalThis.__CUSTOMER_ID__,
+        title: "Simular carrera",
+        stage: "prospecto",
+        estimatedValue: 15000000,
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/opportunities/${created.body.id}/stage`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ stage: "contacto" })
+      .expect(409);
   });
 });
