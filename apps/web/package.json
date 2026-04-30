@@ -1,5 +1,10 @@
 {
   "name": "@norgtech/web",
   "private": true,
-  "version": "0.0.0"
+  "version": "0.0.0",
+  "scripts": {
+    "build": "echo \"web build placeholder\"",
+    "dev": "echo \"web dev placeholder\"",
+    "lint": "echo \"web lint placeholder\""
+  }
 }

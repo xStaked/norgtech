@@ -5,6 +5,9 @@
   "type": "module",
   "main": "./src/index.ts",
   "scripts": {
+    "build": "echo \"shared build placeholder\"",
+    "dev": "echo \"shared dev placeholder\"",
+    "lint": "echo \"shared lint placeholder\"",
     "test": "vitest run"
   },
   "devDependencies": {
