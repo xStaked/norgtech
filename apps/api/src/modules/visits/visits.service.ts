@@ -47,6 +47,7 @@ export class VisitsService {
           customerId: dto.customerId,
           opportunityId: dto.opportunityId,
           scheduledAt: new Date(dto.scheduledAt),
+          summary: dto.summary,
           notes: dto.notes,
           nextStep: dto.nextStep,
           assignedToUserId: dto.assignedToUserId,

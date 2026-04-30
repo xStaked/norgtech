@@ -24,6 +24,11 @@ export class CreateVisitDto {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  summary?: string;
+
+  @IsOptional()
+  @IsString()
   nextStep?: string;
 
   @IsOptional()
