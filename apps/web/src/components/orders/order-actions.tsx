@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { getSessionTokenClient, getUserRoleFromToken } from "@/lib/auth";
 
 interface OrderActionsProps {
   orderId: string;
@@ -24,10 +25,16 @@ const nextStatusMap: Record<string, string> = {
   despachado: "entregado",
 };
 
+const advanceRoles = ["administrador", "director_comercial", "comercial", "logistica"];
+const billRoles = ["administrador", "director_comercial", "facturacion"];
+
 export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const token = getSessionTokenClient();
+  const role = getUserRoleFromToken(token);
 
   async function advanceStatus() {
     setError(null);
@@ -77,8 +84,9 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
     }
   }
 
-  const canAdvance = !!nextStatusMap[currentStatus];
-  const canBill = currentStatus === "entregado" || currentStatus === "facturado";
+  const canAdvance = !!nextStatusMap[currentStatus] && role && advanceRoles.includes(role);
+  const canBill =
+    (currentStatus === "entregado" || currentStatus === "facturado") && role && billRoles.includes(role);
 
   return (
     <div>

@@ -30,6 +30,18 @@ export class CreateOrderDto {
   @IsString()
   notes?: string;
 
+  @IsOptional()
+  @IsString()
+  assignedLogisticsUserId?: string;
+
+  @IsOptional()
+  @IsString()
+  committedDeliveryDate?: string;
+
+  @IsOptional()
+  @IsString()
+  logisticsNotes?: string;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

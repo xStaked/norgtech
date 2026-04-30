@@ -247,6 +247,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             <div style={{ display: "grid", gap: "0.25rem" }}>
               <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Producto</label>
               <select
+                data-testid="product-select"
                 value={item.productId}
                 onChange={(e) => updateItem(index, "productId", e.target.value)}
                 style={{
@@ -277,7 +278,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                 <input
                   type="number"
                   min={0.0001}
-                  step={0.01}
+                  step={0.0001}
                   value={item.quantity}
                   onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
                   style={{

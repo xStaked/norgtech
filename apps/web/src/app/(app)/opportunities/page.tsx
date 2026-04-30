@@ -1,4 +1,13 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
@@ -15,6 +24,16 @@ interface Opportunity {
   createdAt: string;
 }
 
+interface OpportunityRow {
+  id: string;
+  title: string;
+  stage: string;
+  estimatedValue: number | null;
+  customerName: string | null;
+  customerId: string | null;
+  createdAt: string;
+}
+
 const stageLabels: Record<string, string> = {
   prospecto: "Prospecto",
   contacto: "Contacto",
@@ -26,93 +45,155 @@ const stageLabels: Record<string, string> = {
   perdida: "Perdida",
 };
 
-const stageColors: Record<string, string> = {
-  prospecto: "#6b7c93",
-  contacto: "#3498db",
-  visita: "#9b59b6",
-  cotizacion: "#f39c12",
-  negociacion: "#e67e22",
-  orden_facturacion: "#1abc9c",
-  venta_cerrada: "#27ae60",
-  perdida: "#c0392b",
+const stageTones: Record<string, CrmStatusTone> = {
+  prospecto: "neutral",
+  contacto: "info",
+  visita: "info",
+  cotizacion: "warning",
+  negociacion: "warning",
+  orden_facturacion: "success",
+  venta_cerrada: "success",
+  perdida: "danger",
 };
+
+const currencyFormatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
+
+const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+const columns: readonly DataTableColumn<OpportunityRow>[] = [
+  {
+    key: "opportunity",
+    header: "Oportunidad",
+    render: (row) => (
+      <div style={{ display: "grid", gap: 4 }}>
+        <Link href={`/opportunities/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+          {row.title}
+        </Link>
+        <span style={{ fontSize: 13, color: "#52637a" }}>ID {row.id.slice(-8)}</span>
+      </div>
+    ),
+  },
+  {
+    key: "stage",
+    header: "Etapa",
+    render: (row) => (
+      <StatusBadge tone={stageTones[row.stage] ?? "neutral"}>
+        {stageLabels[row.stage] ?? row.stage}
+      </StatusBadge>
+    ),
+  },
+  {
+    key: "customer",
+    header: "Cliente",
+    render: (row) =>
+      row.customerId ? (
+        <Link href={`/customers/${row.customerId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+          {row.customerName}
+        </Link>
+      ) : (
+        <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+      ),
+  },
+  {
+    key: "value",
+    header: "Valor estimado",
+    align: "right",
+    render: (row) =>
+      row.estimatedValue !== null ? currencyFormatter.format(row.estimatedValue) : (
+        <span style={{ color: "#6b7c93" }}>Sin estimación</span>
+      ),
+  },
+  {
+    key: "created",
+    header: "Creada",
+    render: (row) => dateFormatter.format(new Date(row.createdAt)),
+  },
+  {
+    key: "detail",
+    header: "Detalle",
+    align: "right",
+    render: (row) => (
+      <Link href={`/opportunities/${row.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 700 }}>
+        Abrir
+      </Link>
+    ),
+  },
+] as const;
+
+function countByStage(rows: OpportunityRow[], stage: string) {
+  return rows.filter((row) => row.stage === stage).length.toLocaleString("es-CO");
+}
 
 export default async function OpportunitiesPage() {
   const response = await apiFetch("/opportunities");
   const opportunities: Opportunity[] = response.ok ? await response.json() : [];
 
+  const rows: OpportunityRow[] = opportunities.map((opportunity) => ({
+    id: opportunity.id,
+    title: opportunity.title,
+    stage: opportunity.stage,
+    estimatedValue: opportunity.estimatedValue ? Number(opportunity.estimatedValue) : null,
+    customerName: opportunity.customer?.displayName ?? null,
+    customerId: opportunity.customer?.id ?? null,
+    createdAt: opportunity.createdAt,
+  }));
+
   return (
-    <div>
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Flujo comercial"
+        title="Oportunidades"
+        description="Pipeline activo por etapa con foco en avance, monto y contexto del cliente."
+        actions={
+          <>
+            <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>
+            <ButtonLink href="/quotes/new" variant="secondary">
+              Nueva cotización
+            </ButtonLink>
+          </>
+        }
+      />
+
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "1.5rem",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16,
         }}
       >
-        <h1 style={{ margin: 0 }}>Oportunidades</h1>
-        <Link
-          href="/opportunities/new"
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.5rem",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            textDecoration: "none",
-            fontWeight: 600,
-            fontSize: "0.875rem",
-          }}
-        >
-          Nueva oportunidad
-        </Link>
+        <StatCard label="Prospectos" value={countByStage(rows, "prospecto")} tone="neutral" />
+        <StatCard label="En contacto" value={countByStage(rows, "contacto")} tone="info" />
+        <StatCard label="En negociación" value={countByStage(rows, "negociacion")} tone="warning" />
+        <StatCard label="Ventas cerradas" value={countByStage(rows, "venta_cerrada")} tone="success" />
       </div>
 
-      {opportunities.length === 0 ? (
-        <p style={{ color: "#52637a" }}>No hay oportunidades registradas.</p>
-      ) : (
-        <div style={{ display: "grid", gap: "0.75rem" }}>
-          {opportunities.map((opportunity) => (
-            <Link
-              key={opportunity.id}
-              href={`/opportunities/${opportunity.id}`}
-              style={{
-                display: "block",
-                backgroundColor: "#ffffff",
-                padding: "1rem 1.25rem",
-                borderRadius: "0.75rem",
-                boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-                textDecoration: "none",
-                color: "inherit",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ fontWeight: 600, color: "#10233f" }}>
-                  {opportunity.title}
-                </div>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "0.25rem",
-                    backgroundColor: stageColors[opportunity.stage] || "#6b7c93",
-                    color: "#ffffff",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {stageLabels[opportunity.stage] || opportunity.stage}
-                </span>
-              </div>
-              <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                {opportunity.customer?.displayName}
-                {opportunity.estimatedValue &&
-                  ` · Valor estimado: $${Number(opportunity.estimatedValue).toLocaleString("es-CO")}`}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} oportunidades en el pipeline`} />
+
+      <SectionCard
+        title="Pipeline comercial"
+        description="Seguimiento compacto de etapa, cliente y valor estimado para priorizar el trabajo diario."
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowKey={(row) => row.id}
+          emptyState={
+            <EmptyState
+              title="No hay oportunidades registradas"
+              description="Crea la primera oportunidad para empezar a mover el pipeline comercial."
+              action={<ButtonLink href="/opportunities/new">Crear oportunidad</ButtonLink>}
+            />
+          }
+        />
+      </SectionCard>
     </div>
   );
 }

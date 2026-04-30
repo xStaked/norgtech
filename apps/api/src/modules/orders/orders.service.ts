@@ -5,6 +5,7 @@ import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
+import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { allowedTransitions } from "./order-status-transition-map";
 
 @Injectable()
@@ -21,6 +22,9 @@ export class OrdersService {
     }
     if (dto.sourceQuoteId) {
       await this.assertQuoteExists(dto.sourceQuoteId);
+    }
+    if (dto.assignedLogisticsUserId) {
+      await this.assertUserExists(dto.assignedLogisticsUserId);
     }
 
     const itemsWithSnapshot = await Promise.all(
@@ -63,12 +67,17 @@ export class OrdersService {
       const order = await tx.order.create({
         data: {
           customerId: dto.customerId,
-          opportunityId: dto.opportunityId ?? null,
-          sourceQuoteId: dto.sourceQuoteId ?? null,
+          opportunityId: dto.opportunityId || null,
+          sourceQuoteId: dto.sourceQuoteId || null,
           requestedDeliveryDate: dto.requestedDeliveryDate
             ? new Date(dto.requestedDeliveryDate)
             : null,
           notes: dto.notes,
+          assignedLogisticsUserId: dto.assignedLogisticsUserId || null,
+          committedDeliveryDate: dto.committedDeliveryDate
+            ? new Date(dto.committedDeliveryDate)
+            : null,
+          logisticsNotes: dto.logisticsNotes,
           subtotal,
           total,
           createdBy: user.id,
@@ -95,8 +104,9 @@ export class OrdersService {
     });
   }
 
-  findAll() {
+  findAll(status?: OrderStatus) {
     return this.prisma.order.findMany({
+      where: status ? { status } : undefined,
       include: { customer: true, opportunity: true, items: true },
       orderBy: { createdAt: "desc" },
     });
@@ -105,38 +115,110 @@ export class OrdersService {
   findOne(id: string) {
     return this.prisma.order.findUnique({
       where: { id },
-      include: { customer: true, opportunity: true, sourceQuote: true, items: true, billingRequests: true },
+      include: {
+        customer: true,
+        opportunity: true,
+        sourceQuote: true,
+        items: true,
+        billingRequests: true,
+        assignedLogisticsUser: true,
+      },
     });
   }
 
   async updateStatus(user: AuthUser, orderId: string, dto: UpdateOrderStatusDto) {
-    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
-    if (!order) {
-      throw new NotFoundException("Order not found");
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
 
-    if (!this.isTransitionAllowed(order.status, dto.status)) {
-      throw new BadRequestException("Invalid order status transition");
-    }
+      if (!this.isTransitionAllowed(order.status, dto.status)) {
+        throw new BadRequestException("Invalid order status transition");
+      }
 
-    const previousState = JSON.parse(JSON.stringify(order));
+      const previousState = JSON.parse(JSON.stringify(order));
 
-    const updated = await this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: dto.status, updatedBy: user.id },
-      include: { customer: true, opportunity: true, sourceQuote: true, items: true },
+      const data: Parameters<typeof tx.order.update>[0]["data"] = {
+        status: dto.status,
+        updatedBy: user.id,
+      };
+
+      if (dto.status === "despachado") {
+        data.dispatchDate = new Date();
+      }
+      if (dto.status === "entregado") {
+        data.deliveryDate = new Date();
+      }
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data,
+        include: { customer: true, opportunity: true, sourceQuote: true, items: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: updated.id,
+          action: "order.status_changed",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
     });
+  }
 
-    await this.auditService.record({
-      entityType: "Order",
-      entityId: updated.id,
-      action: "order.status_changed",
-      actorUserId: user.id,
-      previousState,
-      nextState: JSON.parse(JSON.stringify(updated)),
+  async updateLogistics(user: AuthUser, orderId: string, dto: UpdateOrderLogisticsDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+
+      if (dto.assignedLogisticsUserId) {
+        await this.assertUserExists(dto.assignedLogisticsUserId);
+      }
+
+      const previousState = JSON.parse(JSON.stringify(order));
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          assignedLogisticsUserId: dto.assignedLogisticsUserId || null,
+          committedDeliveryDate: dto.committedDeliveryDate
+            ? new Date(dto.committedDeliveryDate)
+            : null,
+          logisticsNotes: dto.logisticsNotes,
+          updatedBy: user.id,
+        },
+        include: {
+          customer: true,
+          opportunity: true,
+          sourceQuote: true,
+          items: true,
+          assignedLogisticsUser: true,
+        },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: updated.id,
+          action: "order.logistics_updated",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
     });
-
-    return updated;
   }
 
   async createBillingRequest(user: AuthUser, orderId: string) {
@@ -200,6 +282,13 @@ export class OrdersService {
     const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
     if (!quote) {
       throw new NotFoundException("Quote not found");
+    }
+  }
+
+  private async assertUserExists(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException("User not found");
     }
   }
 

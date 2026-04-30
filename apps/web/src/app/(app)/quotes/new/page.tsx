@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { QuoteForm } from "@/components/quotes/quote-form";
 
@@ -32,23 +34,24 @@ export default async function NewQuotePage() {
   const products: Product[] = productsRes.ok ? await productsRes.json() : [];
 
   return (
-    <div>
-      <Link
-        href="/quotes"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Cotizaciones"
+        title="Nueva cotización"
+        description="Crea una propuesta comercial con contexto de cliente, oportunidad e items valorizados."
+        actions={
+          <ButtonLink href="/quotes" variant="secondary">
+            Volver a cotizaciones
+          </ButtonLink>
+        }
+      />
+
+      <SectionCard
+        title="Formulario comercial"
+        description="Completa los datos base y arma el detalle económico de la propuesta."
       >
-        ← Volver a cotizaciones
-      </Link>
-
-      <h1 style={{ marginTop: 0 }}>Nueva cotización</h1>
-
-      <QuoteForm customers={customers} opportunities={opportunities} products={products} />
+        <QuoteForm customers={customers} opportunities={opportunities} products={products} />
+      </SectionCard>
     </div>
   );
 }

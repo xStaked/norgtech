@@ -4,6 +4,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { UpdateBillingStatusDto } from "./dto/update-billing-status.dto";
+import { CreateBillingRequestDto } from "./dto/create-billing-request.dto";
 
 const allowedStatusTransitions: Record<BillingRequestStatus, BillingRequestStatus[]> = {
   pendiente: ["procesada", "rechazada"],
@@ -18,9 +19,10 @@ export class BillingRequestsService {
     private readonly auditService: AuditService,
   ) {}
 
-  findAll() {
+  findAll(status?: BillingRequestStatus) {
     return this.prisma.billingRequest.findMany({
-      include: { customer: true },
+      where: status ? { status } : undefined,
+      include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -28,7 +30,58 @@ export class BillingRequestsService {
   findOne(id: string) {
     return this.prisma.billingRequest.findUnique({
       where: { id },
-      include: { customer: true },
+      include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true },
+    });
+  }
+
+  async createDirect(user: AuthUser, dto: CreateBillingRequestDto) {
+    if (dto.sourceOrderId) {
+      const order = await this.prisma.order.findUnique({ where: { id: dto.sourceOrderId } });
+      if (!order) {
+        throw new NotFoundException("Source order not found");
+      }
+      if (dto.customerId !== order.customerId) {
+        throw new BadRequestException("Customer does not match source order");
+      }
+    }
+    if (dto.sourceQuoteId) {
+      const quote = await this.prisma.quote.findUnique({ where: { id: dto.sourceQuoteId } });
+      if (!quote) {
+        throw new NotFoundException("Source quote not found");
+      }
+      if (dto.customerId !== quote.customerId) {
+        throw new BadRequestException("Customer does not match source quote");
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const billingRequest = await tx.billingRequest.create({
+        data: {
+          customerId: dto.customerId,
+          opportunityId: dto.opportunityId || null,
+          sourceType: dto.sourceOrderId ? "order" : dto.sourceQuoteId ? "quote" : "direct",
+          sourceQuoteId: dto.sourceQuoteId || null,
+          sourceOrderId: dto.sourceOrderId || null,
+          notes: dto.notes,
+          requestedByUserId: user.id,
+          createdBy: user.id,
+          updatedBy: user.id,
+        },
+        include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "BillingRequest",
+          entityId: billingRequest.id,
+          action: "billing_request.created_direct",
+          actorUserId: user.id,
+          nextState: JSON.parse(JSON.stringify(billingRequest)),
+        },
+        tx,
+      );
+
+      return billingRequest;
     });
   }
 

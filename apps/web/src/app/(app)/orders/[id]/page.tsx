@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
 import { OrderActions } from "@/components/orders/order-actions";
+import { OrderStatusTimeline } from "@/components/orders/order-status-timeline";
+import { OrderLogisticsSection } from "@/components/orders/order-logistics-section";
+import { OrderBillingHistory } from "@/components/orders/order-billing-history";
 
 interface Customer {
   id: string;
@@ -34,6 +38,11 @@ interface BillingRequest {
   createdAt: string;
 }
 
+interface LogisticsUser {
+  id: string;
+  name: string;
+}
+
 interface Order {
   id: string;
   status: string;
@@ -41,11 +50,16 @@ interface Order {
   total: string;
   notes: string | null;
   requestedDeliveryDate: string | null;
+  committedDeliveryDate: string | null;
+  dispatchDate: string | null;
+  deliveryDate: string | null;
+  logisticsNotes: string | null;
   customer: Customer | null;
   opportunity: Opportunity | null;
   sourceQuote: Quote | null;
   items: OrderItem[];
   billingRequests: BillingRequest[];
+  assignedLogisticsUser: LogisticsUser | null;
   createdAt: string;
 }
 
@@ -65,6 +79,13 @@ const statusColors: Record<string, string> = {
   entregado: "#27ae60",
 };
 
+const nextStatusMap: Record<string, string> = {
+  recibido: "orden_facturacion",
+  orden_facturacion: "facturado",
+  facturado: "despachado",
+  despachado: "entregado",
+};
+
 export default async function OrderDetailPage({
   params,
 }: {
@@ -78,6 +99,13 @@ export default async function OrderDetailPage({
   }
 
   const order: Order = await response.json();
+  const user = await getCurrentUser();
+  const role = user?.role ?? null;
+
+  const canEditLogistics = role === "administrador" || role === "logistica";
+  const nextAction = nextStatusMap[order.status]
+    ? `Siguiente acción válida: Avanzar a ${statusLabels[nextStatusMap[order.status]]}`
+    : "Pedido completado";
 
   return (
     <div>
@@ -118,6 +146,8 @@ export default async function OrderDetailPage({
           </span>
         </div>
 
+        <OrderStatusTimeline currentStatus={order.status} />
+
         <div
           style={{
             display: "grid",
@@ -130,7 +160,13 @@ export default async function OrderDetailPage({
           <Info label="Oportunidad" value={order.opportunity?.title} />
           <Info
             label="Cotización origen"
-            value={order.sourceQuote ? `Cotización #${order.sourceQuote.id.slice(-6)}` : null}
+            value={
+              order.sourceQuote ? (
+                <Link href={`/quotes/${order.sourceQuote.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+                  Cotización #{order.sourceQuote.id.slice(-6)}
+                </Link>
+              ) : null
+            }
           />
           <Info
             label="Fecha de entrega solicitada"
@@ -199,30 +235,21 @@ export default async function OrderDetailPage({
           <span style={{ color: "#10233f" }}>${Number(order.total).toLocaleString("es-CO")}</span>
         </div>
 
-        {order.billingRequests.length > 0 && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <h3 style={{ margin: 0, fontSize: "1rem" }}>Solicitudes de facturación</h3>
-            <div style={{ display: "grid", gap: "0.5rem", marginTop: "0.75rem" }}>
-              {order.billingRequests.map((br) => (
-                <div
-                  key={br.id}
-                  style={{
-                    padding: "0.75rem 1rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #e2e8f0",
-                    backgroundColor: "#f8fafc",
-                    fontSize: "0.875rem",
-                  }}
-                >
-                  <span style={{ fontWeight: 600 }}>Solicitud #{br.id.slice(-6)}</span>
-                  <span style={{ color: "#52637a", marginLeft: "0.5rem" }}>
-                    — {br.status} — {new Date(br.createdAt).toLocaleDateString("es-CO")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <OrderBillingHistory billingRequests={order.billingRequests} />
+
+        <OrderLogisticsSection
+          orderId={order.id}
+          assignedLogisticsUser={order.assignedLogisticsUser}
+          committedDeliveryDate={order.committedDeliveryDate}
+          dispatchDate={order.dispatchDate}
+          deliveryDate={order.deliveryDate}
+          logisticsNotes={order.logisticsNotes}
+          canEdit={canEditLogistics}
+        />
+
+        <div style={{ marginTop: "1.5rem", fontSize: "0.875rem", color: "#6b7c93", fontWeight: 500 }}>
+          {nextAction}
+        </div>
 
         <div style={{ marginTop: "1.5rem" }}>
           <OrderActions orderId={order.id} currentStatus={order.status} />
@@ -232,7 +259,7 @@ export default async function OrderDetailPage({
   );
 }
 
-function Info({ label, value }: { label: string; value: string | null | undefined }) {
+function Info({ label, value }: { label: string; value: React.ReactNode }) {
   if (!value) return null;
   return (
     <div>

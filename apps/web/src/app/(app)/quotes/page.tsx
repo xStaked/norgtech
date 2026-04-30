@@ -1,4 +1,13 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { StatCard } from "@/components/ui/stat-card";
+import { StatusBadge } from "@/components/ui/status-badge";
+import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
@@ -15,6 +24,16 @@ interface Quote {
   createdAt: string;
 }
 
+interface QuoteRow {
+  id: string;
+  status: string;
+  subtotal: number;
+  total: number;
+  customerName: string | null;
+  customerId: string | null;
+  createdAt: string;
+}
+
 const statusLabels: Record<string, string> = {
   abierta: "Abierta",
   en_negociacion: "En negociación",
@@ -22,90 +41,159 @@ const statusLabels: Record<string, string> = {
   perdida: "Perdida",
 };
 
-const statusColors: Record<string, string> = {
-  abierta: "#3498db",
-  en_negociacion: "#f39c12",
-  cerrada: "#27ae60",
-  perdida: "#c0392b",
+const statusTones: Record<string, CrmStatusTone> = {
+  abierta: "info",
+  en_negociacion: "warning",
+  cerrada: "success",
+  perdida: "danger",
 };
+
+const currencyFormatter = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
+
+const dateFormatter = new Intl.DateTimeFormat("es-CO", {
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+});
+
+const linkStyle = {
+  color: "#2d6cdf",
+  textDecoration: "none",
+  fontWeight: 700,
+} as const;
+
+const columns: readonly DataTableColumn<QuoteRow>[] = [
+  {
+    key: "quote",
+    header: "Cotización",
+    render: (row) => (
+      <div style={{ display: "grid", gap: 4 }}>
+        <Link href={`/quotes/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+          Cotización #{row.id.slice(-6)}
+        </Link>
+        <span style={{ fontSize: 13, color: "#52637a" }}>{dateFormatter.format(new Date(row.createdAt))}</span>
+      </div>
+    ),
+  },
+  {
+    key: "status",
+    header: "Estado",
+    render: (row) => (
+      <StatusBadge tone={statusTones[row.status] ?? "neutral"}>
+        {statusLabels[row.status] ?? row.status}
+      </StatusBadge>
+    ),
+  },
+  {
+    key: "customer",
+    header: "Cliente",
+    render: (row) =>
+      row.customerId ? (
+        <Link href={`/customers/${row.customerId}`} style={linkStyle}>
+          {row.customerName}
+        </Link>
+      ) : (
+        <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+      ),
+  },
+  {
+    key: "subtotal",
+    header: "Subtotal",
+    align: "right",
+    render: (row) => currencyFormatter.format(row.subtotal),
+  },
+  {
+    key: "total",
+    header: "Total",
+    align: "right",
+    render: (row) => <strong>{currencyFormatter.format(row.total)}</strong>,
+  },
+  {
+    key: "detail",
+    header: "Detalle",
+    align: "right",
+    render: (row) => (
+      <Link href={`/quotes/${row.id}`} style={linkStyle}>
+        Abrir
+      </Link>
+    ),
+  },
+] as const;
+
+function countByStatus(rows: QuoteRow[], status: string) {
+  return rows.filter((row) => row.status === status).length.toLocaleString("es-CO");
+}
+
+function sumTotals(rows: QuoteRow[]) {
+  return currencyFormatter.format(rows.reduce((sum, row) => sum + row.total, 0));
+}
 
 export default async function QuotesPage() {
   const response = await apiFetch("/quotes");
   const quotes: Quote[] = response.ok ? await response.json() : [];
 
+  const rows: QuoteRow[] = quotes.map((quote) => ({
+    id: quote.id,
+    status: quote.status,
+    subtotal: Number(quote.subtotal),
+    total: Number(quote.total),
+    customerName: quote.customer?.displayName ?? null,
+    customerId: quote.customer?.id ?? null,
+    createdAt: quote.createdAt,
+  }));
+
   return (
-    <div>
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Propuestas comerciales"
+        title="Cotizaciones"
+        description="Vista consolidada de propuestas vigentes, valor cotizado y avance hacia cierre comercial."
+        actions={
+          <>
+            <ButtonLink href="/quotes/new">Nueva cotización</ButtonLink>
+            <ButtonLink href="/opportunities" variant="secondary">
+              Ver oportunidades
+            </ButtonLink>
+          </>
+        }
+      />
+
       <div
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "1.5rem",
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+          gap: 16,
         }}
       >
-        <h1 style={{ margin: 0 }}>Cotizaciones</h1>
-        <Link
-          href="/quotes/new"
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.5rem",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            textDecoration: "none",
-            fontWeight: 600,
-            fontSize: "0.875rem",
-          }}
-        >
-          Nueva cotización
-        </Link>
+        <StatCard label="Abiertas" value={countByStatus(rows, "abierta")} tone="info" />
+        <StatCard label="En negociación" value={countByStatus(rows, "en_negociacion")} tone="warning" />
+        <StatCard label="Cerradas" value={countByStatus(rows, "cerrada")} tone="success" />
+        <StatCard label="Valor total" value={sumTotals(rows)} tone="neutral" />
       </div>
 
-      {quotes.length === 0 ? (
-        <p style={{ color: "#52637a" }}>No hay cotizaciones registradas.</p>
-      ) : (
-        <div style={{ display: "grid", gap: "0.75rem" }}>
-          {quotes.map((quote) => (
-            <Link
-              key={quote.id}
-              href={`/quotes/${quote.id}`}
-              style={{
-                display: "block",
-                backgroundColor: "#ffffff",
-                padding: "1rem 1.25rem",
-                borderRadius: "0.75rem",
-                boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-                textDecoration: "none",
-                color: "inherit",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ fontWeight: 600, color: "#10233f" }}>
-                  Cotización #{quote.id.slice(-6)}
-                </div>
-                <span
-                  style={{
-                    fontSize: "0.75rem",
-                    fontWeight: 600,
-                    padding: "0.25rem 0.5rem",
-                    borderRadius: "0.25rem",
-                    backgroundColor: statusColors[quote.status] || "#6b7c93",
-                    color: "#ffffff",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {statusLabels[quote.status] || quote.status}
-                </span>
-              </div>
-              <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                {quote.customer?.displayName}
-              </div>
-              <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#27ae60", marginTop: "0.5rem" }}>
-                Total: ${Number(quote.total).toLocaleString("es-CO")}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} cotizaciones registradas`} />
+
+      <SectionCard
+        title="Pipeline de cotizaciones"
+        description="Consulta estado, cliente y valor total de cada propuesta desde una sola vista operativa."
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowKey={(row) => row.id}
+          emptyState={
+            <EmptyState
+              title="No hay cotizaciones registradas"
+              description="Crea la primera cotización para empezar a consolidar propuestas comerciales."
+              action={<ButtonLink href="/quotes/new">Crear cotización</ButtonLink>}
+            />
+          }
+        />
+      </SectionCard>
     </div>
   );
 }
