@@ -1,5 +1,8 @@
 node_modules
 dist
 coverage
+.next
+playwright-report
+test-results
 .DS_Store
 .pnpm-store

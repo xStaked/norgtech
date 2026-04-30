@@ -2,9 +2,18 @@
   "name": "@norgtech/web",
   "private": true,
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "build": "echo \"web build placeholder\"",
-    "dev": "echo \"web dev placeholder\"",
-    "lint": "echo \"web lint placeholder\""
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next dev",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.59.1",
+    "@types/react": "19.2.14",
+    "next": "^16.2.4",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5"
   }
 }
