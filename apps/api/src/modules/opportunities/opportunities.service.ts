@@ -118,6 +118,20 @@ export class OpportunitiesService {
     }
   }
 
+  findAll() {
+    return this.prisma.opportunity.findMany({
+      include: { customer: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  findOne(id: string) {
+    return this.prisma.opportunity.findUnique({
+      where: { id },
+      include: { customer: true },
+    });
+  }
+
   private isTransitionAllowed(
     currentStage: OpportunityStage,
     nextStage: OpportunityStage,

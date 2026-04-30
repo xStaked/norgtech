@@ -1,6 +1,8 @@
 import {
   Body,
   Controller,
+  Get,
+  Param,
   Post,
   UseGuards,
   ValidationPipe,
@@ -31,5 +33,19 @@ export class CustomersController {
     dto: CreateCustomerDto,
   ) {
     return this.customersService.create(user, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("admin", "comercial")
+  @Get()
+  findAll() {
+    return this.customersService.findAll();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("admin", "comercial")
+  @Get(":id")
+  findOne(@Param("id") id: string) {
+    return this.customersService.findOne(id);
   }
 }

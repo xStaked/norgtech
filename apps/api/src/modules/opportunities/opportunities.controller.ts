@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   Patch,
   Post,
@@ -51,5 +52,19 @@ export class OpportunitiesController {
     dto: UpdateOpportunityStageDto,
   ) {
     return this.opportunitiesService.updateStage(user, opportunityId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("admin", "comercial")
+  @Get()
+  findAll() {
+    return this.opportunitiesService.findAll();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("admin", "comercial")
+  @Get(":id")
+  findOne(@Param("id") id: string) {
+    return this.opportunitiesService.findOne(id);
   }
 }

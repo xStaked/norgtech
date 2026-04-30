@@ -17,4 +17,10 @@ export class CustomerSegmentsService {
       },
     });
   }
+
+  findAll() {
+    return this.prisma.customerSegment.findMany({
+      orderBy: { name: "asc" },
+    });
+  }
 }

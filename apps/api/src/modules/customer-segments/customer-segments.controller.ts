@@ -34,4 +34,11 @@ export class CustomerSegmentsController {
   ) {
     return this.customerSegmentsService.create(user, dto);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("admin", "comercial")
+  @Get()
+  findAll() {
+    return this.customerSegmentsService.findAll();
+  }
 }

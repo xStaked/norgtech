@@ -88,6 +88,20 @@ export class CustomersService {
     }
   }
 
+  findAll() {
+    return this.prisma.customer.findMany({
+      include: { contacts: true, segment: true },
+      orderBy: { displayName: "asc" },
+    });
+  }
+
+  findOne(id: string) {
+    return this.prisma.customer.findUnique({
+      where: { id },
+      include: { contacts: true, segment: true },
+    });
+  }
+
   private assertExactlyOnePrimaryContact(dto: CreateCustomerDto) {
     const primaryContacts = dto.contacts.filter((contact) => contact.isPrimary);
 
