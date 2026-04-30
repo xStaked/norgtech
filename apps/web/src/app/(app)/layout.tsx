@@ -3,8 +3,9 @@ import type { ReactNode } from "react";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/customers", label: "Customers" },
-  { href: "/opportunities", label: "Opportunities" },
+  { href: "/customers", label: "Clientes" },
+  { href: "/opportunities", label: "Oportunidades" },
+  { href: "/segments", label: "Segmentos" },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
