@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -161,6 +163,9 @@ export default async function FollowUpsPage({
   const allResponse = await apiFetch("/follow-up-tasks");
   const allTasks: FollowUpTask[] = allResponse.ok ? await allResponse.json() : [];
 
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const rows: FollowUpRow[] = tasks.map((task) => ({
     id: task.id,
     customerName: task.customer?.displayName ?? null,
@@ -189,7 +194,7 @@ export default async function FollowUpsPage({
         description="Centraliza tareas pendientes por cliente, canal y vencimiento para priorizar el trabajo diario."
         actions={
           <>
-            <ButtonLink href="/follow-ups/new">Nueva tarea</ButtonLink>
+            {canCreate(userRole, "followUp") && <ButtonLink href="/follow-ups/new">Nueva tarea</ButtonLink>}
             <ButtonLink href="/visits" variant="secondary">
               Ver visitas
             </ButtonLink>
@@ -251,7 +256,7 @@ export default async function FollowUpsPage({
             <EmptyState
               title="No hay tareas de seguimiento registradas"
               description="Crea la primera tarea para empezar a ordenar la cola comercial pendiente."
-              action={<ButtonLink href="/follow-ups/new">Crear tarea</ButtonLink>}
+              action={canCreate(userRole, "followUp") && <ButtonLink href="/follow-ups/new">Crear tarea</ButtonLink>}
             />
           }
         />

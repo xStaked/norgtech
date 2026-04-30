@@ -6,6 +6,8 @@ import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Contact {
   id: string;
@@ -118,6 +120,9 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
 ] as const;
 
 export default async function CustomersPage() {
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const response = await apiFetch("/customers");
   const customers: Customer[] = response.ok ? await response.json() : [];
 
@@ -141,7 +146,7 @@ export default async function CustomersPage() {
         eyebrow="Base comercial"
         title="Clientes"
         description="Vista operativa de cuentas activas, clasificación comercial y contacto principal."
-        actions={<ButtonLink href="/customers/new">Nuevo cliente</ButtonLink>}
+        actions={canCreate(userRole, "customer") && <ButtonLink href="/customers/new">Nuevo cliente</ButtonLink>}
       />
 
       <FilterBar summary={`${rows.length.toLocaleString("es-CO")} clientes registrados`} />
@@ -158,7 +163,7 @@ export default async function CustomersPage() {
             <EmptyState
               title="No hay clientes registrados"
               description="Crea el primer cliente para empezar a mover oportunidades, visitas y cotizaciones."
-              action={<ButtonLink href="/customers/new">Crear cliente</ButtonLink>}
+              action={canCreate(userRole, "customer") && <ButtonLink href="/customers/new">Crear cliente</ButtonLink>}
             />
           }
         />

@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -141,6 +143,9 @@ export default async function VisitsPage({
   const allResponse = await apiFetch("/visits");
   const allVisits: Visit[] = allResponse.ok ? await allResponse.json() : [];
 
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const rows: VisitRow[] = visits.map((visit) => ({
     id: visit.id,
     customerName: visit.customer?.displayName ?? null,
@@ -167,7 +172,7 @@ export default async function VisitsPage({
         description="Planea y revisa la ejecución comercial presencial con foco en agenda, cliente y resultado."
         actions={
           <>
-            <ButtonLink href="/visits/new">Nueva visita</ButtonLink>
+            {canCreate(userRole, "visit") && <ButtonLink href="/visits/new">Nueva visita</ButtonLink>}
             <ButtonLink href="/follow-ups" variant="secondary">
               Ver seguimientos
             </ButtonLink>
@@ -229,7 +234,7 @@ export default async function VisitsPage({
             <EmptyState
               title="No hay visitas registradas"
               description="Agenda la primera visita para empezar a estructurar la operación comercial en campo."
-              action={<ButtonLink href="/visits/new">Crear visita</ButtonLink>}
+              action={canCreate(userRole, "visit") && <ButtonLink href="/visits/new">Crear visita</ButtonLink>}
             />
           }
         />

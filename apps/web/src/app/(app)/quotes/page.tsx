@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -133,6 +135,9 @@ function sumTotals(rows: QuoteRow[]) {
 }
 
 export default async function QuotesPage() {
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const response = await apiFetch("/quotes");
   const quotes: Quote[] = response.ok ? await response.json() : [];
 
@@ -154,7 +159,7 @@ export default async function QuotesPage() {
         description="Vista consolidada de propuestas vigentes, valor cotizado y avance hacia cierre comercial."
         actions={
           <>
-            <ButtonLink href="/quotes/new">Nueva cotización</ButtonLink>
+            {canCreate(userRole, "quote") && <ButtonLink href="/quotes/new">Nueva cotización</ButtonLink>}
             <ButtonLink href="/opportunities" variant="secondary">
               Ver oportunidades
             </ButtonLink>
@@ -189,7 +194,7 @@ export default async function QuotesPage() {
             <EmptyState
               title="No hay cotizaciones registradas"
               description="Crea la primera cotización para empezar a consolidar propuestas comerciales."
-              action={<ButtonLink href="/quotes/new">Crear cotización</ButtonLink>}
+              action={canCreate(userRole, "quote") && <ButtonLink href="/quotes/new">Crear cotización</ButtonLink>}
             />
           }
         />

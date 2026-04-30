@@ -8,6 +8,8 @@ import { crmTheme } from "@/components/ui/theme";
 import { CustomerHistorySection } from "@/components/customers/customer-history-section";
 import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Contact {
   id: string;
@@ -122,6 +124,8 @@ export default async function CustomerDetailPage({
   }
 
   const customer: Customer = await response.json();
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -145,34 +149,42 @@ export default async function CustomerDetailPage({
         description={customer.legalName}
         actions={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            <ButtonLink
-              href={`/visits/new?customerId=${customer.id}`}
-              variant="secondary"
-              size="sm"
-            >
-              + Visita
-            </ButtonLink>
-            <ButtonLink
-              href={`/follow-ups/new?customerId=${customer.id}`}
-              variant="secondary"
-              size="sm"
-            >
-              + Seguimiento
-            </ButtonLink>
-            <ButtonLink
-              href={`/quotes/new?customerId=${customer.id}`}
-              variant="secondary"
-              size="sm"
-            >
-              + Cotizacion
-            </ButtonLink>
-            <ButtonLink
-              href={`/orders/new?customerId=${customer.id}`}
-              variant="secondary"
-              size="sm"
-            >
-              + Pedido
-            </ButtonLink>
+            {canCreate(userRole, "visit") && (
+              <ButtonLink
+                href={`/visits/new?customerId=${customer.id}`}
+                variant="secondary"
+                size="sm"
+              >
+                + Visita
+              </ButtonLink>
+            )}
+            {canCreate(userRole, "followUp") && (
+              <ButtonLink
+                href={`/follow-ups/new?customerId=${customer.id}`}
+                variant="secondary"
+                size="sm"
+              >
+                + Seguimiento
+              </ButtonLink>
+            )}
+            {canCreate(userRole, "quote") && (
+              <ButtonLink
+                href={`/quotes/new?customerId=${customer.id}`}
+                variant="secondary"
+                size="sm"
+              >
+                + Cotizacion
+              </ButtonLink>
+            )}
+            {canCreate(userRole, "order") && (
+              <ButtonLink
+                href={`/orders/new?customerId=${customer.id}`}
+                variant="secondary"
+                size="sm"
+              >
+                + Pedido
+              </ButtonLink>
+            )}
           </div>
         }
       />

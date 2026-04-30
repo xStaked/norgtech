@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -159,6 +161,9 @@ export default async function OrdersPage({
     createdAt: order.createdAt,
   }));
 
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const filterSummary = status
     ? `${rows.length.toLocaleString("es-CO")} pedidos en estado "${statusLabels[status] ?? status}"`
     : `${rows.length.toLocaleString("es-CO")} pedidos registrados`;
@@ -171,7 +176,7 @@ export default async function OrdersPage({
         description="Seguimiento operativo de pedidos activos, monetización y avance hacia facturación y entrega."
         actions={
           <>
-            <ButtonLink href="/orders/new">Nuevo pedido</ButtonLink>
+            {canCreate(userRole, "order") && <ButtonLink href="/orders/new">Nuevo pedido</ButtonLink>}
             <ButtonLink href="/billing-requests" variant="secondary">
               Ver facturación
             </ButtonLink>
@@ -216,7 +221,7 @@ export default async function OrdersPage({
             <EmptyState
               title="No hay pedidos registrados"
               description="Genera el primer pedido para activar el flujo de ejecución comercial."
-              action={<ButtonLink href="/orders/new">Crear pedido</ButtonLink>}
+              action={canCreate(userRole, "order") && <ButtonLink href="/orders/new">Crear pedido</ButtonLink>}
             />
           }
         />

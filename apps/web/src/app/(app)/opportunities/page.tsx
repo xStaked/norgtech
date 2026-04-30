@@ -9,6 +9,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -133,6 +135,9 @@ function countByStage(rows: OpportunityRow[], stage: string) {
 }
 
 export default async function OpportunitiesPage() {
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const response = await apiFetch("/opportunities");
   const opportunities: Opportunity[] = response.ok ? await response.json() : [];
 
@@ -154,10 +159,14 @@ export default async function OpportunitiesPage() {
         description="Pipeline activo por etapa con foco en avance, monto y contexto del cliente."
         actions={
           <>
-            <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>
-            <ButtonLink href="/quotes/new" variant="secondary">
-              Nueva cotización
-            </ButtonLink>
+            {canCreate(userRole, "opportunity") && (
+              <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>
+            )}
+            {canCreate(userRole, "quote") && (
+              <ButtonLink href="/quotes/new" variant="secondary">
+                Nueva cotización
+              </ButtonLink>
+            )}
           </>
         }
       />
@@ -189,7 +198,7 @@ export default async function OpportunitiesPage() {
             <EmptyState
               title="No hay oportunidades registradas"
               description="Crea la primera oportunidad para empezar a mover el pipeline comercial."
-              action={<ButtonLink href="/opportunities/new">Crear oportunidad</ButtonLink>}
+              action={canCreate(userRole, "opportunity") && <ButtonLink href="/opportunities/new">Crear oportunidad</ButtonLink>}
             />
           }
         />

@@ -59,9 +59,27 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/billing-requests": ["administrador", "director_comercial", "facturacion"],
     "/products": ["administrador", "director_comercial", "comercial"],
     "/segments": ["administrador", "director_comercial", "comercial"],
+    "/reports": ["administrador", "director_comercial", "tecnico"],
   };
 
   const allowedRoles = moduleAccess[moduleHref];
   if (!allowedRoles) return false;
   return allowedRoles.includes(role);
+}
+
+export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "followUp" | "order" | "billingRequest" | "report"): boolean {
+  if (!role) return false;
+
+  const createAccess: Record<typeof entity, readonly UserRole[]> = {
+    customer: ["administrador", "director_comercial", "comercial"],
+    opportunity: ["administrador", "director_comercial", "comercial"],
+    quote: ["administrador", "director_comercial", "comercial"],
+    visit: ["administrador", "director_comercial", "comercial", "tecnico"],
+    followUp: ["administrador", "director_comercial", "comercial", "tecnico"],
+    order: ["administrador", "director_comercial", "comercial", "logistica"],
+    billingRequest: ["administrador", "director_comercial", "facturacion"],
+    report: ["administrador", "director_comercial", "tecnico"],
+  };
+
+  return createAccess[entity].includes(role);
 }

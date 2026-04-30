@@ -7,6 +7,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface ActivityItem {
   id: string;
@@ -101,6 +103,9 @@ const queueStatusTone: Record<string, CrmStatusTone> = {
 };
 
 export default async function DashboardPage() {
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const response = await apiFetch("/dashboard/summary");
   const summary: DashboardSummary | null = response.ok ? await response.json() : null;
 
@@ -112,7 +117,7 @@ export default async function DashboardPage() {
         description="Resumen comercial, actividad reciente y próximas acciones del equipo."
         actions={
           <>
-            <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>
+            {canCreate(userRole, "opportunity") && <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>}
             <ButtonLink href="/agenda" variant="secondary">
               Ver agenda
             </ButtonLink>

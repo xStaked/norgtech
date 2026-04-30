@@ -10,6 +10,8 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -170,6 +172,9 @@ export default async function AgendaPage({
   const overdueTasks = allTasks.filter((t) => t.status === "vencida" || isOverdueTask(t));
   const dueTodayTasks = allTasks.filter((t) => isDueToday(t));
 
+  const user = await getCurrentUser();
+  const userRole = user?.role ?? null;
+
   const counts: Record<AgendaView, number> = {
     hoy: todayVisits.length + dueTodayTasks.length + overdueTasks.filter((t) => isDueToday(t) || isOverdueTask(t)).length,
     semana: allVisits.filter((v) => {
@@ -208,10 +213,12 @@ export default async function AgendaPage({
         description="Semana comercial consolidada con visitas, seguimientos y foco inmediato del equipo."
         actions={
           <>
-            <ButtonLink href="/visits/new">Nueva visita</ButtonLink>
-            <ButtonLink href="/follow-ups/new" variant="secondary">
-              Nuevo seguimiento
-            </ButtonLink>
+            {canCreate(userRole, "visit") && <ButtonLink href="/visits/new">Nueva visita</ButtonLink>}
+            {canCreate(userRole, "followUp") && (
+              <ButtonLink href="/follow-ups/new" variant="secondary">
+                Nuevo seguimiento
+              </ButtonLink>
+            )}
           </>
         }
       />
