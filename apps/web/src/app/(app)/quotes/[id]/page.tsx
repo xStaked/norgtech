@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiFetch } from "@/lib/api.server";
+import { QuoteBillingButton } from "@/components/quotes/quote-billing-button";
 
 interface Customer {
   id: string;
@@ -128,34 +129,49 @@ export default async function QuoteDetailPage({
 
         <div style={{ marginTop: "1.5rem" }}>
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Items</h3>
-          <div style={{ display: "grid", gap: "0.75rem", marginTop: "0.75rem" }}>
-            {quote.items.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  padding: "0.75rem 1rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #e2e8f0",
-                  backgroundColor: "#f8fafc",
-                }}
-              >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontWeight: 600 }}>{item.productSnapshotName}</div>
-                  <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#27ae60" }}>
-                    ${Number(item.subtotal).toLocaleString("es-CO")}
-                  </div>
-                </div>
-                <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                  {item.productSnapshotSku} · {Number(item.quantity).toLocaleString("es-CO")} {item.unit} · $
-                  {Number(item.unitPrice).toLocaleString("es-CO")}/{item.unit}
-                </div>
-                {item.notes && (
-                  <div style={{ fontSize: "0.8125rem", color: "#6b7c93", marginTop: "0.25rem" }}>
-                    {item.notes}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div
+            style={{
+              marginTop: "0.75rem",
+              border: "1px solid #e2e8f0",
+              borderRadius: "0.5rem",
+              overflow: "hidden",
+            }}
+          >
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.875rem" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#f8fafc" }}>
+                  <th style={{ textAlign: "left", padding: "0.75rem 1rem", fontWeight: 600, color: "#6b7c93", borderBottom: "1px solid #e2e8f0" }}>Producto</th>
+                  <th style={{ textAlign: "left", padding: "0.75rem 1rem", fontWeight: 600, color: "#6b7c93", borderBottom: "1px solid #e2e8f0" }}>SKU</th>
+                  <th style={{ textAlign: "right", padding: "0.75rem 1rem", fontWeight: 600, color: "#6b7c93", borderBottom: "1px solid #e2e8f0" }}>Cantidad</th>
+                  <th style={{ textAlign: "right", padding: "0.75rem 1rem", fontWeight: 600, color: "#6b7c93", borderBottom: "1px solid #e2e8f0" }}>Precio unit.</th>
+                  <th style={{ textAlign: "right", padding: "0.75rem 1rem", fontWeight: 600, color: "#6b7c93", borderBottom: "1px solid #e2e8f0" }}>Subtotal</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quote.items.map((item) => (
+                  <tr key={item.id}>
+                    <td style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0", color: "#10233f", fontWeight: 500 }}>
+                      {item.productSnapshotName}
+                      {item.notes && (
+                        <div style={{ fontSize: "0.8125rem", color: "#6b7c93", marginTop: "0.25rem", fontWeight: 400 }}>
+                          {item.notes}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0", color: "#52637a" }}>{item.productSnapshotSku}</td>
+                    <td style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0", color: "#52637a", textAlign: "right" }}>
+                      {Number(item.quantity).toLocaleString("es-CO")} {item.unit}
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0", color: "#52637a", textAlign: "right" }}>
+                      ${Number(item.unitPrice).toLocaleString("es-CO")}
+                    </td>
+                    <td style={{ padding: "0.75rem 1rem", borderBottom: "1px solid #e2e8f0", color: "#10233f", textAlign: "right", fontWeight: 600 }}>
+                      ${Number(item.subtotal).toLocaleString("es-CO")}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -175,6 +191,12 @@ export default async function QuoteDetailPage({
           <span>Total</span>
           <span style={{ color: "#10233f" }}>${Number(quote.total).toLocaleString("es-CO")}</span>
         </div>
+
+        {quote.status === "cerrada" && (
+          <div style={{ marginTop: "1.5rem" }}>
+            <QuoteBillingButton quoteId={quote.id} />
+          </div>
+        )}
       </div>
     </div>
   );

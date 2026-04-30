@@ -13,13 +13,13 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
-import { CreateQuoteDto } from "./dto/create-quote.dto";
-import { UpdateQuoteStatusDto } from "./dto/update-quote-status.dto";
-import { QuotesService } from "./quotes.service";
+import { CreateOrderDto } from "./dto/create-order.dto";
+import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
+import { OrdersService } from "./orders.service";
 
-@Controller("quotes")
-export class QuotesController {
-  constructor(private readonly quotesService: QuotesService) {}
+@Controller("orders")
+export class OrdersController {
+  constructor(private readonly ordersService: OrdersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("admin", "comercial")
@@ -32,23 +32,23 @@ export class QuotesController {
         forbidNonWhitelisted: true,
       }),
     )
-    dto: CreateQuoteDto,
+    dto: CreateOrderDto,
   ) {
-    return this.quotesService.create(user, dto);
+    return this.ordersService.create(user, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("admin", "comercial")
   @Get()
   findAll() {
-    return this.quotesService.findAll();
+    return this.ordersService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("admin", "comercial")
   @Get(":id")
   findOne(@Param("id") id: string) {
-    return this.quotesService.findOne(id);
+    return this.ordersService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -56,16 +56,16 @@ export class QuotesController {
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
-    @Param("id") quoteId: string,
+    @Param("id") orderId: string,
     @Body(
       new ValidationPipe({
         whitelist: true,
         forbidNonWhitelisted: true,
       }),
     )
-    dto: UpdateQuoteStatusDto,
+    dto: UpdateOrderStatusDto,
   ) {
-    return this.quotesService.updateStatus(user, quoteId, dto);
+    return this.ordersService.updateStatus(user, orderId, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -73,8 +73,8 @@ export class QuotesController {
   @Post(":id/billing-request")
   createBillingRequest(
     @CurrentUser() user: AuthUser,
-    @Param("id") quoteId: string,
+    @Param("id") orderId: string,
   ) {
-    return this.quotesService.createBillingRequest(user, quoteId);
+    return this.ordersService.createBillingRequest(user, orderId);
   }
 }

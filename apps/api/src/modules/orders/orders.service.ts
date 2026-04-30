@@ -1,21 +1,26 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { OrderStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
-import { CreateQuoteDto } from "./dto/create-quote.dto";
-import { UpdateQuoteStatusDto } from "./dto/update-quote-status.dto";
+import { CreateOrderDto } from "./dto/create-order.dto";
+import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
+import { allowedTransitions } from "./order-status-transition-map";
 
 @Injectable()
-export class QuotesService {
+export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
   ) {}
 
-  async create(user: AuthUser, dto: CreateQuoteDto) {
+  async create(user: AuthUser, dto: CreateOrderDto) {
     await this.assertCustomerExists(dto.customerId);
     if (dto.opportunityId) {
       await this.assertOpportunityExists(dto.opportunityId);
+    }
+    if (dto.sourceQuoteId) {
+      await this.assertQuoteExists(dto.sourceQuoteId);
     }
 
     const itemsWithSnapshot = await Promise.all(
@@ -55,12 +60,15 @@ export class QuotesService {
     const total = subtotal;
 
     return this.prisma.$transaction(async (tx) => {
-      const quote = await tx.quote.create({
+      const order = await tx.order.create({
         data: {
           customerId: dto.customerId,
           opportunityId: dto.opportunityId ?? null,
+          sourceQuoteId: dto.sourceQuoteId ?? null,
+          requestedDeliveryDate: dto.requestedDeliveryDate
+            ? new Date(dto.requestedDeliveryDate)
+            : null,
           notes: dto.notes,
-          validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
           subtotal,
           total,
           createdBy: user.id,
@@ -69,56 +77,60 @@ export class QuotesService {
             create: itemsWithSnapshot,
           },
         },
-        include: { items: true, customer: true, opportunity: true },
+        include: { items: true, customer: true, opportunity: true, sourceQuote: true },
       });
 
       await this.auditService.record(
         {
-          entityType: "Quote",
-          entityId: quote.id,
-          action: "quote.created",
+          entityType: "Order",
+          entityId: order.id,
+          action: "order.created",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(quote)),
+          nextState: JSON.parse(JSON.stringify(order)),
         },
         tx,
       );
 
-      return quote;
+      return order;
     });
   }
 
   findAll() {
-    return this.prisma.quote.findMany({
+    return this.prisma.order.findMany({
       include: { customer: true, opportunity: true, items: true },
       orderBy: { createdAt: "desc" },
     });
   }
 
   findOne(id: string) {
-    return this.prisma.quote.findUnique({
+    return this.prisma.order.findUnique({
       where: { id },
-      include: { customer: true, opportunity: true, items: true },
+      include: { customer: true, opportunity: true, sourceQuote: true, items: true, billingRequests: true },
     });
   }
 
-  async updateStatus(user: AuthUser, quoteId: string, dto: UpdateQuoteStatusDto) {
-    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
-    if (!quote) {
-      throw new NotFoundException("Quote not found");
+  async updateStatus(user: AuthUser, orderId: string, dto: UpdateOrderStatusDto) {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException("Order not found");
     }
 
-    const previousState = JSON.parse(JSON.stringify(quote));
+    if (!this.isTransitionAllowed(order.status, dto.status)) {
+      throw new BadRequestException("Invalid order status transition");
+    }
 
-    const updated = await this.prisma.quote.update({
-      where: { id: quoteId },
+    const previousState = JSON.parse(JSON.stringify(order));
+
+    const updated = await this.prisma.order.update({
+      where: { id: orderId },
       data: { status: dto.status, updatedBy: user.id },
-      include: { customer: true, opportunity: true, items: true },
+      include: { customer: true, opportunity: true, sourceQuote: true, items: true },
     });
 
     await this.auditService.record({
-      entityType: "Quote",
+      entityType: "Order",
       entityId: updated.id,
-      action: "quote.status_changed",
+      action: "order.status_changed",
       actorUserId: user.id,
       previousState,
       nextState: JSON.parse(JSON.stringify(updated)),
@@ -127,40 +139,39 @@ export class QuotesService {
     return updated;
   }
 
-  async createBillingRequest(user: AuthUser, quoteId: string) {
-    const quote = await this.prisma.quote.findUnique({
-      where: { id: quoteId },
+  async createBillingRequest(user: AuthUser, orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
       include: { items: true },
     });
 
-    if (!quote) {
-      throw new NotFoundException("Quote not found");
+    if (!order) {
+      throw new NotFoundException("Order not found");
     }
 
-    if (quote.status !== "cerrada") {
-      throw new BadRequestException("Billing request can only be created from closed quotes");
+    if (order.status !== "entregado" && order.status !== "facturado") {
+      throw new BadRequestException("Billing request only allowed when order status is entregado or facturado");
     }
 
     return this.prisma.$transaction(async (tx) => {
       const billingRequest = await tx.billingRequest.create({
         data: {
-          customerId: quote.customerId,
-          opportunityId: quote.opportunityId,
-          sourceType: "quote",
-          sourceQuoteId: quote.id,
-          status: "pendiente",
+          customerId: order.customerId,
+          opportunityId: order.opportunityId,
+          sourceType: "order",
+          sourceOrderId: order.id,
           requestedByUserId: user.id,
           createdBy: user.id,
           updatedBy: user.id,
         },
-        include: { customer: true },
+        include: { customer: true, opportunity: true, sourceOrder: true },
       });
 
       await this.auditService.record(
         {
           entityType: "BillingRequest",
           entityId: billingRequest.id,
-          action: "billing_request.created_from_quote",
+          action: "billing_request.created_from_order",
           actorUserId: user.id,
           nextState: JSON.parse(JSON.stringify(billingRequest)),
         },
@@ -183,5 +194,16 @@ export class QuotesService {
     if (!opportunity) {
       throw new NotFoundException("Opportunity not found");
     }
+  }
+
+  private async assertQuoteExists(quoteId: string) {
+    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
+    if (!quote) {
+      throw new NotFoundException("Quote not found");
+    }
+  }
+
+  private isTransitionAllowed(currentStatus: OrderStatus, nextStatus: OrderStatus) {
+    return allowedTransitions[currentStatus].includes(nextStatus);
   }
 }

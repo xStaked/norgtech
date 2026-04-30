@@ -6,6 +6,8 @@ const navItems = [
   { href: "/customers", label: "Clientes" },
   { href: "/opportunities", label: "Oportunidades" },
   { href: "/quotes", label: "Cotizaciones" },
+  { href: "/orders", label: "Pedidos" },
+  { href: "/billing-requests", label: "Facturación" },
   { href: "/products", label: "Productos" },
   { href: "/segments", label: "Segmentos" },
   { href: "/visits", label: "Visitas" },

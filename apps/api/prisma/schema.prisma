@@ -30,6 +30,20 @@ enum QuoteStatus {
   perdida
 }
 
+enum OrderStatus {
+  recibido
+  orden_facturacion
+  facturado
+  despachado
+  entregado
+}
+
+enum BillingRequestStatus {
+  pendiente
+  procesada
+  rechazada
+}
+
 enum VisitStatus {
   programada
   completada
@@ -112,6 +126,8 @@ model Customer {
   quotes           Quote[]
   visits           Visit[]
   followUpTasks    FollowUpTask[]
+  orders           Order[]
+  billingRequests  BillingRequest[]
 }
 
 model Contact {
@@ -149,6 +165,8 @@ model Opportunity {
   quotes         Quote[]
   visits         Visit[]
   followUpTasks  FollowUpTask[]
+  orders         Order[]
+  billingRequests BillingRequest[]
 }
 
 model Product {
@@ -165,6 +183,7 @@ model Product {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   quoteItems  QuoteItem[]
+  orderItems  OrderItem[]
 }
 
 model Quote {
@@ -183,6 +202,8 @@ model Quote {
   customer      Customer    @relation(fields: [customerId], references: [id])
   opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
   items         QuoteItem[]
+  sourceOrders  Order[]
+  billingRequests BillingRequest[]
 }
 
 model QuoteItem {
@@ -236,4 +257,60 @@ model FollowUpTask {
   updatedAt      DateTime           @updatedAt
   customer       Customer           @relation(fields: [customerId], references: [id])
   opportunity    Opportunity?        @relation(fields: [opportunityId], references: [id])
+}
+
+model Order {
+  id                  String      @id @default(cuid())
+  customerId          String
+  opportunityId       String?
+  sourceQuoteId       String?
+  status              OrderStatus @default(recibido)
+  requestedDeliveryDate DateTime?
+  notes               String?
+  subtotal            Decimal     @db.Decimal(14, 2)
+  total               Decimal     @db.Decimal(14, 2)
+  createdBy           String
+  updatedBy           String
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
+  customer            Customer    @relation(fields: [customerId], references: [id])
+  opportunity         Opportunity? @relation(fields: [opportunityId], references: [id])
+  sourceQuote         Quote?      @relation(fields: [sourceQuoteId], references: [id])
+  items               OrderItem[]
+  billingRequests     BillingRequest[]
+}
+
+model OrderItem {
+  id                  String   @id @default(cuid())
+  orderId             String
+  productId           String?
+  productSnapshotName String
+  productSnapshotSku  String
+  unit                String
+  quantity            Decimal  @db.Decimal(14, 4)
+  unitPrice           Decimal  @db.Decimal(14, 2)
+  subtotal            Decimal  @db.Decimal(14, 2)
+  notes               String?
+  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product             Product? @relation(fields: [productId], references: [id])
+}
+
+model BillingRequest {
+  id                String                 @id @default(cuid())
+  customerId        String
+  opportunityId     String?
+  sourceType        String
+  sourceQuoteId     String?
+  sourceOrderId     String?
+  status            BillingRequestStatus   @default(pendiente)
+  notes             String?
+  requestedByUserId String
+  createdBy         String
+  updatedBy         String
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  customer          Customer               @relation(fields: [customerId], references: [id])
+  opportunity       Opportunity?            @relation(fields: [opportunityId], references: [id])
+  sourceQuote       Quote?                  @relation(fields: [sourceQuoteId], references: [id])
+  sourceOrder       Order?                  @relation(fields: [sourceOrderId], references: [id])
 }
