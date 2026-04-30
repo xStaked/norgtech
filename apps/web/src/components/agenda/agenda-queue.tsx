@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { crmTheme } from "@/components/ui/theme";
