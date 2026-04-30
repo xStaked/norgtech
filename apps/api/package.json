@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
-    "build": "nest build",
+    "build": "nest build -p tsconfig.build.json",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
     "test": "jest --watchman=false --config ./test/jest-e2e.json"
