@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { LogoutButton } from "@/components/logout-button";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -29,7 +30,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         }}
       >
         <strong>Norgtech CRM</strong>
-        <nav style={{ display: "flex", gap: "1rem" }}>
+        <nav style={{ display: "flex", gap: "1rem", alignItems: "center" }}>
           {navItems.map((item) => (
             <Link
               key={item.href}
@@ -39,6 +40,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               {item.label}
             </Link>
           ))}
+          <LogoutButton />
         </nav>
       </header>
       <main style={{ padding: "1.5rem" }}>{children}</main>
