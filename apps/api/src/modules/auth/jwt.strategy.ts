@@ -17,9 +17,33 @@ const jsonwebtoken = require("jsonwebtoken") as JsonWebTokenModule;
 export class JwtStrategy {
   verify(accessToken: string): AuthenticatedUser {
     try {
-      return jsonwebtoken.verify(accessToken, AUTH_JWT_SECRET);
+      const payload = jsonwebtoken.verify(accessToken, AUTH_JWT_SECRET);
+
+      if (!this.isAuthenticatedUser(payload)) {
+        throw new UnauthorizedException("Invalid token");
+      }
+
+      return payload;
     } catch {
       throw new UnauthorizedException("Invalid token");
     }
+  }
+
+  private isAuthenticatedUser(value: unknown): value is AuthenticatedUser {
+    if (!value || typeof value !== "object") {
+      return false;
+    }
+
+    const payload = value as Partial<AuthenticatedUser>;
+
+    return (
+      typeof payload.sub === "string" &&
+      typeof payload.email === "string" &&
+      this.isUserRole(payload.role)
+    );
+  }
+
+  private isUserRole(role: unknown): role is UserRole {
+    return typeof role === "string" && Object.values(UserRole).includes(role as UserRole);
   }
 }

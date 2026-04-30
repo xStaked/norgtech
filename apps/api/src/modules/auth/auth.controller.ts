@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, Post } from "@nestjs/common";
+import { Body, Controller, HttpCode, Post, ValidationPipe } from "@nestjs/common";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 
@@ -8,7 +8,15 @@ export class AuthController {
 
   @Post("login")
   @HttpCode(200)
-  login(@Body() body: LoginDto) {
+  login(
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    body: LoginDto,
+  ) {
     return this.authService.login(body.email, body.password);
   }
 }
