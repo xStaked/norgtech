@@ -106,7 +106,7 @@ describe("shared workspace package", () => {
 });
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `pnpm --filter @norgtech/shared test`
 Expected: FAIL because workspace files and test runner do not exist yet
@@ -159,12 +159,12 @@ export const appName = "norgtech-crm";
 export type UserRole = "admin" | "comercial";
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `pnpm --filter @norgtech/shared test`
 Expected: PASS with 1 test passed
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add package.json pnpm-workspace.yaml tsconfig.base.json .gitignore packages/shared
@@ -861,7 +861,7 @@ git commit -m "feat: scaffold Next CRM shell with auth gate"
 - Create: `apps/web/src/components/opportunities/opportunity-form.tsx`
 - Test: `apps/web/tests/e2e/customers.spec.ts`
 
-- [ ] **Step 1: Write the failing customer create UI test**
+- [x] **Step 1: Write the failing customer create UI test**
 
 ```ts
 // apps/web/tests/e2e/customers.spec.ts
@@ -887,7 +887,7 @@ test("an authenticated user can create a customer", async ({ page }) => {
 Run: `pnpm --filter @norgtech/web test:e2e -- customers.spec.ts`
 Expected: FAIL because forms and API integration are not implemented
 
-- [ ] **Step 3: Write minimal UI implementation**
+- [x] **Step 3: Write minimal UI implementation**
 
 ```tsx
 // apps/web/src/components/customers/customer-form.tsx
