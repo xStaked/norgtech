@@ -32,7 +32,7 @@ describe("Customers", () => {
             name: "Admin",
             email: "admin@norgtech.local",
             passwordHash,
-            role: UserRole.admin,
+            role: UserRole.administrador,
             active: true,
           };
         }
@@ -74,6 +74,60 @@ describe("Customers", () => {
       customer: {
         create: async () => {
           throw new Error("customer.create must run inside a transaction");
+        },
+        findUnique: async ({ where, include }: { where: { id: string }; include?: Record<string, unknown> }) => {
+          const found = customers.find((c) => c.id === where.id);
+          if (!found) return null;
+          const result = { ...found };
+          if (include?.contacts) {
+            result.contacts = [
+              {
+                id: "contact-1",
+                customerId: result.id,
+                fullName: "Carlos Perez",
+                roleTitle: "Compras",
+                phone: "3000000000",
+                email: "carlos@agronorte.co",
+                isPrimary: true,
+                notes: null,
+                createdBy: "admin-user-id",
+                updatedBy: "admin-user-id",
+                createdAt: new Date("2026-04-29T00:00:00.000Z"),
+                updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+              },
+            ];
+          }
+          if (include?.segment) {
+            result.segment = {
+              id: segmentId,
+              name: "Oro",
+              description: "Clientes de alto valor",
+              active: true,
+              createdBy: "admin-user-id",
+              updatedBy: "admin-user-id",
+              createdAt: new Date("2026-04-29T00:00:00.000Z"),
+              updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+            };
+          }
+          if (include?.opportunities) {
+            result.opportunities = [];
+          }
+          if (include?.visits) {
+            result.visits = [];
+          }
+          if (include?.followUpTasks) {
+            result.followUpTasks = [];
+          }
+          if (include?.quotes) {
+            result.quotes = [];
+          }
+          if (include?.orders) {
+            result.orders = [];
+          }
+          if (include?.billingRequests) {
+            result.billingRequests = [];
+          }
+          return result;
         },
       },
       auditLog: {
@@ -427,5 +481,45 @@ describe("Customers", () => {
         ],
       })
       .expect(400);
+  });
+
+  it("returns a customer with all related collections", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        legalName: "Cliente 360 SAS",
+        displayName: "Cliente 360",
+        taxId: "900999999",
+        segmentId: globalThis.__SEGMENT_ID__,
+        contacts: [
+          {
+            fullName: "Ana Lopez",
+            roleTitle: "Gerente",
+            phone: "3100000000",
+            email: "ana@cliente360.co",
+            isPrimary: true,
+          },
+        ],
+      })
+      .expect(201);
+
+    const customerId = createResponse.body.id;
+
+    const getResponse = await request(globalThis.__APP__)
+      .get(`/customers/${customerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(getResponse.body.id).toBe(customerId);
+    expect(getResponse.body.contacts).toBeDefined();
+    expect(getResponse.body.contacts).toHaveLength(1);
+    expect(getResponse.body.segment).toBeDefined();
+    expect(getResponse.body.opportunities).toBeDefined();
+    expect(getResponse.body.visits).toBeDefined();
+    expect(getResponse.body.followUpTasks).toBeDefined();
+    expect(getResponse.body.quotes).toBeDefined();
+    expect(getResponse.body.orders).toBeDefined();
+    expect(getResponse.body.billingRequests).toBeDefined();
   });
 });

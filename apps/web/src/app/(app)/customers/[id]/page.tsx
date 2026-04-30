@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ButtonLink } from "@/components/ui/button-link";
+import { DetailSection } from "@/components/ui/detail-section";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
+import { crmTheme } from "@/components/ui/theme";
+import { CustomerHistorySection } from "@/components/customers/customer-history-section";
+import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
 import { apiFetch } from "@/lib/api.server";
 
 interface Contact {
@@ -17,6 +24,69 @@ interface Segment {
   name: string;
 }
 
+interface Opportunity {
+  id: string;
+  title: string;
+  stage: string;
+  estimatedValue: string | number | null;
+  expectedCloseDate: string | null;
+  createdAt: string;
+}
+
+interface Visit {
+  id: string;
+  scheduledAt: string;
+  status: string;
+  summary: string | null;
+}
+
+interface FollowUpTask {
+  id: string;
+  title: string;
+  type: string;
+  status: string;
+  dueAt: string;
+}
+
+interface QuoteItem {
+  id: string;
+  productSnapshotName: string;
+  quantity: string | number;
+  unitPrice: string | number;
+  subtotal: string | number;
+}
+
+interface Quote {
+  id: string;
+  status: string;
+  total: string | number;
+  createdAt: string;
+  items: QuoteItem[];
+}
+
+interface OrderItem {
+  id: string;
+  productSnapshotName: string;
+  quantity: string | number;
+  unitPrice: string | number;
+  subtotal: string | number;
+}
+
+interface Order {
+  id: string;
+  status: string;
+  total: string | number;
+  createdAt: string;
+  items: OrderItem[];
+}
+
+interface BillingRequest {
+  id: string;
+  status: string;
+  sourceType: string;
+  createdAt: string;
+}
+
 interface Customer {
   id: string;
   legalName: string;
@@ -30,6 +100,12 @@ interface Customer {
   notes: string | null;
   segment: Segment | null;
   contacts: Contact[];
+  opportunities: Opportunity[];
+  visits: Visit[];
+  followUpTasks: FollowUpTask[];
+  quotes: Quote[];
+  orders: Order[];
+  billingRequests: BillingRequest[];
   createdAt: string;
 }
 
@@ -48,108 +124,157 @@ export default async function CustomerDetailPage({
   const customer: Customer = await response.json();
 
   return (
-    <div>
+    <div style={{ display: "grid", gap: 24 }}>
       <Link
         href="/customers"
         style={{
           fontSize: "0.875rem",
-          color: "#52637a",
+          color: crmTheme.colors.textMuted,
           textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
         }}
       >
         ← Volver a clientes
       </Link>
 
-      <div
-        style={{
-          backgroundColor: "#ffffff",
-          padding: "1.5rem",
-          borderRadius: "0.75rem",
-          boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-        }}
-      >
-        <h1 style={{ marginTop: 0 }}>{customer.displayName}</h1>
-        <p style={{ color: "#52637a", marginTop: "0.25rem" }}>{customer.legalName}</p>
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "1rem",
-            marginTop: "1.5rem",
-          }}
-        >
-          <Info label="NIT" value={customer.taxId} />
-          <Info label="Teléfono" value={customer.phone} />
-          <Info label="Correo" value={customer.email} />
-          <Info label="Dirección" value={customer.address} />
-          <Info label="Ciudad" value={customer.city} />
-          <Info label="Departamento" value={customer.department} />
-          <Info label="Segmento" value={customer.segment?.name} />
-        </div>
-
-        {customer.notes && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>Notas</div>
-            <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{customer.notes}</div>
+      <PageHeader
+        eyebrow={customer.segment?.name ?? "Sin segmento"}
+        title={customer.displayName}
+        description={customer.legalName}
+        actions={
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <ButtonLink
+              href={`/visits/new?customerId=${customer.id}`}
+              variant="secondary"
+              size="sm"
+            >
+              + Visita
+            </ButtonLink>
+            <ButtonLink
+              href={`/follow-ups/new?customerId=${customer.id}`}
+              variant="secondary"
+              size="sm"
+            >
+              + Seguimiento
+            </ButtonLink>
+            <ButtonLink
+              href={`/quotes/new?customerId=${customer.id}`}
+              variant="secondary"
+              size="sm"
+            >
+              + Cotizacion
+            </ButtonLink>
+            <ButtonLink
+              href={`/orders/new?customerId=${customer.id}`}
+              variant="secondary"
+              size="sm"
+            >
+              + Pedido
+            </ButtonLink>
           </div>
-        )}
+        }
+      />
 
-        {customer.contacts.length > 0 && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <h3 style={{ margin: 0, fontSize: "1rem" }}>Contactos</h3>
-            <div style={{ display: "grid", gap: "0.75rem", marginTop: "0.75rem" }}>
-              {customer.contacts.map((contact) => (
+      <CustomerRelatedRecords
+        opportunitiesCount={customer.opportunities.length}
+        visitsCount={customer.visits.length}
+        followUpTasksCount={customer.followUpTasks.length}
+        quotesCount={customer.quotes.length}
+        ordersCount={customer.orders.length}
+        billingRequestsCount={customer.billingRequests.length}
+      />
+
+      <DetailSection
+        title="Informacion de contacto"
+        fields={[
+          { label: "NIT", value: customer.taxId ?? "—" },
+          { label: "Telefono", value: customer.phone ?? "—" },
+          { label: "Correo", value: customer.email ?? "—" },
+          { label: "Direccion", value: customer.address ?? "—" },
+          { label: "Ciudad", value: customer.city ?? "—" },
+          { label: "Departamento", value: customer.department ?? "—" },
+          { label: "Segmento", value: customer.segment?.name ?? "—" },
+          {
+            label: "Notas",
+            value: customer.notes ?? "—",
+          },
+        ]}
+      />
+
+      {customer.contacts.length > 0 && (
+        <SectionCard title="Contactos">
+          <div style={{ display: "grid", gap: 12 }}>
+            {customer.contacts.map((contact) => (
+              <div
+                key={contact.id}
+                style={{
+                  padding: "14px 16px",
+                  borderRadius: crmTheme.radius.md,
+                  border: `1px solid ${crmTheme.colors.border}`,
+                  background: crmTheme.colors.surfaceMuted,
+                }}
+              >
+                <div style={{ fontWeight: 700, fontSize: 15, color: crmTheme.colors.text }}>
+                  {contact.fullName}
+                  {contact.isPrimary && (
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        backgroundColor: crmTheme.colors.primary,
+                        color: "#ffffff",
+                        padding: "0.125rem 0.5rem",
+                        borderRadius: "0.25rem",
+                        marginLeft: "0.5rem",
+                        fontWeight: 500,
+                      }}
+                    >
+                      Principal
+                    </span>
+                  )}
+                </div>
                 <div
-                  key={contact.id}
                   style={{
-                    padding: "0.75rem 1rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #e2e8f0",
-                    backgroundColor: "#f8fafc",
+                    fontSize: "0.875rem",
+                    color: crmTheme.colors.textMuted,
+                    marginTop: 4,
                   }}
                 >
-                  <div style={{ fontWeight: 600 }}>
-                    {contact.fullName}
-                    {contact.isPrimary && (
-                      <span
-                        style={{
-                          fontSize: "0.75rem",
-                          backgroundColor: "#10233f",
-                          color: "#ffffff",
-                          padding: "0.125rem 0.5rem",
-                          borderRadius: "0.25rem",
-                          marginLeft: "0.5rem",
-                          fontWeight: 500,
-                        }}
-                      >
-                        Principal
-                      </span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                    {contact.roleTitle && `${contact.roleTitle} · `}
-                    {contact.phone && `${contact.phone} · `}
-                    {contact.email}
-                  </div>
+                  {contact.roleTitle && `${contact.roleTitle}`}
+                  {contact.roleTitle && (contact.phone || contact.email) ? " · " : ""}
+                  {contact.phone && `${contact.phone}`}
+                  {contact.phone && contact.email ? " · " : ""}
+                  {contact.email}
                 </div>
-              ))}
-            </div>
+                {contact.notes && (
+                  <div
+                    style={{
+                      fontSize: "0.8125rem",
+                      color: crmTheme.colors.textSubtle,
+                      marginTop: 6,
+                      fontStyle: "italic",
+                    }}
+                  >
+                    {contact.notes}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
+        </SectionCard>
+      )}
 
-function Info({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <div>
-      <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>{label}</div>
-      <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{value}</div>
+      <CustomerHistorySection
+        history={{
+          opportunities: customer.opportunities,
+          visits: customer.visits,
+          followUpTasks: customer.followUpTasks,
+          quotes: customer.quotes,
+          orders: customer.orders,
+          billingRequests: customer.billingRequests,
+        }}
+      />
     </div>
   );
 }

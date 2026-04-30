@@ -1,4 +1,10 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FilterBar } from "@/components/ui/filter-bar";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 
 interface Contact {
@@ -27,76 +33,136 @@ interface Customer {
   contacts: Contact[];
 }
 
+interface CustomerRow {
+  id: string;
+  displayName: string;
+  legalName: string;
+  segment: string | null;
+  location: string;
+  primaryContact: string | null;
+  primaryContactMeta: string | null;
+}
+
+function buildLocation(customer: Customer) {
+  if (customer.city && customer.department) {
+    return `${customer.city}, ${customer.department}`;
+  }
+
+  return customer.city ?? customer.department ?? "Sin ubicación";
+}
+
+function getPrimaryContact(customer: Customer) {
+  const contact = customer.contacts.find((item) => item.isPrimary) ?? customer.contacts[0];
+
+  if (!contact) {
+    return {
+      name: null,
+      meta: null,
+    };
+  }
+
+  return {
+    name: contact.fullName,
+    meta: [contact.phone, contact.email].filter(Boolean).join(" · ") || null,
+  };
+}
+
+const columns: readonly DataTableColumn<CustomerRow>[] = [
+  {
+    key: "customer",
+    header: "Cliente",
+    render: (row) => (
+      <div style={{ display: "grid", gap: 4 }}>
+        <Link href={`/customers/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+          {row.displayName}
+        </Link>
+        <span style={{ fontSize: 13, color: "#52637a" }}>{row.legalName}</span>
+      </div>
+    ),
+  },
+  {
+    key: "segment",
+    header: "Segmento",
+    render: (row) => row.segment ?? <span style={{ color: "#6b7c93" }}>Sin segmento</span>,
+  },
+  {
+    key: "location",
+    header: "Ubicación",
+    render: (row) => row.location,
+  },
+  {
+    key: "contact",
+    header: "Contacto principal",
+    render: (row) =>
+      row.primaryContact ? (
+        <div style={{ display: "grid", gap: 4 }}>
+          <span>{row.primaryContact}</span>
+          {row.primaryContactMeta ? (
+            <span style={{ fontSize: 13, color: "#6b7c93" }}>{row.primaryContactMeta}</span>
+          ) : null}
+        </div>
+      ) : (
+        <span style={{ color: "#6b7c93" }}>Sin contacto principal</span>
+      ),
+  },
+  {
+    key: "detail",
+    header: "Detalle",
+    align: "right",
+    render: (row) => (
+      <Link href={`/customers/${row.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 700 }}>
+        Ver ficha
+      </Link>
+    ),
+  },
+] as const;
+
 export default async function CustomersPage() {
   const response = await apiFetch("/customers");
   const customers: Customer[] = response.ok ? await response.json() : [];
 
-  return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <h1 style={{ margin: 0 }}>Clientes</h1>
-        <Link
-          href="/customers/new"
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.5rem",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            textDecoration: "none",
-            fontWeight: 600,
-            fontSize: "0.875rem",
-          }}
-        >
-          Nuevo cliente
-        </Link>
-      </div>
+  const rows: CustomerRow[] = customers.map((customer) => {
+    const primary = getPrimaryContact(customer);
 
-      {customers.length === 0 ? (
-        <p style={{ color: "#52637a" }}>No hay clientes registrados.</p>
-      ) : (
-        <div style={{ display: "grid", gap: "0.75rem" }}>
-          {customers.map((customer) => (
-            <Link
-              key={customer.id}
-              href={`/customers/${customer.id}`}
-              style={{
-                display: "block",
-                backgroundColor: "#ffffff",
-                padding: "1rem 1.25rem",
-                borderRadius: "0.75rem",
-                boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-                textDecoration: "none",
-                color: "inherit",
-              }}
-            >
-              <div style={{ fontWeight: 600, color: "#10233f" }}>
-                {customer.displayName}
-              </div>
-              <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                {customer.legalName}
-                {customer.segment && ` · ${customer.segment.name}`}
-                {customer.city && ` · ${customer.city}`}
-                {customer.department && `, ${customer.department}`}
-              </div>
-              {customer.contacts.length > 0 && (
-                <div style={{ fontSize: "0.8125rem", color: "#6b7c93", marginTop: "0.5rem" }}>
-                  {customer.contacts
-                    .filter((c) => c.isPrimary)
-                    .map((c) => `Contacto: ${c.fullName}${c.phone ? ` · ${c.phone}` : ""}${c.email ? ` · ${c.email}` : ""}`)
-                    .join(" | ")}
-                </div>
-              )}
-            </Link>
-          ))}
-        </div>
-      )}
+    return {
+      id: customer.id,
+      displayName: customer.displayName,
+      legalName: customer.legalName,
+      segment: customer.segment?.name ?? null,
+      location: buildLocation(customer),
+      primaryContact: primary.name,
+      primaryContactMeta: primary.meta,
+    };
+  });
+
+  return (
+    <div style={{ display: "grid", gap: 24 }}>
+      <PageHeader
+        eyebrow="Base comercial"
+        title="Clientes"
+        description="Vista operativa de cuentas activas, clasificación comercial y contacto principal."
+        actions={<ButtonLink href="/customers/new">Nuevo cliente</ButtonLink>}
+      />
+
+      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} clientes registrados`} />
+
+      <SectionCard
+        title="Cartera de clientes"
+        description="Accede rápido a la ficha de cada cliente y valida cobertura comercial."
+      >
+        <DataTable
+          columns={columns}
+          rows={rows}
+          getRowKey={(row) => row.id}
+          emptyState={
+            <EmptyState
+              title="No hay clientes registrados"
+              description="Crea el primer cliente para empezar a mover oportunidades, visitas y cotizaciones."
+              action={<ButtonLink href="/customers/new">Crear cliente</ButtonLink>}
+            />
+          }
+        />
+      </SectionCard>
     </div>
   );
 }

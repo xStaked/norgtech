@@ -98,7 +98,32 @@ export class CustomersService {
   findOne(id: string) {
     return this.prisma.customer.findUnique({
       where: { id },
-      include: { contacts: true, segment: true },
+      include: {
+        segment: true,
+        contacts: {
+          orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
+        },
+        opportunities: {
+          orderBy: { createdAt: "desc" },
+        },
+        visits: {
+          orderBy: { scheduledAt: "desc" },
+        },
+        followUpTasks: {
+          orderBy: { dueAt: "asc" },
+        },
+        quotes: {
+          orderBy: { createdAt: "desc" },
+          include: { items: true },
+        },
+        orders: {
+          orderBy: { createdAt: "desc" },
+          include: { items: true },
+        },
+        billingRequests: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
     });
   }
 
