@@ -5,9 +5,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import { VisitStatus } from "@prisma/client";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -23,7 +25,7 @@ export class VisitsController {
   constructor(private readonly visitsService: VisitsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -39,21 +41,39 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get()
-  findAll() {
+  findAll(
+    @CurrentUser() user: AuthUser,
+    @Query("status") status?: VisitStatus,
+    @Query("today") today?: string,
+    @Query("thisWeek") thisWeek?: string,
+    @Query("assignedToMe") assignedToMe?: string,
+  ) {
+    const hasFilters = status || today || thisWeek || assignedToMe;
+
+    if (hasFilters) {
+      return this.visitsService.findWithFilters({
+        status,
+        today: today === "true",
+        thisWeek: thisWeek === "true",
+        assignedToMe: assignedToMe === "true",
+        userId: user.id,
+      });
+    }
+
     return this.visitsService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.visitsService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -70,7 +90,7 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Patch(":id/complete")
   complete(
     @CurrentUser() user: AuthUser,

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
 
@@ -53,27 +54,87 @@ export default function LoginPage() {
         minHeight: "100vh",
         display: "grid",
         placeItems: "center",
-        padding: "2rem",
+        padding: "24px",
+        background:
+          "radial-gradient(circle at top left, rgba(45, 108, 223, 0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef4fa 100%)",
       }}
     >
       <section
         style={{
-          width: "min(100%, 24rem)",
-          backgroundColor: "#ffffff",
-          borderRadius: "1rem",
-          padding: "2rem",
-          boxShadow: "0 12px 40px rgba(16, 35, 63, 0.08)",
+          width: "min(100%, 430px)",
+          display: "grid",
+          gap: 24,
+          padding: "32px",
+          borderRadius: crmTheme.radius.xl,
+          background: "rgba(255,255,255,0.92)",
+          border: `1px solid ${crmTheme.colors.border}`,
+          boxShadow: crmTheme.shadow.floating,
+          backdropFilter: "blur(12px)",
         }}
       >
-        <h1 style={{ marginTop: 0, color: "#10233f" }}>Ingresar</h1>
+        <div style={{ display: "grid", gap: 10 }}>
+          <div
+            style={{
+              display: "inline-grid",
+              placeItems: "center",
+              width: 56,
+              height: 56,
+              borderRadius: 18,
+              background: "linear-gradient(135deg, #f0b543 0%, #f7d06b 100%)",
+              color: crmTheme.colors.primary,
+              fontSize: 18,
+              fontWeight: 800,
+            }}
+          >
+            NT
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              letterSpacing: "0.1em",
+              textTransform: "uppercase",
+              fontWeight: 700,
+              color: crmTheme.colors.info,
+            }}
+          >
+            Acceso operativo
+          </div>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 34,
+              lineHeight: 1,
+              letterSpacing: "-0.04em",
+              color: crmTheme.colors.text,
+            }}
+          >
+            Ingresar
+          </h1>
+          <p style={{ margin: 0, color: crmTheme.colors.textMuted, lineHeight: 1.5 }}>
+            Accede al CRM comercial para gestionar clientes, pipeline, cotizaciones y ejecución diaria.
+          </p>
+        </div>
 
-        {error && (
-          <p style={{ color: "#c0392b", fontSize: "0.875rem" }}>{error}</p>
-        )}
+        {error ? (
+          <div
+            style={{
+              padding: "12px 14px",
+              borderRadius: crmTheme.radius.md,
+              background: "rgba(186, 58, 47, 0.08)",
+              color: crmTheme.colors.danger,
+              fontSize: 14,
+              fontWeight: 600,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
 
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: "1rem" }}>
-          <label style={{ display: "grid", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Correo</span>
+        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: crmTheme.colors.text }}>
+              Correo
+            </span>
             <input
               name="email"
               type="email"
@@ -81,16 +142,22 @@ export default function LoginPage() {
               autoComplete="email"
               aria-label="Correo"
               style={{
-                padding: "0.5rem 0.75rem",
-                borderRadius: "0.5rem",
-                border: "1px solid #c8d3e0",
-                fontSize: "1rem",
+                minHeight: 46,
+                padding: "0 14px",
+                borderRadius: crmTheme.radius.md,
+                border: `1px solid ${crmTheme.colors.borderStrong}`,
+                background: "#ffffff",
+                color: crmTheme.colors.text,
+                fontSize: 15,
+                outline: "none",
               }}
             />
           </label>
 
-          <label style={{ display: "grid", gap: "0.25rem" }}>
-            <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Contraseña</span>
+          <label style={{ display: "grid", gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: crmTheme.colors.text }}>
+              Contraseña
+            </span>
             <input
               name="password"
               type="password"
@@ -98,10 +165,14 @@ export default function LoginPage() {
               autoComplete="current-password"
               aria-label="Contraseña"
               style={{
-                padding: "0.5rem 0.75rem",
-                borderRadius: "0.5rem",
-                border: "1px solid #c8d3e0",
-                fontSize: "1rem",
+                minHeight: 46,
+                padding: "0 14px",
+                borderRadius: crmTheme.radius.md,
+                border: `1px solid ${crmTheme.colors.borderStrong}`,
+                background: "#ffffff",
+                color: crmTheme.colors.text,
+                fontSize: 15,
+                outline: "none",
               }}
             />
           </label>
@@ -110,15 +181,16 @@ export default function LoginPage() {
             type="submit"
             disabled={loading}
             style={{
-              padding: "0.625rem 1rem",
-              borderRadius: "0.5rem",
-              border: "none",
-              backgroundColor: "#10233f",
+              minHeight: 48,
+              border: 0,
+              borderRadius: crmTheme.radius.md,
+              background: crmTheme.colors.primary,
               color: "#ffffff",
-              fontSize: "1rem",
-              fontWeight: 600,
+              fontSize: 15,
+              fontWeight: 700,
               cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
+              opacity: loading ? 0.72 : 1,
+              boxShadow: crmTheme.shadow.card,
             }}
           >
             {loading ? "Ingresando..." : "Ingresar"}

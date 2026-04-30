@@ -22,7 +22,7 @@ export class OpportunitiesController {
   constructor(private readonly opportunitiesService: OpportunitiesService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -38,7 +38,7 @@ export class OpportunitiesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial")
   @Patch(":id/stage")
   updateStage(
     @CurrentUser() user: AuthUser,
@@ -55,14 +55,14 @@ export class OpportunitiesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get()
   findAll() {
     return this.opportunitiesService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.opportunitiesService.findOne(id);

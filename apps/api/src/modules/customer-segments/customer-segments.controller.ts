@@ -21,7 +21,7 @@ export class CustomerSegmentsController {
   ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin")
+  @Roles("administrador", "director_comercial")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -37,7 +37,7 @@ export class CustomerSegmentsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "director_comercial", "comercial")
   @Get()
   findAll() {
     return this.customerSegmentsService.findAll();

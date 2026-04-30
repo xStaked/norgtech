@@ -5,9 +5,11 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import { FollowUpTaskStatus } from "@prisma/client";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -22,7 +24,7 @@ export class FollowUpTasksController {
   constructor(private readonly followUpTasksService: FollowUpTasksService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -38,21 +40,48 @@ export class FollowUpTasksController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get()
-  findAll() {
+  async findAll(
+    @CurrentUser() user: AuthUser,
+    @Query("status") status?: FollowUpTaskStatus,
+    @Query("dueToday") dueToday?: string,
+    @Query("overdue") overdue?: string,
+    @Query("assignedToMe") assignedToMe?: string,
+    @Query("thisWeek") thisWeek?: string,
+  ) {
+    const hasFilters = status || dueToday || overdue || assignedToMe || thisWeek;
+
+    if (hasFilters) {
+      return this.followUpTasksService.findWithFilters({
+        status,
+        dueToday: dueToday === "true",
+        overdue: overdue === "true",
+        assignedToMe: assignedToMe === "true",
+        thisWeek: thisWeek === "true",
+        userId: user.id,
+      });
+    }
+
     return this.followUpTasksService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Post("mark-overdue")
+  markOverdue() {
+    return this.followUpTasksService.markOverdue();
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.followUpTasksService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -69,7 +98,7 @@ export class FollowUpTasksController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Patch(":id/complete")
   complete(
     @CurrentUser() user: AuthUser,

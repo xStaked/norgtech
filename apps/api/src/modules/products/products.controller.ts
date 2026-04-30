@@ -20,7 +20,7 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin")
+  @Roles("administrador", "director_comercial")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -36,14 +36,14 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "director_comercial", "comercial")
   @Get()
   findAll() {
     return this.productsService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "director_comercial", "comercial")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.productsService.findOne(id);

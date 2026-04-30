@@ -8,8 +8,12 @@ datasource db {
 }
 
 enum UserRole {
-  admin
+  administrador
+  director_comercial
   comercial
+  tecnico
+  facturacion
+  logistica
 }
 
 enum OpportunityStage {
@@ -76,6 +80,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   assignedCustomers Customer[] @relation("CustomerAssignedUser")
+  assignedOrders Order[]
+  createdReports ExecutiveReport[]
 }
 
 model AuditLog {
@@ -128,6 +134,7 @@ model Customer {
   followUpTasks    FollowUpTask[]
   orders           Order[]
   billingRequests  BillingRequest[]
+  reports          ExecutiveReport[]
 }
 
 model Contact {
@@ -238,6 +245,7 @@ model Visit {
   updatedAt      DateTime    @updatedAt
   customer       Customer    @relation(fields: [customerId], references: [id])
   opportunity    Opportunity? @relation(fields: [opportunityId], references: [id])
+  reports        ExecutiveReport[]
 }
 
 model FollowUpTask {
@@ -266,6 +274,11 @@ model Order {
   sourceQuoteId       String?
   status              OrderStatus @default(recibido)
   requestedDeliveryDate DateTime?
+  assignedLogisticsUserId String?
+  committedDeliveryDate DateTime?
+  dispatchDate        DateTime?
+  deliveryDate        DateTime?
+  logisticsNotes      String?
   notes               String?
   subtotal            Decimal     @db.Decimal(14, 2)
   total               Decimal     @db.Decimal(14, 2)
@@ -276,6 +289,7 @@ model Order {
   customer            Customer    @relation(fields: [customerId], references: [id])
   opportunity         Opportunity? @relation(fields: [opportunityId], references: [id])
   sourceQuote         Quote?      @relation(fields: [sourceQuoteId], references: [id])
+  assignedLogisticsUser User?     @relation(fields: [assignedLogisticsUserId], references: [id])
   items               OrderItem[]
   billingRequests     BillingRequest[]
 }
@@ -293,6 +307,21 @@ model OrderItem {
   notes               String?
   order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product             Product? @relation(fields: [productId], references: [id])
+}
+
+model ExecutiveReport {
+  id        String   @id @default(cuid())
+  title     String
+  customerId String
+  customer  Customer @relation(fields: [customerId], references: [id])
+  visitId   String?
+  visit     Visit?   @relation(fields: [visitId], references: [id])
+  payload   Json
+  fileUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  createdBy String
+  creator   User     @relation(fields: [createdBy], references: [id])
 }
 
 model BillingRequest {

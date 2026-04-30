@@ -31,7 +31,7 @@ describe("Quotes", () => {
             name: "Admin",
             email: "admin@norgtech.local",
             passwordHash,
-            role: UserRole.admin,
+            role: UserRole.administrador,
             active: true,
           };
         }

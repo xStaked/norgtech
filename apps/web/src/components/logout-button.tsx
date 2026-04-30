@@ -1,6 +1,8 @@
 "use client";
 
+import { startTransition } from "react";
 import { useRouter } from "next/navigation";
+import { crmTheme } from "@/components/ui/theme";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
 
 export function LogoutButton() {
@@ -8,19 +10,25 @@ export function LogoutButton() {
 
   function handleLogout() {
     document.cookie = `${SESSION_COOKIE_NAME}=;path=/;max-age=0`;
-    router.push("/login");
+    startTransition(() => {
+      router.push("/login");
+      router.refresh();
+    });
   }
 
   return (
     <button
+      type="button"
       onClick={handleLogout}
       style={{
-        backgroundColor: "transparent",
-        border: "1px solid #dce7f7",
-        color: "#dce7f7",
-        padding: "0.375rem 0.75rem",
-        borderRadius: "0.375rem",
-        fontSize: "0.875rem",
+        minHeight: 40,
+        padding: "0 14px",
+        borderRadius: crmTheme.radius.md,
+        border: `1px solid ${crmTheme.colors.borderStrong}`,
+        background: crmTheme.colors.surface,
+        color: crmTheme.colors.text,
+        fontSize: 14,
+        fontWeight: 700,
         cursor: "pointer",
       }}
     >

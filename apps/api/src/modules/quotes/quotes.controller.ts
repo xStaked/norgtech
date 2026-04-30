@@ -22,7 +22,7 @@ export class QuotesController {
   constructor(private readonly quotesService: QuotesService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -38,21 +38,21 @@ export class QuotesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion")
   @Get()
   findAll() {
     return this.quotesService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.quotesService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -69,7 +69,7 @@ export class QuotesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial")
   @Post(":id/billing-request")
   createBillingRequest(
     @CurrentUser() user: AuthUser,

@@ -20,7 +20,7 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin")
+  @Roles("administrador", "comercial", "director_comercial")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -36,14 +36,14 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get()
   findAll() {
     return this.customersService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("admin", "comercial")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.customersService.findOne(id);

@@ -3,7 +3,19 @@ import { NextResponse } from "next/server";
 
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
 
-const protectedPaths = ["/dashboard", "/customers", "/opportunities"];
+const protectedPaths = [
+  "/dashboard",
+  "/customers",
+  "/opportunities",
+  "/quotes",
+  "/orders",
+  "/billing-requests",
+  "/products",
+  "/segments",
+  "/visits",
+  "/follow-ups",
+  "/agenda",
+];
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
@@ -26,5 +38,17 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/customers/:path*", "/opportunities/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/customers/:path*",
+    "/opportunities/:path*",
+    "/quotes/:path*",
+    "/orders/:path*",
+    "/billing-requests/:path*",
+    "/products/:path*",
+    "/segments/:path*",
+    "/visits/:path*",
+    "/follow-ups/:path*",
+    "/agenda/:path*",
+  ],
 };
