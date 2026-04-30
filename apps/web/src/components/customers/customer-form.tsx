@@ -25,25 +25,30 @@ export function CustomerForm({ segments }: CustomerFormProps) {
 
     const formData = new FormData(event.currentTarget);
 
+    const optionalString = (key: string) => {
+      const value = formData.get(key);
+      return value && String(value).trim() ? String(value).trim() : undefined;
+    };
+
     const body = {
       legalName: String(formData.get("legalName")),
       displayName: String(formData.get("displayName")),
-      taxId: String(formData.get("taxId") || ""),
-      phone: String(formData.get("phone") || ""),
-      email: String(formData.get("email") || ""),
-      address: String(formData.get("address") || ""),
-      city: String(formData.get("city") || ""),
-      department: String(formData.get("department") || ""),
-      notes: String(formData.get("notes") || ""),
+      taxId: optionalString("taxId"),
+      phone: optionalString("phone"),
+      email: optionalString("email"),
+      address: optionalString("address"),
+      city: optionalString("city"),
+      department: optionalString("department"),
+      notes: optionalString("notes"),
       segmentId: String(formData.get("segmentId")),
       contacts: [
         {
           fullName: String(formData.get("contactFullName")),
-          roleTitle: String(formData.get("contactRoleTitle") || ""),
-          phone: String(formData.get("contactPhone") || ""),
-          email: String(formData.get("contactEmail") || ""),
+          roleTitle: optionalString("contactRoleTitle"),
+          phone: optionalString("contactPhone"),
+          email: optionalString("contactEmail"),
           isPrimary: true,
-          notes: String(formData.get("contactNotes") || ""),
+          notes: optionalString("contactNotes"),
         },
       ],
     };

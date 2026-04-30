@@ -19,6 +19,18 @@ async function main() {
       role: UserRole.admin,
     },
   });
+
+  await prisma.customerSegment.upsert({
+    where: { name: "Oro" },
+    update: {},
+    create: {
+      name: "Oro",
+      description: "Clientes de alto valor",
+      active: true,
+      createdBy: "system",
+      updatedBy: "system",
+    },
+  });
 }
 
 void main()
