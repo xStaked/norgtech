@@ -55,6 +55,8 @@ export class CreateCustomerDto {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty()
+  @Matches(/\S/)
   assignedToUserId?: string;
 
   @IsArray()

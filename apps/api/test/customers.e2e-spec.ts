@@ -372,6 +372,26 @@ describe("Customers", () => {
       .expect(404);
   });
 
+  it("rejects empty assigned user ids before persistence", async () => {
+    await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        legalName: "Agropecuaria Norte SAS",
+        displayName: "Agro Norte",
+        segmentId: globalThis.__SEGMENT_ID__,
+        assignedToUserId: "",
+        contacts: [
+          {
+            fullName: "Carlos Perez",
+            email: "carlos@agronorte.co",
+            isPrimary: true,
+          },
+        ],
+      })
+      .expect(400);
+  });
+
   it("rejects empty required names and invalid customer email", async () => {
     await request(globalThis.__APP__)
       .post("/customers")
