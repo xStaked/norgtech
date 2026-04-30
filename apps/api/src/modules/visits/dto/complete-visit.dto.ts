@@ -6,10 +6,10 @@ import {
 } from "class-validator";
 
 export class CompleteVisitDto {
+  @IsOptional()
   @IsString()
-  @IsNotEmpty()
   @Matches(/\S/)
-  summary!: string;
+  summary?: string;
 
   @IsOptional()
   @IsString()

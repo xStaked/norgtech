@@ -18,6 +18,7 @@ export function VisitActions({ visitId }: VisitActionsProps) {
     try {
       const response = await apiFetchClient(`/visits/${visitId}/complete`, {
         method: "PATCH",
+        body: JSON.stringify({}),
       });
       if (response.ok) {
         router.refresh();
@@ -30,8 +31,9 @@ export function VisitActions({ visitId }: VisitActionsProps) {
   async function markCancelled() {
     setLoading(true);
     try {
-      const response = await apiFetchClient(`/visits/${visitId}/cancel`, {
+      const response = await apiFetchClient(`/visits/${visitId}/status`, {
         method: "PATCH",
+        body: JSON.stringify({ status: "cancelada" }),
       });
       if (response.ok) {
         router.refresh();
