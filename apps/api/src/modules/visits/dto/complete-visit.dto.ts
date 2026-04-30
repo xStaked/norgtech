@@ -13,5 +13,21 @@ export class CompleteVisitDto {
 
   @IsOptional()
   @IsString()
+  diagnosis?: string;
+
+  @IsOptional()
+  @IsString()
+  problems?: string;
+
+  @IsOptional()
+  @IsString()
+  proposedSolution?: string;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+
+  @IsOptional()
+  @IsString()
   nextStep?: string;
 }

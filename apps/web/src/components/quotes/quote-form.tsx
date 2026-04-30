@@ -71,11 +71,17 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
     setLoading(true);
 
     const formData = new FormData(event.currentTarget);
+
+    const optionalString = (key: string) => {
+      const value = formData.get(key);
+      return value && String(value).trim() ? String(value).trim() : undefined;
+    };
+
     const body = {
       customerId: String(formData.get("customerId")),
-      opportunityId: String(formData.get("opportunityId") || ""),
-      notes: String(formData.get("notes") || ""),
-      validUntil: String(formData.get("validUntil") || ""),
+      opportunityId: optionalString("opportunityId"),
+      notes: optionalString("notes"),
+      validUntil: optionalString("validUntil"),
       items: items
         .filter((item) => item.productId && item.quantity > 0)
         .map((item) => ({

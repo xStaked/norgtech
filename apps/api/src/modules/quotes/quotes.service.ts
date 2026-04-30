@@ -13,9 +13,11 @@ export class QuotesService {
   ) {}
 
   async create(user: AuthUser, dto: CreateQuoteDto) {
+    const opportunityId = dto.opportunityId?.trim() || null;
+
     await this.assertCustomerExists(dto.customerId);
-    if (dto.opportunityId) {
-      await this.assertOpportunityExists(dto.opportunityId);
+    if (opportunityId) {
+      await this.assertOpportunityExists(opportunityId);
     }
 
     const itemsWithSnapshot = await Promise.all(
@@ -58,7 +60,7 @@ export class QuotesService {
       const quote = await tx.quote.create({
         data: {
           customerId: dto.customerId,
-          opportunityId: dto.opportunityId ?? null,
+          opportunityId,
           notes: dto.notes,
           validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
           subtotal,

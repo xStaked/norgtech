@@ -194,6 +194,26 @@ describe("Quotes", () => {
     expect(response.body.total).toBe(450000);
   });
 
+  it("treats empty opportunityId as null", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/quotes")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId,
+        opportunityId: "",
+        items: [
+          {
+            productId,
+            quantity: 2,
+            unitPrice: 45000,
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.opportunityId).toBeNull();
+  });
+
   it("rejects quote with invalid customer", async () => {
     await request(globalThis.__APP__)
       .post("/quotes")
