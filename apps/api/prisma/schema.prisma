@@ -22,3 +22,14 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  entityType    String
+  entityId      String
+  action        String
+  previousState Json?
+  nextState     Json?
+  actorUserId   String
+  createdAt     DateTime @default(now())
+}
