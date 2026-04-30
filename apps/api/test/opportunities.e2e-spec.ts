@@ -103,7 +103,7 @@ describe("Opportunities", () => {
                 customerId: string;
                 title: string;
                 stage: OpportunityStage;
-                estimatedValue?: number | null;
+                estimatedValue?: number | string | null;
                 createdBy: string;
                 updatedBy: string;
               };
@@ -139,8 +139,13 @@ describe("Opportunities", () => {
                 id: `opportunity-${pendingOpportunities.length + opportunities.length + 1}`,
                 customerId: data.customerId,
                 title: data.title,
+                description: null,
                 stage: data.stage,
                 estimatedValue: data.estimatedValue ?? null,
+                expectedCloseDate: null,
+                assignedToUserId: null,
+                lostReason: null,
+                closedAt: null,
                 createdBy: data.createdBy,
                 updatedBy: data.updatedBy,
                 createdAt: new Date("2026-04-29T00:00:00.000Z"),

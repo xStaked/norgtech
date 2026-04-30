@@ -102,8 +102,13 @@ model Opportunity {
   id             String           @id @default(cuid())
   customerId     String
   title          String
+  description    String?
   stage          OpportunityStage
-  estimatedValue Int?
+  estimatedValue Decimal?         @db.Decimal(14, 2)
+  expectedCloseDate DateTime?
+  assignedToUserId String?
+  lostReason     String?
+  closedAt       DateTime?
   createdBy      String
   updatedBy      String
   createdAt      DateTime         @default(now())

@@ -2,8 +2,8 @@ import { OpportunityStage } from "@prisma/client";
 import { Type } from "class-transformer";
 import {
   IsEnum,
-  IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
@@ -25,7 +25,7 @@ export class CreateOpportunityDto {
 
   @IsOptional()
   @Type(() => Number)
-  @IsInt()
+  @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   estimatedValue?: number;
 }
