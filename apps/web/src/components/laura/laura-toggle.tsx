@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { crmTheme } from "@/components/ui/theme";
 
 interface LauraToggleProps {
@@ -10,6 +11,8 @@ interface LauraToggleProps {
 }
 
 export function LauraToggle({ checked, onChange, disabled, label }: LauraToggleProps) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <label
       style={{
@@ -26,6 +29,7 @@ export function LauraToggle({ checked, onChange, disabled, label }: LauraToggleP
       <div
         role="switch"
         aria-checked={checked}
+        aria-disabled={disabled}
         aria-label={label}
         tabIndex={disabled ? -1 : 0}
         onClick={() => !disabled && onChange(!checked)}
@@ -35,6 +39,8 @@ export function LauraToggle({ checked, onChange, disabled, label }: LauraToggleP
             onChange(!checked);
           }
         }}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
         style={{
           width: 40,
           height: 22,
@@ -43,6 +49,7 @@ export function LauraToggle({ checked, onChange, disabled, label }: LauraToggleP
           position: "relative",
           transition: "background 0.2s ease",
           cursor: disabled ? "not-allowed" : "pointer",
+          boxShadow: focused ? crmTheme.laura.focusRing : "none",
         }}
       >
         <div
@@ -53,8 +60,8 @@ export function LauraToggle({ checked, onChange, disabled, label }: LauraToggleP
             background: "#ffffff",
             position: "absolute",
             top: 2,
-            left: checked ? 20 : 2,
-            transition: "left 0.2s ease",
+            transform: `translateX(${checked ? 18 : 0}px)`,
+            transition: "transform 0.2s ease",
             boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
           }}
         />
