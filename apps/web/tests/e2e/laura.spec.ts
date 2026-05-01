@@ -21,12 +21,12 @@ async function waitForBackend(request: ReturnType<typeof test.fixtures>["request
   expect(backendReady, "Backend health check failed").toBe(true);
 }
 
-async function getAdminToken(request: ReturnType<typeof test.fixtures>["request"]) {
+async function getTokenForUser(
+  request: ReturnType<typeof test.fixtures>["request"],
+  credentials: { email: string; password: string },
+) {
   const response = await request.post("http://localhost:3001/auth/login", {
-    data: {
-      email: "admin@norgtech.com",
-      password: "Admin123!",
-    },
+    data: credentials,
   });
 
   expect(response.ok()).toBe(true);
@@ -41,7 +41,32 @@ async function seedAuthenticatedAdmin(
   request: ReturnType<typeof test.fixtures>["request"],
   context: ReturnType<typeof test.fixtures>["context"],
 ) {
-  const token = await getAdminToken(request);
+  const token = await getTokenForUser(request, {
+    email: "admin@norgtech.com",
+    password: "Admin123!",
+  });
+
+  await context.addCookies([
+    {
+      name: SESSION_COOKIE_NAME,
+      value: token,
+      domain: "localhost",
+      path: "/",
+      httpOnly: false,
+      secure: false,
+      sameSite: "Lax",
+    },
+  ]);
+
+  return token;
+}
+
+async function seedAuthenticatedUser(
+  request: ReturnType<typeof test.fixtures>["request"],
+  context: ReturnType<typeof test.fixtures>["context"],
+  credentials: { email: string; password: string },
+) {
+  const token = await getTokenForUser(request, credentials);
 
   await context.addCookies([
     {
@@ -317,6 +342,136 @@ test("allowed users can use Laura to confirm an edited proposal", async ({
       },
     },
   });
+});
+
+test("disallowed roles do not see Laura in nav and are redirected away from /laura", async ({
+  page,
+  request,
+  context,
+}) => {
+  await waitForBackend(request);
+  await seedAuthenticatedUser(request, context, {
+    email: "facturacion@norgtech.com",
+    password: "Facturacion123!",
+  });
+
+  await page.goto("/dashboard");
+  await expect(page.getByRole("link", { name: /Laura/i })).toHaveCount(0);
+
+  await page.goto("/laura");
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
+test("confirmation button stays disabled while Laura is saving", async ({
+  page,
+  request,
+  context,
+}) => {
+  await waitForBackend(request);
+  await seedAuthenticatedAdmin(request, context);
+
+  await page.route("http://localhost:3001/laura/messages", async (route) => {
+    const body = route.request().postDataJSON() as { content: string };
+
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        mode: "proposal",
+        sessionId: "session-laura-pending",
+        message: "Listo. Organicé una propuesta editable con los bloques detectados.",
+        proposalId: "proposal-laura-pending",
+        proposal: {
+          blocks: {
+            interaction: {
+              enabled: true,
+              summary: "Acme confirmó interés y pidió una visita comercial.",
+              rawMessage: body.content,
+            },
+          },
+        },
+      }),
+    });
+  });
+
+  await page.route("http://localhost:3001/laura/sessions/session-laura-pending*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "session-laura-pending",
+        ownerUserId: "admin-user-id",
+        contextType: null,
+        contextEntityId: null,
+        messages: [],
+        proposals: [
+          {
+            id: "proposal-laura-pending",
+            status: "draft",
+            payload: {
+              blocks: {
+                interaction: {
+                  enabled: true,
+                  summary: "Acme confirmó interés y pidió una visita comercial.",
+                  rawMessage: "Visité a Acme y quiere una visita comercial el viernes.",
+                },
+              },
+            },
+            createdAt: "2026-05-01T10:00:05.000Z",
+            updatedAt: "2026-05-01T10:00:05.000Z",
+          },
+        ],
+        createdAt: "2026-05-01T10:00:00.000Z",
+        updatedAt: "2026-05-01T10:00:05.000Z",
+      }),
+    });
+  });
+
+  let allowConfirm = false;
+  await page.route(
+    "http://localhost:3001/laura/proposals/proposal-laura-pending/confirm",
+    async (route) => {
+      while (!allowConfirm) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          proposalId: "proposal-laura-pending",
+          status: "confirmed",
+          proposal: {
+            blocks: {
+              interaction: {
+                enabled: true,
+                summary: "Acme confirmó interés y pidió una visita comercial.",
+                rawMessage: "Visité a Acme y quiere una visita comercial el viernes.",
+              },
+            },
+          },
+          saved: ["interaction"],
+          discarded: [],
+          createdIds: {
+            interaction: "visit-laura-pending-1",
+          },
+        }),
+      });
+    },
+  );
+
+  await page.goto("/laura");
+  await page.getByLabel("Mensaje para Laura").fill(
+    "Visité a Acme y quiere una visita comercial el viernes.",
+  );
+  await page.getByRole("button", { name: "Enviar a Laura" }).click();
+
+  const confirmButton = page.getByRole("button", { name: "Confirmar propuesta" });
+  await confirmButton.click();
+  await expect(confirmButton).toBeDisabled();
+
+  allowConfirm = true;
+  await expect(page.getByText("Laura guardó 1 bloques y descartó 0.").first()).toBeVisible();
 });
 
 test("customer and opportunity detail pages expose Laura contextual launchers", async ({
