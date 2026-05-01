@@ -296,6 +296,7 @@ export function LauraChat({
             </div>
           ) : null}
           <LauraMessageList messages={messages} busy={busy} onRetry={handleRetry} />
+          {agendaItems.length > 0 && <LauraAgendaCard items={agendaItems} />}
         </div>
 
         <div
