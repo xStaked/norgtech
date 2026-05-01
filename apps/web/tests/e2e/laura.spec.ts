@@ -37,17 +37,10 @@ async function getAdminToken(request: ReturnType<typeof test.fixtures>["request"
   return data.accessToken as string;
 }
 
-test("laura page redirects unauthenticated users to login", async ({ page }) => {
-  await page.goto("/laura");
-  await expect(page).toHaveURL(/\/login$/);
-});
-
-test("allowed users can use Laura to confirm an edited proposal", async ({
-  page,
-  request,
-  context,
-}) => {
-  await waitForBackend(request);
+async function seedAuthenticatedAdmin(
+  request: ReturnType<typeof test.fixtures>["request"],
+  context: ReturnType<typeof test.fixtures>["context"],
+) {
   const token = await getAdminToken(request);
 
   await context.addCookies([
@@ -61,6 +54,67 @@ test("allowed users can use Laura to confirm an edited proposal", async ({
       sameSite: "Lax",
     },
   ]);
+
+  return token;
+}
+
+async function createCustomerFixture(
+  request: ReturnType<typeof test.fixtures>["request"],
+  token: string,
+) {
+  const segmentsResponse = await request.get("http://localhost:3001/customer-segments", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  expect(segmentsResponse.ok()).toBe(true);
+
+  const segments = (await segmentsResponse.json()) as Array<{ id: string }>;
+  expect(segments[0]?.id).toBeTruthy();
+
+  const customerResponse = await request.post("http://localhost:3001/customers", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      legalName: `Cliente Laura ${Date.now()} SAS`,
+      displayName: `Cliente Laura ${Date.now()}`,
+      segmentId: segments[0].id,
+      contacts: [{ fullName: "Laura Contexto", isPrimary: true }],
+    },
+  });
+
+  expect(customerResponse.ok()).toBe(true);
+  return (await customerResponse.json()) as { id: string; displayName: string };
+}
+
+async function createOpportunityFixture(
+  request: ReturnType<typeof test.fixtures>["request"],
+  token: string,
+  customerId: string,
+) {
+  const opportunityResponse = await request.post("http://localhost:3001/opportunities", {
+    headers: { Authorization: `Bearer ${token}` },
+    data: {
+      customerId,
+      title: `Oportunidad Laura ${Date.now()}`,
+      stage: "contacto",
+      estimatedValue: 1200000,
+    },
+  });
+
+  expect(opportunityResponse.ok()).toBe(true);
+  return (await opportunityResponse.json()) as { id: string; title: string };
+}
+
+test("laura page redirects unauthenticated users to login", async ({ page }) => {
+  await page.goto("/laura");
+  await expect(page).toHaveURL(/\/login$/);
+});
+
+test("allowed users can use Laura to confirm an edited proposal", async ({
+  page,
+  request,
+  context,
+}) => {
+  await waitForBackend(request);
+  await seedAuthenticatedAdmin(request, context);
 
   const sentMessages: Array<{ sessionId?: string; content: string }> = [];
   const confirmedProposals: Array<unknown> = [];
@@ -262,5 +316,120 @@ test("allowed users can use Laura to confirm an edited proposal", async ({
         },
       },
     },
+  });
+});
+
+test("customer and opportunity detail pages expose Laura contextual launchers", async ({
+  page,
+  request,
+  context,
+}) => {
+  await waitForBackend(request);
+  const token = await seedAuthenticatedAdmin(request, context);
+  const customer = await createCustomerFixture(request, token);
+  const opportunity = await createOpportunityFixture(request, token, customer.id);
+
+  await page.goto(`/customers/${customer.id}`);
+  const customerLauncher = page.getByRole("link", { name: "Hablar con Laura" });
+  await expect(customerLauncher).toBeVisible();
+  await expect(customerLauncher).toHaveAttribute(
+    "href",
+    new RegExp(`^/laura\\?contextType=customer&contextEntityId=${customer.id}&contextLabel=`),
+  );
+
+  await page.goto(`/opportunities/${opportunity.id}`);
+  const opportunityLauncher = page.getByRole("link", { name: "Hablar con Laura" });
+  await expect(opportunityLauncher).toBeVisible();
+  await expect(opportunityLauncher).toHaveAttribute(
+    "href",
+    new RegExp(`^/laura\\?contextType=opportunity&contextEntityId=${opportunity.id}&contextLabel=`),
+  );
+});
+
+test("customer contextual launch sends initial context and still allows a switch clarification", async ({
+  page,
+  request,
+  context,
+}) => {
+  await waitForBackend(request);
+  const token = await seedAuthenticatedAdmin(request, context);
+  const customer = await createCustomerFixture(request, token);
+  const sentMessages: Array<Record<string, unknown>> = [];
+
+  await page.route("http://localhost:3001/laura/messages", async (route) => {
+    const body = route.request().postDataJSON() as Record<string, unknown>;
+    sentMessages.push(body);
+
+    await route.fulfill({
+      status: 201,
+      contentType: "application/json",
+      body: JSON.stringify({
+        mode: "clarification",
+        sessionId: "session-laura-context",
+        message: "No estoy segura de si hablas de esta cuenta o de otra. ¿Quieres cambiar el cliente?",
+        clarification: {
+          type: "customer",
+          options: [
+            { id: customer.id, label: customer.displayName },
+            { id: "other-customer", label: "Otra cuenta detectada" },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.route("http://localhost:3001/laura/sessions/session-laura-context*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "session-laura-context",
+        ownerUserId: "admin-user-id",
+        contextType: "customer",
+        contextEntityId: customer.id,
+        messages: [
+          {
+            id: "message-user-context",
+            role: "user",
+            kind: "report",
+            content: "En realidad esta nota era para otra cuenta.",
+            createdAt: "2026-05-01T10:00:00.000Z",
+          },
+          {
+            id: "message-assistant-context",
+            role: "assistant",
+            kind: "clarification",
+            content: "No estoy segura de si hablas de esta cuenta o de otra. ¿Quieres cambiar el cliente?",
+            createdAt: "2026-05-01T10:00:03.000Z",
+          },
+        ],
+        proposals: [],
+        createdAt: "2026-05-01T10:00:00.000Z",
+        updatedAt: "2026-05-01T10:00:03.000Z",
+      }),
+    });
+  });
+
+  await page.goto(`/customers/${customer.id}`);
+  await page.getByRole("link", { name: "Hablar con Laura" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`/laura\\?contextType=customer&contextEntityId=${customer.id}&contextLabel=`),
+  );
+  await expect(
+    page.getByText(`Laura arrancará con el contexto sugerido de ${customer.displayName}.`),
+  ).toBeVisible();
+
+  await page.getByLabel("Mensaje para Laura").fill("En realidad esta nota era para otra cuenta.");
+  await page.getByRole("button", { name: "Enviar a Laura" }).click();
+
+  await expect(
+    page.getByText("No estoy segura de si hablas de esta cuenta o de otra. ¿Quieres cambiar el cliente?"),
+  ).toBeVisible();
+
+  expect(sentMessages).toHaveLength(1);
+  expect(sentMessages[0]).toMatchObject({
+    content: "En realidad esta nota era para otra cuenta.",
+    contextType: "customer",
+    contextEntityId: customer.id,
   });
 });
