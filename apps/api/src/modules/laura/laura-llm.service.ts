@@ -84,9 +84,13 @@ export class LauraLlmService {
 
     let parsed: unknown;
     try {
-      parsed = JSON.parse(raw) as unknown;
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*\n?/i, "")
+        .replace(/\n?\s*```$/,"")
+        .trim();
+      parsed = JSON.parse(cleaned) as unknown;
     } catch {
-      throw new BadRequestException("Laura extractor returned malformed JSON");
+      throw new BadRequestException(`Laura extractor returned malformed JSON: ${raw.slice(0, 200)}`);
     }
 
     return this.parseExtractionResult(parsed);
@@ -94,22 +98,26 @@ export class LauraLlmService {
 
   private parseExtractionResult(value: unknown): LauraExtractionResult {
     if (!value || typeof value !== "object") {
-      throw new BadRequestException("Laura extractor returned malformed JSON");
+      throw new BadRequestException("Laura extractor returned malformed JSON (not an object)");
     }
 
     const candidate = value as Record<string, unknown>;
     if (candidate.intent !== "report" && candidate.intent !== "agenda_query") {
-      throw new BadRequestException("Laura extractor returned malformed JSON");
+      throw new BadRequestException(`Laura extractor returned unexpected intent: ${String(candidate.intent)}`);
+    }
+
+    if (candidate.intent === "agenda_query") {
+      return { intent: "agenda_query" };
     }
 
     const stage = candidate.suggestedOpportunityStage;
     if (stage && !Object.values(OpportunityStage).includes(stage as OpportunityStage)) {
-      throw new BadRequestException("Laura extractor returned malformed JSON");
+      throw new BadRequestException(`Laura extractor returned invalid stage: ${String(stage)}`);
     }
 
     const taskType = candidate.taskType;
     if (taskType && !Object.values(FollowUpTaskType).includes(taskType as FollowUpTaskType)) {
-      throw new BadRequestException("Laura extractor returned malformed JSON");
+      throw new BadRequestException(`Laura extractor returned invalid taskType: ${String(taskType)}`);
     }
 
     const signals = candidate.signals;
