@@ -1,7 +1,17 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { MessageSquare, Target, CalendarClock, ClipboardList, Activity } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
+import { LauraToggle } from "./laura-toggle";
+
+const blockIcons: Record<string, typeof MessageSquare> = {
+  Interacción: MessageSquare,
+  Oportunidad: Target,
+  Seguimiento: CalendarClock,
+  "Tarea interna": ClipboardList,
+  "Señales comerciales": Activity,
+};
 
 export function LauraProposalBlock({
   title,
@@ -18,77 +28,73 @@ export function LauraProposalBlock({
   toggleLabel: string;
   children: ReactNode;
 }) {
+  const Icon = blockIcons[title] ?? MessageSquare;
+
   return (
     <section
       style={{
         display: "grid",
-        gap: 14,
-        padding: "16px 18px",
-        borderRadius: crmTheme.radius.lg,
-        border: `1px solid ${enabled ? crmTheme.colors.borderStrong : crmTheme.colors.border}`,
-        background: enabled ? "#fbfdff" : crmTheme.colors.surfaceMuted,
+        borderRadius: 14,
+        overflow: "hidden",
+        border: `1px solid ${enabled ? crmTheme.laura.border : crmTheme.colors.border}`,
+        background: crmTheme.colors.surface,
+        opacity: enabled ? 1 : 0.5,
+        transition: "opacity 0.2s ease",
       }}
     >
       <div
         style={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems: "center",
           justifyContent: "space-between",
-          gap: 16,
-          flexWrap: "wrap",
+          gap: 12,
+          padding: "12px 16px",
+          background: enabled ? crmTheme.laura.gradient : crmTheme.colors.surfaceMuted,
+          transition: "background 0.2s ease",
         }}
       >
-        <div style={{ display: "grid", gap: 6 }}>
-          <h3
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <div
             style={{
-              margin: 0,
-              fontSize: 16,
-              color: crmTheme.colors.text,
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: enabled ? "rgba(255,255,255,0.2)" : crmTheme.colors.border,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            {title}
-          </h3>
-          <p
-            style={{
-              margin: 0,
-              fontSize: 13,
-              lineHeight: 1.5,
-              color: crmTheme.colors.textMuted,
-            }}
-          >
-            {description}
-          </p>
+            <Icon size={16} color={enabled ? "#ffffff" : crmTheme.colors.textMuted} strokeWidth={2} />
+          </div>
+          <div style={{ display: "grid", gap: 2 }}>
+            <h3
+              style={{
+                margin: 0,
+                fontSize: 14,
+                fontWeight: 600,
+                color: enabled ? "#ffffff" : crmTheme.colors.text,
+              }}
+            >
+              {title}
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                fontSize: 12,
+                lineHeight: 1.4,
+                color: enabled ? "rgba(255,255,255,0.8)" : crmTheme.colors.textMuted,
+              }}
+            >
+              {description}
+            </p>
+          </div>
         </div>
 
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 10,
-            fontSize: 13,
-            fontWeight: 700,
-            color: crmTheme.colors.text,
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={enabled}
-            onChange={(event) => onToggle(event.target.checked)}
-            aria-label={toggleLabel}
-          />
-          Guardar
-        </label>
+        <LauraToggle checked={enabled} onChange={onToggle} label={toggleLabel} />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 12,
-          opacity: enabled ? 1 : 0.64,
-        }}
-      >
-        {children}
-      </div>
+      <div style={{ display: "grid", gap: 12, padding: "14px 16px" }}>{children}</div>
     </section>
   );
 }
