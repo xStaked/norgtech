@@ -84,12 +84,12 @@ export function LauraEmptyState({ onSend }: LauraEmptyStateProps) {
               padding: "10px 14px",
               background: crmTheme.colors.surface,
               border: `1px solid ${crmTheme.laura.border}`,
-              borderRadius: 10,
+              borderRadius: crmTheme.radius.md,
               textAlign: "left",
               fontSize: 13,
               color: crmTheme.laura.textMuted,
               cursor: "pointer",
-              transition: "all 0.15s ease",
+              transition: "border-color 0.15s ease, background 0.15s ease",
               fontFamily: crmTheme.typography.body,
               lineHeight: 1.4,
             }}
@@ -100,6 +100,14 @@ export function LauraEmptyState({ onSend }: LauraEmptyStateProps) {
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = crmTheme.laura.border;
               e.currentTarget.style.background = crmTheme.colors.surface;
+            }}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = crmTheme.laura.primary;
+              e.currentTarget.style.boxShadow = crmTheme.laura.focusRing;
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = crmTheme.laura.border;
+              e.currentTarget.style.boxShadow = "none";
             }}
           >
             {example}
