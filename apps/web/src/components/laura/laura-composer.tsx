@@ -3,6 +3,16 @@
 import { useState } from "react";
 import { crmTheme } from "@/components/ui/theme";
 
+const MIN_LENGTH = 5;
+
+const placeholderExamples = [
+  "Ejemplo: Visité a Acme, confirmaron interés y piden nueva visita",
+  "Ejemplo: Tengo pendiente llamar a Pérez sobre la propuesta",
+  "Ejemplo: Qué tengo pendiente hoy?",
+  "Ejemplo: El cliente Lago quiere cotización para el próximo viernes",
+  "Ejemplo: Reunión con Distribuidora Norte, quieren cerrar esta semana",
+];
+
 export function LauraComposer({
   disabled,
   onSubmit,
@@ -11,18 +21,22 @@ export function LauraComposer({
   onSubmit: (value: string) => Promise<void>;
 }) {
   const [value, setValue] = useState("");
+  const [placeholder] = useState(() => placeholderExamples[Math.floor(Math.random() * placeholderExamples.length)]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const trimmed = value.trim();
-    if (!trimmed || disabled) {
+    if (!trimmed || trimmed.length < MIN_LENGTH || disabled) {
       return;
     }
 
     await onSubmit(trimmed);
     setValue("");
   }
+
+  const canSend = !disabled && value.trim().length >= MIN_LENGTH;
+  const showLengthHint = value.trim().length > 0 && value.trim().length < MIN_LENGTH;
 
   return (
     <form
@@ -47,7 +61,7 @@ export function LauraComposer({
         value={value}
         onChange={(event) => setValue(event.target.value)}
         rows={4}
-        placeholder="Ejemplo: Visité a Acme, confirmaron interés, piden una nueva visita y debo mover la oportunidad."
+        placeholder={placeholder}
         disabled={disabled}
         style={{
           width: "100%",
@@ -72,32 +86,29 @@ export function LauraComposer({
           flexWrap: "wrap",
         }}
       >
-        <p
-          style={{
-            margin: 0,
-            fontSize: 13,
-            color: crmTheme.colors.textMuted,
-          }}
-        >
-          Laura estructura la interacción y te deja editar cada bloque antes de guardar.
-        </p>
+        {showLengthHint ? (
+          <p style={{ margin: 0, fontSize: 12, color: crmTheme.colors.danger }}>
+            Escribe al menos {MIN_LENGTH} caracteres
+          </p>
+        ) : (
+          <p style={{ margin: 0, fontSize: 13, color: crmTheme.colors.textMuted }}>
+            Laura estructura la interacción y te deja editar cada bloque antes de guardar.
+          </p>
+        )}
         <button
           type="submit"
-          disabled={disabled || value.trim().length === 0}
+          disabled={!canSend}
           style={{
             appearance: "none",
             border: 0,
             borderRadius: crmTheme.radius.md,
             minHeight: 44,
             padding: "0 18px",
-            background:
-              disabled || value.trim().length === 0
-                ? crmTheme.colors.borderStrong
-                : crmTheme.colors.primary,
+            background: !canSend ? crmTheme.colors.borderStrong : crmTheme.colors.primary,
             color: "#ffffff",
             fontSize: 14,
             fontWeight: 700,
-            cursor: disabled || value.trim().length === 0 ? "not-allowed" : "pointer",
+            cursor: !canSend ? "not-allowed" : "pointer",
           }}
         >
           Enviar a Laura
