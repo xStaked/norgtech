@@ -8,6 +8,7 @@ import {
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -22,6 +23,7 @@ import { LauraService } from "./laura.service";
 export class LauraController {
   constructor(private readonly lauraService: LauraService) {}
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Post("messages")
@@ -38,6 +40,7 @@ export class LauraController {
     return this.lauraService.handleMessage(user, dto);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Post("proposals/:proposalId/confirm")
@@ -55,6 +58,7 @@ export class LauraController {
     return this.lauraService.confirmProposal(user, proposalId, dto);
   }
 
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get("sessions/:sessionId")
