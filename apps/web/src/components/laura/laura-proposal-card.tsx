@@ -4,6 +4,7 @@ import { crmTheme } from "@/components/ui/theme";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { LauraProposalBlock } from "./laura-proposal-block";
+import { ObjectionsInput } from "./laura-objections-input";
 import type { LauraProposalConfirmationResponse, LauraProposalPayload } from "./laura-types";
 
 const opportunityStages = [
@@ -436,28 +437,26 @@ export function LauraProposalCard({
             }
             toggleLabel="Guardar bloque de señales"
           >
-            <TextField
-              label="Objeciones"
-              value={proposal.blocks.signals.objections.join(", ")}
-              onChange={(value) =>
-                updateProposal((draft) => ({
-                  ...draft,
-                  blocks: {
-                    ...draft.blocks,
-                    signals: draft.blocks.signals
-                      ? {
-                          ...draft.blocks.signals,
-                          objections: value
-                            .split(",")
-                            .map((item) => item.trim())
-                            .filter(Boolean),
-                        }
-                      : draft.blocks.signals,
-                  },
-                }))
-              }
-              disabled={confirming}
-            />
+            <label style={{ display: "grid", gap: 8 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
+                Objeciones
+              </span>
+              <ObjectionsInput
+                objections={proposal.blocks.signals.objections}
+                disabled={confirming}
+                onChange={(objections) =>
+                  updateProposal((draft) => ({
+                    ...draft,
+                    blocks: {
+                      ...draft.blocks,
+                      signals: draft.blocks.signals
+                        ? { ...draft.blocks.signals, objections }
+                        : draft.blocks.signals,
+                    },
+                  }))
+                }
+              />
+            </label>
             <div
               style={{
                 display: "grid",
