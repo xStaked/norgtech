@@ -110,15 +110,8 @@ export class LauraLlmService {
       return { intent: "agenda_query" };
     }
 
-    const stage = candidate.suggestedOpportunityStage;
-    if (stage && !Object.values(OpportunityStage).includes(stage as OpportunityStage)) {
-      throw new BadRequestException(`Laura extractor returned invalid stage: ${String(stage)}`);
-    }
-
-    const taskType = candidate.taskType;
-    if (taskType && !Object.values(FollowUpTaskType).includes(taskType as FollowUpTaskType)) {
-      throw new BadRequestException(`Laura extractor returned invalid taskType: ${String(taskType)}`);
-    }
+    const stage = normalizeStage(candidate.suggestedOpportunityStage);
+    const taskType = normalizeTaskType(candidate.taskType);
 
     const signals = candidate.signals;
     if (signals && typeof signals !== "object") {
@@ -270,4 +263,51 @@ function extractObjections(message: string) {
     objections.push("entrega");
   }
   return objections;
+}
+
+const TASK_TYPE_MAP: Record<string, FollowUpTaskType> = {
+  llamada: FollowUpTaskType.llamada,
+  correo: FollowUpTaskType.email,
+  email: FollowUpTaskType.email,
+  "e-mail": FollowUpTaskType.email,
+  mail: FollowUpTaskType.email,
+  whatsapp: FollowUpTaskType.whatsapp,
+  reunion: FollowUpTaskType.reunion,
+  reunión: FollowUpTaskType.reunion,
+  recordatorio: FollowUpTaskType.recordatorio,
+  llamada_telefonica: FollowUpTaskType.llamada,
+  telefono: FollowUpTaskType.llamada,
+  teléfono: FollowUpTaskType.llamada,
+  videollamada: FollowUpTaskType.reunion,
+};
+
+const STAGE_MAP: Record<string, OpportunityStage> = {
+  prospecto: OpportunityStage.prospecto,
+  contacto: OpportunityStage.contacto,
+  visita: OpportunityStage.visita,
+  cotizacion: OpportunityStage.cotizacion,
+  cotización: OpportunityStage.cotizacion,
+  propuesta: OpportunityStage.cotizacion,
+  negociacion: OpportunityStage.negociacion,
+  negociación: OpportunityStage.negociacion,
+  orden_facturacion: OpportunityStage.orden_facturacion,
+  factura: OpportunityStage.orden_facturacion,
+  venta_cerrada: OpportunityStage.venta_cerrada,
+  cerrada: OpportunityStage.venta_cerrada,
+  perdida: OpportunityStage.perdida,
+  pérdida: OpportunityStage.perdida,
+};
+
+function normalizeTaskType(value: unknown): FollowUpTaskType | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.toLowerCase().trim();
+  return TASK_TYPE_MAP[normalized] ?? (Object.values(FollowUpTaskType).includes(normalized as FollowUpTaskType) ? normalized as FollowUpTaskType : undefined);
+}
+
+function normalizeStage(value: unknown): OpportunityStage | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") return undefined;
+  const normalized = value.toLowerCase().trim();
+  return STAGE_MAP[normalized] ?? (Object.values(OpportunityStage).includes(normalized as OpportunityStage) ? normalized as OpportunityStage : undefined);
 }
