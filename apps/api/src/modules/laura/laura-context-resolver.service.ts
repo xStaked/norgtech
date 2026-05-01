@@ -1,6 +1,13 @@
 import { Injectable } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import {
+  similarity,
+  classifyMatch,
+  isAmbiguous,
+  bestMatch,
+  type SimilarityMatch,
+} from "./laura-similarity";
 
 type CustomerRecord = {
   id: string;
@@ -43,48 +50,56 @@ export class LauraContextResolverService {
     const candidateTexts = this.candidateTexts(normalizedText);
 
     for (const candidateText of candidateTexts) {
-      const exactDisplayMatches = customers.filter((customer) =>
-        candidateText.includes(this.normalizeText(customer.displayName)),
-      );
+      const matches: SimilarityMatch[] = customers.map((customer) => {
+        const displayNameNorm = this.normalizeText(customer.displayName);
+        const legalNameNorm = this.normalizeText(customer.legalName);
+        const contactNames = customer.contacts.map((c) => this.normalizeText(c.fullName));
 
-      if (exactDisplayMatches.length === 1) {
-        return this.toResolvedCustomer(exactDisplayMatches[0], "high");
-      }
+        const fieldScores = [similarity(candidateText, displayNameNorm), similarity(candidateText, legalNameNorm)];
+        for (const contactName of contactNames) {
+          fieldScores.push(similarity(candidateText, contactName));
+        }
 
-      if (exactDisplayMatches.length > 1) {
-        return this.toAmbiguousCustomer(exactDisplayMatches, this.bestQuery(candidateText, exactDisplayMatches));
-      }
+        const inputTokens = candidateText.split(/\s+/).filter((t) => t.length >= 4);
+        const customerTokens = this.customerTokens(customer).filter((t) => t.length >= 4);
+        const tokenScores = inputTokens.flatMap((inputToken) =>
+          customerTokens.map((customerToken) => similarity(inputToken, customerToken)),
+        );
 
-      const exactAliasMatches = customers.filter((customer) => {
-        const aliases = [
-          customer.legalName,
-          ...customer.contacts.map((contact) => contact.fullName),
-        ];
+        const allScores = [...fieldScores, ...tokenScores];
+        const bestScore = Math.max(...allScores);
 
-        return aliases.some((alias) => candidateText.includes(this.normalizeText(alias)));
+        return { id: customer.id, label: customer.displayName, score: bestScore };
       });
 
-      if (exactAliasMatches.length === 1) {
-        return this.toResolvedCustomer(exactAliasMatches[0], "medium");
+      const significantMatches = matches.filter((m) => m.score >= THRESHOLD_AMBIGUOUS);
+
+      if (significantMatches.length === 0) {
+        continue;
       }
 
-      if (exactAliasMatches.length > 1) {
-        return this.toAmbiguousCustomer(exactAliasMatches, this.bestQuery(candidateText, exactAliasMatches));
+      if (isAmbiguous(significantMatches)) {
+        const top = bestMatch(significantMatches)!;
+        return {
+          status: "ambiguous",
+          query: top.label,
+          options: significantMatches.map((m) => ({ customerId: m.id, label: m.label })),
+        };
       }
 
-      const partialMatches = customers.filter((customer) =>
-        this.customerTokens(customer).some((token) =>
-          token.length >= 4 && candidateText.includes(token),
-        ),
-      );
+      const top = bestMatch(significantMatches)!;
+      const classification = classifyMatch(top.score);
 
-      if (partialMatches.length === 1) {
-        return this.toResolvedCustomer(partialMatches[0], "medium");
+      if (classification === "high" || classification === "medium") {
+        return {
+          status: "resolved",
+          customerId: top.id,
+          confidence: classification,
+          label: top.label,
+        };
       }
 
-      if (partialMatches.length > 1) {
-        return this.toAmbiguousCustomer(partialMatches, this.bestQuery(candidateText, partialMatches));
-      }
+      // single low-confidence match falls through to next candidate
     }
 
     return { status: "unresolved" };
@@ -161,15 +176,10 @@ export class LauraContextResolverService {
     );
   }
 
-  private bestQuery(normalizedText: string, customers: CustomerRecord[]) {
-    const matchingTokens = customers.flatMap((customer) =>
-      this.customerTokens(customer).filter((token) =>
-        token.length >= 4 && normalizedText.includes(token),
-      ),
-    );
-
-    const preferredToken = matchingTokens.sort((a, b) => b.length - a.length)[0] ?? "cliente";
-    return preferredToken.charAt(0).toUpperCase() + preferredToken.slice(1);
+  private bestQueryFromMatches(matches: SimilarityMatch[]): string {
+    const top = bestMatch(matches);
+    if (!top) return "cliente";
+    return top.label;
   }
 
   private candidateTexts(normalizedText: string) {
@@ -183,3 +193,5 @@ export class LauraContextResolverService {
     return [...focusedSegments, normalizedText];
   }
 }
+
+const THRESHOLD_AMBIGUOUS = 0.70;
