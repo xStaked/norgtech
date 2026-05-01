@@ -1,7 +1,7 @@
 "use client";
 
+import { Sparkles } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
-import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { LauraProposalBlock } from "./laura-proposal-block";
 import { ObjectionsInput } from "./laura-objections-input";
@@ -49,12 +49,14 @@ function textInputStyle() {
     width: "100%",
     minHeight: 42,
     padding: "10px 12px",
-    borderRadius: crmTheme.radius.md,
-    border: `1px solid ${crmTheme.colors.borderStrong}`,
-    background: crmTheme.colors.surface,
-    color: crmTheme.colors.text,
+    borderRadius: crmTheme.radius.sm,
+    border: `1px solid ${crmTheme.laura.border}`,
+    background: crmTheme.laura.soft,
+    color: crmTheme.laura.textPrimary,
     font: `400 14px/1.4 ${crmTheme.typography.body}`,
     boxSizing: "border-box" as const,
+    outline: "none",
+    transition: "border-color 0.15s ease, box-shadow 0.15s ease",
   };
 }
 
@@ -70,8 +72,8 @@ function TextField({
   disabled: boolean;
 }) {
   return (
-    <label style={{ display: "grid", gap: 8 }}>
-      <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
+    <label style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
         {label}
       </span>
       <input
@@ -80,6 +82,14 @@ function TextField({
         disabled={disabled}
         aria-label={label}
         style={textInputStyle()}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = crmTheme.laura.primary;
+          e.currentTarget.style.boxShadow = crmTheme.laura.focusRing;
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = crmTheme.laura.border;
+          e.currentTarget.style.boxShadow = "none";
+        }}
       />
     </label>
   );
@@ -99,8 +109,8 @@ function TextAreaField({
   rows?: number;
 }) {
   return (
-    <label style={{ display: "grid", gap: 8 }}>
-      <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
+    <label style={{ display: "grid", gap: 6 }}>
+      <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
         {label}
       </span>
       <textarea
@@ -112,7 +122,15 @@ function TextAreaField({
         style={{
           ...textInputStyle(),
           resize: "vertical",
-          minHeight: rows * 24 + 36,
+          minHeight: rows * 24 + 32,
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = crmTheme.laura.primary;
+          e.currentTarget.style.boxShadow = crmTheme.laura.focusRing;
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = crmTheme.laura.border;
+          e.currentTarget.style.boxShadow = "none";
         }}
       />
     </label>
@@ -137,20 +155,46 @@ export function LauraProposalCard({
   }
 
   return (
-    <SectionCard
-      title="Propuesta de Laura"
-      description="Edita, apaga o confirma cada bloque antes de persistirlo en el CRM."
-      actions={
+    <div
+      style={{
+        border: `2px solid ${crmTheme.laura.primary}`,
+        borderRadius: 16,
+        background: crmTheme.colors.surface,
+        boxShadow: "0 4px 16px rgba(99,102,241,0.12)",
+        display: "grid",
+        gap: 0,
+        overflow: "hidden",
+      }}
+    >
+      {/* Card Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          padding: "14px 16px",
+          background: crmTheme.laura.soft,
+          borderBottom: `1px solid ${crmTheme.laura.border}`,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <Sparkles size={18} color={crmTheme.laura.primary} strokeWidth={2} />
+          <span style={{ fontSize: 14, fontWeight: 700, color: crmTheme.laura.textPrimary }}>
+            Propuesta de Laura
+          </span>
+        </div>
         <StatusBadge tone={confirmation ? "success" : "info"}>
           {confirmation ? "Confirmada" : "Borrador"}
         </StatusBadge>
-      }
-    >
-      <div style={{ display: "grid", gap: 14 }}>
-        {proposal.blocks.interaction ? (
+      </div>
+
+      {/* Blocks */}
+      <div style={{ display: "grid", gap: 12, padding: 16 }}>
+        {proposal.blocks.interaction && (
           <LauraProposalBlock
             title="Interacción"
-            description="Resumen base que se convertirá en el registro principal de la conversación."
+            description="Resumen base que se convertirá en el registro principal."
             enabled={proposal.blocks.interaction.enabled}
             onToggle={(enabled) =>
               updateProposal((draft) => ({
@@ -199,9 +243,9 @@ export function LauraProposalCard({
               rows={4}
             />
           </LauraProposalBlock>
-        ) : null}
+        )}
 
-        {proposal.blocks.opportunity ? (
+        {proposal.blocks.opportunity && (
           <LauraProposalBlock
             title="Oportunidad"
             description="Define si Laura actualiza una oportunidad existente o crea una nueva."
@@ -235,8 +279,8 @@ export function LauraProposalCard({
               }
               disabled={confirming}
             />
-            <label style={{ display: "grid", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
                 Etapa
               </span>
               <select
@@ -265,12 +309,12 @@ export function LauraProposalCard({
               </select>
             </label>
           </LauraProposalBlock>
-        ) : null}
+        )}
 
-        {proposal.blocks.followUp ? (
+        {proposal.blocks.followUp && (
           <LauraProposalBlock
             title="Seguimiento"
-            description="Próximo movimiento comercial que sí tiene destino operativo directo."
+            description="Próximo movimiento comercial con destino operativo directo."
             enabled={proposal.blocks.followUp.enabled}
             onToggle={(enabled) =>
               updateProposal((draft) => ({
@@ -288,8 +332,8 @@ export function LauraProposalCard({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 12,
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 10,
               }}
             >
               <TextField
@@ -308,9 +352,9 @@ export function LauraProposalCard({
                 }
                 disabled={confirming}
               />
-              <label style={{ display: "grid", gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
-                  Tipo de seguimiento
+              <label style={{ display: "grid", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
+                  Tipo
                 </span>
                 <select
                   aria-label="Tipo de seguimiento"
@@ -337,9 +381,9 @@ export function LauraProposalCard({
                 </select>
               </label>
             </div>
-            <label style={{ display: "grid", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
-                Fecha del seguimiento
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
+                Fecha
               </span>
               <input
                 type="datetime-local"
@@ -364,12 +408,12 @@ export function LauraProposalCard({
               />
             </label>
           </LauraProposalBlock>
-        ) : null}
+        )}
 
-        {proposal.blocks.task ? (
+        {proposal.blocks.task && (
           <LauraProposalBlock
             title="Tarea interna"
-            description="Bloque liviano para dejar claro qué se conserva y qué se descarta en V1."
+            description="Bloque liviano para notas y tareas internas."
             enabled={proposal.blocks.task.enabled}
             onToggle={(enabled) =>
               updateProposal((draft) => ({
@@ -417,12 +461,12 @@ export function LauraProposalCard({
               disabled={confirming}
             />
           </LauraProposalBlock>
-        ) : null}
+        )}
 
-        {proposal.blocks.signals ? (
+        {proposal.blocks.signals && (
           <LauraProposalBlock
             title="Señales comerciales"
-            description="Objeciones, riesgo y nivel de intención detectados en la conversación."
+            description="Objeciones, riesgo y nivel de intención detectados."
             enabled={proposal.blocks.signals.enabled}
             onToggle={(enabled) =>
               updateProposal((draft) => ({
@@ -437,8 +481,8 @@ export function LauraProposalCard({
             }
             toggleLabel="Guardar bloque de señales"
           >
-            <label style={{ display: "grid", gap: 8 }}>
-              <span style={{ fontSize: 12, fontWeight: 700, color: crmTheme.colors.textSubtle }}>
+            <label style={{ display: "grid", gap: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
                 Objeciones
               </span>
               <ObjectionsInput
@@ -460,8 +504,8 @@ export function LauraProposalCard({
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                gap: 12,
+                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                gap: 10,
               }}
             >
               <TextField
@@ -498,44 +542,25 @@ export function LauraProposalCard({
               />
             </div>
           </LauraProposalBlock>
-        ) : null}
+        )}
+      </div>
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-            flexWrap: "wrap",
-            paddingTop: 4,
-          }}
-        >
-          <div style={{ display: "grid", gap: 4 }}>
-            {confirmation ? (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 14,
-                  fontWeight: 700,
-                  color: crmTheme.colors.success,
-                }}
-              >
-                Laura guardó {confirmation.saved.length} bloques y descartó{" "}
-                {confirmation.discarded.length}.
-              </p>
-            ) : (
-              <p
-                style={{
-                  margin: 0,
-                  fontSize: 13,
-                  color: crmTheme.colors.textMuted,
-                }}
-              >
-                Confirma el borrador cuando los bloques reflejen lo que quieres registrar.
-              </p>
-            )}
-          </div>
-
+      {/* Confirm Button */}
+      <div style={{ padding: "0 16px 16px" }}>
+        {confirmation ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 13,
+              fontWeight: 600,
+              color: crmTheme.colors.success,
+              textAlign: "center",
+              padding: "8px 0",
+            }}
+          >
+            Laura guardó {confirmation.saved.length} bloques y descartó {confirmation.discarded.length}.
+          </p>
+        ) : (
           <button
             type="button"
             onClick={() => void onConfirm()}
@@ -544,19 +569,26 @@ export function LauraProposalCard({
               appearance: "none",
               border: 0,
               borderRadius: crmTheme.radius.md,
+              width: "100%",
               minHeight: 44,
               padding: "0 18px",
-              background: confirming ? crmTheme.colors.borderStrong : crmTheme.colors.primary,
+              background: confirming ? "#d4d2e8" : crmTheme.laura.gradient,
               color: "#ffffff",
               fontSize: 14,
               fontWeight: 700,
               cursor: confirming ? "wait" : "pointer",
+              transition: "background 0.15s ease",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
             }}
           >
+            <Sparkles size={16} />
             Confirmar propuesta
           </button>
-        </div>
+        )}
       </div>
-    </SectionCard>
+    </div>
   );
 }
