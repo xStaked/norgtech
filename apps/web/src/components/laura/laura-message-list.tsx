@@ -4,6 +4,7 @@ import { crmTheme } from "@/components/ui/theme";
 import { EmptyState } from "@/components/ui/empty-state";
 import { LauraEntryCard } from "./laura-entry-card";
 import type { LauraMessageItem } from "./laura-types";
+import { useAutoScroll } from "@/hooks/use-auto-scroll";
 
 export function LauraMessageList({
   messages,
@@ -12,6 +13,8 @@ export function LauraMessageList({
   messages: LauraMessageItem[];
   busy: boolean;
 }) {
+  const scrollRef = useAutoScroll(messages.length + (busy ? 1 : 0));
+
   if (messages.length === 0) {
     return (
       <EmptyState
@@ -22,7 +25,7 @@ export function LauraMessageList({
   }
 
   return (
-    <div style={{ display: "grid", gap: 14 }}>
+    <div style={{ display: "grid", gap: 14, overflowY: "auto", maxHeight: "520px" }}>
       {messages.map((message) => (
         <LauraEntryCard key={message.id} message={message} />
       ))}
@@ -45,6 +48,7 @@ export function LauraMessageList({
           Laura está procesando tu mensaje
         </div>
       ) : null}
+      <div ref={scrollRef} />
     </div>
   );
 }
