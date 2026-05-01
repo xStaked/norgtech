@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Send } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
 
 const MIN_LENGTH = 5;
@@ -43,62 +44,45 @@ export function LauraComposer({
   const showLengthHint = value.trim().length > 0 && value.trim().length < MIN_LENGTH;
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "grid",
-        gap: 12,
-      }}
-    >
-      <label
-        htmlFor="laura-message"
-        style={{
-          fontSize: 13,
-          fontWeight: 700,
-          color: crmTheme.colors.textSubtle,
-        }}
-      >
-        Mensaje para Laura
-      </label>
-      <textarea
-        id="laura-message"
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        rows={4}
-        placeholder={placeholder}
-        disabled={disabled}
-        style={{
-          width: "100%",
-          resize: "vertical",
-          minHeight: 116,
-          padding: "14px 16px",
-          borderRadius: crmTheme.radius.lg,
-          border: `1px solid ${crmTheme.colors.borderStrong}`,
-          background: crmTheme.colors.surface,
-          color: crmTheme.colors.text,
-          font: `400 15px/1.5 ${crmTheme.typography.body}`,
-          outline: "none",
-          boxSizing: "border-box",
-        }}
-      />
+    <form onSubmit={handleSubmit}>
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          flexWrap: "wrap",
+          gap: 10,
+          alignItems: "flex-end",
         }}
       >
-        {showLengthHint ? (
-          <p style={{ margin: 0, fontSize: 12, color: crmTheme.colors.danger }}>
-            Escribe al menos {MIN_LENGTH} caracteres
-          </p>
-        ) : (
-          <p style={{ margin: 0, fontSize: 13, color: crmTheme.colors.textMuted }}>
-            Laura estructura la interacción y te deja editar cada bloque antes de guardar.
-          </p>
-        )}
+        <textarea
+          id="laura-message"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          rows={3}
+          placeholder={placeholder}
+          disabled={disabled}
+          style={{
+            flex: 1,
+            resize: "none",
+            minHeight: 48,
+            maxHeight: 120,
+            padding: "12px 14px",
+            borderRadius: crmTheme.radius.md,
+            border: `1px solid ${crmTheme.laura.border}`,
+            background: crmTheme.colors.surface,
+            color: crmTheme.laura.textPrimary,
+            font: `400 15px/1.5 ${crmTheme.typography.body}`,
+            outline: "none",
+            boxSizing: "border-box",
+            transition: "border-color 0.15s ease, box-shadow 0.15s ease",
+          }}
+          onFocus={(e) => {
+            e.currentTarget.style.borderColor = crmTheme.laura.primary;
+            e.currentTarget.style.boxShadow = crmTheme.laura.focusRing;
+          }}
+          onBlur={(e) => {
+            e.currentTarget.style.borderColor = crmTheme.laura.border;
+            e.currentTarget.style.boxShadow = "none";
+          }}
+        />
         <button
           type="submit"
           disabled={!canSend}
@@ -106,18 +90,26 @@ export function LauraComposer({
             appearance: "none",
             border: 0,
             borderRadius: crmTheme.radius.md,
-            minHeight: 44,
-            padding: "0 18px",
-            background: !canSend ? crmTheme.colors.borderStrong : crmTheme.colors.primary,
+            width: 44,
+            height: 44,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: canSend ? crmTheme.laura.gradient : "#d4d2e8",
             color: "#ffffff",
-            fontSize: 14,
-            fontWeight: 700,
-            cursor: !canSend ? "not-allowed" : "pointer",
+            cursor: canSend ? "pointer" : "not-allowed",
+            transition: "background 0.15s ease",
+            flexShrink: 0,
           }}
         >
-          Enviar a Laura
+          <Send size={18} />
         </button>
       </div>
+      {showLengthHint && (
+        <p style={{ margin: "6px 0 0", fontSize: 12, color: crmTheme.colors.danger }}>
+          Escribe al menos {MIN_LENGTH} caracteres
+        </p>
+      )}
     </form>
   );
 }
