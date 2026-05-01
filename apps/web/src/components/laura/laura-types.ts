@@ -44,6 +44,11 @@ export interface LauraAgendaItem {
 
 export type LauraAssistantResponse =
   | {
+      mode: "greeting";
+      sessionId: string;
+      message: string;
+    }
+  | {
       mode: "clarification";
       sessionId: string;
       message: string;

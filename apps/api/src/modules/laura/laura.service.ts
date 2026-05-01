@@ -98,6 +98,24 @@ export class LauraService {
         );
       }
 
+      if (seemsLikeGreeting && !pendingClarification) {
+        const greetingResponse: LauraAssistantResponse = {
+          mode: "greeting",
+          sessionId: session.id,
+          message: "¡Hola! 👋 Soy Laura, tu asistente comercial. Contame qué pasó en tu visita, qué pendientes tenés o si querés ver tu agenda.",
+        };
+
+        await this.lauraSessionService.appendAssistantMessage(
+          session.id,
+          LauraMessageKind.report,
+          greetingResponse.message,
+          undefined,
+          tx,
+        );
+
+        return greetingResponse;
+      }
+
       const selectedCustomer = customerResolution?.status === "resolved"
         ? {
           id: customerResolution.customerId,
@@ -447,14 +465,20 @@ export class LauraService {
     const [tasks, visits] = await Promise.all([
       tx.followUpTask.findMany({
         where: {
-          assignedToUserId: userId,
           status: FollowUpTaskStatus.pendiente,
+          OR: [
+            { assignedToUserId: userId },
+            { assignedToUserId: null },
+          ],
         },
       }),
       tx.visit.findMany({
         where: {
-          assignedToUserId: userId,
           status: VisitStatus.programada,
+          OR: [
+            { assignedToUserId: userId },
+            { assignedToUserId: null },
+          ],
         },
       }),
     ]);
