@@ -7,6 +7,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { crmTheme } from "@/components/ui/theme";
 import { CustomerHistorySection } from "@/components/customers/customer-history-section";
 import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
+import { LauraContextLauncher } from "@/components/laura/laura-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -196,6 +197,12 @@ export default async function CustomerDetailPage({
         quotesCount={customer.quotes.length}
         ordersCount={customer.orders.length}
         billingRequestsCount={customer.billingRequests.length}
+      />
+
+      <LauraContextLauncher
+        contextType="customer"
+        contextEntityId={customer.id}
+        contextLabel={customer.displayName}
       />
 
       <DetailSection

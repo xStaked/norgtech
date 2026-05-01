@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { LauraContextLauncher } from "@/components/laura/laura-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
@@ -132,6 +133,14 @@ export default async function OpportunityDetailPage({
             <Info label="Motivo de pérdida" value={opportunity.lostReason} />
           )}
         </div>
+      </div>
+
+      <div style={{ marginTop: "1.25rem" }}>
+        <LauraContextLauncher
+          contextType="opportunity"
+          contextEntityId={opportunity.id}
+          contextLabel={opportunity.title}
+        />
       </div>
     </div>
   );

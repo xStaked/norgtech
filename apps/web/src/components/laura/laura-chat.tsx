@@ -17,6 +17,12 @@ import type {
   LauraSessionResponse,
 } from "./laura-types";
 
+interface LauraChatInitialContext {
+  contextType: "customer" | "opportunity";
+  contextEntityId: string;
+  contextLabel?: string | null;
+}
+
 function createClientMessage(content: string): LauraMessageItem {
   return {
     id: `user-${crypto.randomUUID()}`,
@@ -59,7 +65,11 @@ function extractDraftProposal(session: LauraSessionResponse): LauraDraftProposal
   };
 }
 
-export function LauraChat() {
+export function LauraChat({
+  initialContext,
+}: {
+  initialContext?: LauraChatInitialContext | null;
+}) {
   const [messages, setMessages] = useState<LauraMessageItem[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [draftProposal, setDraftProposal] = useState<LauraDraftProposal | null>(null);
@@ -98,6 +108,8 @@ export function LauraChat() {
         body: JSON.stringify({
           sessionId: sessionId ?? undefined,
           content,
+          contextType: sessionId ? undefined : initialContext?.contextType,
+          contextEntityId: sessionId ? undefined : initialContext?.contextEntityId,
         }),
       });
 
@@ -212,6 +224,22 @@ export function LauraChat() {
             alignContent: "start",
           }}
         >
+          {initialContext ? (
+            <div
+              style={{
+                padding: "12px 14px",
+                borderRadius: crmTheme.radius.md,
+                background: "rgba(45, 108, 223, 0.08)",
+                color: crmTheme.colors.info,
+                fontSize: 13,
+                lineHeight: 1.5,
+              }}
+            >
+              Laura arrancará con el contexto sugerido de{" "}
+              <strong>{initialContext.contextLabel ?? initialContext.contextEntityId}</strong>.
+              Si tu reporte era sobre otra cuenta, igual puedes escribirlo libremente.
+            </div>
+          ) : null}
           {notice ? (
             <div
               style={{
