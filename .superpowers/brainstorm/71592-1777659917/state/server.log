@@ -1,0 +1,14 @@
+{"type":"server-started","port":50020,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:50020","screen_dir":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content","state_dir":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/state"}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/layout-options.html"}
+{"source":"user-event","type":"click","text":"C\n    \n      Tabs / Pestañas\n      Tab \"Conversación\" y tab \"Borrador\". Solo una visible a la vez. Toggle rápido entre ambas.","choice":"c","id":null,"timestamp":1777660162823}
+{"source":"user-event","type":"click","text":"C\n    \n      Tabs / Pestañas\n      Tab \"Conversación\" y tab \"Borrador\". Solo una visible a la vez. Toggle rápido entre ambas.","choice":"c","id":null,"timestamp":1777660163706}
+{"source":"user-event","type":"click","text":"B\n    \n      Propuestas Inline\n      La propuesta aparece como un mensaje especial dentro del flujo del chat. Todo en una sola columna.","choice":"b","id":null,"timestamp":1777660195438}
+{"source":"user-event","type":"click","text":"C\n    \n      Tabs / Pestañas\n      Tab \"Conversación\" y tab \"Borrador\". Solo una visible a la vez. Toggle rápido entre ambas.","choice":"c","id":null,"timestamp":1777660198211}
+{"source":"user-event","type":"click","text":"B\n    \n      Propuestas Inline\n      La propuesta aparece como un mensaje especial dentro del flujo del chat. Todo en una sola columna.","choice":"b","id":null,"timestamp":1777660200812}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/waiting-1.html"}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/identity.html"}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/waiting-2.html"}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/proposal-blocks.html"}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/waiting-3.html"}
+{"type":"screen-added","file":"/Users/xstaked/Desktop/projects/norgtech-CRM/.superpowers/brainstorm/71592-1777659917/content/empty-state.html"}
+{"type":"server-stopped","reason":"idle timeout"}

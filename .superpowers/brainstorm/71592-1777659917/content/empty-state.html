@@ -1,0 +1,57 @@
+<h2>Estado Vacío — Primera Impresión</h2>
+<p class="subtitle">¿Qué ve el usuario cuando abre Laura por primera vez?</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Opción A — Welcome Card + Quick Actions</div>
+    <div class="mockup-body" style="background:#f8f6ff;padding:24px;display:flex;flex-direction:column;align-items:center;gap:20px;min-height:300px;">
+      <div style="width:64px;height:64px;border-radius:20px;background:linear-gradient(135deg,#6366f1,#a78bfa);display:flex;align-items:center;justify-content:center;box-shadow:0 8px 24px rgba(99,102,241,0.25);">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 9h8"/><path d="M8 13h6"/></svg>
+      </div>
+      <div style="text-align:center;">
+        <h3 style="margin:0 0 4px;color:#1a1a2e;font-size:18px;">Hola, soy Laura</h3>
+        <p style="margin:0;color:#6b6b80;font-size:14px;max-width:280px;">Tu asistente comercial. Contame qué pasó con un cliente y yo armo el registro por vos.</p>
+      </div>
+      <div style="width:100%;display:flex;flex-direction:column;gap:8px;max-width:320px;">
+        <span style="font-size:11px;font-weight:700;color:#8b8b9e;text-transform:uppercase;letter-spacing:0.5px;">Probá con un ejemplo:</span>
+        <button style="padding:10px 14px;background:#fff;border:1px solid #e5e1ff;border-radius:10px;text-align:left;font-size:13px;color:#4b4b60;cursor:pointer;">Visité a Acme, confirmaron interés y piden nueva visita</button>
+        <button style="padding:10px 14px;background:#fff;border:1px solid #e5e1ff;border-radius:10px;text-align:left;font-size:13px;color:#4b4b60;cursor:pointer;">Tengo pendiente llamar a Pérez sobre la propuesta</button>
+        <button style="padding:10px 14px;background:#fff;border:1px solid #e5e1ff;border-radius:10px;text-align:left;font-size:13px;color:#4b4b60;cursor:pointer;">¿Qué tengo pendiente hoy?</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Opción B — Minimal + Composer Focus</div>
+    <div class="mockup-body" style="background:#f8f6ff;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:300px;">
+      <div style="text-align:center;">
+        <h3 style="margin:0 0 8px;color:#1a1a2e;font-size:20px;">Empezá a chatear con Laura</h3>
+        <p style="margin:0;color:#6b6b80;font-size:14px;max-width:260px;">Escribí como hablarías con un coordinador comercial.</p>
+      </div>
+      <div style="width:100%;max-width:360px;background:#fff;border:2px solid #6366f1;border-radius:14px;padding:14px;box-shadow:0 4px 16px rgba(99,102,241,0.12);">
+        <div style="height:60px;background:#f8f7ff;border-radius:8px;margin-bottom:10px;"></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span style="font-size:11px;color:#8b8b9e;">Mínimo 5 caracteres</span>
+          <div style="width:80px;height:36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);border-radius:8px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options" style="margin-top:16px;">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Welcome + Ejemplos Clickeables</h3>
+      <p>Avatar grande, saludo, y 3 ejemplos pre-escritos que el usuario puede clickar para empezar rápido.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Minimal + Composer Destacado</h3>
+      <p>Título corto y el input de texto como protagonista con borde púrpura. Sin distracciones.</p>
+    </div>
+  </div>
+</div>
