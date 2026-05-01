@@ -59,7 +59,7 @@ export function LauraToggle({ checked, onChange, disabled, label }: LauraToggleP
           }}
         />
       </div>
-      Guardar
+      {label}
     </label>
   );
 }
