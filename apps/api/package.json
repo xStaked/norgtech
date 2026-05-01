@@ -10,13 +10,18 @@
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
+    "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.6",
     "@nestjs/platform-express": "^11.1.6",
+    "@nestjs/throttler": "^6.5.0",
     "@prisma/client": "^6.7.0",
     "bcryptjs": "^3.0.2",
+    "chrono-node": "^2.9.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
+    "jaro-winkler": "^0.2.8",
     "jsonwebtoken": "^9.0.2",
+    "openai": "^6.35.0",
     "pdf-lib": "^1.17.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2"
