@@ -86,6 +86,10 @@ export function LauraChat({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<LauraProposalConfirmationResponse | null>(null);
+  const [clarificationOptions, setClarificationOptions] = useState<{
+    type: "customer" | "opportunity" | "date" | "action";
+    options?: Array<{ id: string; label: string }>;
+  } | null>(null);
 
   async function loadSession(nextSessionId: string) {
     const response = await apiFetchClient(
@@ -109,6 +113,7 @@ export function LauraChat({
     setError(null);
     setNotice(null);
     setConfirmation(null);
+    setClarificationOptions(null);
     setMessages((current) => [...current, clientMessage]);
 
     try {
@@ -152,6 +157,12 @@ export function LauraChat({
 
       if (body.mode === "agenda") {
         setAgendaItems(body.agenda.items);
+      }
+
+      if (body.mode === "clarification") {
+        setClarificationOptions(body.clarification);
+      } else {
+        setClarificationOptions(null);
       }
 
       await loadSession(body.sessionId);
@@ -300,6 +311,43 @@ export function LauraChat({
             </div>
           ) : null}
           <LauraMessageList messages={messages} busy={busy} onRetry={handleRetry} />
+          {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
+            <div
+              style={{
+                display: "grid",
+                gap: 8,
+                padding: "8px 0",
+              }}
+            >
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: crmTheme.colors.textSubtle }}>
+                Selecciona una opción:
+              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {clarificationOptions.options.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleSend(option.label)}
+                    style={{
+                      appearance: "none",
+                      border: `1px solid ${crmTheme.colors.primary}`,
+                      borderRadius: crmTheme.radius.md,
+                      padding: "8px 16px",
+                      background: "#fff",
+                      color: crmTheme.colors.primary,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: busy ? "not-allowed" : "pointer",
+                      transition: "background 0.15s",
+                    }}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {agendaItems.length > 0 && <LauraAgendaCard items={agendaItems} />}
         </div>
 

@@ -63,21 +63,28 @@ export class LauraService {
       );
 
       const clarificationResolution = await this.resolveClarificationReply(dto.content, pendingClarification);
-      const customerResolution = clarificationResolution
-        ?? await this.lauraContextResolverService.resolveCustomerFromText(dto.content, tx);
 
-      if (pendingClarification && !clarificationResolution && customerResolution.status === "unresolved") {
+      const seemsLikeAgendaQuery = this.looksLikeAgendaQuery(dto.content);
+      const seemsLikeGreeting = this.looksLikeGreeting(dto.content);
+
+      let customerResolution: Awaited<ReturnType<typeof this.lauraContextResolverService.resolveCustomerFromText>> | null = null;
+
+      if (!seemsLikeAgendaQuery && !seemsLikeGreeting && !clarificationResolution) {
+        customerResolution = await this.lauraContextResolverService.resolveCustomerFromText(dto.content, tx);
+      }
+
+      if (pendingClarification && !clarificationResolution && (!customerResolution || customerResolution.status === "unresolved")) {
         return this.createClarificationResponse(
           session.id,
           pendingClarification.payload?.sourceMessage?.content ?? dto.content,
           pendingClarification.payload?.clarification?.options ?? [],
           "Necesito que elijas una de las opciones para continuar.",
           tx,
-          "customer",
+          pendingClarification.payload?.clarification?.type ?? "customer",
         );
       }
 
-      if (customerResolution.status === "ambiguous") {
+      if (customerResolution?.status === "ambiguous") {
         return this.createClarificationResponse(
           session.id,
           pendingClarification?.payload?.sourceMessage?.content ?? dto.content,
@@ -91,7 +98,7 @@ export class LauraService {
         );
       }
 
-      const selectedCustomer = customerResolution.status === "resolved"
+      const selectedCustomer = customerResolution?.status === "resolved"
         ? {
           id: customerResolution.customerId,
           label: customerResolution.label,
@@ -653,6 +660,30 @@ export class LauraService {
     }
 
     return null;
+  }
+
+  private looksLikeAgendaQuery(text: string): boolean {
+    const normalized = text
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .trim();
+
+    const agendaKeywords = ["agenda", "pendientes", "pendiente", "tareas", "visitas", "semana", "hoy", "que tengo", "qué tengo", "programado"];
+    return agendaKeywords.some((keyword) => normalized.includes(keyword));
+  }
+
+  private looksLikeGreeting(text: string): boolean {
+    const normalized = text
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase()
+      .trim();
+
+    if (normalized.split(/\s+/).length > 6) return false;
+
+    const greetings = ["hola", "buenos dias", "buenas tardes", "buenas noches", "hey", "hi", "que tal", "qué tal"];
+    return greetings.some((greeting) => normalized === greeting || normalized.startsWith(`${greeting} `));
   }
 
   private async assertSessionOwner(userId: string, sessionId: string, client?: Prisma.TransactionClient) {

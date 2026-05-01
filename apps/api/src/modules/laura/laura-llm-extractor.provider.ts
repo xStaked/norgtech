@@ -39,7 +39,7 @@ export class LauraLlmExtractorProvider implements LauraExtractorProvider {
     const apiKey = this.configService.get<string>(config.envKey);
     const baseUrl = this.configService.get<string>(config.envBaseUrl) ?? config.fallbackBaseUrl;
     this.model = this.configService.get<string>("LAURA_LLM_MODEL") ?? config.defaultModel;
-    this.timeoutMs = this.configService.get<number>("LAURA_LLM_TIMEOUT_MS") ?? 30000;
+    this.timeoutMs = Number(this.configService.get<string>("LAURA_LLM_TIMEOUT_MS") ?? "30000");
 
     if (!apiKey) {
       this.client = null;

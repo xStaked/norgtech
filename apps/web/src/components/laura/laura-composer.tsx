@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { crmTheme } from "@/components/ui/theme";
 
 const MIN_LENGTH = 5;
@@ -21,7 +21,11 @@ export function LauraComposer({
   onSubmit: (value: string) => Promise<void>;
 }) {
   const [value, setValue] = useState("");
-  const [placeholder] = useState(() => placeholderExamples[Math.floor(Math.random() * placeholderExamples.length)]);
+  const [placeholder, setPlaceholder] = useState(placeholderExamples[0]);
+
+  useEffect(() => {
+    setPlaceholder(placeholderExamples[Math.floor(Math.random() * placeholderExamples.length)]);
+  }, []);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
