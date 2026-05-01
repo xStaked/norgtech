@@ -1,6 +1,7 @@
 import { BadRequestException, Inject, Injectable } from "@nestjs/common";
 import { FollowUpTaskType, OpportunityStage } from "@prisma/client";
 import { LAURA_SYSTEM_PROMPT } from "./prompts/laura-system-prompt";
+import { parseRelativeDate, formatIsoDate } from "./laura-date-parser";
 
 export interface LauraExtractionResult {
   intent: "report" | "agenda_query";
@@ -41,7 +42,7 @@ export class DeterministicLauraExtractorProvider implements LauraExtractorProvid
 
     const normalized = normalize(input.message);
     const intent = isAgendaQuery(normalized) ? "agenda_query" : "report";
-    const followUpDate = inferFollowUpDate(normalized);
+    const followUpDate = parseRelativeDate(input.message)?.toISOString() ?? formatIsoDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000));
     const stage = inferOpportunityStage(normalized);
     const taskType = normalized.includes("visita") ? FollowUpTaskType.reunion : FollowUpTaskType.llamada;
     const objections = extractObjections(input.message);
@@ -211,17 +212,7 @@ function inferOpportunityStage(normalized: string) {
   return OpportunityStage.contacto;
 }
 
-function inferFollowUpDate(normalized: string) {
-  if (normalized.includes("viernes")) {
-    return "2026-05-01T15:00:00.000Z";
-  }
 
-  if (normalized.includes("proxima semana") || normalized.includes("proxima")) {
-    return "2026-05-04T15:00:00.000Z";
-  }
-
-  return "2026-05-01T15:00:00.000Z";
-}
 
 function inferOpportunityTitle(message: string) {
   return message.toLowerCase().includes("propuesta")
