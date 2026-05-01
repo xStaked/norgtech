@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
 
 export function ObjectionsInput({
@@ -9,7 +10,7 @@ export function ObjectionsInput({
   onChange,
 }: {
   objections: string[];
-  disabled: boolean;
+  disabled?: boolean;
   onChange: (objections: string[]) => void;
 }) {
   const [inputValue, setInputValue] = useState("");
@@ -42,23 +43,24 @@ export function ObjectionsInput({
         alignItems: "center",
         minHeight: 42,
         padding: "6px 10px",
-        borderRadius: crmTheme.radius.md,
-        border: `1px solid ${crmTheme.colors.borderStrong}`,
-        background: crmTheme.colors.surface,
+        borderRadius: crmTheme.radius.sm,
+        border: `1px solid ${crmTheme.laura.border}`,
+        background: crmTheme.laura.soft,
       }}
     >
       {objections.map((objection, index) => (
         <span
-          key={objection}
+          key={`${objection}-${index}`}
           style={{
             display: "inline-flex",
             alignItems: "center",
             gap: 4,
-            padding: "2px 8px",
+            padding: "2px 6px 2px 10px",
             borderRadius: crmTheme.radius.pill,
-            background: crmTheme.colors.surfaceMuted,
+            background: crmTheme.laura.primary,
+            color: "#ffffff",
             fontSize: 13,
-            color: crmTheme.colors.text,
+            fontWeight: 500,
           }}
         >
           {objection}
@@ -70,15 +72,16 @@ export function ObjectionsInput({
                 appearance: "none",
                 border: 0,
                 background: "none",
-                color: crmTheme.colors.textMuted,
+                color: "rgba(255,255,255,0.7)",
                 cursor: "pointer",
-                fontSize: 14,
-                lineHeight: 1,
+                display: "flex",
+                alignItems: "center",
                 padding: 0,
+                marginLeft: 2,
               }}
               aria-label={`Eliminar objeción: ${objection}`}
             >
-              ×
+              <X size={14} />
             </button>
           )}
         </span>
@@ -97,7 +100,7 @@ export function ObjectionsInput({
           outline: 0,
           background: "transparent",
           font: `400 14px/1.4 ${crmTheme.typography.body}`,
-          color: crmTheme.colors.text,
+          color: crmTheme.laura.textPrimary,
         }}
       />
     </div>
