@@ -6,6 +6,7 @@ import { OpportunitiesService } from "../opportunities/opportunities.service";
 import { VisitsService } from "../visits/visits.service";
 import { ConfirmProposalDto } from "./dto/confirm-proposal.dto";
 import { LauraStoredProposalPayload } from "./laura.types";
+import { formatIsoDate } from "./laura-date-parser";
 
 @Injectable()
 export class LauraPersistenceService {
@@ -106,7 +107,21 @@ export class LauraPersistenceService {
       discarded.push("followUp");
     }
 
-    if (blocks.task) {
+    if (blocks.task?.enabled && customerId) {
+      const task = await this.followUpTasksService.createFromLaura(
+        user,
+        {
+          customerId,
+          opportunityId: opportunityId ?? undefined,
+          title: blocks.task.title,
+          dueAt: blocks.task.dueAt ?? blocks.followUp?.dueAt ?? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
+          type: "llamada",
+        },
+        client,
+      );
+      saved.push("task");
+      createdIds.task = task.id;
+    } else if (blocks.task) {
       discarded.push("task");
     }
 

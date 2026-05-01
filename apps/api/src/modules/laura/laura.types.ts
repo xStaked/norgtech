@@ -55,6 +55,8 @@ export interface LauraAgendaPayload {
     id: string;
     type: "visit" | "follow_up_task";
     label: string;
+    scheduledAt?: string;
+    priorityGroup?: number;
   }>;
 }
 

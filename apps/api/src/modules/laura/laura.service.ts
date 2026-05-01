@@ -73,6 +73,7 @@ export class LauraService {
           pendingClarification.payload?.clarification?.options ?? [],
           "Necesito que elijas una de las opciones para continuar.",
           tx,
+          "customer",
         );
       }
 
@@ -86,6 +87,7 @@ export class LauraService {
           })),
           `Encontré varios clientes que coinciden con ${customerResolution.query || "cliente"}. ¿Cuál es?`,
           tx,
+          "customer",
         );
       }
 
@@ -395,13 +397,14 @@ export class LauraService {
     options: LauraClarificationOption[],
     message: string,
     tx: Prisma.TransactionClient,
+    clarificationType: "customer" | "opportunity" | "date" | "action" = "customer",
   ): Promise<LauraAssistantResponse> {
     const response: LauraAssistantResponse = {
       mode: "clarification",
       sessionId,
       message,
       clarification: {
-        type: "customer",
+        type: clarificationType,
         options,
       },
     };
@@ -428,6 +431,12 @@ export class LauraService {
     userId: string,
     tx: Prisma.TransactionClient,
   ): Promise<LauraAgendaPayload> {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const weekEnd = new Date(todayStart);
+    weekEnd.setDate(weekEnd.getDate() + (7 - weekEnd.getDay()));
+
     const [tasks, visits] = await Promise.all([
       tx.followUpTask.findMany({
         where: {
@@ -444,34 +453,47 @@ export class LauraService {
     ]);
 
     const items = [
-      ...tasks.map((task) => ({
-        id: task.id,
-        type: "follow_up_task" as const,
-        label: task.title,
-        scheduledAt: task.dueAt,
-        priorityGroup: 0,
-      })),
-      ...visits.map((visit) => ({
-        id: visit.id,
-        type: "visit" as const,
-        label: visit.summary?.trim() || visit.nextStep?.trim() || "Visita programada",
-        scheduledAt: visit.scheduledAt,
-        priorityGroup: 1,
-      })),
+      ...tasks.map((task) => {
+        const dueAt = task.dueAt;
+        let priorityGroup: number;
+        if (dueAt < todayStart) priorityGroup = 0;
+        else if (dueAt >= todayStart && dueAt <= todayEnd) priorityGroup = 1;
+        else if (dueAt > todayEnd && dueAt <= weekEnd) priorityGroup = 2;
+        else priorityGroup = 3;
+
+        return {
+          id: task.id,
+          type: "follow_up_task" as const,
+          label: task.title,
+          scheduledAt: dueAt.toISOString(),
+          priorityGroup,
+        };
+      }),
+      ...visits.map((visit) => {
+        const scheduledAt = visit.scheduledAt;
+        let priorityGroup: number;
+        if (scheduledAt < todayStart) priorityGroup = 0;
+        else if (scheduledAt >= todayStart && scheduledAt <= todayEnd) priorityGroup = 2;
+        else if (scheduledAt > todayEnd && scheduledAt <= weekEnd) priorityGroup = 2;
+        else priorityGroup = 3;
+
+        return {
+          id: visit.id,
+          type: "visit" as const,
+          label: visit.summary?.trim() || visit.nextStep?.trim() || "Visita programada",
+          scheduledAt: scheduledAt.toISOString(),
+          priorityGroup,
+        };
+      }),
     ]
       .sort((left, right) => {
-        const byDate = left.scheduledAt.getTime() - right.scheduledAt.getTime();
-        if (byDate !== 0) {
-          return byDate;
+        const byPriority = left.priorityGroup - right.priorityGroup;
+        if (byPriority !== 0) {
+          return byPriority;
         }
 
-        return left.priorityGroup - right.priorityGroup;
-      })
-      .map(({ id, type, label }) => ({
-        id,
-        type,
-        label,
-      }));
+        return left.scheduledAt.localeCompare(right.scheduledAt);
+      });
 
     return { items };
   }
