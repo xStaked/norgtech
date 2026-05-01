@@ -1,26 +1,33 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
 import {
+  FollowUpTaskStatus,
   LauraMessageKind,
   LauraProposalStatus,
   Prisma,
+  VisitStatus,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { LauraContextResolverService } from "./laura-context-resolver.service";
+import { LauraLlmService } from "./laura-llm.service";
+import { LauraPersistenceService } from "./laura-persistence.service";
 import { ConfirmProposalDto } from "./dto/confirm-proposal.dto";
 import { CreateMessageDto } from "./dto/create-message.dto";
 import { QuerySessionDto } from "./dto/query-session.dto";
 import { LauraSessionService } from "./laura-session.service";
 import {
+  LauraAgendaPayload,
   LauraAssistantResponse,
   LauraClarificationOption,
   LauraProposalConfirmationResponse,
   LauraProposalPayload,
+  LauraStoredProposalPayload,
   LauraSessionResponse,
 } from "./laura.types";
 
@@ -34,6 +41,8 @@ export class LauraService {
     private readonly prisma: PrismaService,
     private readonly lauraSessionService: LauraSessionService,
     private readonly lauraContextResolverService: LauraContextResolverService,
+    private readonly lauraLlmService: LauraLlmService,
+    private readonly lauraPersistenceService: LauraPersistenceService,
   ) {}
 
   async handleMessage(
@@ -43,6 +52,8 @@ export class LauraService {
     return this.prisma.$transaction(async (tx) => {
       const session = await this.lauraSessionService.ensureSession(user.id, dto, tx);
       const pendingClarification = await this.lauraSessionService.getLatestPendingClarification(session.id, tx);
+      const recentMessages = await this.lauraSessionService.getRecentMessages(session.id, 6, tx);
+
       const userMessage = await this.lauraSessionService.appendUserMessage(
         session.id,
         LauraMessageKind.report,
@@ -87,13 +98,55 @@ export class LauraService {
 
       const proposalSourceContent = clarificationResolution?.sourceContent
         ?? this.resolveProposalSourceContent(dto.content, pendingClarification, selectedCustomer?.id);
-      const proposalPayload = this.buildProposalPayload(proposalSourceContent, selectedCustomer);
+
+      const extraction = await this.lauraLlmService.extract({
+        message: proposalSourceContent,
+        recentMessages: recentMessages.map((message) => message.content),
+        contextSummary: selectedCustomer?.label,
+      });
+
+      if (extraction.intent === "agenda_query") {
+        const agenda = await this.buildAgendaPayload(user.id, tx);
+        const response: LauraAssistantResponse = {
+          mode: "agenda",
+          sessionId: session.id,
+          message: agenda.items.length > 0
+            ? "Estas son tus prioridades comerciales actuales."
+            : "No encontré pendientes activos en tu agenda.",
+          agenda,
+        };
+
+        await this.lauraSessionService.appendAssistantMessage(
+          session.id,
+          LauraMessageKind.agenda_query,
+          response.message,
+          toJsonValue({
+            agenda: response.agenda,
+          }),
+          tx,
+        );
+
+        return response;
+      }
+
+      const proposalPayload = this.buildProposalPayload(
+        proposalSourceContent,
+        extraction,
+        selectedCustomer,
+        session.contextType === "opportunity" ? session.contextEntityId ?? undefined : undefined,
+      );
+      const storedProposalPayload = this.buildStoredProposalPayload(
+        proposalPayload,
+        selectedCustomer,
+        session.contextType === "opportunity" ? session.contextEntityId ?? undefined : undefined,
+      );
+
       const proposal = await tx.lauraProposal.create({
         data: {
           sessionId: session.id,
           messageId: userMessage.id,
           status: LauraProposalStatus.draft,
-          payload: toJsonValue(proposalPayload),
+          payload: toJsonValue(storedProposalPayload),
         },
       });
 
@@ -135,6 +188,11 @@ export class LauraService {
       }
 
       await this.assertSessionOwner(user.id, proposal.sessionId, tx);
+      const storedProposal = proposal.payload as unknown as LauraStoredProposalPayload;
+      const confirmedProposal = this.reconcileConfirmedProposal(
+        storedProposal,
+        dto.proposal,
+      );
 
       const updatedCount = await tx.lauraProposal.updateMany({
         where: {
@@ -143,7 +201,7 @@ export class LauraService {
         },
         data: {
           status: LauraProposalStatus.confirmed,
-          payload: toJsonValue(dto.proposal),
+          payload: toJsonValue(confirmedProposal),
         },
       });
 
@@ -151,18 +209,22 @@ export class LauraService {
         throw new ConflictException("Laura proposal has already been finalized");
       }
 
-      const updatedProposal = await tx.lauraProposal.findUnique({
-        where: { id: proposalId },
-      });
-
-      if (!updatedProposal) {
-        throw new NotFoundException("Laura proposal not found");
-      }
+      const persistence = await this.lauraPersistenceService.persistApprovedBlocks(
+        user,
+        storedProposal,
+        {
+          proposal: confirmedProposal,
+        },
+        tx,
+      );
 
       return {
         proposalId,
         status: "confirmed",
-        proposal: updatedProposal.payload as unknown as LauraProposalPayload,
+        proposal: confirmedProposal,
+        saved: persistence.saved,
+        discarded: persistence.discarded,
+        createdIds: persistence.createdIds,
       };
     });
   }
@@ -211,19 +273,120 @@ export class LauraService {
 
   private buildProposalPayload(
     content: string,
+    extraction: Awaited<ReturnType<LauraLlmService["extract"]>>,
     selectedCustomer?: LauraClarificationOption | null,
+    opportunityId?: string,
   ): LauraProposalPayload {
+    const canPersist = Boolean(selectedCustomer?.id);
+
     return {
-      customer: {
-        status: selectedCustomer ? "resolved" : "missing",
-        selectedOption: selectedCustomer ?? undefined,
+      blocks: {
+        interaction: {
+          enabled: canPersist,
+          summary: extraction.interactionSummary ?? content.trim(),
+          rawMessage: content.trim(),
+        },
+        opportunity: {
+          enabled: canPersist,
+          opportunityId,
+          createNew: !opportunityId && Boolean(selectedCustomer?.id),
+          title: extraction.suggestedOpportunityTitle,
+          stage: extraction.suggestedOpportunityStage,
+        },
+        followUp: {
+          enabled: canPersist,
+          opportunityId,
+          title: extraction.suggestedNextStep ?? "Dar seguimiento comercial",
+          dueAt: extraction.suggestedFollowUpDate ?? "2026-05-01T15:00:00.000Z",
+          type: extraction.taskType ?? "llamada",
+        },
+        task: {
+          enabled: canPersist,
+          title: extraction.suggestedTaskTitle ?? "Registrar seguimiento comercial",
+          dueAt: extraction.suggestedFollowUpDate,
+          notes: extraction.contactName,
+        },
+        signals: {
+          enabled: canPersist,
+          objections: extraction.signals?.objections ?? [],
+          risk: extraction.signals?.risk,
+          buyingIntent: extraction.signals?.buyingIntent,
+        },
       },
-      summary: content.trim(),
-      suggestedActions: [
-        "Programar visita comercial",
-        "Preparar propuesta para alimento",
-      ],
     };
+  }
+
+  private buildStoredProposalPayload(
+    proposal: LauraProposalPayload,
+    selectedCustomer?: LauraClarificationOption | null,
+    opportunityId?: string,
+  ): LauraStoredProposalPayload {
+    return {
+      ...proposal,
+      blocks: {
+        ...proposal.blocks,
+        opportunity: proposal.blocks.opportunity,
+        followUp: proposal.blocks.followUp,
+      },
+      internal: {
+        customerId: selectedCustomer?.id,
+        customerLabel: selectedCustomer?.label,
+        opportunityId,
+      },
+    };
+  }
+
+  private reconcileConfirmedProposal(
+    storedProposal: LauraStoredProposalPayload,
+    confirmedProposal: LauraProposalPayload,
+  ): LauraProposalPayload {
+    const storedBlocks = storedProposal.blocks;
+    const confirmedBlocks = confirmedProposal.blocks;
+
+    this.assertImmutableTarget(
+      storedBlocks.opportunity?.opportunityId,
+      confirmedBlocks.opportunity?.opportunityId,
+    );
+    this.assertImmutableTarget(
+      storedBlocks.opportunity?.createNew,
+      confirmedBlocks.opportunity?.createNew,
+    );
+    this.assertImmutableTarget(
+      storedBlocks.opportunity?.stage,
+      confirmedBlocks.opportunity?.stage,
+    );
+    this.assertImmutableTarget(
+      storedBlocks.followUp?.opportunityId,
+      confirmedBlocks.followUp?.opportunityId,
+    );
+
+    return {
+      blocks: {
+        interaction: confirmedBlocks.interaction,
+        opportunity: confirmedBlocks.opportunity
+          ? {
+            ...confirmedBlocks.opportunity,
+            opportunityId: storedBlocks.opportunity?.opportunityId,
+            createNew: storedBlocks.opportunity?.createNew,
+            stage: storedBlocks.opportunity?.stage,
+          }
+          : confirmedBlocks.opportunity,
+        followUp: confirmedBlocks.followUp
+          ? {
+            ...confirmedBlocks.followUp,
+            opportunityId: storedBlocks.followUp?.opportunityId,
+          }
+          : confirmedBlocks.followUp,
+        task: confirmedBlocks.task,
+        signals: confirmedBlocks.signals,
+      },
+    };
+  }
+
+  private assertImmutableTarget<T>(stored: T, confirmed: T) {
+    if (stored !== confirmed) {
+      throw new BadRequestException("Laura confirmation contains invalid target changes");
+    }
   }
 
   private async createClarificationResponse(
@@ -259,6 +422,58 @@ export class LauraService {
     );
 
     return response;
+  }
+
+  private async buildAgendaPayload(
+    userId: string,
+    tx: Prisma.TransactionClient,
+  ): Promise<LauraAgendaPayload> {
+    const [tasks, visits] = await Promise.all([
+      tx.followUpTask.findMany({
+        where: {
+          assignedToUserId: userId,
+          status: FollowUpTaskStatus.pendiente,
+        },
+      }),
+      tx.visit.findMany({
+        where: {
+          assignedToUserId: userId,
+          status: VisitStatus.programada,
+        },
+      }),
+    ]);
+
+    const items = [
+      ...tasks.map((task) => ({
+        id: task.id,
+        type: "follow_up_task" as const,
+        label: task.title,
+        scheduledAt: task.dueAt,
+        priorityGroup: 0,
+      })),
+      ...visits.map((visit) => ({
+        id: visit.id,
+        type: "visit" as const,
+        label: visit.summary?.trim() || visit.nextStep?.trim() || "Visita programada",
+        scheduledAt: visit.scheduledAt,
+        priorityGroup: 1,
+      })),
+    ]
+      .sort((left, right) => {
+        const byDate = left.scheduledAt.getTime() - right.scheduledAt.getTime();
+        if (byDate !== 0) {
+          return byDate;
+        }
+
+        return left.priorityGroup - right.priorityGroup;
+      })
+      .map(({ id, type, label }) => ({
+        id,
+        type,
+        label,
+      }));
+
+    return { items };
   }
 
   private async resolveClarificationReply(

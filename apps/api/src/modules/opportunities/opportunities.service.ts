@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { OpportunityStage } from "@prisma/client";
+import { OpportunityStage, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -20,33 +20,7 @@ export class OpportunitiesService {
   ) {}
 
   async create(user: AuthUser, dto: CreateOpportunityDto) {
-    await this.assertCustomerExists(dto.customerId);
-
-    return this.prisma.$transaction(async (tx) => {
-      const opportunity = await tx.opportunity.create({
-        data: {
-          customerId: dto.customerId,
-          title: dto.title,
-          stage: dto.stage,
-          estimatedValue: dto.estimatedValue,
-          createdBy: user.id,
-          updatedBy: user.id,
-        },
-      });
-
-      await this.auditService.record(
-        {
-          entityType: "Opportunity",
-          entityId: opportunity.id,
-          action: "opportunity.created",
-          actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(opportunity)),
-        },
-        tx,
-      );
-
-      return opportunity;
-    });
+    return this.prisma.$transaction((tx) => this.createRecord(user, dto, tx));
   }
 
   async updateStage(
@@ -54,58 +28,32 @@ export class OpportunitiesService {
     opportunityId: string,
     dto: UpdateOpportunityStageDto,
   ) {
-    return this.prisma.$transaction(async (tx) => {
-      const opportunity = await tx.opportunity.findUnique({
-        where: { id: opportunityId },
-      });
+    return this.prisma.$transaction((tx) => this.updateStageRecord(user, opportunityId, dto.stage, tx));
+  }
 
-      if (!opportunity) {
-        throw new NotFoundException("Opportunity not found");
-      }
+  createFromLaura(
+    user: AuthUser,
+    input: Pick<CreateOpportunityDto, "customerId" | "title" | "stage">,
+    client?: Prisma.TransactionClient,
+  ) {
+    if (client) {
+      return this.createRecord(user, input, client);
+    }
 
-      if (!this.isTransitionAllowed(opportunity.stage, dto.stage)) {
-        throw new BadRequestException("Invalid opportunity stage transition");
-      }
+    return this.create(user, input);
+  }
 
-      const updatedCount = await tx.opportunity.updateMany({
-        where: {
-          id: opportunityId,
-          stage: opportunity.stage,
-        },
-        data: {
-          stage: dto.stage,
-          updatedBy: user.id,
-        },
-      });
+  updateStageFromLaura(
+    user: AuthUser,
+    opportunityId: string,
+    stage: OpportunityStage,
+    client?: Prisma.TransactionClient,
+  ) {
+    if (client) {
+      return this.updateStageRecord(user, opportunityId, stage, client);
+    }
 
-      if (updatedCount.count !== 1) {
-        throw new ConflictException(
-          "Opportunity stage changed before update",
-        );
-      }
-
-      const updatedOpportunity = await tx.opportunity.findUnique({
-        where: { id: opportunityId },
-      });
-
-      if (!updatedOpportunity) {
-        throw new NotFoundException("Opportunity not found");
-      }
-
-      await this.auditService.record(
-        {
-          entityType: "Opportunity",
-          entityId: updatedOpportunity.id,
-          action: "opportunity.stage_changed",
-          actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(opportunity)),
-          nextState: JSON.parse(JSON.stringify(updatedOpportunity)),
-        },
-        tx,
-      );
-
-      return updatedOpportunity;
-    });
+    return this.updateStage(user, opportunityId, { stage });
   }
 
   private async assertCustomerExists(customerId: string) {
@@ -137,5 +85,93 @@ export class OpportunitiesService {
     nextStage: OpportunityStage,
   ) {
     return allowedTransitions[currentStage].includes(nextStage);
+  }
+
+  private async createRecord(
+    user: AuthUser,
+    dto: Pick<CreateOpportunityDto, "customerId" | "title" | "stage" | "estimatedValue">,
+    client: Prisma.TransactionClient,
+  ) {
+    await this.assertCustomerExists(dto.customerId);
+
+    const opportunity = await client.opportunity.create({
+      data: {
+        customerId: dto.customerId,
+        title: dto.title,
+        stage: dto.stage,
+        estimatedValue: dto.estimatedValue,
+        createdBy: user.id,
+        updatedBy: user.id,
+      },
+    });
+
+    await this.auditService.record(
+      {
+        entityType: "Opportunity",
+        entityId: opportunity.id,
+        action: "opportunity.created",
+        actorUserId: user.id,
+        nextState: JSON.parse(JSON.stringify(opportunity)),
+      },
+      client,
+    );
+
+    return opportunity;
+  }
+
+  private async updateStageRecord(
+    user: AuthUser,
+    opportunityId: string,
+    stage: OpportunityStage,
+    client: Prisma.TransactionClient,
+  ) {
+    const opportunity = await client.opportunity.findUnique({
+      where: { id: opportunityId },
+    });
+
+    if (!opportunity) {
+      throw new NotFoundException("Opportunity not found");
+    }
+
+    if (!this.isTransitionAllowed(opportunity.stage, stage)) {
+      throw new BadRequestException("Invalid opportunity stage transition");
+    }
+
+    const updatedCount = await client.opportunity.updateMany({
+      where: {
+        id: opportunityId,
+        stage: opportunity.stage,
+      },
+      data: {
+        stage,
+        updatedBy: user.id,
+      },
+    });
+
+    if (updatedCount.count !== 1) {
+      throw new ConflictException("Opportunity stage changed before update");
+    }
+
+    const updatedOpportunity = await client.opportunity.findUnique({
+      where: { id: opportunityId },
+    });
+
+    if (!updatedOpportunity) {
+      throw new NotFoundException("Opportunity not found");
+    }
+
+    await this.auditService.record(
+      {
+        entityType: "Opportunity",
+        entityId: updatedOpportunity.id,
+        action: "opportunity.stage_changed",
+        actorUserId: user.id,
+        previousState: JSON.parse(JSON.stringify(opportunity)),
+        nextState: JSON.parse(JSON.stringify(updatedOpportunity)),
+      },
+      client,
+    );
+
+    return updatedOpportunity;
   }
 }

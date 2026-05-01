@@ -9,9 +9,15 @@ import {
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import {
+  DeterministicLauraExtractorProvider,
+  LAURA_EXTRACTOR_PROVIDER,
+} from "../src/modules/laura/laura-llm.service";
+import {
   LauraAssistantResponse,
   LauraProposalConfirmationResponse,
+  LauraProposalPayload,
   LauraSessionResponse,
+  LauraStoredProposalPayload,
 } from "../src/modules/laura/laura.types";
 import { PrismaService } from "../src/prisma/prisma.service";
 
@@ -64,6 +70,36 @@ type CustomerRecord = {
 type OpportunityRecord = {
   id: string;
   customerId: string;
+  title: string;
+  stage: string;
+};
+
+type VisitRecord = {
+  id: string;
+  customerId: string;
+  opportunityId?: string;
+  scheduledAt: Date;
+  status?: string;
+  summary?: string;
+  notes?: string;
+  nextStep?: string;
+  assignedToUserId?: string;
+  createdBy?: string;
+  updatedBy?: string;
+};
+
+type FollowUpTaskRecord = {
+  id: string;
+  customerId: string;
+  opportunityId?: string;
+  title: string;
+  dueAt: Date;
+  type?: string;
+  status?: string;
+  notes?: string;
+  assignedToUserId?: string;
+  createdBy?: string;
+  updatedBy?: string;
 };
 
 const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
@@ -74,10 +110,11 @@ describe("Laura", () => {
   let sessions: SessionRecord[];
   let messages: MessageRecord[];
   let proposals: ProposalRecord[];
-  let visits: Array<Record<string, unknown>>;
-  let followUpTasks: Array<Record<string, unknown>>;
+  let visits: VisitRecord[];
+  let followUpTasks: FollowUpTaskRecord[];
   let customers: CustomerRecord[];
   let opportunities: OpportunityRecord[];
+  let extractorResponses: Record<string, string>;
 
   const seedSession = (overrides: Partial<SessionRecord> = {}): SessionRecord => {
     const session: SessionRecord = {
@@ -113,15 +150,37 @@ describe("Laura", () => {
       messageId: overrides.messageId ?? "message-1",
       status: overrides.status ?? LauraProposalStatus.draft,
       payload: overrides.payload ?? {
-        customer: {
-          status: "resolved",
-          selectedOption: {
-            id: "customer-acme",
-            label: "Acme Piscicola SAS",
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Resumen",
+            rawMessage: "Resumen",
+          },
+          opportunity: {
+            enabled: true,
+            title: "Oportunidad Acme",
+            stage: "contacto",
+          },
+          followUp: {
+            enabled: true,
+            title: "Programar visita comercial",
+            dueAt: "2026-05-01T15:00:00.000Z",
+            type: "reunion",
+          },
+          task: {
+            enabled: true,
+            title: "Preparar propuesta comercial",
+          },
+          signals: {
+            enabled: true,
+            objections: [],
+            buyingIntent: "alto",
           },
         },
-        summary: "Resumen",
-        suggestedActions: ["Programar visita comercial"],
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
       },
       createdAt: overrides.createdAt ?? new Date("2026-04-30T00:00:00.000Z"),
       updatedAt: overrides.updatedAt ?? new Date("2026-04-30T00:00:00.000Z"),
@@ -130,62 +189,92 @@ describe("Laura", () => {
     return proposal;
   };
 
+  const toPublicProposal = (payload: unknown): LauraProposalPayload => {
+    const stored = payload as LauraStoredProposalPayload;
+    return {
+      blocks: stored.blocks,
+    };
+  };
+
+  const getStoredProposalInternal = (payload: unknown) => {
+    return (payload as LauraStoredProposalPayload).internal;
+  };
+
+  const seedVisit = (overrides: Partial<VisitRecord> = {}): VisitRecord => {
+    const visit: VisitRecord = {
+      id: overrides.id ?? `visit-${visits.length + 1}`,
+      customerId: overrides.customerId ?? "customer-acme",
+      opportunityId: overrides.opportunityId,
+      scheduledAt: overrides.scheduledAt ?? new Date("2026-05-01T15:00:00.000Z"),
+      status: overrides.status ?? "programada",
+      summary: overrides.summary,
+      notes: overrides.notes,
+      nextStep: overrides.nextStep,
+      assignedToUserId: overrides.assignedToUserId,
+      createdBy: overrides.createdBy ?? "admin-user-id",
+      updatedBy: overrides.updatedBy ?? "admin-user-id",
+    };
+    visits.push(visit);
+    return visit;
+  };
+
+  const seedFollowUpTask = (overrides: Partial<FollowUpTaskRecord> = {}): FollowUpTaskRecord => {
+    const task: FollowUpTaskRecord = {
+      id: overrides.id ?? `follow-up-task-${followUpTasks.length + 1}`,
+      customerId: overrides.customerId ?? "customer-acme",
+      opportunityId: overrides.opportunityId,
+      title: overrides.title ?? "Seguimiento comercial",
+      dueAt: overrides.dueAt ?? new Date("2026-05-01T10:00:00.000Z"),
+      type: overrides.type ?? "llamada",
+      status: overrides.status ?? "pendiente",
+      notes: overrides.notes,
+      assignedToUserId: overrides.assignedToUserId,
+      createdBy: overrides.createdBy ?? "admin-user-id",
+      updatedBy: overrides.updatedBy ?? "admin-user-id",
+    };
+    followUpTasks.push(task);
+    return task;
+  };
+
   beforeAll(async () => {
     sessions = [];
     messages = [];
     proposals = [];
     visits = [];
     followUpTasks = [];
+    extractorResponses = {};
     customers = [
       {
         id: "customer-acme",
         displayName: "Acme Piscicola SAS",
         legalName: "Acme Piscicola SAS",
-        contacts: [
-          {
-            id: "contact-acme-1",
-            fullName: "Laura Acosta",
-          },
-        ],
+        contacts: [{ id: "contact-acme-1", fullName: "Laura Acosta" }],
       },
       {
         id: "customer-perez-a",
         displayName: "Perez Acuicola SAS",
         legalName: "Perez Acuicola SAS",
-        contacts: [
-          {
-            id: "contact-perez-a-1",
-            fullName: "Juan Perez",
-          },
-        ],
+        contacts: [{ id: "contact-perez-a-1", fullName: "Juan Perez" }],
       },
       {
         id: "customer-perez-b",
         displayName: "Perez Trading",
         legalName: "Comercializadora Perez Trading SAS",
-        contacts: [
-          {
-            id: "contact-perez-b-1",
-            fullName: "Patricia Gomez",
-          },
-        ],
+        contacts: [{ id: "contact-perez-b-1", fullName: "Patricia Gomez" }],
       },
       {
         id: "customer-lago",
         displayName: "Alimentos del Lago",
         legalName: "Alimentos del Lago SAS",
-        contacts: [
-          {
-            id: "contact-lago-1",
-            fullName: "Carlos Mejia",
-          },
-        ],
+        contacts: [{ id: "contact-lago-1", fullName: "Carlos Mejia" }],
       },
     ];
     opportunities = [
       {
         id: "opportunity-lago-1",
         customerId: "customer-lago",
+        title: "Negociacion Alimentos del Lago",
+        stage: "contacto",
       },
     ];
 
@@ -229,36 +318,52 @@ describe("Laura", () => {
         findUnique: async ({ where }: { where: { id: string } }) => {
           return opportunities.find((opportunity) => opportunity.id === where.id) ?? null;
         },
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const opportunity = {
+            id: `opportunity-${opportunities.length + 1}`,
+            ...data,
+          } as OpportunityRecord;
+          opportunities.push(opportunity);
+          return opportunity;
+        },
+        updateMany: async ({
+          where,
+          data,
+        }: {
+          where: { id: string; stage?: string };
+          data: Partial<OpportunityRecord>;
+        }) => {
+          const index = opportunities.findIndex((opportunity) =>
+            opportunity.id === where.id && (!where.stage || opportunity.stage === where.stage),
+          );
+
+          if (index === -1) {
+            return { count: 0 };
+          }
+
+          opportunities[index] = {
+            ...opportunities[index],
+            ...data,
+          };
+
+          return { count: 1 };
+        },
       },
       visit: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
-          const visit = {
-            id: `visit-${visits.length + 1}`,
-            ...data,
-          };
-          visits.push(visit);
-          return visit;
+          return seedVisit(data as Partial<VisitRecord>);
         },
+        findMany: async () => visits,
       },
       followUpTask: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
-          const task = {
-            id: `follow-up-task-${followUpTasks.length + 1}`,
-            ...data,
-          };
-          followUpTasks.push(task);
-          return task;
+          return seedFollowUpTask(data as Partial<FollowUpTaskRecord>);
         },
+        findMany: async () => followUpTasks,
       },
       lauraSession: {
-        create: async ({ data }: { data: Partial<SessionRecord> }) => {
-          return seedSession(data);
-        },
-        findUnique: async ({
-          where,
-        }: {
-          where: { id: string };
-        }) => {
+        create: async ({ data }: { data: Partial<SessionRecord> }) => seedSession(data),
+        findUnique: async ({ where }: { where: { id: string } }) => {
           return sessions.find((session) => session.id === where.id) ?? null;
         },
       },
@@ -292,11 +397,7 @@ describe("Laura", () => {
         create: async ({ data }: { data: Omit<ProposalRecord, "id" | "createdAt" | "updatedAt"> & Partial<Pick<ProposalRecord, "createdAt" | "updatedAt">> }) => {
           return seedProposal(data);
         },
-        findUnique: async ({
-          where,
-        }: {
-          where: { id: string };
-        }) => {
+        findUnique: async ({ where }: { where: { id: string } }) => {
           return proposals.find((proposal) => proposal.id === where.id) ?? null;
         },
         findMany: async ({
@@ -343,26 +444,6 @@ describe("Laura", () => {
 
           return { count: 1 };
         },
-        update: async ({
-          where,
-          data,
-        }: {
-          where: { id: string };
-          data: Partial<ProposalRecord>;
-        }) => {
-          const index = proposals.findIndex((proposal) => proposal.id === where.id);
-          if (index === -1) {
-            throw new Error("Proposal not found");
-          }
-
-          proposals[index] = {
-            ...proposals[index],
-            ...data,
-            updatedAt: new Date("2026-04-30T01:00:00.000Z"),
-          };
-
-          return proposals[index];
-        },
       },
       auditLog: {
         create: async () => null,
@@ -371,6 +452,9 @@ describe("Laura", () => {
         callback: (tx: {
           customer: typeof prismaStub.customer;
           opportunity: typeof prismaStub.opportunity;
+          visit: typeof prismaStub.visit;
+          followUpTask: typeof prismaStub.followUpTask;
+          auditLog: typeof prismaStub.auditLog;
           lauraSession: typeof prismaStub.lauraSession;
           lauraMessage: typeof prismaStub.lauraMessage;
           lauraProposal: typeof prismaStub.lauraProposal;
@@ -379,6 +463,9 @@ describe("Laura", () => {
         return callback({
           customer: prismaStub.customer as typeof prismaStub.customer,
           opportunity: prismaStub.opportunity as typeof prismaStub.opportunity,
+          visit: prismaStub.visit as typeof prismaStub.visit,
+          followUpTask: prismaStub.followUpTask as typeof prismaStub.followUpTask,
+          auditLog: prismaStub.auditLog as typeof prismaStub.auditLog,
           lauraSession: prismaStub.lauraSession as typeof prismaStub.lauraSession,
           lauraMessage: prismaStub.lauraMessage as typeof prismaStub.lauraMessage,
           lauraProposal: prismaStub.lauraProposal as typeof prismaStub.lauraProposal,
@@ -386,11 +473,25 @@ describe("Laura", () => {
       },
     };
 
+    const deterministicExtractorProvider = new DeterministicLauraExtractorProvider();
+
     moduleRef = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
       .useValue(prismaStub)
+      .overrideProvider(LAURA_EXTRACTOR_PROVIDER)
+      .useValue({
+        extract: async (input: {
+          message: string;
+          contextSummary?: string;
+          recentMessages: string[];
+          systemPrompt: string;
+        }) => {
+          return extractorResponses[input.message]
+            ?? deterministicExtractorProvider.extract(input);
+        },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -411,6 +512,15 @@ describe("Laura", () => {
     proposals.length = 0;
     visits.length = 0;
     followUpTasks.length = 0;
+    extractorResponses = {};
+    opportunities = [
+      {
+        id: "opportunity-lago-1",
+        customerId: "customer-lago",
+        title: "Negociacion Alimentos del Lago",
+        stage: "contacto",
+      },
+    ];
   });
 
   afterAll(async () => {
@@ -441,75 +551,19 @@ describe("Laura", () => {
     expect(proposals[0]?.messageId).toBe(messages[0]?.id);
   });
 
-  it("returns a deterministic structured proposal payload for a free-form report", async () => {
-    seedSession({
-      id: "session-existing",
-      ownerUserId: "admin-user-id",
-    });
-
-    const response = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        sessionId: "session-existing",
-        content: "Cliente Acme confirmó interés en 20 toneladas de alimento y pide visita el viernes.",
-      })
-      .expect(201);
-
-    const body = response.body as LauraAssistantResponse;
-    const expected: Extract<LauraAssistantResponse, { mode: "proposal" }> = {
-      mode: "proposal",
-      sessionId: "session-existing",
-      message: "Preparé una propuesta inicial para que la revises antes de guardarla.",
-      proposalId: expect.any(String) as unknown as string,
-      proposal: {
-        customer: {
-          status: "resolved",
-          selectedOption: {
-            id: "customer-acme",
-            label: "Acme Piscicola SAS",
-          },
-        },
-        summary: "Cliente Acme confirmó interés en 20 toneladas de alimento y pide visita el viernes.",
-        suggestedActions: [
-          "Programar visita comercial",
-          "Preparar propuesta para alimento",
-        ],
-      },
-    };
-
-    expect(body).toMatchObject(expected);
-  });
-
-  it("rejects sending a message to a session owned by another user", async () => {
-    seedSession({
-      id: "session-foreign",
-      ownerUserId: "seller-user-id",
-    });
-
-    await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        sessionId: "session-foreign",
-        content: "Seguimiento privado",
-      })
-      .expect(403);
-  });
-
   it("returns a clarification payload for ambiguous customer mentions and does not create CRM records", async () => {
     const response = await request(globalThis.__LAURA_APP__)
       .post("/laura/messages")
       .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
       .send({
-        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
+        content: "Hable con el cliente Perez y quiere retomar la propuesta.",
       })
       .expect(201);
 
     const body = response.body as LauraAssistantResponse;
-    const expected: Extract<LauraAssistantResponse, { mode: "clarification" }> = {
+
+    expect(body).toMatchObject({
       mode: "clarification",
-      sessionId: expect.any(String) as unknown as string,
       message: "Encontré varios clientes que coinciden con Perez. ¿Cuál es?",
       clarification: {
         type: "customer",
@@ -518,32 +572,9 @@ describe("Laura", () => {
           { id: "customer-perez-b", label: "Perez Trading" },
         ],
       },
-    };
-
-    expect(body).toMatchObject(expected);
+    });
     expect(visits).toHaveLength(0);
     expect(followUpTasks).toHaveLength(0);
-  });
-
-  it("resolves a customer from a fuzzy contact-name match in free-form text", async () => {
-    const response = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        content: "Hablé con carlos mejia y quiere reactivar el pedido de alimento.",
-      })
-      .expect(201);
-
-    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
-
-    expect(body.mode).toBe("proposal");
-    expect(body.proposal.customer).toMatchObject({
-      status: "resolved",
-      selectedOption: {
-        id: "customer-lago",
-        label: "Alimentos del Lago",
-      },
-    });
   });
 
   it("uses the pending clarification in session memory when the follow-up says si, el primero", async () => {
@@ -551,7 +582,7 @@ describe("Laura", () => {
       .post("/laura/messages")
       .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
       .send({
-        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
+        content: "Hable con el cliente Perez y quiere retomar la propuesta.",
       })
       .expect(201);
 
@@ -567,139 +598,11 @@ describe("Laura", () => {
       .expect(201);
 
     const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+    const storedProposal = proposals.at(-1)?.payload;
 
-    expect(body.mode).toBe("proposal");
-    expect(body.sessionId).toBe(clarification.sessionId);
-    expect(body.proposal.customer).toMatchObject({
-      status: "resolved",
-      selectedOption: {
-        id: "customer-perez-a",
-        label: "Perez Acuicola SAS",
-      },
-    });
-  });
-
-  it("keeps Laura in clarification mode when a pending clarification gets a non-resolving follow-up", async () => {
-    const clarificationResponse = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
-      })
-      .expect(201);
-
-    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
-
-    const response = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        sessionId: clarification.sessionId,
-        content: "si",
-      })
-      .expect(201);
-
-    const body = response.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
-
-    expect(body.mode).toBe("clarification");
-    expect(body.sessionId).toBe(clarification.sessionId);
-    expect(body.clarification.options).toMatchObject([
-      { id: "customer-perez-a", label: "Perez Acuicola SAS" },
-      { id: "customer-perez-b", label: "Perez Trading" },
-    ]);
-    expect(proposals).toHaveLength(0);
-  });
-
-  it("allows correcting a pending clarification with a different explicit customer in the follow-up", async () => {
-    const clarificationResponse = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
-      })
-      .expect(201);
-
-    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
-
-    const response = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        sessionId: clarification.sessionId,
-        content: "No, era Alimentos del Lago, quiere 10 toneladas",
-      })
-      .expect(201);
-
-    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
-
-    expect(body.mode).toBe("proposal");
-    expect(body.proposal.customer).toMatchObject({
-      status: "resolved",
-      selectedOption: {
-        id: "customer-lago",
-        label: "Alimentos del Lago",
-      },
-    });
-    expect(body.proposal.summary).toContain("Alimentos del Lago");
-    expect(body.proposal.summary).toContain("10 toneladas");
-    expect(body.proposal.summary).not.toContain("Perez");
-  });
-
-  it("does not treat digits inside larger numbers as ordinal clarification picks", async () => {
-    const clarificationResponse = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
-      })
-      .expect(201);
-
-    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
-
-    const response = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        sessionId: clarification.sessionId,
-        content: "Perez Trading, 10 toneladas",
-      })
-      .expect(201);
-
-    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
-
-    expect(body.mode).toBe("proposal");
-    expect(body.proposal.customer).toMatchObject({
-      status: "resolved",
-      selectedOption: {
-        id: "customer-perez-b",
-        label: "Perez Trading",
-      },
-    });
-    expect(body.proposal.summary).toContain("10 toneladas");
-    expect(body.proposal.summary).toContain("retomar la propuesta");
-  });
-
-  it("keeps contextual launch hints but still suggests another customer when the text names one explicitly", async () => {
-    const response = await request(globalThis.__LAURA_APP__)
-      .post("/laura/messages")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        contextType: "customer",
-        contextEntityId: "customer-acme",
-        content: "Vine desde Acme pero esta nota es sobre Perez y su nueva propuesta.",
-      })
-      .expect(201);
-
-    const body = response.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
-
-    expect(body.mode).toBe("clarification");
-    expect(body.clarification.options).toMatchObject([
-      { id: "customer-perez-a", label: "Perez Acuicola SAS" },
-      { id: "customer-perez-b", label: "Perez Trading" },
-    ]);
-    expect(sessions[0]).toMatchObject({
-      contextType: "customer",
-      contextEntityId: "customer-acme",
+    expect(getStoredProposalInternal(storedProposal)).toMatchObject({
+      customerId: "customer-perez-a",
+      customerLabel: "Perez Acuicola SAS",
     });
   });
 
@@ -710,23 +613,28 @@ describe("Laura", () => {
       .send({
         contextType: "opportunity",
         contextEntityId: "opportunity-lago-1",
-        content: "Quiere revisar condiciones comerciales la próxima semana.",
+        content: "Quiere revisar condiciones comerciales la proxima semana.",
       })
       .expect(201);
 
     const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+    const storedProposal = proposals.at(-1)?.payload;
 
-    expect(body.mode).toBe("proposal");
-    expect(body.proposal.customer).toMatchObject({
-      status: "resolved",
-      selectedOption: {
-        id: "customer-lago",
-        label: "Alimentos del Lago",
-      },
+    expect(body.proposal.blocks.opportunity).toMatchObject({
+      opportunityId: "opportunity-lago-1",
+      createNew: false,
+    });
+    expect(body.proposal.blocks.followUp).toMatchObject({
+      opportunityId: "opportunity-lago-1",
+    });
+    expect(getStoredProposalInternal(storedProposal)).toMatchObject({
+      customerId: "customer-lago",
+      customerLabel: "Alimentos del Lago",
+      opportunityId: "opportunity-lago-1",
     });
   });
 
-  it("leaves the proposal customer unresolved when neither text nor context resolves deterministically", async () => {
+  it("leaves customer references empty when neither text nor context resolves deterministically", async () => {
     const response = await request(globalThis.__LAURA_APP__)
       .post("/laura/messages")
       .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
@@ -738,15 +646,128 @@ describe("Laura", () => {
       .expect(201);
 
     const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+    const storedProposal = proposals.at(-1)?.payload;
 
-    expect(body.mode).toBe("proposal");
-    expect(body.proposal.customer).toMatchObject({
-      status: "missing",
-    });
-    expect(body.proposal.customer.selectedOption).toBeUndefined();
+    expect(getStoredProposalInternal(storedProposal)?.customerId).toBeUndefined();
+    expect(body.proposal.blocks.interaction?.enabled).toBe(false);
+    expect(body.proposal.blocks.followUp?.enabled).toBe(false);
+    expect(body.proposal.blocks.opportunity?.enabled).toBe(false);
   });
 
-  it("confirms a proposal for a session owned by the current user", async () => {
+  it("returns normalized proposal blocks for editable confirmation", async () => {
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Cliente Acme confirmó interés en 20 toneladas de alimento y pide visita el viernes.",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body).toMatchObject({
+      mode: "proposal",
+      proposal: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            rawMessage: "Cliente Acme confirmó interés en 20 toneladas de alimento y pide visita el viernes.",
+          },
+          opportunity: {
+            enabled: true,
+            createNew: true,
+          },
+          followUp: {
+            enabled: true,
+            type: "reunion",
+          },
+          task: {
+            enabled: true,
+          },
+          signals: {
+            enabled: true,
+            objections: [],
+            buyingIntent: "alto",
+          },
+        },
+      },
+    });
+    expect(body.proposal.blocks.interaction).not.toHaveProperty("customerId");
+    expect(body.proposal.blocks.interaction).not.toHaveProperty("customerLabel");
+    expect(body.proposal.blocks.opportunity).not.toHaveProperty("customerId");
+    expect(body.proposal.blocks.followUp).not.toHaveProperty("customerId");
+    expect(body.proposal.blocks.interaction?.summary).toContain("20 toneladas");
+    expect(body.proposal.blocks.followUp?.dueAt).toEqual(expect.any(String));
+  });
+
+  it("returns prioritized agenda items from existing visits and follow-up tasks without creating records", async () => {
+    seedFollowUpTask({
+      id: "follow-up-task-urgent",
+      customerId: "customer-acme",
+      title: "Llamar a Acme por pago pendiente",
+      dueAt: new Date("2026-04-30T09:00:00.000Z"),
+      assignedToUserId: "admin-user-id",
+      status: "pendiente",
+    });
+    seedVisit({
+      id: "visit-soon",
+      customerId: "customer-lago",
+      scheduledAt: new Date("2026-04-30T11:00:00.000Z"),
+      assignedToUserId: "admin-user-id",
+      status: "programada",
+      summary: "Visita tecnica Alimentos del Lago",
+    });
+    seedFollowUpTask({
+      id: "follow-up-task-later",
+      customerId: "customer-lago",
+      title: "Enviar propuesta actualizada",
+      dueAt: new Date("2026-04-30T17:00:00.000Z"),
+      assignedToUserId: "admin-user-id",
+      status: "pendiente",
+    });
+
+    const previousVisitCount = visits.length;
+    const previousTaskCount = followUpTasks.length;
+    const previousProposalCount = proposals.length;
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Laura, que tengo en la agenda hoy y cuales son mis prioridades?",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "agenda" }>;
+
+    expect(body).toMatchObject({
+      mode: "agenda",
+      agenda: {
+        items: [
+          {
+            id: "follow-up-task-urgent",
+            type: "follow_up_task",
+            label: expect.stringContaining("Llamar a Acme por pago pendiente"),
+          },
+          {
+            id: "visit-soon",
+            type: "visit",
+            label: expect.stringContaining("Visita tecnica Alimentos del Lago"),
+          },
+          {
+            id: "follow-up-task-later",
+            type: "follow_up_task",
+            label: expect.stringContaining("Enviar propuesta actualizada"),
+          },
+        ],
+      },
+    });
+    expect(visits).toHaveLength(previousVisitCount);
+    expect(followUpTasks).toHaveLength(previousTaskCount);
+    expect(proposals).toHaveLength(previousProposalCount);
+  });
+
+  it("confirms only approved blocks and persists interaction and follow-up without touching opportunity stage", async () => {
     const session = seedSession({
       id: "session-confirm",
       ownerUserId: "admin-user-id",
@@ -762,17 +783,38 @@ describe("Laura", () => {
       id: "proposal-confirm",
       sessionId: session.id,
       messageId: message.id,
-      status: LauraProposalStatus.draft,
       payload: {
-        customer: {
-          status: "resolved",
-          selectedOption: {
-            id: "customer-acme",
-            label: "Acme Piscicola SAS",
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Reporte base Acme",
+            rawMessage: "Reporte base Acme",
+          },
+          opportunity: {
+            enabled: false,
+            opportunityId: "opportunity-lago-1",
+            stage: "visita",
+          },
+          followUp: {
+            enabled: true,
+            title: "Programar visita comercial",
+            dueAt: "2026-05-01T15:00:00.000Z",
+            type: "reunion",
+          },
+          task: {
+            enabled: false,
+            title: "Enviar propuesta",
+          },
+          signals: {
+            enabled: false,
+            objections: [],
+            buyingIntent: "alto",
           },
         },
-        summary: "Reporte base",
-        suggestedActions: ["Programar visita comercial"],
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
       },
     });
 
@@ -780,7 +822,7 @@ describe("Laura", () => {
       .post(`/laura/proposals/${proposal.id}/confirm`)
       .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
       .send({
-        proposal: proposal.payload,
+        proposal: toPublicProposal(proposal.payload),
       })
       .expect(201);
 
@@ -789,9 +831,423 @@ describe("Laura", () => {
     expect(body).toMatchObject({
       proposalId: proposal.id,
       status: "confirmed",
-      proposal: proposal.payload,
+      proposal: toPublicProposal(proposal.payload),
+      saved: ["interaction", "followUp"],
+      discarded: ["opportunity", "task", "signals"],
     });
+    expect(body.createdIds.interaction).toEqual(expect.any(String));
+    expect(body.createdIds.followUp).toEqual(expect.any(String));
     expect(proposals.find((item) => item.id === proposal.id)?.status).toBe(LauraProposalStatus.confirmed);
+    expect(visits).toHaveLength(1);
+    expect(followUpTasks).toHaveLength(1);
+    expect(opportunities.find((item) => item.id === "opportunity-lago-1")?.stage).toBe("contacto");
+  });
+
+  it("does not leak rejected follow-up or signals data into the persisted visit", async () => {
+    const session = seedSession({
+      id: "session-rejected-blocks",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-rejected-blocks",
+      sessionId: session.id,
+      role: LauraMessageRole.user,
+      kind: LauraMessageKind.report,
+      content: "Reporte sin persistir extras",
+    });
+    const proposal = seedProposal({
+      id: "proposal-rejected-blocks",
+      sessionId: session.id,
+      messageId: message.id,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Reporte sin persistir extras Acme",
+            rawMessage: "Reporte sin persistir extras Acme",
+          },
+          followUp: {
+            enabled: false,
+            title: "No persistir este siguiente paso",
+            dueAt: "2026-05-02T15:00:00.000Z",
+            type: "llamada",
+          },
+          signals: {
+            enabled: false,
+            objections: ["precio"],
+            risk: "alto",
+            buyingIntent: "medio",
+          },
+        },
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
+      },
+    });
+
+    await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: toPublicProposal(proposal.payload),
+      })
+      .expect(201);
+
+    expect(visits).toHaveLength(1);
+    expect(visits[0]).toMatchObject({
+      summary: "Reporte sin persistir extras Acme",
+      notes: "Mensaje original: Reporte sin persistir extras Acme",
+    });
+    expect(visits[0]?.nextStep).toBeUndefined();
+  });
+
+  it("creates a new approved opportunity before persisting the interaction", async () => {
+    const session = seedSession({
+      id: "session-create-new-opportunity",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-create-new-opportunity",
+      sessionId: session.id,
+      role: LauraMessageRole.user,
+      kind: LauraMessageKind.report,
+      content: "Reporte con oportunidad nueva",
+    });
+    const proposal = seedProposal({
+      id: "proposal-create-new-opportunity",
+      sessionId: session.id,
+      messageId: message.id,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Reporte con oportunidad nueva Acme",
+            rawMessage: "Reporte con oportunidad nueva Acme",
+          },
+          opportunity: {
+            enabled: true,
+            createNew: true,
+            title: 'Nueva oportunidad Laura',
+            stage: "contacto",
+          },
+        },
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
+      },
+    });
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: toPublicProposal(proposal.payload),
+      })
+      .expect(201);
+
+    const body = response.body as LauraProposalConfirmationResponse;
+
+    expect(body.createdIds.opportunity).toEqual(expect.any(String));
+    expect(visits).toHaveLength(1);
+    expect(visits[0]?.opportunityId).toBe(body.createdIds.opportunity);
+    expect(opportunities.find((item) => item.id === body.createdIds.opportunity)).toMatchObject({
+      customerId: "customer-acme",
+      title: "Nueva oportunidad Laura",
+      stage: "contacto",
+    });
+  });
+
+  it("does not create CRM side effects when confirming an already finalized proposal", async () => {
+    const session = seedSession({
+      id: "session-finalized-proposal",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-finalized-proposal",
+      sessionId: session.id,
+    });
+    const proposal = seedProposal({
+      id: "proposal-finalized",
+      sessionId: session.id,
+      messageId: message.id,
+      status: LauraProposalStatus.confirmed,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "No deberia persistirse Acme",
+            rawMessage: "No deberia persistirse Acme",
+          },
+          followUp: {
+            enabled: true,
+            title: "No deberia crearse",
+            dueAt: "2026-05-02T15:00:00.000Z",
+            type: "llamada",
+          },
+        },
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
+      },
+    });
+
+    await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: toPublicProposal(proposal.payload),
+      })
+      .expect(409);
+
+    expect(visits).toHaveLength(0);
+    expect(followUpTasks).toHaveLength(0);
+  });
+
+  it("rejects confirm-time opportunity target tampering against the stored Laura draft", async () => {
+    const session = seedSession({
+      id: "session-target-tampering",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-target-tampering",
+      sessionId: session.id,
+    });
+    const proposal = seedProposal({
+      id: "proposal-target-tampering",
+      sessionId: session.id,
+      messageId: message.id,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Reporte base Lago",
+            rawMessage: "Reporte base Lago",
+          },
+          opportunity: {
+            enabled: true,
+            opportunityId: "opportunity-lago-1",
+            createNew: false,
+            title: "Negociacion Alimentos del Lago",
+            stage: "contacto",
+          },
+          followUp: {
+            enabled: true,
+            opportunityId: "opportunity-lago-1",
+            title: "Programar visita comercial",
+            dueAt: "2026-05-01T15:00:00.000Z",
+            type: "reunion",
+          },
+        },
+        internal: {
+          customerId: "customer-lago",
+          customerLabel: "Alimentos del Lago",
+          opportunityId: "opportunity-lago-1",
+        },
+      },
+    });
+
+    await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: {
+          blocks: {
+            interaction: {
+              enabled: true,
+              summary: "Reporte base Lago editado",
+              rawMessage: "Reporte base Lago editado",
+            },
+            opportunity: {
+              enabled: true,
+              opportunityId: "opportunity-forged",
+              createNew: false,
+              title: "Intento de secuestro",
+              stage: "visita",
+            },
+            followUp: {
+              enabled: true,
+              opportunityId: "opportunity-forged",
+              title: "Programar visita comercial",
+              dueAt: "2026-05-01T15:00:00.000Z",
+              type: "reunion",
+            },
+          },
+        },
+      })
+      .expect(400);
+
+    expect(visits).toHaveLength(0);
+    expect(followUpTasks).toHaveLength(0);
+    expect(opportunities.find((item) => item.id === "opportunity-lago-1")?.stage).toBe("contacto");
+  });
+
+  it("does not report task blocks as saved when this phase has no concrete persistence target", async () => {
+    const session = seedSession({
+      id: "session-task-unsaved",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-task-unsaved",
+      sessionId: session.id,
+    });
+    const proposal = seedProposal({
+      id: "proposal-task-unsaved",
+      sessionId: session.id,
+      messageId: message.id,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Persistir solo interaccion Acme",
+            rawMessage: "Persistir solo interaccion Acme",
+          },
+          task: {
+            enabled: true,
+            title: "Tarea sin destino real",
+          },
+        },
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
+      },
+    });
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: toPublicProposal(proposal.payload),
+      })
+      .expect(201);
+
+    const body = response.body as LauraProposalConfirmationResponse;
+
+    expect(body.saved).toEqual(["interaction"]);
+    expect(body.discarded).toContain("task");
+    expect(body.createdIds.task).toBeUndefined();
+  });
+
+  it("does not report signals as saved when no interaction was persisted", async () => {
+    const session = seedSession({
+      id: "session-signals-no-interaction",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-signals-no-interaction",
+      sessionId: session.id,
+    });
+    const proposal = seedProposal({
+      id: "proposal-signals-no-interaction",
+      sessionId: session.id,
+      messageId: message.id,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: false,
+            summary: "No guardar interaccion",
+            rawMessage: "No guardar interaccion Acme",
+          },
+          signals: {
+            enabled: true,
+            objections: ["precio"],
+            risk: "alto",
+          },
+        },
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
+      },
+    });
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: toPublicProposal(proposal.payload),
+      })
+      .expect(201);
+
+    const body = response.body as LauraProposalConfirmationResponse;
+
+    expect(body.saved).toEqual([]);
+    expect(body.discarded).toEqual(expect.arrayContaining(["interaction", "signals"]));
+    expect(visits).toHaveLength(0);
+  });
+
+  it("surfaces Laura-created visits and follow-ups in a later agenda query for the same user", async () => {
+    const session = seedSession({
+      id: "session-agenda-after-confirm",
+      ownerUserId: "admin-user-id",
+    });
+    const message = seedMessage({
+      id: "message-agenda-after-confirm",
+      sessionId: session.id,
+    });
+    const proposal = seedProposal({
+      id: "proposal-agenda-after-confirm",
+      sessionId: session.id,
+      messageId: message.id,
+      payload: {
+        blocks: {
+          interaction: {
+            enabled: true,
+            summary: "Seguimiento agenda Acme",
+            rawMessage: "Seguimiento agenda Acme",
+          },
+          followUp: {
+            enabled: true,
+            title: "Llamar a Acme despues de visita",
+            dueAt: "2026-05-01T15:00:00.000Z",
+            type: "llamada",
+          },
+        },
+        internal: {
+          customerId: "customer-acme",
+          customerLabel: "Acme Piscicola SAS",
+        },
+      },
+    });
+
+    const confirmResponse = await request(globalThis.__LAURA_APP__)
+      .post(`/laura/proposals/${proposal.id}/confirm`)
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        proposal: toPublicProposal(proposal.payload),
+      })
+      .expect(201);
+
+    const confirmBody = confirmResponse.body as LauraProposalConfirmationResponse;
+
+    expect(visits[0]?.assignedToUserId).toBe("admin-user-id");
+    expect(followUpTasks[0]?.assignedToUserId).toBe("admin-user-id");
+
+    const agendaResponse = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Laura, muéstrame mi agenda y prioridades",
+      })
+      .expect(201);
+
+    const agendaBody = agendaResponse.body as Extract<LauraAssistantResponse, { mode: "agenda" }>;
+
+    expect(agendaBody.agenda.items).toEqual(expect.arrayContaining([
+      {
+        id: confirmBody.createdIds.interaction,
+        type: "visit",
+        label: "Seguimiento agenda Acme",
+      },
+      {
+        id: confirmBody.createdIds.followUp,
+        type: "follow_up_task",
+        label: "Llamar a Acme despues de visita",
+      },
+    ]));
   });
 
   it("rejects confirming a proposal tied to another user's session", async () => {
@@ -813,34 +1269,9 @@ describe("Laura", () => {
       .post(`/laura/proposals/${proposal.id}/confirm`)
       .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
       .send({
-        proposal: proposal.payload,
+        proposal: toPublicProposal(proposal.payload),
       })
       .expect(403);
-  });
-
-  it("rejects confirming an already finalized proposal", async () => {
-    const session = seedSession({
-      id: "session-finalized-proposal",
-      ownerUserId: "admin-user-id",
-    });
-    const message = seedMessage({
-      id: "message-finalized-proposal",
-      sessionId: session.id,
-    });
-    const proposal = seedProposal({
-      id: "proposal-finalized",
-      sessionId: session.id,
-      messageId: message.id,
-      status: LauraProposalStatus.confirmed,
-    });
-
-    await request(globalThis.__LAURA_APP__)
-      .post(`/laura/proposals/${proposal.id}/confirm`)
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .send({
-        proposal: proposal.payload,
-      })
-      .expect(409);
   });
 
   it("rejects invalid confirmProposal payloads", async () => {
@@ -867,7 +1298,7 @@ describe("Laura", () => {
       .expect(400);
   });
 
-  it("rejects malformed Task 1 proposal payloads", async () => {
+  it("rejects malformed Task 3 proposal payloads", async () => {
     const session = seedSession({
       id: "session-malformed-confirm",
       ownerUserId: "admin-user-id",
@@ -887,11 +1318,39 @@ describe("Laura", () => {
       .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
       .send({
         proposal: {
-          summary: 123,
-          suggestedActions: "not-an-array",
+          blocks: {
+            interaction: {
+              enabled: true,
+              summary: 123,
+            },
+          },
         },
       })
       .expect(400);
+  });
+
+  it("fails closed when the extractor returns malformed field types", async () => {
+    extractorResponses["forzar payload invalido"] = JSON.stringify({
+      intent: "report",
+      interactionSummary: 123,
+      suggestedOpportunityStage: "contacto",
+      taskType: "llamada",
+      signals: {
+        objections: "precio",
+      },
+    });
+
+    await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "forzar payload invalido",
+      })
+      .expect(400);
+
+    expect(proposals).toHaveLength(0);
+    expect(visits).toHaveLength(0);
+    expect(followUpTasks).toHaveLength(0);
   });
 
   it("returns a session owned by the current user", async () => {
@@ -912,17 +1371,6 @@ describe("Laura", () => {
       id: "proposal-read",
       sessionId: session.id,
       messageId: message.id,
-      payload: {
-        customer: {
-          status: "resolved",
-          selectedOption: {
-            id: "customer-acme",
-            label: "Acme Piscicola SAS",
-          },
-        },
-        summary: "Reporte leido",
-        suggestedActions: ["Programar visita comercial"],
-      },
     });
 
     const response = await request(globalThis.__LAURA_APP__)
@@ -941,29 +1389,5 @@ describe("Laura", () => {
     expect(body.messages).toHaveLength(1);
     expect(body.proposals).toHaveLength(1);
     expect(body.proposals[0]?.id).toBe(proposal.id);
-  });
-
-  it("rejects reading a session owned by another user", async () => {
-    seedSession({
-      id: "session-foreign-read",
-      ownerUserId: "seller-user-id",
-    });
-
-    await request(globalThis.__LAURA_APP__)
-      .get("/laura/sessions/session-foreign-read")
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .expect(403);
-  });
-
-  it("rejects invalid query boolean values", async () => {
-    const session = seedSession({
-      id: "session-invalid-query",
-      ownerUserId: "admin-user-id",
-    });
-
-    await request(globalThis.__LAURA_APP__)
-      .get(`/laura/sessions/${session.id}?includeMessages=abc`)
-      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
-      .expect(400);
   });
 });

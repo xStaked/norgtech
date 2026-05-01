@@ -3,14 +3,51 @@ export interface LauraClarificationOption {
   label: string;
 }
 
+import { FollowUpTaskType, OpportunityStage } from "@prisma/client";
+
 export interface LauraProposalPayload {
-  customer: {
-    status: "resolved" | "ambiguous" | "missing";
-    selectedOption?: LauraClarificationOption;
-    options?: LauraClarificationOption[];
+  blocks: {
+    interaction?: {
+      enabled: boolean;
+      summary: string;
+      rawMessage: string;
+    };
+    opportunity?: {
+      enabled: boolean;
+      opportunityId?: string;
+      createNew?: boolean;
+      title?: string;
+      stage?: OpportunityStage;
+    };
+    followUp?: {
+      enabled: boolean;
+      title: string;
+      dueAt: string;
+      opportunityId?: string;
+      type: FollowUpTaskType;
+    };
+    task?: {
+      enabled: boolean;
+      title: string;
+      dueAt?: string;
+      notes?: string;
+    };
+    signals?: {
+      enabled: boolean;
+      objections: string[];
+      risk?: string;
+      buyingIntent?: string;
+    };
   };
-  summary: string;
-  suggestedActions: string[];
+}
+
+export interface LauraStoredProposalPayload extends LauraProposalPayload {
+  internal?: {
+    customerId?: string;
+    customerLabel?: string;
+    opportunityId?: string;
+    occurredAt?: string;
+  };
 }
 
 export interface LauraAgendaPayload {
@@ -73,4 +110,7 @@ export interface LauraProposalConfirmationResponse {
   proposalId: string;
   status: "confirmed";
   proposal: LauraProposalPayload;
+  saved: string[];
+  discarded: string[];
+  createdIds: Record<string, string>;
 }

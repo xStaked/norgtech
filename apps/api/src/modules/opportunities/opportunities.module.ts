@@ -8,5 +8,6 @@ import { OpportunitiesService } from "./opportunities.service";
   imports: [AuthModule, AuditModule],
   controllers: [OpportunitiesController],
   providers: [OpportunitiesService],
+  exports: [OpportunitiesService],
 })
 export class OpportunitiesModule {}
