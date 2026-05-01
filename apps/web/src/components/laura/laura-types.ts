@@ -34,6 +34,14 @@ export interface LauraProposalPayload {
   };
 }
 
+export interface LauraAgendaItem {
+  id: string;
+  type: "visit" | "follow_up_task";
+  label: string;
+  scheduledAt?: string;
+  priorityGroup?: number;
+}
+
 export type LauraAssistantResponse =
   | {
       mode: "clarification";
@@ -56,11 +64,7 @@ export type LauraAssistantResponse =
       sessionId: string;
       message: string;
       agenda: {
-        items: Array<{
-          id: string;
-          type: "visit" | "follow_up_task";
-          label: string;
-        }>;
+        items: LauraAgendaItem[];
       };
     };
 
@@ -97,12 +101,15 @@ export interface LauraProposalConfirmationResponse {
   createdIds: Record<string, string>;
 }
 
+export type LauraMessageStatus = "pending" | "confirmed" | "error";
+
 export interface LauraMessageItem {
   id: string;
   role: "user" | "assistant" | "system";
   kind: string;
   content: string;
   createdAt: string;
+  status?: LauraMessageStatus;
 }
 
 export interface LauraDraftProposal {

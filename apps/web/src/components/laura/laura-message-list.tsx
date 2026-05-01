@@ -9,9 +9,11 @@ import { useAutoScroll } from "@/hooks/use-auto-scroll";
 export function LauraMessageList({
   messages,
   busy,
+  onRetry,
 }: {
   messages: LauraMessageItem[];
   busy: boolean;
+  onRetry?: (content: string) => void;
 }) {
   const scrollRef = useAutoScroll(messages.length + (busy ? 1 : 0));
 
@@ -29,6 +31,28 @@ export function LauraMessageList({
       {messages.map((message) => (
         <LauraEntryCard key={message.id} message={message} />
       ))}
+      {messages
+        .filter((message) => message.status === "error" && onRetry)
+        .map((message) => (
+          <button
+            key={`retry-${message.id}`}
+            type="button"
+            onClick={() => onRetry!(message.content)}
+            style={{
+              appearance: "none",
+              border: 0,
+              borderRadius: crmTheme.radius.md,
+              padding: "4px 12px",
+              background: crmTheme.colors.danger,
+              color: "#ffffff",
+              fontSize: 12,
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Reintentar
+          </button>
+        ))}
       {busy ? (
         <div
           style={{
