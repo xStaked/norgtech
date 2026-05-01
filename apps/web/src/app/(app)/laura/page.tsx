@@ -41,6 +41,16 @@ export default async function LauraPage({
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
+      <style>{`
+        @keyframes lauraBounce {
+          0%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-6px); }
+        }
+        @keyframes lauraPulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
       <PageHeader
         eyebrow="Asistente comercial"
         title="Laura"
