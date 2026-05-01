@@ -1,5 +1,6 @@
 "use client";
 
+import { MessageSquare } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
 import type { LauraMessageItem } from "./laura-types";
 
@@ -34,17 +35,17 @@ export function LauraEntryCard({ message }: { message: LauraMessageItem }) {
     >
       <div
         style={{
-          width: "min(100%, 720px)",
+          width: "min(100%, 680px)",
           display: "grid",
-          gap: 8,
-          padding: "16px 18px",
-          borderRadius: isUser ? "20px 20px 6px 20px" : "20px 20px 20px 6px",
-          border: `1px solid ${isUser ? "transparent" : crmTheme.colors.border}`,
+          gap: 6,
+          padding: "12px 16px",
+          borderRadius: 16,
+          border: `1px solid ${isUser ? "transparent" : crmTheme.laura.border}`,
           background: isUser
             ? "linear-gradient(135deg, #10233f 0%, #1f4875 100%)"
             : crmTheme.colors.surface,
-          boxShadow: crmTheme.shadow.card,
-          color: isUser ? "#ffffff" : crmTheme.colors.text,
+          boxShadow: isUser ? "none" : crmTheme.laura.shadow,
+          color: isUser ? "#ffffff" : crmTheme.laura.textPrimary,
         }}
       >
         <div
@@ -55,11 +56,29 @@ export function LauraEntryCard({ message }: { message: LauraMessageItem }) {
             gap: 12,
           }}
         >
-          <strong style={{ fontSize: 13 }}>{roleCopy[message.role]}</strong>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {!isUser && (
+              <div
+                style={{
+                  width: 20,
+                  height: 20,
+                  borderRadius: 6,
+                  background: crmTheme.laura.gradient,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <MessageSquare size={12} color="#ffffff" strokeWidth={2.5} />
+              </div>
+            )}
+            <strong style={{ fontSize: 12, fontWeight: 700 }}>{roleCopy[message.role]}</strong>
+          </div>
           <span
             style={{
-              fontSize: 12,
-              color: isUser ? "rgba(255, 255, 255, 0.68)" : crmTheme.colors.textSubtle,
+              fontSize: 11,
+              color: isUser ? "rgba(255, 255, 255, 0.6)" : crmTheme.laura.textSubtle,
             }}
           >
             {formatMessageTime(message.createdAt)}
