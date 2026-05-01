@@ -59,9 +59,9 @@ export const crmTheme = {
     textPrimary: "#1a1a2e",
     textMuted: "#6b6b80",
     textSubtle: "#8b8b9e",
-    shadow: "0 2px 8px rgba(99,102,241,0.06)",
-    shadowFloating: "0 8px 24px rgba(99,102,241,0.25)",
-    focusRing: "0 0 0 3px rgba(99,102,241,0.15)",
+    shadow: "0 2px 8px rgba(99, 102, 241, 0.06)",
+    shadowFloating: "0 8px 24px rgba(99, 102, 241, 0.25)",
+    focusRing: "0 0 0 3px rgba(99, 102, 241, 0.15)",
   },
 } as const;
 
