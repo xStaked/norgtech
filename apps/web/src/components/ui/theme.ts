@@ -30,12 +30,6 @@ export const crmTheme = {
     floating: "0 18px 48px rgba(16, 35, 63, 0.12)",
     inset: "inset 0 1px 0 rgba(255, 255, 255, 0.6)",
   },
-  spacing: {
-    page: "24px",
-    pageMobile: "16px",
-    section: "16px",
-    stack: "20px",
-  },
   typography: {
     body: '"Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif',
     mono: '"SFMono-Regular", "SF Mono", Consolas, monospace',
@@ -47,6 +41,27 @@ export const crmTheme = {
   motion: {
     fast: "160ms ease",
     base: "220ms ease",
+  },
+  spacing: {
+    page: "24px",
+    pageMobile: "16px",
+    section: "16px",
+    stack: "20px",
+    chat: "12px",
+  },
+  laura: {
+    primary: "#6366f1",
+    primaryHover: "#4f46e5",
+    gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+    soft: "rgba(99, 102, 241, 0.08)",
+    border: "#e5e1ff",
+    surface: "#f8f6ff",
+    textPrimary: "#1a1a2e",
+    textMuted: "#6b6b80",
+    textSubtle: "#8b8b9e",
+    shadow: "0 2px 8px rgba(99,102,241,0.06)",
+    shadowFloating: "0 8px 24px rgba(99,102,241,0.25)",
+    focusRing: "0 0 0 3px rgba(99,102,241,0.15)",
   },
 } as const;
 
