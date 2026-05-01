@@ -1,16 +1,13 @@
 "use client";
 
-// import { streamLauraMessage } from "@/lib/laura-sse.client";
-// SSE streaming is available but opt-in. Set USE_STREAMING = true to enable.
 const USE_STREAMING = false;
 
 import { useState } from "react";
 import { LauraAgendaCard } from "@/components/laura/laura-agenda-card";
+import { LauraChatHeader } from "@/components/laura/laura-chat-header";
 import { LauraComposer } from "@/components/laura/laura-composer";
 import { LauraMessageList } from "@/components/laura/laura-message-list";
 import { LauraProposalCard } from "@/components/laura/laura-proposal-card";
-import { SectionCard } from "@/components/ui/section-card";
-import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
 import type {
@@ -238,185 +235,159 @@ export function LauraChat({
   }
 
   return (
-    <div
-      className="laura-chat-layout"
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(0, 1.45fr) minmax(320px, 0.95fr)",
-        gap: 20,
-        alignItems: "start",
-      }}
-    >
-      <SectionCard
-        title="Conversación"
-        description="Reporta libremente una visita, un avance comercial o pide foco de agenda. Laura conserva la sesión solo mientras esta página siga abierta."
-        actions={sessionId ? <StatusBadge tone="info">Sesión activa</StatusBadge> : null}
-        style={{
-          minHeight: 720,
-          display: "grid",
-          gridTemplateRows: "minmax(0, 1fr) auto",
-          gap: 16,
-        }}
-      >
+    <div style={{ display: "grid", gap: 0 }}>
+      <LauraChatHeader hasActiveSession={!!sessionId} />
+
+      {/* Context Banner */}
+      {initialContext && (
         <div
           style={{
-            minHeight: 0,
-            display: "grid",
-            gap: 14,
-            alignContent: "start",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: crmTheme.radius.md,
+            background: crmTheme.laura.soft,
+            border: `1px solid ${crmTheme.laura.border}`,
+            color: crmTheme.laura.primary,
+            fontSize: 13,
+            lineHeight: 1.5,
+            marginBottom: 16,
           }}
         >
-          {initialContext ? (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: crmTheme.radius.md,
-                background: "rgba(45, 108, 223, 0.08)",
-                color: crmTheme.colors.info,
-                fontSize: 13,
-                lineHeight: 1.5,
-              }}
-            >
-              Laura arrancará con el contexto sugerido de{" "}
-              <strong>{initialContext.contextLabel ?? initialContext.contextEntityId}</strong>.
-              Si tu reporte era sobre otra cuenta, igual puedes escribirlo libremente.
-            </div>
-          ) : null}
-          {notice ? (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: crmTheme.radius.md,
-                background: "rgba(31, 143, 95, 0.12)",
-                color: crmTheme.colors.success,
-                fontSize: 13,
-                fontWeight: 700,
-              }}
-            >
-              {notice}
-            </div>
-          ) : null}
-          {error ? (
-            <div
-              style={{
-                padding: "12px 14px",
-                borderRadius: crmTheme.radius.md,
-                background: "rgba(186, 58, 47, 0.1)",
-                color: crmTheme.colors.danger,
-                fontSize: 13,
-                fontWeight: 700,
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
-          <LauraMessageList messages={messages} busy={busy} onRetry={handleRetry} />
-          {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
-            <div
-              style={{
-                display: "grid",
-                gap: 8,
-                padding: "8px 0",
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: crmTheme.colors.textSubtle }}>
-                Selecciona una opción:
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {clarificationOptions.options.map((option) => (
-                  <button
-                    key={option.id}
-                    type="button"
-                    disabled={busy}
-                    onClick={() => handleSend(option.label)}
-                    style={{
-                      appearance: "none",
-                      border: `1px solid ${crmTheme.colors.primary}`,
-                      borderRadius: crmTheme.radius.md,
-                      padding: "8px 16px",
-                      background: "#fff",
-                      color: crmTheme.colors.primary,
-                      fontSize: 14,
-                      fontWeight: 600,
-                      cursor: busy ? "not-allowed" : "pointer",
-                      transition: "background 0.15s",
-                    }}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {agendaItems.length > 0 && <LauraAgendaCard items={agendaItems} />}
+          Contexto: <strong>{initialContext.contextLabel ?? initialContext.contextEntityId}</strong>
         </div>
+      )}
 
+      {/* Notice Banner */}
+      {notice && (
         <div
           style={{
-            position: "sticky",
-            bottom: 0,
-            paddingTop: 8,
-            background:
-              "linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.94) 18%, rgba(255, 255, 255, 1) 100%)",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: crmTheme.radius.md,
+            background: "rgba(34,197,94,0.08)",
+            borderLeft: `3px solid #22c55e`,
+            color: crmTheme.colors.success,
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 16,
           }}
         >
-          <LauraComposer disabled={busy || confirming} onSubmit={handleSend} />
+          {notice}
         </div>
-      </SectionCard>
+      )}
 
-      <div style={{ display: "grid", gap: 16 }}>
-        {draftProposal ? (
+      {/* Error Banner */}
+      {error && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            padding: "10px 14px",
+            borderRadius: crmTheme.radius.md,
+            background: "rgba(220,38,38,0.08)",
+            borderLeft: `3px solid #dc2626`,
+            color: crmTheme.colors.danger,
+            fontSize: 13,
+            fontWeight: 600,
+            marginBottom: 16,
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {/* Message List */}
+      <LauraMessageList
+        messages={messages}
+        busy={busy}
+        onRetry={handleRetry}
+        onSend={handleSend}
+      />
+
+      {/* Clarification Options */}
+      {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
+        <div style={{ display: "grid", gap: 8, padding: "8px 0" }}>
+          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: crmTheme.laura.textSubtle }}>
+            Selecciona una opción:
+          </p>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {clarificationOptions.options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                disabled={busy}
+                onClick={() => handleSend(option.label)}
+                style={{
+                  appearance: "none",
+                  border: `1px solid ${crmTheme.laura.border}`,
+                  borderRadius: crmTheme.radius.md,
+                  padding: "8px 16px",
+                  background: crmTheme.laura.soft,
+                  color: crmTheme.laura.primary,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: busy ? "not-allowed" : "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!busy) {
+                    e.currentTarget.style.background = crmTheme.colors.surface;
+                    e.currentTarget.style.borderColor = crmTheme.laura.primary;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = crmTheme.laura.soft;
+                  e.currentTarget.style.borderColor = crmTheme.laura.border;
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Agenda */}
+      {agendaItems.length > 0 && (
+        <div style={{ padding: "8px 0" }}>
+          <LauraAgendaCard items={agendaItems} />
+        </div>
+      )}
+
+      {/* Inline Proposal Card */}
+      {draftProposal && (
+        <div style={{ padding: "12px 0" }}>
           <LauraProposalCard
             proposal={draftProposal.proposal}
             confirming={confirming}
             confirmation={confirmation}
             onChange={(proposal) =>
               setDraftProposal((current) =>
-                current
-                  ? {
-                      ...current,
-                      proposal,
-                    }
-                  : current,
+                current ? { ...current, proposal } : current
               )
             }
             onConfirm={handleConfirm}
           />
-        ) : (
-          <SectionCard
-            title="Borrador estructurado"
-            description="Cuando Laura detecte un bloque confirmable, aparecerá aquí con edición inline."
-          >
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                padding: "6px 0 4px",
-                color: crmTheme.colors.textMuted,
-                fontSize: 14,
-                lineHeight: 1.6,
-              }}
-            >
-              <p style={{ margin: 0 }}>
-                Usa esta vista para validar el resumen, decidir qué guardar y ajustar campos antes
-                de persistirlos.
-              </p>
-              <p style={{ margin: 0 }}>
-                V1 conserva el `sessionId` solo en memoria. Si recargas la página, empiezas una
-                sesión nueva.
-              </p>
-            </div>
-          </SectionCard>
-        )}
-      </div>
+        </div>
+      )}
 
-      <style>{`
-        @media (max-width: 1180px) {
-          .laura-chat-layout {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
+      {/* Sticky Composer */}
+      <div
+        style={{
+          position: "sticky",
+          bottom: 0,
+          paddingTop: 16,
+          paddingBottom: 8,
+          background: "linear-gradient(180deg, rgba(248,246,255,0) 0%, rgba(248,246,255,0.94) 18%, rgba(248,246,255,1) 100%)",
+        }}
+      >
+        <LauraComposer disabled={busy || confirming} onSubmit={handleSend} />
+      </div>
     </div>
   );
 }
