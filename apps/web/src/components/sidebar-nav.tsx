@@ -5,10 +5,19 @@ import { usePathname } from "next/navigation";
 import {
   crmTheme,
   navGroups,
-  type NavGroup,
   type NavItem,
+  type NavGroup,
   type UserRole,
 } from "@/components/ui/theme";
+
+const lauraNavItem: NavItem = {
+  href: "/laura",
+  label: "Laura",
+  shortLabel: "LA",
+  description: "Asistente conversacional para reportes y confirmaciones",
+  group: "Operacion",
+  requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"],
+};
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -100,7 +109,16 @@ function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 function filterNavGroups(role: UserRole) {
-  return navGroups
+  const groupsWithLaura = navGroups.map((group) =>
+    group.label === "Operacion"
+      ? {
+          ...group,
+          items: [...group.items, lauraNavItem],
+        }
+      : group,
+  );
+
+  return groupsWithLaura
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => item.requiredRoles.includes(role)),
