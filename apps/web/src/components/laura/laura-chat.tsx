@@ -1,5 +1,9 @@
 "use client";
 
+// import { streamLauraMessage } from "@/lib/laura-sse.client";
+// SSE streaming is available but opt-in. Set USE_STREAMING = true to enable.
+const USE_STREAMING = false;
+
 import { useState } from "react";
 import { LauraAgendaCard } from "@/components/laura/laura-agenda-card";
 import { LauraComposer } from "@/components/laura/laura-composer";
