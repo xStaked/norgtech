@@ -1,3 +1,10 @@
+export interface LauraClarificationOption {
+  id: string;
+  label: string;
+}
+
+import { FollowUpTaskType, OpportunityStage } from "@prisma/client";
+
 export interface LauraProposalPayload {
   blocks: {
     interaction?: {
@@ -10,14 +17,14 @@ export interface LauraProposalPayload {
       opportunityId?: string;
       createNew?: boolean;
       title?: string;
-      stage?: string;
+      stage?: OpportunityStage;
     };
     followUp?: {
       enabled: boolean;
       title: string;
       dueAt: string;
       opportunityId?: string;
-      type: string;
+      type: FollowUpTaskType;
     };
     task?: {
       enabled: boolean;
@@ -34,12 +41,23 @@ export interface LauraProposalPayload {
   };
 }
 
-export interface LauraAgendaItem {
-  id: string;
-  type: "visit" | "follow_up_task";
-  label: string;
-  scheduledAt?: string;
-  priorityGroup?: number;
+export interface LauraStoredProposalPayload extends LauraProposalPayload {
+  internal?: {
+    customerId?: string;
+    customerLabel?: string;
+    opportunityId?: string;
+    occurredAt?: string;
+  };
+}
+
+export interface LauraAgendaPayload {
+  items: Array<{
+    id: string;
+    type: "visit" | "follow_up_task";
+    label: string;
+    scheduledAt?: string;
+    priorityGroup?: number;
+  }>;
 }
 
 export type LauraAssistantResponse =
@@ -49,7 +67,7 @@ export type LauraAssistantResponse =
       message: string;
       clarification: {
         type: "customer" | "opportunity" | "date" | "action";
-        options?: Array<{ id: string; label: string }>;
+        options?: LauraClarificationOption[];
       };
     }
   | {
@@ -63,9 +81,7 @@ export type LauraAssistantResponse =
       mode: "agenda";
       sessionId: string;
       message: string;
-      agenda: {
-        items: LauraAgendaItem[];
-      };
+      agenda: LauraAgendaPayload;
     };
 
 export interface LauraSessionResponse {
@@ -79,17 +95,17 @@ export interface LauraSessionResponse {
     kind: string;
     content: string;
     payload?: unknown;
-    createdAt: string;
+    createdAt: Date;
   }>;
   proposals: Array<{
     id: string;
     status: string;
     payload: unknown;
-    createdAt: string;
-    updatedAt: string;
+    createdAt: Date;
+    updatedAt: Date;
   }>;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface LauraProposalConfirmationResponse {
@@ -99,21 +115,4 @@ export interface LauraProposalConfirmationResponse {
   saved: string[];
   discarded: string[];
   createdIds: Record<string, string>;
-}
-
-export type LauraMessageStatus = "pending" | "confirmed" | "error";
-
-export interface LauraMessageItem {
-  id: string;
-  role: "user" | "assistant" | "system";
-  kind: string;
-  content: string;
-  createdAt: string;
-  status?: LauraMessageStatus;
-}
-
-export interface LauraDraftProposal {
-  proposalId: string;
-  proposal: LauraProposalPayload;
-  status?: string;
 }

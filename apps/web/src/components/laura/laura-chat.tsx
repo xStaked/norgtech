@@ -1,6 +1,11 @@
 "use client";
 
+// import { streamLauraMessage } from "@/lib/laura-sse.client";
+// SSE streaming is available but opt-in. Set USE_STREAMING = true to enable.
+const USE_STREAMING = false;
+
 import { useState } from "react";
+import { LauraAgendaCard } from "@/components/laura/laura-agenda-card";
 import { LauraComposer } from "@/components/laura/laura-composer";
 import { LauraMessageList } from "@/components/laura/laura-message-list";
 import { LauraProposalCard } from "@/components/laura/laura-proposal-card";
@@ -9,9 +14,11 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
 import type {
+  LauraAgendaItem,
   LauraAssistantResponse,
   LauraDraftProposal,
   LauraMessageItem,
+  LauraMessageStatus,
   LauraProposalConfirmationResponse,
   LauraProposalPayload,
   LauraSessionResponse,
@@ -73,6 +80,7 @@ export function LauraChat({
   const [messages, setMessages] = useState<LauraMessageItem[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [draftProposal, setDraftProposal] = useState<LauraDraftProposal | null>(null);
+  const [agendaItems, setAgendaItems] = useState<LauraAgendaItem[]>([]);
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -95,6 +103,7 @@ export function LauraChat({
 
   async function handleSend(content: string) {
     const clientMessage = createClientMessage(content);
+    (clientMessage as typeof clientMessage & { status: LauraMessageStatus }).status = "pending";
 
     setBusy(true);
     setError(null);
@@ -119,6 +128,13 @@ export function LauraChat({
 
       const body = (await response.json()) as LauraAssistantResponse;
       setSessionId(body.sessionId);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === clientMessage.id
+            ? { ...message, status: "confirmed" as LauraMessageStatus }
+            : message,
+        ),
+      );
       setMessages((current) => [
         ...current,
         createAssistantMessage(body.message, body.mode),
@@ -134,9 +150,19 @@ export function LauraChat({
         setDraftProposal(null);
       }
 
+      if (body.mode === "agenda") {
+        setAgendaItems(body.agenda.items);
+      }
+
       await loadSession(body.sessionId);
     } catch (caughtError) {
-      setMessages((current) => current.filter((message) => message.id !== clientMessage.id));
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === clientMessage.id
+            ? { ...message, status: "error" as LauraMessageStatus }
+            : message,
+        ),
+      );
       setError(
         caughtError instanceof Error
           ? caughtError.message
@@ -193,6 +219,11 @@ export function LauraChat({
     } finally {
       setConfirming(false);
     }
+  }
+
+  function handleRetry(content: string) {
+    setMessages((current) => current.filter((m) => m.status !== "error"));
+    void handleSend(content);
   }
 
   return (
@@ -268,7 +299,8 @@ export function LauraChat({
               {error}
             </div>
           ) : null}
-          <LauraMessageList messages={messages} busy={busy} />
+          <LauraMessageList messages={messages} busy={busy} onRetry={handleRetry} />
+          {agendaItems.length > 0 && <LauraAgendaCard items={agendaItems} />}
         </div>
 
         <div

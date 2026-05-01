@@ -70,6 +70,25 @@ enum FollowUpTaskType {
   otro
 }
 
+enum LauraMessageRole {
+  user
+  assistant
+  system
+}
+
+enum LauraMessageKind {
+  report
+  agenda_query
+  clarification
+  proposal
+}
+
+enum LauraProposalStatus {
+  draft
+  confirmed
+  discarded
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -82,6 +101,43 @@ model User {
   assignedCustomers Customer[] @relation("CustomerAssignedUser")
   assignedOrders Order[]
   createdReports ExecutiveReport[]
+  lauraSessions LauraSession[]
+}
+
+model LauraSession {
+  id              String         @id @default(cuid())
+  ownerUserId     String
+  contextType     String?
+  contextEntityId String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  ownerUser       User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  messages        LauraMessage[]
+  proposals       LauraProposal[]
+}
+
+model LauraMessage {
+  id        String           @id @default(cuid())
+  sessionId String
+  role      LauraMessageRole
+  kind      LauraMessageKind
+  content   String
+  payload   Json?
+  createdAt DateTime         @default(now())
+  session   LauraSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  proposals LauraProposal[]
+}
+
+model LauraProposal {
+  id        String               @id @default(cuid())
+  sessionId String
+  messageId String
+  status    LauraProposalStatus  @default(draft)
+  payload   Json
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+  message   LauraMessage         @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  session   LauraSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model AuditLog {

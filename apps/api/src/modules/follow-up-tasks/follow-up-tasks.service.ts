@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { FollowUpTaskStatus } from "@prisma/client";
+import { FollowUpTaskStatus, FollowUpTaskType, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -34,39 +34,30 @@ export class FollowUpTasksService {
   ) {}
 
   async create(user: AuthUser, dto: CreateFollowUpTaskDto) {
-    await this.assertCustomerExists(dto.customerId);
+    return this.prisma.$transaction((tx) => this.createRecord(user, dto, tx));
+  }
 
-    if (dto.opportunityId) {
-      await this.assertOpportunityExists(dto.opportunityId);
+  createFromLaura(
+    user: AuthUser,
+    input: {
+      customerId: string;
+      opportunityId?: string;
+      type: FollowUpTaskType;
+      title: string;
+      dueAt: string;
+    },
+    client?: Prisma.TransactionClient,
+  ) {
+    if (client) {
+      return this.createRecord(user, {
+        ...input,
+        assignedToUserId: user.id,
+      }, client);
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const task = await tx.followUpTask.create({
-        data: {
-          customerId: dto.customerId,
-          opportunityId: dto.opportunityId,
-          type: dto.type,
-          title: dto.title,
-          dueAt: new Date(dto.dueAt),
-          notes: dto.notes,
-          assignedToUserId: dto.assignedToUserId,
-          createdBy: user.id,
-          updatedBy: user.id,
-        },
-      });
-
-      await this.auditService.record(
-        {
-          entityType: "FollowUpTask",
-          entityId: task.id,
-          action: "follow_up_task.created",
-          actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(task)),
-        },
-        tx,
-      );
-
-      return task;
+    return this.create(user, {
+      ...input,
+      assignedToUserId: user.id,
     });
   }
 
@@ -277,5 +268,52 @@ export class FollowUpTasksService {
     nextStatus: FollowUpTaskStatus,
   ) {
     return allowedStatusTransitions[currentStatus].includes(nextStatus);
+  }
+
+  private async createRecord(
+    user: AuthUser,
+    dto: {
+      customerId: string;
+      opportunityId?: string;
+      type: FollowUpTaskType;
+      title: string;
+      dueAt: string;
+      notes?: string;
+      assignedToUserId?: string;
+    },
+    client: Prisma.TransactionClient,
+  ) {
+    await this.assertCustomerExists(dto.customerId);
+
+    if (dto.opportunityId) {
+      await this.assertOpportunityExists(dto.opportunityId);
+    }
+
+    const task = await client.followUpTask.create({
+      data: {
+        customerId: dto.customerId,
+        opportunityId: dto.opportunityId,
+        type: dto.type,
+        title: dto.title,
+        dueAt: new Date(dto.dueAt),
+        notes: dto.notes,
+        assignedToUserId: dto.assignedToUserId,
+        createdBy: user.id,
+        updatedBy: user.id,
+      },
+    });
+
+    await this.auditService.record(
+      {
+        entityType: "FollowUpTask",
+        entityId: task.id,
+        action: "follow_up_task.created",
+        actorUserId: user.id,
+        nextState: JSON.parse(JSON.stringify(task)),
+      },
+      client,
+    );
+
+    return task;
   }
 }

@@ -8,5 +8,6 @@ import { FollowUpTasksService } from "./follow-up-tasks.service";
   imports: [AuthModule, AuditModule],
   controllers: [FollowUpTasksController],
   providers: [FollowUpTasksService],
+  exports: [FollowUpTasksService],
 })
 export class FollowUpTasksModule {}

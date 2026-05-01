@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { VisitStatus } from "@prisma/client";
+import { Prisma, VisitStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -35,40 +35,55 @@ export class VisitsService {
   ) {}
 
   async create(user: AuthUser, dto: CreateVisitDto) {
-    await this.assertCustomerExists(dto.customerId);
+    return this.prisma.$transaction((tx) => this.createRecord(user, dto, tx));
+  }
 
-    if (dto.opportunityId) {
-      await this.assertOpportunityExists(dto.opportunityId);
+  createFromLaura(
+    user: AuthUser,
+    input: {
+      customerId?: string;
+      customerLabel?: string;
+      opportunityId?: string;
+      occurredAt?: string;
+      summary: string;
+      rawMessage: string;
+      nextStep?: string;
+      signals?: {
+        objections: string[];
+        risk?: string;
+        buyingIntent?: string;
+      };
+    },
+    client?: Prisma.TransactionClient,
+  ) {
+    if (!input.customerId) {
+      throw new NotFoundException("Customer not found");
     }
 
-    return this.prisma.$transaction(async (tx) => {
-      const visit = await tx.visit.create({
-        data: {
-          customerId: dto.customerId,
-          opportunityId: dto.opportunityId,
-          scheduledAt: new Date(dto.scheduledAt),
-          summary: dto.summary,
-          notes: dto.notes,
-          nextStep: dto.nextStep,
-          assignedToUserId: dto.assignedToUserId,
-          createdBy: user.id,
-          updatedBy: user.id,
-        },
-      });
+    const notes = [
+      `Mensaje original: ${input.rawMessage}`,
+      input.signals?.objections.length ? `Objeciones: ${input.signals.objections.join(", ")}` : "",
+      input.signals?.risk ? `Riesgo: ${input.signals.risk}` : "",
+      input.signals?.buyingIntent ? `Intencion de compra: ${input.signals.buyingIntent}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
 
-      await this.auditService.record(
-        {
-          entityType: "Visit",
-          entityId: visit.id,
-          action: "visit.created",
-          actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(visit)),
-        },
-        tx,
-      );
+    const payload = {
+      customerId: input.customerId,
+      opportunityId: input.opportunityId,
+      scheduledAt: input.occurredAt ?? new Date().toISOString(),
+      summary: input.summary,
+      notes,
+      nextStep: input.nextStep,
+      assignedToUserId: user.id,
+    };
 
-      return visit;
-    });
+    if (client) {
+      return this.createRecord(user, payload, client);
+    }
+
+    return this.create(user, payload);
   }
 
   async updateStatus(
@@ -277,5 +292,52 @@ export class VisitsService {
     nextStatus: VisitStatus,
   ) {
     return allowedStatusTransitions[currentStatus].includes(nextStatus);
+  }
+
+  private async createRecord(
+    user: AuthUser,
+    dto: {
+      customerId: string;
+      opportunityId?: string;
+      scheduledAt: string;
+      notes?: string;
+      summary?: string;
+      nextStep?: string;
+      assignedToUserId?: string;
+    },
+    client: Prisma.TransactionClient,
+  ) {
+    await this.assertCustomerExists(dto.customerId);
+
+    if (dto.opportunityId) {
+      await this.assertOpportunityExists(dto.opportunityId);
+    }
+
+    const visit = await client.visit.create({
+      data: {
+        customerId: dto.customerId,
+        opportunityId: dto.opportunityId,
+        scheduledAt: new Date(dto.scheduledAt),
+        summary: dto.summary,
+        notes: dto.notes,
+        nextStep: dto.nextStep,
+        assignedToUserId: dto.assignedToUserId,
+        createdBy: user.id,
+        updatedBy: user.id,
+      },
+    });
+
+    await this.auditService.record(
+      {
+        entityType: "Visit",
+        entityId: visit.id,
+        action: "visit.created",
+        actorUserId: user.id,
+        nextState: JSON.parse(JSON.stringify(visit)),
+      },
+      client,
+    );
+
+    return visit;
   }
 }
