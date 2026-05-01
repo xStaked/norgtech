@@ -5,9 +5,11 @@ import {
   Param,
   Post,
   Query,
+  Sse,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import { Observable } from "rxjs";
 import { Throttle } from "@nestjs/throttler";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -75,5 +77,35 @@ export class LauraController {
     query: QuerySessionDto,
   ) {
     return this.lauraService.getSession(user, sessionId, query);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Sse("messages/stream")
+  streamMessage(
+    @CurrentUser() user: AuthUser,
+    @Query("content") content: string,
+    @Query("sessionId") sessionId?: string,
+    @Query("contextType") contextType?: string,
+    @Query("contextEntityId") contextEntityId?: string,
+  ) {
+    const dto = new CreateMessageDto();
+    dto.content = content;
+    dto.sessionId = sessionId;
+    dto.contextType = contextType;
+    dto.contextEntityId = contextEntityId;
+
+    return new Observable((subscriber) => {
+      this.lauraService
+        .handleMessage(user, dto)
+        .then((result) => {
+          subscriber.next({ data: JSON.stringify(result) });
+          subscriber.complete();
+        })
+        .catch((error) => {
+          subscriber.next({ data: JSON.stringify({ mode: "error", message: error.message }) });
+          subscriber.complete();
+        });
+    });
   }
 }
