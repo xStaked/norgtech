@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-
+import { ConfigModule, ConfigService } from "@nestjs/config";
 import { PrismaModule } from "../../prisma/prisma.module";
 import { AuthModule } from "../auth/auth.module";
 import { FollowUpTasksModule } from "../follow-up-tasks/follow-up-tasks.module";
@@ -17,16 +17,6 @@ import { LauraService } from "./laura.service";
 import { OpportunitiesModule } from "../opportunities/opportunities.module";
 import { VisitsModule } from "../visits/visits.module";
 
-const llmProvider = process.env.LAURA_LLM_PROVIDER === "deterministic" || !process.env.LAURA_LLM_PROVIDER
-  ? {
-      provide: LAURA_EXTRACTOR_PROVIDER,
-      useExisting: DeterministicLauraExtractorProvider,
-    }
-  : {
-      provide: LAURA_EXTRACTOR_PROVIDER,
-      useClass: LauraLlmExtractorProvider,
-    };
-
 @Module({
   imports: [
     PrismaModule,
@@ -34,7 +24,7 @@ const llmProvider = process.env.LAURA_LLM_PROVIDER === "deterministic" || !proce
     OpportunitiesModule,
     FollowUpTasksModule,
     VisitsModule,
-    
+    ConfigModule.forRoot(),
   ],
   controllers: [LauraController],
   providers: [
@@ -44,7 +34,23 @@ const llmProvider = process.env.LAURA_LLM_PROVIDER === "deterministic" || !proce
     LauraPersistenceService,
     LauraLlmService,
     DeterministicLauraExtractorProvider,
-    llmProvider,
+    {
+      provide: LAURA_EXTRACTOR_PROVIDER,
+      useFactory: (configService: ConfigService) => {
+        const provider = configService.get<string>("LAURA_LLM_PROVIDER") ?? "deterministic";
+        const hasApiKey = provider === "deepseek"
+          ? Boolean(configService.get<string>("DEEPSEEK_API_KEY"))
+          : provider === "qwen"
+            ? Boolean(configService.get<string>("QWEN_API_KEY"))
+            : false;
+
+        if (provider !== "deterministic" && hasApiKey) {
+          return new LauraLlmExtractorProvider(configService);
+        }
+        return new DeterministicLauraExtractorProvider();
+      },
+      inject: [ConfigService],
+    },
   ],
   exports: [LauraService],
 })

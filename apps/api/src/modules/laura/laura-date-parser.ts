@@ -1,11 +1,11 @@
-import chrono, { ParsingComponents, ParsingResult } from "chrono-node";
+import * as chrono from "chrono-node";
 
-const esConfiguration = chrono.casual.clone();
+const esConfiguration = chrono.es.casual.clone();
 esConfiguration.refiners.push({
-  refine: (_context: chrono.ParsingContext, results: ParsingResult[]) => {
+  refine: (_context: chrono.ParsingContext, results: chrono.ParsingResult[]) => {
     results.forEach((result) => {
       if (result.start.isCertain("month") && !result.start.isCertain("hour")) {
-        (result.start as ParsingComponents).assign("hour", 15);
+        result.start.assign("hour", 15);
       }
     });
     return results;

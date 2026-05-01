@@ -25,26 +25,29 @@ type LauraProvider = keyof typeof PROVIDER_CONFIG;
 
 @Injectable()
 export class LauraLlmExtractorProvider implements LauraExtractorProvider {
-  private readonly client: OpenAI;
+  private readonly client: OpenAI | null;
   private readonly model: string;
   private readonly timeoutMs: number;
   private readonly logger = new Logger(LauraLlmExtractorProvider.name);
+  private readonly providerName: string;
 
   constructor(private readonly configService: ConfigService) {
     const provider = (this.configService.get<string>("LAURA_LLM_PROVIDER") ?? "deepseek") as LauraProvider;
     const config = PROVIDER_CONFIG[provider] ?? PROVIDER_CONFIG.deepseek;
+    this.providerName = provider;
 
     const apiKey = this.configService.get<string>(config.envKey);
-    if (!apiKey) {
-      throw new Error(`${config.envKey} is required when using ${provider} as Laura LLM provider`);
-    }
-
     const baseUrl = this.configService.get<string>(config.envBaseUrl) ?? config.fallbackBaseUrl;
     this.model = this.configService.get<string>("LAURA_LLM_MODEL") ?? config.defaultModel;
     this.timeoutMs = this.configService.get<number>("LAURA_LLM_TIMEOUT_MS") ?? 30000;
 
-    this.client = new OpenAI({ apiKey, baseURL: baseUrl });
-    this.logger.log(`Laura LLM provider: ${provider}, model: ${this.model}, baseUrl: ${baseUrl}`);
+    if (!apiKey) {
+      this.client = null;
+      this.logger.warn(`No API key configured for ${provider} (${config.envKey}). Laura will use deterministic extraction as fallback.`);
+    } else {
+      this.client = new OpenAI({ apiKey, baseURL: baseUrl });
+      this.logger.log(`Laura LLM provider: ${provider}, model: ${this.model}, baseUrl: ${baseUrl}`);
+    }
   }
 
   async extract(input: {
@@ -53,6 +56,10 @@ export class LauraLlmExtractorProvider implements LauraExtractorProvider {
     recentMessages: string[];
     systemPrompt: string;
   }): Promise<string> {
+    if (!this.client) {
+      throw new BadRequestException(`Laura LLM provider (${this.providerName}) is not configured. Set the appropriate API key in environment variables.`);
+    }
+
     const filledSystemPrompt = fillPromptSections(input.systemPrompt, {
       context: input.contextSummary ?? "",
       recentMessages: input.recentMessages.join("\n"),
