@@ -51,6 +51,21 @@ type ProposalRecord = {
   updatedAt: Date;
 };
 
+type CustomerRecord = {
+  id: string;
+  displayName: string;
+  legalName: string;
+  contacts: Array<{
+    id: string;
+    fullName: string;
+  }>;
+};
+
+type OpportunityRecord = {
+  id: string;
+  customerId: string;
+};
+
 const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
 
 describe("Laura", () => {
@@ -61,6 +76,8 @@ describe("Laura", () => {
   let proposals: ProposalRecord[];
   let visits: Array<Record<string, unknown>>;
   let followUpTasks: Array<Record<string, unknown>>;
+  let customers: CustomerRecord[];
+  let opportunities: OpportunityRecord[];
 
   const seedSession = (overrides: Partial<SessionRecord> = {}): SessionRecord => {
     const session: SessionRecord = {
@@ -119,6 +136,58 @@ describe("Laura", () => {
     proposals = [];
     visits = [];
     followUpTasks = [];
+    customers = [
+      {
+        id: "customer-acme",
+        displayName: "Acme Piscicola SAS",
+        legalName: "Acme Piscicola SAS",
+        contacts: [
+          {
+            id: "contact-acme-1",
+            fullName: "Laura Acosta",
+          },
+        ],
+      },
+      {
+        id: "customer-perez-a",
+        displayName: "Perez Acuicola SAS",
+        legalName: "Perez Acuicola SAS",
+        contacts: [
+          {
+            id: "contact-perez-a-1",
+            fullName: "Juan Perez",
+          },
+        ],
+      },
+      {
+        id: "customer-perez-b",
+        displayName: "Perez Trading",
+        legalName: "Comercializadora Perez Trading SAS",
+        contacts: [
+          {
+            id: "contact-perez-b-1",
+            fullName: "Patricia Gomez",
+          },
+        ],
+      },
+      {
+        id: "customer-lago",
+        displayName: "Alimentos del Lago",
+        legalName: "Alimentos del Lago SAS",
+        contacts: [
+          {
+            id: "contact-lago-1",
+            fullName: "Carlos Mejia",
+          },
+        ],
+      },
+    ];
+    opportunities = [
+      {
+        id: "opportunity-lago-1",
+        customerId: "customer-lago",
+      },
+    ];
 
     const user = {
       findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
@@ -151,8 +220,15 @@ describe("Laura", () => {
     const prismaStub: Record<string, unknown> = {
       user,
       customer: {
-        findMany: async () => [],
-        findUnique: async () => null,
+        findMany: async () => customers,
+        findUnique: async ({ where }: { where: { id: string } }) => {
+          return customers.find((customer) => customer.id === where.id) ?? null;
+        },
+      },
+      opportunity: {
+        findUnique: async ({ where }: { where: { id: string } }) => {
+          return opportunities.find((opportunity) => opportunity.id === where.id) ?? null;
+        },
       },
       visit: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -192,13 +268,24 @@ describe("Laura", () => {
         },
         findMany: async ({
           where,
+          take,
+          orderBy,
         }: {
           where: { sessionId: string };
+          take?: number;
           orderBy?: { createdAt: "asc" | "desc" };
         }) => {
-          return messages
+          const sorted = messages
             .filter((message) => message.sessionId === where.sessionId)
-            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+            .sort((a, b) => {
+              if (orderBy?.createdAt === "desc") {
+                return b.createdAt.getTime() - a.createdAt.getTime();
+              }
+
+              return a.createdAt.getTime() - b.createdAt.getTime();
+            });
+
+          return typeof take === "number" ? sorted.slice(0, take) : sorted;
         },
       },
       lauraProposal: {
@@ -214,13 +301,47 @@ describe("Laura", () => {
         },
         findMany: async ({
           where,
+          take,
+          orderBy,
         }: {
           where: { sessionId: string };
+          take?: number;
           orderBy?: { createdAt: "asc" | "desc" };
         }) => {
-          return proposals
+          const sorted = proposals
             .filter((proposal) => proposal.sessionId === where.sessionId)
-            .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+            .sort((a, b) => {
+              if (orderBy?.createdAt === "desc") {
+                return b.createdAt.getTime() - a.createdAt.getTime();
+              }
+
+              return a.createdAt.getTime() - b.createdAt.getTime();
+            });
+
+          return typeof take === "number" ? sorted.slice(0, take) : sorted;
+        },
+        updateMany: async ({
+          where,
+          data,
+        }: {
+          where: { id: string; status: LauraProposalStatus };
+          data: Partial<ProposalRecord>;
+        }) => {
+          const index = proposals.findIndex((proposal) =>
+            proposal.id === where.id && proposal.status === where.status,
+          );
+
+          if (index === -1) {
+            return { count: 0 };
+          }
+
+          proposals[index] = {
+            ...proposals[index],
+            ...data,
+            updatedAt: new Date("2026-04-30T01:00:00.000Z"),
+          };
+
+          return { count: 1 };
         },
         update: async ({
           where,
@@ -248,12 +369,16 @@ describe("Laura", () => {
       },
       $transaction: async <T>(
         callback: (tx: {
+          customer: typeof prismaStub.customer;
+          opportunity: typeof prismaStub.opportunity;
           lauraSession: typeof prismaStub.lauraSession;
           lauraMessage: typeof prismaStub.lauraMessage;
           lauraProposal: typeof prismaStub.lauraProposal;
         }) => Promise<T>,
       ) => {
         return callback({
+          customer: prismaStub.customer as typeof prismaStub.customer,
+          opportunity: prismaStub.opportunity as typeof prismaStub.opportunity,
           lauraSession: prismaStub.lauraSession as typeof prismaStub.lauraSession,
           lauraMessage: prismaStub.lauraMessage as typeof prismaStub.lauraMessage,
           lauraProposal: prismaStub.lauraProposal as typeof prismaStub.lauraProposal,
@@ -398,6 +523,227 @@ describe("Laura", () => {
     expect(body).toMatchObject(expected);
     expect(visits).toHaveLength(0);
     expect(followUpTasks).toHaveLength(0);
+  });
+
+  it("resolves a customer from a fuzzy contact-name match in free-form text", async () => {
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Hablé con carlos mejia y quiere reactivar el pedido de alimento.",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body.mode).toBe("proposal");
+    expect(body.proposal.customer).toMatchObject({
+      status: "resolved",
+      selectedOption: {
+        id: "customer-lago",
+        label: "Alimentos del Lago",
+      },
+    });
+  });
+
+  it("uses the pending clarification in session memory when the follow-up says si, el primero", async () => {
+    const clarificationResponse = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
+      })
+      .expect(201);
+
+    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        sessionId: clarification.sessionId,
+        content: "si, el primero",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body.mode).toBe("proposal");
+    expect(body.sessionId).toBe(clarification.sessionId);
+    expect(body.proposal.customer).toMatchObject({
+      status: "resolved",
+      selectedOption: {
+        id: "customer-perez-a",
+        label: "Perez Acuicola SAS",
+      },
+    });
+  });
+
+  it("keeps Laura in clarification mode when a pending clarification gets a non-resolving follow-up", async () => {
+    const clarificationResponse = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
+      })
+      .expect(201);
+
+    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        sessionId: clarification.sessionId,
+        content: "si",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
+
+    expect(body.mode).toBe("clarification");
+    expect(body.sessionId).toBe(clarification.sessionId);
+    expect(body.clarification.options).toMatchObject([
+      { id: "customer-perez-a", label: "Perez Acuicola SAS" },
+      { id: "customer-perez-b", label: "Perez Trading" },
+    ]);
+    expect(proposals).toHaveLength(0);
+  });
+
+  it("allows correcting a pending clarification with a different explicit customer in the follow-up", async () => {
+    const clarificationResponse = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
+      })
+      .expect(201);
+
+    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        sessionId: clarification.sessionId,
+        content: "No, era Alimentos del Lago, quiere 10 toneladas",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body.mode).toBe("proposal");
+    expect(body.proposal.customer).toMatchObject({
+      status: "resolved",
+      selectedOption: {
+        id: "customer-lago",
+        label: "Alimentos del Lago",
+      },
+    });
+    expect(body.proposal.summary).toContain("Alimentos del Lago");
+    expect(body.proposal.summary).toContain("10 toneladas");
+    expect(body.proposal.summary).not.toContain("Perez");
+  });
+
+  it("does not treat digits inside larger numbers as ordinal clarification picks", async () => {
+    const clarificationResponse = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        content: "Hablé con el cliente Perez y quiere retomar la propuesta.",
+      })
+      .expect(201);
+
+    const clarification = clarificationResponse.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
+
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        sessionId: clarification.sessionId,
+        content: "Perez Trading, 10 toneladas",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body.mode).toBe("proposal");
+    expect(body.proposal.customer).toMatchObject({
+      status: "resolved",
+      selectedOption: {
+        id: "customer-perez-b",
+        label: "Perez Trading",
+      },
+    });
+    expect(body.proposal.summary).toContain("10 toneladas");
+    expect(body.proposal.summary).toContain("retomar la propuesta");
+  });
+
+  it("keeps contextual launch hints but still suggests another customer when the text names one explicitly", async () => {
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        contextType: "customer",
+        contextEntityId: "customer-acme",
+        content: "Vine desde Acme pero esta nota es sobre Perez y su nueva propuesta.",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "clarification" }>;
+
+    expect(body.mode).toBe("clarification");
+    expect(body.clarification.options).toMatchObject([
+      { id: "customer-perez-a", label: "Perez Acuicola SAS" },
+      { id: "customer-perez-b", label: "Perez Trading" },
+    ]);
+    expect(sessions[0]).toMatchObject({
+      contextType: "customer",
+      contextEntityId: "customer-acme",
+    });
+  });
+
+  it("resolves the linked customer when launched from an opportunity and the text does not name another customer", async () => {
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        contextType: "opportunity",
+        contextEntityId: "opportunity-lago-1",
+        content: "Quiere revisar condiciones comerciales la próxima semana.",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body.mode).toBe("proposal");
+    expect(body.proposal.customer).toMatchObject({
+      status: "resolved",
+      selectedOption: {
+        id: "customer-lago",
+        label: "Alimentos del Lago",
+      },
+    });
+  });
+
+  it("leaves the proposal customer unresolved when neither text nor context resolves deterministically", async () => {
+    const response = await request(globalThis.__LAURA_APP__)
+      .post("/laura/messages")
+      .set("Authorization", `Bearer ${globalThis.__LAURA_ADMIN_TOKEN__}`)
+      .send({
+        contextType: "opportunity",
+        contextEntityId: "opportunity-missing",
+        content: "Necesita seguimiento comercial pronto.",
+      })
+      .expect(201);
+
+    const body = response.body as Extract<LauraAssistantResponse, { mode: "proposal" }>;
+
+    expect(body.mode).toBe("proposal");
+    expect(body.proposal.customer).toMatchObject({
+      status: "missing",
+    });
+    expect(body.proposal.customer.selectedOption).toBeUndefined();
   });
 
   it("confirms a proposal for a session owned by the current user", async () => {
