@@ -1,7 +1,5 @@
 "use client";
 
-const USE_STREAMING = false;
-
 import { useState } from "react";
 import { LauraAgendaCard } from "@/components/laura/laura-agenda-card";
 import { LauraChatHeader } from "@/components/laura/laura-chat-header";
@@ -10,6 +8,7 @@ import { LauraMessageList } from "@/components/laura/laura-message-list";
 import { LauraProposalCard } from "@/components/laura/laura-proposal-card";
 import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
+import { getSessionTokenClient } from "@/lib/auth";
 import type {
   LauraAgendaItem,
   LauraAssistantResponse,
@@ -20,6 +19,8 @@ import type {
   LauraProposalPayload,
   LauraSessionResponse,
 } from "./laura-types";
+
+const NEXT_PUBLIC_USE_LAURO_STREAMING = process.env.NEXT_PUBLIC_USE_LAURO_STREAMING === "true";
 
 interface LauraChatInitialContext {
   contextType: "customer" | "opportunity";
@@ -69,6 +70,69 @@ function extractDraftProposal(session: LauraSessionResponse): LauraDraftProposal
   };
 }
 
+async function fetchLauraStream(
+  sessionId: string | null,
+  content: string,
+  contextType?: string,
+  contextEntityId?: string,
+): Promise<LauraAssistantResponse> {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+  const token = getSessionTokenClient();
+
+  const response = await fetch(`${apiUrl}/laura/messages/stream`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      Accept: "text/event-stream",
+    },
+    body: JSON.stringify({
+      userId: "",
+      sessionId: sessionId ?? "",
+      content,
+      contextType,
+      contextEntityId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Stream error: ${response.status}`);
+  }
+
+  const body = response.body;
+  if (!body) throw new Error("No response body");
+
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: LauraAssistantResponse | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        try {
+          const parsed = JSON.parse(line.slice(6)) as { event?: string; node?: string; mode?: string; sessionId?: string; message?: string } & LauraAssistantResponse;
+          if (parsed.event === "result" || parsed.mode) {
+            result = parsed as LauraAssistantResponse;
+          }
+        } catch {
+          // skip non-JSON data
+        }
+      }
+    }
+  }
+
+  if (result) return result;
+  throw new Error("Laura stream finished without result");
+}
+
 export function LauraChat({
   initialContext,
 }: {
@@ -114,21 +178,32 @@ export function LauraChat({
     setMessages((current) => [...current, clientMessage]);
 
     try {
-      const response = await apiFetchClient("/laura/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          sessionId: sessionId ?? undefined,
+      let body: LauraAssistantResponse;
+
+      if (NEXT_PUBLIC_USE_LAURO_STREAMING) {
+        body = await fetchLauraStream(
+          sessionId,
           content,
-          contextType: sessionId ? undefined : initialContext?.contextType,
-          contextEntityId: sessionId ? undefined : initialContext?.contextEntityId,
-        }),
-      });
+          sessionId ? undefined : initialContext?.contextType,
+          sessionId ? undefined : initialContext?.contextEntityId,
+        );
+      } else {
+        const response = await apiFetchClient("/laura/messages", {
+          method: "POST",
+          body: JSON.stringify({
+            sessionId: sessionId ?? undefined,
+            content,
+            contextType: sessionId ? undefined : initialContext?.contextType,
+            contextEntityId: sessionId ? undefined : initialContext?.contextEntityId,
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Laura no pudo procesar el mensaje.");
+        if (!response.ok) {
+          throw new Error("Laura no pudo procesar el mensaje.");
+        }
+
+        body = (await response.json()) as LauraAssistantResponse;
       }
-
-      const body = (await response.json()) as LauraAssistantResponse;
       setSessionId(body.sessionId);
       setMessages((current) =>
         current.map((message) =>

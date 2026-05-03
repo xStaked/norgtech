@@ -5,6 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
+import { Observable } from "rxjs";
 import {
   FollowUpTaskStatus,
   LauraMessageKind,
@@ -338,6 +339,81 @@ export class LauraService {
     }
 
     return response.json() as Promise<LauraAssistantResponse>;
+  }
+
+  streamMessageViaAgent(
+    user: AuthUser,
+    dto: CreateMessageDto,
+  ): Observable<MessageEvent> {
+    const url = `${this.agentBaseUrl}/stream`;
+    const serviceToken = this.configService.get<string>("LAURA_AGENT_SERVICE_TOKEN") ?? "";
+
+    return new Observable((subscriber) => {
+      const controller = new AbortController();
+
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          ...(serviceToken ? { Authorization: `Bearer ${serviceToken}` } : {}),
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          sessionId: dto.sessionId ?? "",
+          content: dto.content,
+          contextType: dto.contextType,
+          contextEntityId: dto.contextEntityId,
+        }),
+        signal: controller.signal,
+      })
+        .then(async (response) => {
+          if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            subscriber.next({ data: JSON.stringify({ event: "error", message: `Agent error (${response.status}): ${errorBody}` }) } as MessageEvent);
+            subscriber.complete();
+            return;
+          }
+
+          const body = response.body;
+          if (!body) {
+            subscriber.next({ data: JSON.stringify({ event: "error", message: "No response body" }) } as MessageEvent);
+            subscriber.complete();
+            return;
+          }
+
+          const reader = body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split("\n");
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              if (line.startsWith("data: ")) {
+                subscriber.next({ data: line.slice(6) } as MessageEvent);
+              }
+            }
+          }
+
+          if (buffer.startsWith("data: ")) {
+            subscriber.next({ data: buffer.slice(6) } as MessageEvent);
+          }
+
+          subscriber.complete();
+        })
+        .catch((error) => {
+          subscriber.next({ data: JSON.stringify({ event: "error", message: error.message }) } as MessageEvent);
+          subscriber.complete();
+        });
+
+      return () => controller.abort();
+    });
   }
 
   private buildProposalPayload(

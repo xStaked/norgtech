@@ -2,14 +2,18 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Query,
+  Res,
   Sse,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
 import { Observable } from "rxjs";
+import type { Response } from "express";
 import { Throttle } from "@nestjs/throttler";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -98,6 +102,10 @@ export class LauraController {
     dto.contextType = contextType;
     dto.contextEntityId = contextEntityId;
 
+    if (this.lauraService.useAgent) {
+      return this.lauraService.streamMessageViaAgent(user, dto);
+    }
+
     return new Observable((subscriber) => {
       this.lauraService
         .handleMessage(user, dto)
@@ -110,5 +118,67 @@ export class LauraController {
           subscriber.complete();
         });
     });
+  }
+
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Post("messages/stream")
+  async streamMessagePost(
+    @CurrentUser() user: AuthUser,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: CreateMessageDto,
+    @Res() res: Response,
+  ) {
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    const sendEvent = (event: string, data: unknown) => {
+      res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      if (this.lauraService.useAgent) {
+        const observable = this.lauraService.streamMessageViaAgent(user, dto);
+        await new Promise<void>((resolve, reject) => {
+          observable.subscribe({
+            next: (event) => {
+              try {
+                const parsed = JSON.parse(event.data) as Record<string, unknown>;
+                sendEvent(parsed.event as string ?? "data", parsed);
+              } catch {
+                res.write(`data: ${event.data}\n\n`);
+              }
+            },
+            error: (err) => {
+              sendEvent("error", { message: err.message ?? "Stream error" });
+              resolve();
+            },
+            complete: () => {
+              sendEvent("done", { ok: true });
+              resolve();
+            },
+          });
+        });
+      } else {
+        const result = await this.lauraService.handleMessage(user, dto);
+        sendEvent("result", result);
+        sendEvent("done", { ok: true });
+      }
+    } catch (error) {
+      sendEvent("error", {
+        message: error instanceof Error ? error.message : "Internal error",
+      });
+    }
+
+    res.end();
   }
 }
