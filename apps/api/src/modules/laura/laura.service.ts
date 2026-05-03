@@ -12,6 +12,7 @@ import {
   Prisma,
   VisitStatus,
 } from "@prisma/client";
+import { ConfigService } from "@nestjs/config";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { LauraContextResolverService } from "./laura-context-resolver.service";
@@ -43,6 +44,7 @@ export class LauraService {
     private readonly lauraContextResolverService: LauraContextResolverService,
     private readonly lauraLlmService: LauraLlmService,
     private readonly lauraPersistenceService: LauraPersistenceService,
+    private readonly configService: ConfigService,
   ) {}
 
   async handleMessage(
@@ -296,6 +298,46 @@ export class LauraService {
       createdAt: session.createdAt,
       updatedAt: session.updatedAt,
     };
+  }
+
+  private get agentBaseUrl(): string {
+    return this.configService.get<string>("LAURA_AGENT_BASE_URL") ?? "http://localhost:3100";
+  }
+
+  get useAgent(): boolean {
+    return this.configService.get<string>("LAURA_USE_AGENT") === "true";
+  }
+
+  async handleMessageViaAgent(
+    user: AuthUser,
+    dto: CreateMessageDto,
+  ): Promise<LauraAssistantResponse> {
+    const url = `${this.agentBaseUrl}/invoke`;
+    const serviceToken = this.configService.get<string>("LAURA_AGENT_SERVICE_TOKEN") ?? "";
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(serviceToken ? { Authorization: `Bearer ${serviceToken}` } : {}),
+      },
+      body: JSON.stringify({
+        userId: user.id,
+        sessionId: dto.sessionId ?? "",
+        content: dto.content,
+        contextType: dto.contextType,
+        contextEntityId: dto.contextEntityId,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new BadRequestException(
+        `Laura Agent Service error (${response.status}): ${errorBody}`,
+      );
+    }
+
+    return response.json() as Promise<LauraAssistantResponse>;
   }
 
   private buildProposalPayload(

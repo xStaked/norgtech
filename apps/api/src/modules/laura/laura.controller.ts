@@ -29,7 +29,7 @@ export class LauraController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Post("messages")
-  sendMessage(
+  async sendMessage(
     @CurrentUser() user: AuthUser,
     @Body(
       new ValidationPipe({
@@ -39,6 +39,9 @@ export class LauraController {
     )
     dto: CreateMessageDto,
   ) {
+    if (this.lauraService.useAgent) {
+      return this.lauraService.handleMessageViaAgent(user, dto);
+    }
     return this.lauraService.handleMessage(user, dto);
   }
 
