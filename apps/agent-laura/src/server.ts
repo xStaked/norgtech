@@ -1,6 +1,7 @@
 import { createLauraGraph } from "./graph/graph.js";
 import { config } from "./config/index.js";
-import type { AgentResponse, AgentMode } from "./types.js";
+import { getCheckpointer, closeCheckpointer, isPostgresCheckpointer } from "./checkpointer.js";
+import type { AgentResponse } from "./types.js";
 import type { LauraStateType } from "./graph/state.js";
 import { HumanMessage } from "@langchain/core/messages";
 
@@ -42,33 +43,45 @@ export async function handleInvoke(
   contextType?: string,
   contextEntityId?: string,
 ): Promise<AgentResponse> {
-  const graph = createLauraGraph();
+  const checkpointer = await getCheckpointer();
+  const graph = createLauraGraph(checkpointer);
 
-  const result = await graph.invoke({
-    sessionId,
-    userId,
-    messages: [new HumanMessage(content)],
-    mode: "greeting" as AgentMode,
-    customerContext: contextType === "customer" && contextEntityId
-      ? { id: contextEntityId, label: "" }
-      : null,
-    opportunityContext: contextType === "opportunity" && contextEntityId
-      ? { id: contextEntityId, label: "" }
-      : null,
-    clarificationOptions: null,
-    proposal: null,
-    proposalId: null,
-    proposalStatus: "draft",
-    agendaItems: null,
-    lastError: null,
-    _extractionResult: null,
-  });
+  const threadConfig = {
+    configurable: { thread_id: sessionId || crypto.randomUUID() },
+  };
+
+  const currentState = await graph.getState(threadConfig);
+  const isNewThread = currentState.values.messages === undefined || currentState.values.messages.length === 0;
+
+  const input = isNewThread
+    ? {
+        sessionId: sessionId || threadConfig.configurable.thread_id,
+        userId,
+        messages: [new HumanMessage(content)],
+        mode: "greeting" as const,
+        customerContext: contextType === "customer" && contextEntityId ? { id: contextEntityId, label: "" } : null,
+        opportunityContext: contextType === "opportunity" && contextEntityId ? { id: contextEntityId, label: "" } : null,
+        clarificationOptions: null,
+        proposal: null,
+        proposalId: null,
+        proposalStatus: "draft" as const,
+        agendaItems: null,
+        lastError: null,
+        _extractionResult: null,
+      }
+    : {
+        messages: [new HumanMessage(content)],
+      };
+
+  const result = await graph.invoke(input, threadConfig);
 
   return stateToResponse(result);
 }
 
 async function startServer() {
   const { createServer } = await import("http");
+
+  await getCheckpointer();
 
   const server = createServer(async (req, res) => {
     if (req.method === "POST" && req.url === "/invoke") {
@@ -92,7 +105,7 @@ async function startServer() {
       }
     } else if (req.method === "GET" && req.url === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ status: "ok" }));
+      res.end(JSON.stringify({ status: "ok", checkpointer: isPostgresCheckpointer() ? "postgres" : "memory" }));
     } else {
       res.writeHead(404, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Not found" }));
@@ -102,6 +115,15 @@ async function startServer() {
   server.listen(config.port, () => {
     console.log(`Laura Agent Service running on port ${config.port}`);
   });
+
+  const shutdown = async () => {
+    console.log("\nShutting down...");
+    await closeCheckpointer();
+    process.exit(0);
+  };
+
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 }
 
 export { startServer };

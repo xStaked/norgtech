@@ -46,6 +46,7 @@ graphBuilder
   .addEdge("confirm", END)
   .addEdge("discard", END);
 
-export function createLauraGraph() {
-  return graphBuilder.compile();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function createLauraGraph(checkpointer?: any) {
+  return graphBuilder.compile(checkpointer ? { checkpointer } : undefined);
 }
