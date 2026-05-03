@@ -1,0 +1,23 @@
+{
+  "name": "@norgtech/agent-laura",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@langchain/core": "^0.3.42",
+    "@langchain/langgraph": "^0.2.54",
+    "@langchain/langgraph-checkpoint-postgres": "^0.0.3",
+    "@langchain/openai": "^0.5.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.8.3",
+    "vitest": "^3.2.0"
+  }
+}
