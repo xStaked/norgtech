@@ -8,6 +8,12 @@ export function routerEdge(state: LauraStateType): string {
       return "agenda";
     case "clarification":
       return "clarify";
+    case "confirm":
+      return "confirm";
+    case "discard":
+      return "discard";
+    case "refine":
+      return "refine";
     case "proposal":
       return "extract_intent";
     default:

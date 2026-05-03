@@ -416,6 +416,53 @@ export class LauraService {
     });
   }
 
+  async confirmProposalViaAgent(
+    proposal: LauraProposalPayload,
+    customerId?: string,
+    opportunityId?: string,
+  ): Promise<LauraProposalConfirmationResponse> {
+    const url = `${this.agentBaseUrl}/confirm`;
+    const serviceToken = this.configService.get<string>("LAURA_AGENT_SERVICE_TOKEN") ?? "";
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(serviceToken ? { Authorization: `Bearer ${serviceToken}` } : {}),
+      },
+      body: JSON.stringify({
+        proposal,
+        customerId: customerId ?? "",
+        opportunityId: opportunityId ?? "",
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new BadRequestException(
+        `Laura Agent confirm error (${response.status}): ${errorBody}`,
+      );
+    }
+
+    const result = await response.json() as {
+      confirmation: {
+        saved: string[];
+        discarded: string[];
+        createdIds: Record<string, string>;
+      };
+      proposal: LauraProposalPayload;
+    };
+
+    return {
+      proposalId: "",
+      status: "confirmed",
+      proposal,
+      saved: result.confirmation.saved,
+      discarded: result.confirmation.discarded,
+      createdIds: result.confirmation.createdIds,
+    };
+  }
+
   private buildProposalPayload(
     content: string,
     extraction: Awaited<ReturnType<LauraLlmService["extract"]>>,

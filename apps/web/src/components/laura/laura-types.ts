@@ -71,6 +71,11 @@ export type LauraAssistantResponse =
       agenda: {
         items: LauraAgendaItem[];
       };
+    }
+  | {
+      mode: "confirm" | "discard";
+      sessionId: string;
+      message: string;
     };
 
 export interface LauraSessionResponse {

@@ -57,7 +57,7 @@ export interface AgendaItem {
   priorityGroup?: number;
 }
 
-export type AgentMode = "greeting" | "clarification" | "proposal" | "agenda";
+export type AgentMode = "greeting" | "clarification" | "proposal" | "agenda" | "confirm" | "discard" | "refine";
 
 export interface AgentResponse {
   mode: AgentMode;
@@ -71,5 +71,12 @@ export interface AgentResponse {
   proposal?: ProposalPayload;
   agenda?: {
     items: AgendaItem[];
+  };
+  confirmation?: {
+    proposalId: string;
+    status: "confirmed";
+    saved: string[];
+    discarded: string[];
+    createdIds: Record<string, string>;
   };
 }

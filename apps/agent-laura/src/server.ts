@@ -1,7 +1,8 @@
 import { createLauraGraph } from "./graph/graph.js";
 import { config } from "./config/index.js";
 import { getCheckpointer, closeCheckpointer, isPostgresCheckpointer } from "./checkpointer.js";
-import type { AgentResponse } from "./types.js";
+import { handleConfirm } from "./confirm.js";
+import type { AgentResponse, ProposalPayload } from "./types.js";
 import type { LauraStateType } from "./graph/state.js";
 import { HumanMessage } from "@langchain/core/messages";
 import type { ServerResponse } from "http";
@@ -32,6 +33,10 @@ function stateToResponse(state: LauraStateType): AgentResponse {
 
   if (state.mode === "agenda" && state.agendaItems) {
     base.agenda = { items: state.agendaItems };
+  }
+
+  if (state.mode === "confirm" || state.mode === "discard") {
+    base.proposalId = state.proposalId ?? undefined;
   }
 
   return base;
@@ -191,6 +196,47 @@ async function startServer() {
           res.writeHead(500, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ error: message }));
         }
+      }
+    } else if (req.method === "POST" && url.pathname === "/confirm") {
+      try {
+        const body = await new Promise<string>((resolve) => {
+          let data = "";
+          req.on("data", (chunk: Buffer) => { data += chunk.toString(); });
+          req.on("end", () => resolve(data));
+        });
+
+        const { proposal, customerId, opportunityId } = JSON.parse(body);
+
+        if (!proposal) {
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "proposal is required" }));
+          return;
+        }
+
+        const result = await handleConfirm(
+          proposal as ProposalPayload,
+          customerId as string | undefined,
+          opportunityId as string | undefined,
+        );
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          mode: "confirm",
+          sessionId: "",
+          message: result.message,
+          confirmation: {
+            proposalId: "",
+            status: "confirmed" as const,
+            saved: result.saved,
+            discarded: result.discarded,
+            createdIds: result.createdIds,
+          },
+        }));
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Internal server error";
+        console.error("Error handling /confirm:", error);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: message }));
       }
     } else if (req.method === "GET" && url.pathname === "/health") {
       res.writeHead(200, { "Content-Type": "application/json" });

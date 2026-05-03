@@ -5,20 +5,53 @@ export async function routerNode(state: LauraStateType): Promise<Partial<LauraSt
   const content = typeof lastMessage.content === "string"
     ? lastMessage.content
     : Array.isArray(lastMessage.content)
-      ? lastMessage.content.map((c) => (typeof c === "string" ? c : ("text" in c ? c.text : ""))).join(" ")
+      ? lastMessage.content.map((c: unknown) => (typeof c === "string" ? c : "")).join(" ")
       : "";
 
-  const classification = classifyWithHeuristics(content);
+  const classification = classifyWithHeuristics(content, state);
 
   return { mode: classification };
 }
 
-function classifyWithHeuristics(content: string): "greeting" | "agenda" | "clarification" | "proposal" {
+function classifyWithHeuristics(
+  content: string,
+  state: LauraStateType,
+): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" {
   const normalized = content
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim();
+
+  const hasActiveProposal = state.proposalStatus === "draft" && state.proposal !== null;
+
+  if (hasActiveProposal) {
+    const confirmPatterns = [
+      "confirmo", "confirmar", "si confirmo", "si, confirmo",
+      "sí confirmo", "sí, confirmo", "guarda", "guardalo", "guardá",
+      "guardalo todo", "ok guardalo", "dale guardalo",
+    ];
+    if (confirmPatterns.some((p) => normalized === p || normalized.includes(p))) {
+      return "confirm";
+    }
+
+    const discardPatterns = [
+      "cancelar", "cancela", "descartar", "descarta", "no guardar",
+      "no lo guardes", "borrar", "borra", "eliminar", "elimina",
+    ];
+    if (discardPatterns.some((p) => normalized.includes(p))) {
+      return "discard";
+    }
+
+    const refinePatterns = [
+      "cambia", "cambiar", "modifica", "modificar", "ajusta", "ajustar",
+      "editar", "edita", "no quiero", "quitale", "quítale", "agrega",
+      "agregale", "pone", "poné", "ponle", "mejor", "en vez de",
+    ];
+    if (refinePatterns.some((p) => normalized.includes(p))) {
+      return "refine";
+    }
+  }
 
   const agendaKeywords = ["agenda", "pendientes", "pendiente", "tareas", "visitas", "semana", "hoy", "que tengo", "qué tengo", "programado"];
   if (agendaKeywords.some((k) => normalized.includes(k))) {

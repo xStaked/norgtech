@@ -64,6 +64,13 @@ export class LauraController {
     )
     dto: ConfirmProposalDto,
   ) {
+    if (this.lauraService.useAgent) {
+      return this.lauraService.confirmProposalViaAgent(
+        dto.proposal,
+        dto.proposal.blocks.interaction?.enabled ? undefined : undefined,
+        dto.proposal.blocks.opportunity?.opportunityId,
+      );
+    }
     return this.lauraService.confirmProposal(user, proposalId, dto);
   }
 

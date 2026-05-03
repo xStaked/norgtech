@@ -223,6 +223,11 @@ export function LauraChat({
           proposal: body.proposal,
           status: "draft",
         });
+      } else if (body.mode === "confirm") {
+        setDraftProposal(null);
+        setNotice(body.message);
+      } else if (body.mode === "discard") {
+        setDraftProposal(null);
       } else {
         setDraftProposal(null);
       }
