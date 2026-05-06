@@ -50,11 +50,42 @@ export async function getOpportunityDetails(opportunityId: string): Promise<Reco
   return nestjsRequest(`/laura/agents/opportunities/${opportunityId}`);
 }
 
-export async function getPendingTasks(userId: string): Promise<Array<{ id: string; title: string; dueAt: string; type: string }>> {
+export async function getPendingTasks(userId: string): Promise<Array<{
+  id: string;
+  title: string;
+  dueAt: string;
+  type: string;
+  customer: {
+    id: string;
+    displayName: string;
+    contacts: Array<{
+      id: string;
+      fullName: string;
+      roleTitle: string | null;
+      isPrimary: boolean;
+    }>;
+  } | null;
+  opportunity: { id: string; title: string } | null;
+}>> {
   return nestjsRequest(`/laura/agents/users/${userId}/tasks?status=pendiente`);
 }
 
-export async function getScheduledVisits(userId: string): Promise<Array<{ id: string; summary: string; scheduledAt: string }>> {
+export async function getScheduledVisits(userId: string): Promise<Array<{
+  id: string;
+  summary: string;
+  scheduledAt: string;
+  customer: {
+    id: string;
+    displayName: string;
+    contacts: Array<{
+      id: string;
+      fullName: string;
+      roleTitle: string | null;
+      isPrimary: boolean;
+    }>;
+  } | null;
+  opportunity: { id: string; title: string } | null;
+}>> {
   return nestjsRequest(`/laura/agents/users/${userId}/visits?status=programada`);
 }
 
@@ -110,4 +141,134 @@ export async function createTask(data: {
     method: "POST",
     body: JSON.stringify(data),
   });
+}
+
+// Read operations
+export async function searchProducts(params: { search?: string; active?: boolean }) {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.active !== undefined) query.set("active", String(params.active));
+  return nestjsRequest<any[]>(`/laura/agents/products?${query.toString()}`);
+}
+
+export async function getProductDetails(id: string) {
+  return nestjsRequest<any>(`/laura/agents/products/${id}`);
+}
+
+export async function searchQuotes(params: { customerId?: string; status?: string; search?: string }) {
+  const query = new URLSearchParams();
+  if (params.customerId) query.set("customerId", params.customerId);
+  if (params.status) query.set("status", params.status);
+  if (params.search) query.set("search", params.search);
+  return nestjsRequest<any[]>(`/laura/agents/quotes?${query.toString()}`);
+}
+
+export async function getQuoteDetails(id: string) {
+  return nestjsRequest<any>(`/laura/agents/quotes/${id}`);
+}
+
+export async function searchOrders(params: { customerId?: string; status?: string; search?: string }) {
+  const query = new URLSearchParams();
+  if (params.customerId) query.set("customerId", params.customerId);
+  if (params.status) query.set("status", params.status);
+  if (params.search) query.set("search", params.search);
+  return nestjsRequest<any[]>(`/laura/agents/orders?${query.toString()}`);
+}
+
+export async function getOrderDetails(id: string) {
+  return nestjsRequest<any>(`/laura/agents/orders/${id}`);
+}
+
+export async function searchSegments() {
+  return nestjsRequest<any[]>("/laura/agents/segments");
+}
+
+export async function searchContacts(params: { search?: string; customerId?: string }) {
+  const query = new URLSearchParams();
+  if (params.search) query.set("search", params.search);
+  if (params.customerId) query.set("customerId", params.customerId);
+  return nestjsRequest<any[]>(`/laura/agents/contacts?${query.toString()}`);
+}
+
+export async function searchVisits(params: { customerId?: string; status?: string; dateFrom?: string; dateTo?: string }) {
+  const query = new URLSearchParams();
+  if (params.customerId) query.set("customerId", params.customerId);
+  if (params.status) query.set("status", params.status);
+  if (params.dateFrom) query.set("dateFrom", params.dateFrom);
+  if (params.dateTo) query.set("dateTo", params.dateTo);
+  return nestjsRequest<any[]>(`/laura/agents/visits?${query.toString()}`);
+}
+
+export async function searchFollowups(params: { customerId?: string; status?: string }) {
+  const query = new URLSearchParams();
+  if (params.customerId) query.set("customerId", params.customerId);
+  if (params.status) query.set("status", params.status);
+  return nestjsRequest<any[]>(`/laura/agents/followups?${query.toString()}`);
+}
+
+export async function getDashboardSummary(userId?: string) {
+  const query = new URLSearchParams();
+  if (userId) query.set("userId", userId);
+  return nestjsRequest<any>(`/laura/agents/dashboard?${query.toString()}`);
+}
+
+// Write operations
+export async function createCustomer(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/customers", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateCustomer(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/customers/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function createContact(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/contacts", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateContact(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/contacts/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function createQuote(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/quotes", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateQuoteStatus(id: string, data: { status: string }) {
+  return nestjsRequest<any>(`/laura/agents/quotes/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function createOrder(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/orders", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateOrderStatus(id: string, data: { status: string; notes?: string }) {
+  return nestjsRequest<any>(`/laura/agents/orders/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function createProduct(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/products", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateProduct(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/products/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function createSegment(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/segments", { method: "POST", body: JSON.stringify(data) });
+}
+
+export async function updateSegment(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/segments/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function updateVisit(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/visits/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function updateFollowup(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/followups/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+}
+
+export async function updateOpportunity(id: string, data: Record<string, any>) {
+  return nestjsRequest<any>(`/laura/agents/opportunities/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 }

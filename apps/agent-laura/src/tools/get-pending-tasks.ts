@@ -10,7 +10,7 @@ export const getPendingTasksTool = tool(
   {
     name: "get_pending_tasks",
     description:
-      "Get the list of pending follow-up tasks for a user. Returns task ID, title, due date, and type.",
+      "Get the list of pending follow-up tasks for a user. Returns each task with its title, due date, type (llamada/correo/reunion/whatsapp), associated customer name and contacts, and associated opportunity. Use this to answer questions about tasks, calls, follow-ups, or when the user asks about their schedule.",
     schema: z.object({
       userId: z.string().describe("The user ID whose tasks to retrieve"),
     }),
