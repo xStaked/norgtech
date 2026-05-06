@@ -35,6 +35,19 @@ function stateToResponse(state: LauraState): AgentResponse {
     base.agenda = { items: state.agendaItems };
   }
 
+  if (state.mode === "query") {
+    const lastMsg = state.messages[state.messages.length - 1];
+    const content = typeof lastMsg?.content === "string" ? lastMsg.content : "";
+    base.message = content || "No encontre resultados.";
+    base.data = state.data ?? undefined;
+  }
+
+  if (state.mode === "modify") {
+    base.message = "Prepare una propuesta de modificacion para que revises.";
+    base.proposal = state.proposal ?? undefined;
+    base.proposalId = state.proposalId ?? undefined;
+  }
+
   if (state.mode === "confirm" || state.mode === "discard") {
     base.proposalId = state.proposalId ?? undefined;
   }
