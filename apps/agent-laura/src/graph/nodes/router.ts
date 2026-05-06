@@ -1,6 +1,6 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 
-export async function routerNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function routerNode(state: LauraState): Promise<Partial<LauraState>> {
   const lastMessage = state.messages[state.messages.length - 1];
   const content = typeof lastMessage.content === "string"
     ? lastMessage.content
@@ -15,13 +15,14 @@ export async function routerNode(state: LauraStateType): Promise<Partial<LauraSt
 
 function classifyWithHeuristics(
   content: string,
-  state: LauraStateType,
-): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" {
+  state: LauraState,
+): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" | "qa" {
   const normalized = content
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
-    .trim();
+    .trim()
+    .replace(/[!?.]+$/, "");
 
   const hasActiveProposal = state.proposalStatus === "draft" && state.proposal !== null;
 
@@ -53,14 +54,16 @@ function classifyWithHeuristics(
     }
   }
 
-  const agendaKeywords = ["agenda", "pendientes", "pendiente", "tareas", "visitas", "semana", "hoy", "que tengo", "qué tengo", "programado"];
-  if (agendaKeywords.some((k) => normalized.includes(k))) {
-    return "agenda";
-  }
+  const wordCount = normalized.split(/\s+/).length;
 
-  if (normalized.split(/\s+/).length <= 6) {
-    const greetingPatterns = ["hola", "buenos dias", "buenas tardes", "buenas noches", "hey", "hi", "que tal", "qué tal"];
-    if (greetingPatterns.some((g) => normalized === g || normalized.startsWith(`${g} `))) {
+  if (wordCount <= 8) {
+    const greetingPatterns = [
+      "hola", "buenos dias", "buenas tardes", "buenas noches",
+      "hey", "hi", "que tal", "como estas", "como andas",
+      "como va", "como te va", "como andas", "todo bien",
+      "todo liso", "que onda", "que haces", "que me cuentas",
+    ];
+    if (greetingPatterns.some((g) => normalized === g || normalized.startsWith(`${g} `) || normalized.endsWith(g))) {
       return "greeting";
     }
   }
@@ -69,7 +72,48 @@ function classifyWithHeuristics(
     return "clarification";
   }
 
+  const hasAgendaContext = state.agendaItems !== null && state.agendaItems.length > 0;
+
+  if (hasAgendaContext && isFollowUpQuestion(normalized)) {
+    return "qa";
+  }
+
+  if (isQAQuestion(normalized)) {
+    return "qa";
+  }
+
+  const agendaKeywords = ["agenda", "pendientes", "pendiente", "tareas", "visitas", "semana", "hoy", "que tengo", "qué tengo", "programado"];
+  if (agendaKeywords.some((k) => normalized.includes(k))) {
+    return "agenda";
+  }
+
   return "proposal";
+}
+
+function isFollowUpQuestion(normalized: string): boolean {
+  const followUpPatterns = [
+    "esa llamada", "ese pendiente", "esa tarea", "esa visita",
+    "ese cliente", "esa empresa", "ese contacto",
+    "a que hora", "a qué hora", "cuando es", "cuándo es",
+    "de que se trata", "de qué se trata",
+    "el primero", "la primera", "el segundo", "la segunda",
+    "ese", "esa", "aquel",
+  ];
+  return followUpPatterns.some((p) => normalized.includes(p));
+}
+
+function isQAQuestion(normalized: string): boolean {
+  const qaPatterns = [
+    "que hora", "que empresa", "a que empresa", "a qué empresa",
+    "cuando", "cuándo", "cuantos", "cuántos", "cuanto", "cuánto",
+    "cual es", "cuál es", "quien es", "quién es",
+    "donde", "dónde", "pertenece", "telefono de", "teléfono de",
+    "email de", "correo de", "contacto de",
+    "a quien", "a quién", "de quien", "de quién",
+    "que cliente", "qué cliente", "que contacto", "qué contacto",
+    "cuales son", "cuáles son", "listame", "listáme",
+  ];
+  return qaPatterns.some((p) => normalized.includes(p));
 }
 
 function isClarificationReply(normalized: string): boolean {

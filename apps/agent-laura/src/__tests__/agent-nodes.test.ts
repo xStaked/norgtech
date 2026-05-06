@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { LauraStateType } from "../graph/state.js";
+import type { LauraState } from "../graph/state.js";
 import { HumanMessage, AIMessage } from "@langchain/core/messages";
 
 const {
@@ -87,7 +87,7 @@ import { refineNode } from "../graph/nodes/refine.js";
 import { extractIntentNode } from "../graph/nodes/extract-intent.js";
 import { routerEdge } from "../graph/edges.js";
 
-function makeState(overrides: Partial<LauraStateType> = {}): LauraStateType {
+function makeState(overrides: Partial<LauraState> = {}): LauraState {
   return {
     sessionId: "test-session",
     userId: "test-user",
@@ -102,6 +102,8 @@ function makeState(overrides: Partial<LauraStateType> = {}): LauraStateType {
     agendaItems: null,
     lastError: null,
     _extractionResult: null,
+    mentionedEntities: {},
+    data: null,
     ...overrides,
   };
 }

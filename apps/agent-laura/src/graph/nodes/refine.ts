@@ -1,4 +1,4 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 import { AIMessage } from "@langchain/core/messages";
 import { createLlm } from "../../config/providers.js";
 
@@ -12,7 +12,7 @@ Feedback del usuario:
 
 Respondé SOLO con un JSON que contenga los campos que hay que actualizar, manteniendo los demás igual. Si el usuario no sugiere cambios específicos, devolvé la propuesta sin modificaciones.`;
 
-export async function refineNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function refineNode(state: LauraState): Promise<Partial<LauraState>> {
   const lastMessage = state.messages[state.messages.length - 1];
   const feedback = typeof lastMessage.content === "string" ? lastMessage.content : String(lastMessage.content);
 

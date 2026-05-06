@@ -1,4 +1,4 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 import { createLlm } from "../../config/providers.js";
 import { LAURA_SYSTEM_PROMPT } from "../../prompts/system-prompt.js";
 import { SYSTEM_SCHEMA } from "../../prompts/prompt-sections.js";
@@ -21,7 +21,7 @@ interface ExtractionResult {
   };
 }
 
-export async function extractIntentNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function extractIntentNode(state: LauraState): Promise<Partial<LauraState>> {
   const lastMessage = state.messages[state.messages.length - 1];
   const content = typeof lastMessage.content === "string" ? lastMessage.content : String(lastMessage.content);
 

@@ -1,8 +1,8 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 import { AIMessage } from "@langchain/core/messages";
 import { searchCustomers } from "../../tools/nestjs-client.js";
 
-export async function clarifyNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function clarifyNode(state: LauraState): Promise<Partial<LauraState>> {
   const lastMessage = state.messages[state.messages.length - 1];
   const content = typeof lastMessage.content === "string" ? lastMessage.content : String(lastMessage.content);
 

@@ -1,6 +1,6 @@
-import type { LauraStateType } from "./state.js";
+import type { LauraState } from "./state.js";
 
-export function routerEdge(state: LauraStateType): string {
+export function routerEdge(state: LauraState): string {
   switch (state.mode) {
     case "greeting":
       return "greeting";
@@ -14,6 +14,8 @@ export function routerEdge(state: LauraStateType): string {
       return "discard";
     case "refine":
       return "refine";
+    case "qa":
+      return "qa";
     case "proposal":
       return "extract_intent";
     default:

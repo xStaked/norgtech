@@ -1,7 +1,7 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 import { AIMessage } from "@langchain/core/messages";
 
-export async function discardNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function discardNode(state: LauraState): Promise<Partial<LauraState>> {
   return {
     proposalStatus: "discarded",
     proposal: null,

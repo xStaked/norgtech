@@ -3,11 +3,11 @@ import { config } from "./config/index.js";
 import { getCheckpointer, closeCheckpointer, isPostgresCheckpointer } from "./checkpointer.js";
 import { handleConfirm } from "./confirm.js";
 import type { AgentResponse, ProposalPayload } from "./types.js";
-import type { LauraStateType } from "./graph/state.js";
+import type { LauraState } from "./graph/state.js";
 import { HumanMessage } from "@langchain/core/messages";
 import type { ServerResponse } from "http";
 
-function stateToResponse(state: LauraStateType): AgentResponse {
+function stateToResponse(state: LauraState): AgentResponse {
   const lastMessage = state.messages[state.messages.length - 1];
   const message = lastMessage
     ? (typeof lastMessage.content === "string" ? lastMessage.content : String(lastMessage.content))

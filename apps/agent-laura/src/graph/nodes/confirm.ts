@@ -1,4 +1,4 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 import { AIMessage } from "@langchain/core/messages";
 import {
   createInteraction,
@@ -7,7 +7,7 @@ import {
   upsertOpportunity,
 } from "../../tools/nestjs-client.js";
 
-export async function confirmNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function confirmNode(state: LauraState): Promise<Partial<LauraState>> {
   if (!state.proposal) {
     return {
       mode: "proposal",

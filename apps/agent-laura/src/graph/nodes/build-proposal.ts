@@ -1,8 +1,8 @@
-import type { LauraStateType } from "../state.js";
+import type { LauraState } from "../state.js";
 import { AIMessage } from "@langchain/core/messages";
 import type { ProposalPayload } from "../../types.js";
 
-export async function buildProposalNode(state: LauraStateType): Promise<Partial<LauraStateType>> {
+export async function buildProposalNode(state: LauraState): Promise<Partial<LauraState>> {
   const extraction = state._extractionResult;
   const lastUserContent = state.messages
     .filter((m) => m._getType() === "human")
