@@ -16,7 +16,7 @@ export async function routerNode(state: LauraState): Promise<Partial<LauraState>
 function classifyWithHeuristics(
   content: string,
   state: LauraState,
-): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" | "qa" {
+): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" | "qa" | "query" | "modify" {
   const normalized = content
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -80,6 +80,41 @@ function classifyWithHeuristics(
 
   if (isQAQuestion(normalized)) {
     return "qa";
+  }
+
+  const queryKeywords = [
+    "productos", "catalogo", "catalogo", "que productos", "que productos",
+    "cotizaciones", "cotizacion", "pedidos", "pedido",
+    "segmentos", "segmento", "contactos", "contacto",
+    "clientes", "cliente", "oportunidades", "oportunidad",
+    "cuantos", "cuanto", "cuantas", "cual es", "cual es",
+    "datos de", "info de", "informacion de",
+    "detalle de", "detalles de", "detalles del",
+    "buscar", "busca", "encontra",
+    "listado", "lista de", "ver todos", "mostra", "muestra",
+    "cuanto vale", "precio de",
+    "estado de", "status de",
+    "dashboard", "resumen", "kpi",
+  ];
+
+  const modifyKeywords = [
+    "cambia", "cambiar", "modifica", "modificar",
+    "actualiza", "actualizar", "edita", "editar",
+    "reprograma", "reprogramar", "move",
+    "cancela", "cancelar", "elimina", "eliminar",
+    "completa", "completar", "cierra", "cerrar",
+    "avanza", "pasar a",
+    "la hora", "el horario", "la fecha", "el estado",
+  ];
+
+  // CHECK: query patterns (before agenda to avoid false positives)
+  if (queryKeywords.some(kw => normalized.includes(kw))) {
+    return "query";
+  }
+
+  // CHECK: modify patterns
+  if (modifyKeywords.some(kw => normalized.includes(kw))) {
+    return "modify";
   }
 
   const agendaKeywords = ["agenda", "pendientes", "pendiente", "tareas", "visitas", "semana", "hoy", "que tengo", "qué tengo", "programado"];

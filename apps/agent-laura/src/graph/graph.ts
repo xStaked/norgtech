@@ -9,6 +9,9 @@ import { refineNode } from "./nodes/refine.js";
 import { confirmNode } from "./nodes/confirm.js";
 import { discardNode } from "./nodes/discard.js";
 import { agendaNode } from "./nodes/agenda.js";
+import { qaNode } from "./nodes/qa.js";
+import { queryNode } from "./nodes/query.js";
+import { modifyNode } from "./nodes/modify.js";
 import { routerEdge } from "./edges.js";
 
 const graphBuilder = new StateGraph(LauraState)
@@ -20,7 +23,10 @@ const graphBuilder = new StateGraph(LauraState)
   .addNode("refine", refineNode)
   .addNode("confirm", confirmNode)
   .addNode("discard", discardNode)
-  .addNode("agenda", agendaNode);
+  .addNode("agenda", agendaNode)
+  .addNode("qa", qaNode)
+  .addNode("query", queryNode)
+  .addNode("modify", modifyNode);
 
 graphBuilder
   .addEdge(START, "router")
@@ -32,10 +38,16 @@ graphBuilder
     discard: "discard",
     refine: "refine",
     extract_intent: "extract_intent",
+    qa: "qa",
+    query: "query",
+    modify: "modify",
   })
   .addEdge("greeting", END)
   .addEdge("clarify", END)
   .addEdge("agenda", END)
+  .addEdge("qa", END)
+  .addEdge("query", END)
+  .addEdge("modify", END)
   .addEdge("extract_intent", "build_proposal")
   .addEdge("build_proposal", END)
   .addEdge("refine", END)
