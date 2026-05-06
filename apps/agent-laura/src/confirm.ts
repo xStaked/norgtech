@@ -24,8 +24,7 @@ export async function handleConfirm(
   const createdIds: Record<string, string> = {};
   const custId = customerId ?? "";
 
-  let oppId = blocks.followUp?.opportunityId
-    ?? blocks.opportunity?.opportunityId
+  let oppId = blocks.opportunity?.opportunityId
     ?? opportunityId;
 
   if (blocks.opportunity?.enabled && custId) {
@@ -70,7 +69,7 @@ export async function handleConfirm(
       title: blocks.followUp.title,
       dueAt: blocks.followUp.dueAt,
       type: blocks.followUp.type,
-      opportunityId: blocks.followUp.opportunityId ?? oppId,
+      opportunityId: oppId,
     });
     saved.push("followUp");
     createdIds.followUp = task.id;

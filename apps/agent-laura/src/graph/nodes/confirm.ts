@@ -21,8 +21,7 @@ export async function confirmNode(state: LauraStateType): Promise<Partial<LauraS
   const saved: string[] = [];
   const discarded: string[] = [];
 
-  let opportunityId = blocks.followUp?.opportunityId
-    ?? blocks.opportunity?.opportunityId
+  let opportunityId = blocks.opportunity?.opportunityId
     ?? state.opportunityContext?.id;
 
   if (blocks.opportunity?.enabled && customerId) {
@@ -64,7 +63,7 @@ export async function confirmNode(state: LauraStateType): Promise<Partial<LauraS
       title: blocks.followUp.title,
       dueAt: blocks.followUp.dueAt,
       type: blocks.followUp.type,
-      opportunityId: blocks.followUp.opportunityId ?? opportunityId,
+      opportunityId,
     });
     saved.push("followUp");
   }

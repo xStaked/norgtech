@@ -24,12 +24,11 @@ export async function buildProposalNode(state: LauraStateType): Promise<Partial<
         enabled: canPersist,
         opportunityId: state.opportunityContext?.id,
         createNew: !state.opportunityContext?.id && canPersist,
-        title: extraction?.suggestedOpportunityTitle as string | undefined,
-        stage: extraction?.suggestedOpportunityStage as string | undefined,
+        title: (extraction?.suggestedOpportunityTitle as string) ?? "Seguimiento comercial",
+        stage: (extraction?.suggestedOpportunityStage as string) ?? "contacto",
       },
       followUp: {
         enabled: canPersist,
-        opportunityId: state.opportunityContext?.id,
         title: (extraction?.suggestedNextStep as string) ?? "Dar seguimiento comercial",
         dueAt: (extraction?.suggestedFollowUpDate as string) ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         type: (extraction?.taskType as string) ?? "llamada",
@@ -37,14 +36,14 @@ export async function buildProposalNode(state: LauraStateType): Promise<Partial<
       task: {
         enabled: canPersist,
         title: (extraction?.suggestedTaskTitle as string) ?? "Registrar seguimiento comercial",
-        dueAt: extraction?.suggestedFollowUpDate as string | undefined,
+        dueAt: (extraction?.suggestedFollowUpDate as string) ?? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
         notes: extraction?.contactName as string | undefined,
       },
       signals: {
         enabled: canPersist,
         objections: (sig?.objections as string[]) ?? [],
-        risk: sig?.risk as string | undefined,
-        buyingIntent: sig?.buyingIntent as string | undefined,
+        riskFlags: sig?.risk ? [sig.risk as string] : [],
+        buyingSignals: sig?.buyingIntent ? [sig.buyingIntent as string] : [],
       },
     },
   };

@@ -1,52 +1,184 @@
-export interface ProposalInteractionBlock {
-  enabled: boolean;
+import type { BaseMessage } from "@langchain/core/messages";
+
+export type AgentMode =
+  | "greeting"
+  | "clarification"
+  | "proposal"
+  | "agenda"
+  | "confirm"
+  | "discard"
+  | "refine"
+  | "qa"
+  | "query"
+  | "modify";
+
+export type ProposalBlockAction = "create" | "update" | "delete";
+
+export interface InteractionBlock {
   summary: string;
   rawMessage: string;
+  enabled: boolean;
+  action?: ProposalBlockAction;
 }
 
-export interface ProposalOpportunityBlock {
-  enabled: boolean;
+export interface OpportunityBlock {
+  title: string;
+  stage: string;
+  estimatedValue?: number;
+  expectedCloseDate?: string;
+  createNew: boolean;
   opportunityId?: string;
-  createNew?: boolean;
-  title?: string;
-  stage?: string;
+  enabled: boolean;
+  action?: ProposalBlockAction;
 }
 
-export interface ProposalFollowUpBlock {
+export interface FollowUpBlock {
+  title: string;
+  type: string;
+  dueAt: string;
+  notes?: string;
   enabled: boolean;
+  action?: ProposalBlockAction;
+  id?: string;
+}
+
+export interface TaskBlock {
   title: string;
   dueAt: string;
-  opportunityId?: string;
-  type: string;
-}
-
-export interface ProposalTaskBlock {
-  enabled: boolean;
-  title: string;
-  dueAt?: string;
   notes?: string;
+  enabled: boolean;
+  action?: ProposalBlockAction;
 }
 
-export interface ProposalSignalsBlock {
-  enabled: boolean;
+export interface SignalsBlock {
   objections: string[];
-  risk?: string;
-  buyingIntent?: string;
+  riskFlags: string[];
+  buyingSignals: string[];
+  enabled: boolean;
+  action?: ProposalBlockAction;
+}
+
+export interface CustomerBlock {
+  legalName: string;
+  displayName?: string;
+  taxId?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  department?: string;
+  notes?: string;
+  segmentId?: string;
+  assignedToUserId?: string;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
+}
+
+export interface ContactBlock {
+  customerId: string;
+  fullName: string;
+  roleTitle?: string;
+  phone?: string;
+  email?: string;
+  isPrimary?: boolean;
+  notes?: string;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
+}
+
+export interface QuoteBlock {
+  customerId: string;
+  opportunityId?: string;
+  validUntil?: string;
+  notes?: string;
+  items?: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    notes?: string;
+  }>;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
+}
+
+export interface OrderBlock {
+  customerId: string;
+  opportunityId?: string;
+  sourceQuoteId?: string;
+  notes?: string;
+  items?: Array<{
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    notes?: string;
+  }>;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
+}
+
+export interface ProductBlock {
+  sku: string;
+  name: string;
+  description?: string;
+  unit?: string;
+  presentation?: string;
+  basePrice?: number;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
+}
+
+export interface SegmentBlock {
+  name: string;
+  description?: string;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
+}
+
+export interface VisitBlock {
+  customerId: string;
+  opportunityId?: string;
+  scheduledAt: string;
+  summary?: string;
+  notes?: string;
+  enabled: boolean;
+  action: ProposalBlockAction;
+  id?: string;
 }
 
 export interface ProposalPayload {
   blocks: {
-    interaction?: ProposalInteractionBlock;
-    opportunity?: ProposalOpportunityBlock;
-    followUp?: ProposalFollowUpBlock;
-    task?: ProposalTaskBlock;
-    signals?: ProposalSignalsBlock;
+    interaction?: InteractionBlock;
+    opportunity?: OpportunityBlock;
+    followUp?: FollowUpBlock;
+    task?: TaskBlock;
+    signals?: SignalsBlock;
+    customer?: CustomerBlock;
+    contact?: ContactBlock;
+    quote?: QuoteBlock;
+    order?: OrderBlock;
+    product?: ProductBlock;
+    segment?: SegmentBlock;
+    visit?: VisitBlock;
   };
 }
 
-export interface ClarificationOption {
-  id: string;
-  label: string;
+export interface MentionedEntities {
+  customerId?: string;
+  customerName?: string;
+  opportunityId?: string;
+  quoteId?: string;
+  orderId?: string;
+  visitId?: string;
+  followupId?: string;
+  taskId?: string;
+  productId?: string;
+  segmentId?: string;
 }
 
 export interface AgendaItem {
@@ -57,26 +189,31 @@ export interface AgendaItem {
   priorityGroup?: number;
 }
 
-export type AgentMode = "greeting" | "clarification" | "proposal" | "agenda" | "confirm" | "discard" | "refine";
+export interface ClarificationOption {
+  id: string;
+  label: string;
+}
+
+export interface ClarificationPayload {
+  type: "customer" | "opportunity" | "product" | "date" | "action";
+  options: ClarificationOption[];
+}
+
+export interface DataResult {
+  entityType: string;
+  action: "list" | "detail";
+  data: unknown;
+  summary: string;
+}
 
 export interface AgentResponse {
   mode: AgentMode;
   sessionId: string;
   message: string;
-  clarification?: {
-    type: "customer" | "opportunity" | "date" | "action";
-    options?: ClarificationOption[];
-  };
-  proposalId?: string;
+  clarification?: ClarificationPayload;
   proposal?: ProposalPayload;
-  agenda?: {
-    items: AgendaItem[];
-  };
-  confirmation?: {
-    proposalId: string;
-    status: "confirmed";
-    saved: string[];
-    discarded: string[];
-    createdIds: Record<string, string>;
-  };
+  proposalId?: string;
+  agenda?: { items: AgendaItem[] };
+  data?: DataResult;
+  confirmation?: { saved: string[]; discarded: string[]; message: string };
 }
