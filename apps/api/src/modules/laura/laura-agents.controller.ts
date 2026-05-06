@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
   Query,
   UseGuards,
@@ -449,5 +450,316 @@ export class LauraAgentsController {
       pendingQuotes,
       openOrders,
     };
+  }
+
+  @Post("customers")
+  async createCustomer(@Body() body: {
+    legalName: string;
+    displayName?: string;
+    taxId?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+    department?: string;
+    notes?: string;
+    segmentId?: string;
+    assignedToUserId?: string;
+  }) {
+    return this.prisma.customer.create({
+      data: {
+        legalName: body.legalName,
+        displayName: body.displayName ?? body.legalName,
+        taxId: body.taxId ?? null,
+        phone: body.phone ?? null,
+        email: body.email ?? null,
+        address: body.address ?? null,
+        city: body.city ?? null,
+        department: body.department ?? null,
+        notes: body.notes ?? null,
+        segmentId: body.segmentId!,
+        assignedToUserId: body.assignedToUserId ?? null,
+        active: true,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+      },
+    });
+  }
+
+  @Patch("customers/:id")
+  async updateCustomer(@Param("id") id: string, @Body() body: {
+    legalName?: string;
+    displayName?: string;
+    taxId?: string;
+    phone?: string;
+    email?: string;
+    address?: string;
+    city?: string;
+    department?: string;
+    notes?: string;
+    segmentId?: string;
+    assignedToUserId?: string;
+    active?: boolean;
+  }) {
+    return this.prisma.customer.update({
+      where: { id },
+      data: { ...body, updatedBy: SYSTEM_USER_ID },
+    });
+  }
+
+  @Post("contacts")
+  async createContact(@Body() body: {
+    customerId: string;
+    fullName: string;
+    roleTitle?: string;
+    phone?: string;
+    email?: string;
+    isPrimary?: boolean;
+    notes?: string;
+  }) {
+    return this.prisma.contact.create({
+      data: {
+        customerId: body.customerId,
+        fullName: body.fullName,
+        roleTitle: body.roleTitle,
+        phone: body.phone,
+        email: body.email,
+        isPrimary: body.isPrimary ?? false,
+        notes: body.notes,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+      },
+    });
+  }
+
+  @Patch("contacts/:id")
+  async updateContact(@Param("id") id: string, @Body() body: {
+    fullName?: string;
+    roleTitle?: string;
+    phone?: string;
+    email?: string;
+    isPrimary?: boolean;
+    notes?: string;
+  }) {
+    return this.prisma.contact.update({
+      where: { id },
+      data: { ...body, updatedBy: SYSTEM_USER_ID },
+    });
+  }
+
+  @Post("quotes")
+  async createQuote(@Body() body: {
+    customerId: string;
+    opportunityId?: string;
+    validUntil?: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      productSnapshotName?: string;
+      productSnapshotSku?: string;
+      unit?: string;
+      notes?: string;
+    }>;
+  }) {
+    const items = body.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      subtotal: item.quantity * item.unitPrice,
+      productSnapshotName: item.productSnapshotName ?? "",
+      productSnapshotSku: item.productSnapshotSku ?? "",
+      unit: item.unit ?? "",
+      notes: item.notes ?? null,
+    }));
+    const subtotal = items.reduce((sum, i) => sum + i.subtotal, 0);
+
+    return this.prisma.quote.create({
+      data: {
+        customerId: body.customerId,
+        opportunityId: body.opportunityId,
+        validUntil: body.validUntil ? new Date(body.validUntil) : undefined,
+        notes: body.notes,
+        subtotal,
+        total: subtotal,
+        status: "abierta",
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+        items: { create: items },
+      },
+      include: { items: true },
+    });
+  }
+
+  @Patch("quotes/:id/status")
+  async updateQuoteStatus(@Param("id") id: string, @Body() body: { status: string }) {
+    return this.prisma.quote.update({
+      where: { id },
+      data: { status: body.status as any, updatedBy: SYSTEM_USER_ID },
+    });
+  }
+
+  @Post("orders")
+  async createOrder(@Body() body: {
+    customerId: string;
+    opportunityId?: string;
+    sourceQuoteId?: string;
+    notes?: string;
+    items: Array<{
+      productId: string;
+      quantity: number;
+      unitPrice: number;
+      productSnapshotName?: string;
+      productSnapshotSku?: string;
+      unit?: string;
+      notes?: string;
+    }>;
+  }) {
+    const items = body.items.map((item) => ({
+      productId: item.productId,
+      quantity: item.quantity,
+      unitPrice: item.unitPrice,
+      subtotal: item.quantity * item.unitPrice,
+      productSnapshotName: item.productSnapshotName ?? "",
+      productSnapshotSku: item.productSnapshotSku ?? "",
+      unit: item.unit ?? "",
+      notes: item.notes ?? null,
+    }));
+    const subtotal = items.reduce((sum, i) => sum + i.subtotal, 0);
+
+    return this.prisma.order.create({
+      data: {
+        customerId: body.customerId,
+        opportunityId: body.opportunityId,
+        sourceQuoteId: body.sourceQuoteId,
+        notes: body.notes,
+        subtotal,
+        total: subtotal,
+        status: "recibido",
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+        items: { create: items },
+      },
+      include: { items: true },
+    });
+  }
+
+  @Patch("orders/:id/status")
+  async updateOrderStatus(@Param("id") id: string, @Body() body: { status: string; notes?: string }) {
+    return this.prisma.order.update({
+      where: { id },
+      data: { status: body.status as any, notes: body.notes, updatedBy: SYSTEM_USER_ID },
+    });
+  }
+
+  @Post("products")
+  async createProduct(@Body() body: {
+    sku: string;
+    name: string;
+    description?: string;
+    unit: string;
+    presentation?: string;
+    basePrice: number;
+  }) {
+    return this.prisma.product.create({
+      data: {
+        sku: body.sku,
+        name: body.name,
+        description: body.description ?? null,
+        unit: body.unit,
+        presentation: body.presentation ?? null,
+        basePrice: body.basePrice,
+        active: true,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+      },
+    });
+  }
+
+  @Patch("products/:id")
+  async updateProduct(@Param("id") id: string, @Body() body: {
+    sku?: string;
+    name?: string;
+    description?: string;
+    unit?: string;
+    presentation?: string;
+    basePrice?: number;
+    active?: boolean;
+  }) {
+    return this.prisma.product.update({
+      where: { id },
+      data: { ...body, updatedBy: SYSTEM_USER_ID },
+    });
+  }
+
+  @Post("segments")
+  async createSegment(@Body() body: { name: string; description?: string }) {
+    return this.prisma.customerSegment.create({
+      data: {
+        name: body.name,
+        description: body.description,
+        active: true,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+      },
+    });
+  }
+
+  @Patch("segments/:id")
+  async updateSegment(@Param("id") id: string, @Body() body: {
+    name?: string;
+    description?: string;
+    active?: boolean;
+  }) {
+    return this.prisma.customerSegment.update({
+      where: { id },
+      data: { ...body, updatedBy: SYSTEM_USER_ID },
+    });
+  }
+
+  @Patch("visits/:id")
+  async updateVisit(@Param("id") id: string, @Body() body: {
+    scheduledAt?: string;
+    status?: string;
+    summary?: string;
+    diagnosis?: string;
+    problems?: string;
+    proposedSolution?: string;
+    notes?: string;
+    nextStep?: string;
+  }) {
+    const data: any = { ...body, updatedBy: SYSTEM_USER_ID };
+    if (body.scheduledAt) data.scheduledAt = new Date(body.scheduledAt);
+    if (body.status === "completada") data.completedAt = new Date();
+    return this.prisma.visit.update({ where: { id }, data });
+  }
+
+  @Patch("followups/:id")
+  async updateFollowup(@Param("id") id: string, @Body() body: {
+    title?: string;
+    dueAt?: string;
+    status?: string;
+    notes?: string;
+  }) {
+    const data: any = { ...body, updatedBy: SYSTEM_USER_ID };
+    if (body.dueAt) data.dueAt = new Date(body.dueAt);
+    if (body.status === "completada") data.completedAt = new Date();
+    return this.prisma.followUpTask.update({ where: { id }, data });
+  }
+
+  @Patch("opportunities/:id")
+  async updateOpportunity(@Param("id") id: string, @Body() body: {
+    stage?: string;
+    estimatedValue?: number;
+    expectedCloseDate?: string;
+    title?: string;
+    description?: string;
+    lostReason?: string;
+  }) {
+    const data: any = { ...body, updatedBy: SYSTEM_USER_ID };
+    if (body.expectedCloseDate) data.expectedCloseDate = new Date(body.expectedCloseDate);
+    if (body.stage === "perdida" || body.stage === "venta_cerrada") data.closedAt = new Date();
+    return this.prisma.opportunity.update({ where: { id }, data });
   }
 }
