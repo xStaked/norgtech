@@ -168,9 +168,9 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("agenda");
     });
 
-    it("clasifica reporte vago con 'cliente' como query (keyword catch)", async () => {
+    it("clasifica reporte vago con 'cliente' como proposal", async () => {
       const state = makeState({ messages: [new HumanMessage("fui a ver un cliente y me dijo que le interesa")] });
-      expect((await routerNode(state)).mode).toBe("query");
+      expect((await routerNode(state)).mode).toBe("proposal");
     });
   });
 
@@ -227,9 +227,9 @@ describe("Router — Tipos de usuarios", () => {
   });
 
   describe("Usuario con Spanglish / mixto", () => {
-    it("clasifica mensaje con inglés + español como query (keyword catch: 'cliente')", async () => {
+    it("clasifica mensaje con inglés + español como proposal", async () => {
       const state = makeState({ messages: [new HumanMessage("Tuve un meeting con el cliente, quieren un follow-up del producto")] });
-      expect((await routerNode(state)).mode).toBe("query");
+      expect((await routerNode(state)).mode).toBe("proposal");
     });
 
     it("clasifica 'hi, necesito ver mi agenda' como agenda (contiene 'agenda')", async () => {
@@ -427,16 +427,16 @@ describe("Router — Edge cases", () => {
     expect(["clarification", "proposal"]).toContain(result.mode);
   });
 
-  it("clasifica mensaje muy largo con 'cliente' como query", async () => {
+  it("clasifica mensaje muy largo con 'cliente' como proposal", async () => {
     const longMsg = "Estuve con el cliente y ".repeat(50) + "quieren una propuesta";
     const state = makeState({ messages: [new HumanMessage(longMsg)] });
-    expect((await routerNode(state)).mode).toBe("query");
+    expect((await routerNode(state)).mode).toBe("proposal");
   });
 
-  it("clasifica 'hola, estuve con el cliente' como query (keyword catch: 'cliente')", async () => {
+  it("clasifica 'hola, estuve con el cliente' como proposal", async () => {
     const state = makeState({ messages: [new HumanMessage("hola, estuve con el cliente ayer y quieren un sistema")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("proposal");
   });
 
   it("clasifica mensaje con caracteres especiales como proposal", async () => {
@@ -616,10 +616,10 @@ describe("Router — Existing modes still work", () => {
     expect(result.mode).toBe("agenda");
   });
 
-  it("should classify reports about clients as 'query' (keyword catch: 'cliente')", async () => {
+  it("should classify reports about clients as 'proposal'", async () => {
     const state = makeState({ messages: [new HumanMessage("estuve con un cliente y cerramos un trato")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("proposal");
   });
 });
 
@@ -1160,7 +1160,7 @@ describe("Flujo completo — simulación de conversación", () => {
     expect(step3.mode).toBe("confirm");
   });
 
-  it("Flujo: saludo → agenda → query → descartar", async () => {
+  it("Flujo: saludo → agenda → proposal → descartar", async () => {
     const sessionId = "flow-test-2";
 
     const step1 = await routerNode(makeState({ messages: [new HumanMessage("hola")], sessionId }));
@@ -1170,7 +1170,7 @@ describe("Flujo completo — simulación de conversación", () => {
     expect(step2.mode).toBe("agenda");
 
     const step3 = await routerNode(makeState({ messages: [new HumanMessage("visité a un cliente nuevo")], sessionId }));
-    expect(step3.mode).toBe("query");
+    expect(step3.mode).toBe("proposal");
 
     const step4 = await routerNode(makeState({
       messages: [new HumanMessage("descartar")],
@@ -1253,14 +1253,14 @@ describe("E2E conversation flows", () => {
     expect(routed.mode).toBe("modify");
   });
 
-  it("should handle create quote request as 'query' (keyword catch: 'cotizacion')", async () => {
+  it("should handle create quote request as 'proposal'", async () => {
     const state = makeState({
       messages: [new HumanMessage("crea una cotizacion para Carlos Mendoza con 10 bolsas de semilla")],
       sessionId: "e2e-create-1",
       customerContext: { id: "cust-1", label: "Carlos Mendoza" },
     });
     const routed = await routerNode(state);
-    expect(routed.mode).toBe("query");
+    expect(routed.mode).toBe("proposal");
   });
 
   it("full flow: query products → modify followup → query", async () => {

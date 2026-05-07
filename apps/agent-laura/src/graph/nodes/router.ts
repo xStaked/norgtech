@@ -78,15 +78,29 @@ function classifyWithHeuristics(
     return "qa";
   }
 
+  if (isCapabilityQuestion(normalized)) {
+    return "qa";
+  }
+
   if (isQAQuestion(normalized)) {
     return "qa";
+  }
+
+  // Action verbs — route to proposal (write/create intent) BEFORE query check
+  const actionVerbs = [
+    "registrar", "registra", "crear", "crea", "agrega", "agregar",
+    "anota", "anotar", "carga", "cargar", "nuevo cliente", "nueva oportunidad",
+    "nueva cotizacion", "nuevo pedido", "nuevo producto", "nuevo segmento",
+    "nuevo contacto", "nueva visita", "nuevo seguimiento",
+  ];
+  if (actionVerbs.some((v) => normalized.includes(v))) {
+    return "proposal";
   }
 
   const queryKeywords = [
     "productos", "catalogo", "catalogo", "que productos", "que productos",
     "cotizaciones", "cotizacion", "pedidos", "pedido",
     "segmentos", "segmento", "contactos", "contacto",
-    "clientes", "cliente", "oportunidades", "oportunidad",
     "cuantos", "cuanto", "cuantas", "cual es", "cual es",
     "datos de", "info de", "informacion de",
     "detalle de", "detalles de", "detalles del",
@@ -95,6 +109,8 @@ function classifyWithHeuristics(
     "cuanto vale", "precio de",
     "estado de", "status de",
     "dashboard", "resumen", "kpi",
+    "que clientes", "que oportunidades",
+    "cliente por id", "oportunidad por id",
   ];
 
   const modifyKeywords = [
@@ -149,6 +165,19 @@ function isQAQuestion(normalized: string): boolean {
     "cuales son", "cuáles son", "listame", "listáme",
   ];
   return qaPatterns.some((p) => normalized.includes(p));
+}
+
+function isCapabilityQuestion(normalized: string): boolean {
+  const capabilityPatterns = [
+    "que podes hacer", "que puedes hacer", "que sabes hacer",
+    "que mas podes", "que mas puedes", "como me podes ayudar",
+    "como me puedes ayudar", "como ayudas", "que funcionalidades",
+    "para que servis", "para que sirves", "que haces",
+    "en que me podes ayudar", "en que me puedes ayudar",
+    "cuales son tus capacidades", "que mas haces",
+    "explicame que podes", "decime que podes",
+  ];
+  return capabilityPatterns.some((p) => normalized.includes(p));
 }
 
 function isClarificationReply(normalized: string): boolean {

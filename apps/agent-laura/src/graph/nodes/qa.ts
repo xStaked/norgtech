@@ -7,23 +7,61 @@ import { getCustomerDetails } from "../../tools/nestjs-client.js";
 import { getOpportunityDetails } from "../../tools/nestjs-client.js";
 import { getPendingTasks } from "../../tools/nestjs-client.js";
 import { getScheduledVisits } from "../../tools/nestjs-client.js";
+import { searchProducts } from "../../tools/nestjs-client.js";
+import { getProductDetails } from "../../tools/nestjs-client.js";
+import { searchQuotes } from "../../tools/nestjs-client.js";
+import { searchOrders } from "../../tools/nestjs-client.js";
+import { searchSegments } from "../../tools/nestjs-client.js";
+import { searchContacts } from "../../tools/nestjs-client.js";
+import { getDashboardSummary } from "../../tools/nestjs-client.js";
 import { searchCustomersTool } from "../../tools/search-customers.js";
 import { searchOpportunitiesTool } from "../../tools/search-opportunities.js";
 import { getCustomerDetailsTool } from "../../tools/get-customer-details.js";
 import { getOpportunityDetailsTool } from "../../tools/get-opportunity-details.js";
 import { getPendingTasksTool } from "../../tools/get-pending-tasks.js";
 import { getScheduledVisitsTool } from "../../tools/get-scheduled-visits.js";
+import { searchProductsTool } from "../../tools/search-products.js";
+import { getProductDetailsTool } from "../../tools/get-product-details.js";
+import { searchQuotesTool } from "../../tools/search-quotes.js";
+import { searchOrdersTool } from "../../tools/search-orders.js";
+import { searchSegmentsTool } from "../../tools/search-segments.js";
+import { searchContactsTool } from "../../tools/search-contacts.js";
+import { getDashboardSummaryTool } from "../../tools/get-dashboard-summary.js";
 import type { ToolCall } from "@langchain/core/messages/tool";
 
-const QA_SYSTEM_PROMPT = `Eres Laura, asistente comercial del CRM Norgtech. Respondé la pregunta del usuario usando los datos disponibles a través de las herramientas.
+const QA_SYSTEM_PROMPT = `Eres Laura, la asistente comercial del CRM Norgtech. Podés hacer MUCHAS cosas para ayudar a los vendedores:
+
+Tus capacidades son:
+
+📋 **Consultas (respondés directo):**
+- Ver agenda del día: tareas pendientes y visitas programadas
+- Buscar clientes, oportunidades, productos, cotizaciones, pedidos, segmentos, contactos
+- Ver detalles de cualquier entidad (cliente, producto, cotización, pedido, etc.)
+- Dashboard con KPIs: total de clientes, oportunidades activas, cotizaciones pendientes, pedidos abiertos
+- Listar productos del catálogo, cotizaciones por estado, pedidos por cliente
+
+✏️ **Creación (generás propuesta que el usuario confirma):**
+- Registrar nuevos clientes, contactos, oportunidades
+- Crear cotizaciones con items y precios
+- Crear pedidos desde cotizaciones
+- Registrar visitas, seguimientos y tareas
+- Dar de alta productos y segmentos
+
+🔧 **Modificación (generás propuesta que el usuario confirma):**
+- Cambiar fecha/hora de tareas, visitas y seguimientos
+- Actualizar estado de oportunidades, cotizaciones, pedidos
+- Editar datos de clientes, contactos, productos
+- Reprogramar o cancelar visitas
+- Completar seguimientos
 
 Reglas:
-1. Usá las herramientas para obtener datos reales antes de responder. Nunca respondas de memoria.
-2. Respondé de forma específica y concisa. No repitas toda la información si solo preguntaron por un detalle.
-3. Si no encontrás datos, decilo honestamente: "No encontré información sobre eso."
-4. Nunca inventes información.
-5. Prestá atención al contexto de la conversación. Si el usuario dice "él", "ella", "ese cliente", "esa reunión", etc., resolvé la referencia usando lo que se mencionó antes.
-6. Respondé en español rioplatense, de forma breve y directa.`;
+1. Si te preguntan qué podés hacer, describí tus capacidades como lo hago arriba.
+2. Usá las herramientas para obtener datos reales antes de responder. Nunca respondas de memoria.
+3. Respondé de forma específica y concisa.
+4. Si no encontrás datos, decilo honestamente: "No encontré información sobre eso."
+5. Nunca inventes información.
+6. Respondé en español rioplatense, de forma breve y directa.
+7. Usá "vos" en lugar de "tú".`;
 
 const qaTools = [
   searchCustomersTool,
@@ -32,6 +70,13 @@ const qaTools = [
   getOpportunityDetailsTool,
   getPendingTasksTool,
   getScheduledVisitsTool,
+  searchProductsTool,
+  getProductDetailsTool,
+  searchQuotesTool,
+  searchOrdersTool,
+  searchSegmentsTool,
+  searchContactsTool,
+  getDashboardSummaryTool,
 ];
 
 async function executeToolCall(toolCall: ToolCall, userId: string): Promise<string> {
@@ -60,6 +105,45 @@ async function executeToolCall(toolCall: ToolCall, userId: string): Promise<stri
     }
     case "get_scheduled_visits": {
       const result = await getScheduledVisits(userId);
+      return JSON.stringify(result);
+    }
+    case "search_products": {
+      const result = await searchProducts({ search: (args.search as string) ?? undefined, active: (args.active as boolean) ?? true });
+      return JSON.stringify(result);
+    }
+    case "get_product_details": {
+      const result = await getProductDetails((args.productId as string) ?? "");
+      return JSON.stringify(result);
+    }
+    case "search_quotes": {
+      const result = await searchQuotes({
+        customerId: (args.customerId as string) ?? undefined,
+        status: (args.status as string) ?? undefined,
+        search: (args.search as string) ?? undefined,
+      });
+      return JSON.stringify(result);
+    }
+    case "search_orders": {
+      const result = await searchOrders({
+        customerId: (args.customerId as string) ?? undefined,
+        status: (args.status as string) ?? undefined,
+        search: (args.search as string) ?? undefined,
+      });
+      return JSON.stringify(result);
+    }
+    case "search_segments": {
+      const result = await searchSegments();
+      return JSON.stringify(result);
+    }
+    case "search_contacts": {
+      const result = await searchContacts({
+        search: (args.search as string) ?? undefined,
+        customerId: (args.customerId as string) ?? undefined,
+      });
+      return JSON.stringify(result);
+    }
+    case "get_dashboard_summary": {
+      const result = await getDashboardSummary(userId);
       return JSON.stringify(result);
     }
     default:
