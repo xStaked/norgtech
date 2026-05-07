@@ -543,6 +543,127 @@ export function LauraProposalCard({
             </div>
           </LauraProposalBlock>
         )}
+
+        {/* Customer Block */}
+        {proposal.blocks.customer && (
+          <LauraProposalBlock
+            title="Cliente"
+            description={proposal.blocks.customer.action === "create" ? "Crear nuevo cliente en el CRM." : "Actualizar datos del cliente."}
+            enabled={proposal.blocks.customer.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de cliente"
+          >
+            <TextField label="Nombre legal" value={proposal.blocks.customer.legalName} onChange={(legalName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, legalName } : undefined } }))} disabled={confirming} />
+            <TextField label="Nombre para mostrar" value={proposal.blocks.customer.displayName ?? ""} onChange={(displayName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, displayName } : undefined } }))} disabled={confirming} />
+            <TextField label="Telefono" value={proposal.blocks.customer.phone ?? ""} onChange={(phone) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, phone } : undefined } }))} disabled={confirming} />
+            <TextField label="Email" value={proposal.blocks.customer.email ?? ""} onChange={(email) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, email } : undefined } }))} disabled={confirming} />
+            {proposal.blocks.customer.id && <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>ID: {proposal.blocks.customer.id}</p>}
+          </LauraProposalBlock>
+        )}
+
+        {/* Contact Block */}
+        {proposal.blocks.contact && (
+          <LauraProposalBlock
+            title="Contacto"
+            description={proposal.blocks.contact.action === "create" ? "Crear nuevo contacto." : "Actualizar datos del contacto."}
+            enabled={proposal.blocks.contact.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de contacto"
+          >
+            <TextField label="Nombre completo" value={proposal.blocks.contact.fullName} onChange={(fullName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, fullName } : undefined } }))} disabled={confirming} />
+            <TextField label="Telefono" value={proposal.blocks.contact.phone ?? ""} onChange={(phone) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, phone } : undefined } }))} disabled={confirming} />
+            <TextField label="Email" value={proposal.blocks.contact.email ?? ""} onChange={(email) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, email } : undefined } }))} disabled={confirming} />
+          </LauraProposalBlock>
+        )}
+
+        {/* Quote Block */}
+        {proposal.blocks.quote && (
+          <LauraProposalBlock
+            title="Cotizacion"
+            description={proposal.blocks.quote.action === "create" ? "Crear nueva cotizacion." : "Actualizar cotizacion."}
+            enabled={proposal.blocks.quote.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, quote: draft.blocks.quote ? { ...draft.blocks.quote, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de cotizacion"
+          >
+            {proposal.blocks.quote.items && proposal.blocks.quote.items.length > 0 && (
+              <div style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Items ({proposal.blocks.quote.items.length})</span>
+                {proposal.blocks.quote.items.map((item, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: "4px 0", borderBottom: "1px solid #eee" }}>
+                    Producto: {item.productId} — Cant: {item.quantity} — ${item.unitPrice?.toLocaleString("es-AR") ?? "0"}
+                  </div>
+                ))}
+              </div>
+            )}
+            <TextField label="Notas" value={proposal.blocks.quote.notes ?? ""} onChange={(notes) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, quote: draft.blocks.quote ? { ...draft.blocks.quote, notes } : undefined } }))} disabled={confirming} />
+          </LauraProposalBlock>
+        )}
+
+        {/* Order Block */}
+        {proposal.blocks.order && (
+          <LauraProposalBlock
+            title="Pedido"
+            description={proposal.blocks.order.action === "create" ? "Crear nuevo pedido." : "Actualizar pedido."}
+            enabled={proposal.blocks.order.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, order: draft.blocks.order ? { ...draft.blocks.order, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de pedido"
+          >
+            {proposal.blocks.order.items && proposal.blocks.order.items.length > 0 && (
+              <div style={{ display: "grid", gap: 4 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Items ({proposal.blocks.order.items.length})</span>
+                {proposal.blocks.order.items.map((item, i) => (
+                  <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>Producto: {item.productId} — Cant: {item.quantity} — ${item.unitPrice?.toLocaleString("es-AR") ?? "0"}</div>
+                ))}
+              </div>
+            )}
+            <TextField label="Notas" value={proposal.blocks.order.notes ?? ""} onChange={(notes) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, order: draft.blocks.order ? { ...draft.blocks.order, notes } : undefined } }))} disabled={confirming} />
+          </LauraProposalBlock>
+        )}
+
+        {/* Product Block */}
+        {proposal.blocks.product && (
+          <LauraProposalBlock
+            title="Producto"
+            description={proposal.blocks.product.action === "create" ? "Crear nuevo producto." : "Actualizar producto."}
+            enabled={proposal.blocks.product.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de producto"
+          >
+            <TextField label="SKU" value={proposal.blocks.product.sku} onChange={(sku) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, sku } : undefined } }))} disabled={confirming} />
+            <TextField label="Nombre" value={proposal.blocks.product.name} onChange={(name) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, name } : undefined } }))} disabled={confirming} />
+            {proposal.blocks.product.basePrice !== undefined && (
+              <TextField label="Precio base" value={String(proposal.blocks.product.basePrice)} onChange={(basePrice) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, basePrice: Number(basePrice) } : undefined } }))} disabled={confirming} />
+            )}
+          </LauraProposalBlock>
+        )}
+
+        {/* Segment Block */}
+        {proposal.blocks.segment && (
+          <LauraProposalBlock
+            title="Segmento"
+            description={proposal.blocks.segment.action === "create" ? "Crear nuevo segmento." : "Actualizar segmento."}
+            enabled={proposal.blocks.segment.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de segmento"
+          >
+            <TextField label="Nombre" value={proposal.blocks.segment.name} onChange={(name) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, name } : undefined } }))} disabled={confirming} />
+            <TextAreaField label="Descripcion" value={proposal.blocks.segment.description ?? ""} onChange={(description) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, description } : undefined } }))} disabled={confirming} />
+          </LauraProposalBlock>
+        )}
+
+        {/* Visit Block (update only — for modify flow) */}
+        {proposal.blocks.visit && (
+          <LauraProposalBlock
+            title="Visita"
+            description={proposal.blocks.visit.action === "update" ? "Actualizar visita existente." : "Crear nueva visita."}
+            enabled={proposal.blocks.visit.enabled}
+            onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, visit: draft.blocks.visit ? { ...draft.blocks.visit, enabled } : undefined } }))}
+            toggleLabel="Guardar bloque de visita"
+          >
+            <TextField label="Fecha programada" value={proposal.blocks.visit.scheduledAt ? toDateTimeLocal(proposal.blocks.visit.scheduledAt) : ""} onChange={(scheduledAt) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, visit: draft.blocks.visit ? { ...draft.blocks.visit, scheduledAt: fromDateTimeLocal(scheduledAt) } : undefined } }))} disabled={confirming} />
+            <TextAreaField label="Resumen" value={proposal.blocks.visit.summary ?? ""} onChange={(summary) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, visit: draft.blocks.visit ? { ...draft.blocks.visit, summary } : undefined } }))} disabled={confirming} />
+          </LauraProposalBlock>
+        )}
       </div>
 
       {/* Confirm Button */}

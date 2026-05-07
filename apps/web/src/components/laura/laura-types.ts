@@ -1,38 +1,138 @@
+export type LauraCustomerBlock = {
+  legalName: string;
+  displayName?: string;
+  taxId?: string;
+  phone?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  department?: string;
+  notes?: string;
+  segmentId?: string;
+  assignedToUserId?: string;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
+export type LauraContactBlock = {
+  customerId: string;
+  fullName: string;
+  roleTitle?: string;
+  phone?: string;
+  email?: string;
+  isPrimary?: boolean;
+  notes?: string;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
+export type LauraQuoteBlock = {
+  customerId: string;
+  opportunityId?: string;
+  validUntil?: string;
+  notes?: string;
+  items?: Array<{ productId: string; quantity: number; unitPrice: number; notes?: string }>;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
+export type LauraOrderBlock = {
+  customerId: string;
+  opportunityId?: string;
+  sourceQuoteId?: string;
+  notes?: string;
+  items?: Array<{ productId: string; quantity: number; unitPrice: number; notes?: string }>;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
+export type LauraProductBlock = {
+  sku: string;
+  name: string;
+  description?: string;
+  unit?: string;
+  presentation?: string;
+  basePrice?: number;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
+export type LauraSegmentBlock = {
+  name: string;
+  description?: string;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
+export type LauraVisitBlock = {
+  customerId: string;
+  opportunityId?: string;
+  scheduledAt: string;
+  summary?: string;
+  notes?: string;
+  enabled: boolean;
+  action: "create" | "update" | "delete";
+  id?: string;
+};
+
 export interface LauraProposalPayload {
   blocks: {
-    interaction?: {
-      enabled: boolean;
-      summary: string;
-      rawMessage: string;
-    };
-    opportunity?: {
-      enabled: boolean;
-      opportunityId?: string;
-      createNew?: boolean;
-      title?: string;
-      stage?: string;
-    };
-    followUp?: {
-      enabled: boolean;
-      title: string;
-      dueAt: string;
-      opportunityId?: string;
-      type: string;
-    };
-    task?: {
-      enabled: boolean;
-      title: string;
-      dueAt?: string;
-      notes?: string;
-    };
-    signals?: {
-      enabled: boolean;
-      objections: string[];
-      risk?: string;
-      buyingIntent?: string;
-    };
+    interaction?: LauraInteractionBlock;
+    opportunity?: LauraOpportunityBlock;
+    followUp?: LauraFollowUpBlock;
+    task?: LauraTaskBlock;
+    signals?: LauraSignalsBlock;
+    customer?: LauraCustomerBlock;
+    contact?: LauraContactBlock;
+    quote?: LauraQuoteBlock;
+    order?: LauraOrderBlock;
+    product?: LauraProductBlock;
+    segment?: LauraSegmentBlock;
+    visit?: LauraVisitBlock;
   };
 }
+
+export type LauraInteractionBlock = {
+  enabled: boolean;
+  summary: string;
+  rawMessage: string;
+};
+
+export type LauraOpportunityBlock = {
+  enabled: boolean;
+  opportunityId?: string;
+  createNew?: boolean;
+  title?: string;
+  stage?: string;
+};
+
+export type LauraFollowUpBlock = {
+  enabled: boolean;
+  title: string;
+  dueAt: string;
+  opportunityId?: string;
+  type: string;
+};
+
+export type LauraTaskBlock = {
+  enabled: boolean;
+  title: string;
+  dueAt?: string;
+  notes?: string;
+};
+
+export type LauraSignalsBlock = {
+  enabled: boolean;
+  objections: string[];
+  risk?: string;
+  buyingIntent?: string;
+};
 
 export interface LauraAgendaItem {
   id: string;
@@ -73,7 +173,30 @@ export type LauraAssistantResponse =
       };
     }
   | {
-      mode: "confirm" | "discard";
+      mode: "qa";
+      sessionId: string;
+      message: string;
+    }
+  | {
+      mode: "query";
+      sessionId: string;
+      message: string;
+      data?: {
+        entityType: string;
+        action: "list" | "detail";
+        data: unknown;
+        summary: string;
+      };
+    }
+  | {
+      mode: "modify";
+      sessionId: string;
+      message: string;
+      proposalId: string;
+      proposal: LauraProposalPayload;
+    }
+  | {
+      mode: "confirm" | "discard" | "refine";
       sessionId: string;
       message: string;
     };

@@ -5,6 +5,7 @@ import { LauraAgendaCard } from "@/components/laura/laura-agenda-card";
 import { LauraChatHeader } from "@/components/laura/laura-chat-header";
 import { LauraComposer } from "@/components/laura/laura-composer";
 import { LauraMessageList } from "@/components/laura/laura-message-list";
+import { LauraDataCard } from "@/components/laura/laura-data-card";
 import { LauraProposalCard } from "@/components/laura/laura-proposal-card";
 import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
@@ -151,6 +152,12 @@ export function LauraChat({
     type: "customer" | "opportunity" | "date" | "action";
     options?: Array<{ id: string; label: string }>;
   } | null>(null);
+  const [queryData, setQueryData] = useState<{
+    entityType: string;
+    action: "list" | "detail";
+    data: unknown;
+    summary: string;
+  } | null>(null);
 
   async function loadSession(nextSessionId: string) {
     const response = await apiFetchClient(
@@ -175,6 +182,7 @@ export function LauraChat({
     setNotice(null);
     setConfirmation(null);
     setClarificationOptions(null);
+    setQueryData(null);
     setMessages((current) => [...current, clientMessage]);
 
     try {
@@ -217,7 +225,7 @@ export function LauraChat({
         createAssistantMessage(body.message, body.mode),
       ]);
 
-      if (body.mode === "proposal") {
+      if (body.mode === "proposal" || body.mode === "modify") {
         setDraftProposal({
           proposalId: body.proposalId,
           proposal: body.proposal,
@@ -234,12 +242,20 @@ export function LauraChat({
 
       if (body.mode === "agenda") {
         setAgendaItems(body.agenda.items);
+      } else {
+        setAgendaItems([]);
       }
 
       if (body.mode === "clarification") {
         setClarificationOptions(body.clarification);
       } else {
         setClarificationOptions(null);
+      }
+
+      if (body.mode === "query" && body.data) {
+        setQueryData(body.data);
+      } else {
+        setQueryData(null);
       }
 
       await loadSession(body.sessionId);
@@ -436,6 +452,18 @@ export function LauraChat({
       {agendaItems.length > 0 && (
         <div style={{ padding: "8px 0" }}>
           <LauraAgendaCard items={agendaItems} />
+        </div>
+      )}
+
+      {/* Query Data Card */}
+      {queryData && (
+        <div style={{ padding: "8px 0" }}>
+          <LauraDataCard
+            entityType={queryData.entityType}
+            action={queryData.action}
+            data={queryData.data}
+            summary={queryData.summary}
+          />
         </div>
       )}
 
