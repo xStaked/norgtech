@@ -562,10 +562,10 @@ describe("Router — Comportamiento sin propuesta activa", () => {
 });
 
 // ============================================================
-// SECTION 5b: Router — Query and Modify modes
+// SECTION 5b: Router — Platform routing for read/write CRM requests
 // ============================================================
 
-describe("Router — Query mode (consultas de lectura)", () => {
+describe("Router — Platform routing for CRM reads", () => {
   it("should classify product queries as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("que productos tenemos?")] });
     const result = await routerNode(state);
@@ -615,7 +615,7 @@ describe("Router — Query mode (consultas de lectura)", () => {
   });
 });
 
-describe("Router — Modify mode (acciones de escritura)", () => {
+describe("Router — Platform routing for CRM writes", () => {
   it("should classify time changes as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("cambia la hora de la tarea a las 14:20")] });
     const result = await routerNode(state);
@@ -1458,7 +1458,7 @@ describe("E2E conversation flows", () => {
     expect(routed.mode).toBe("platform");
   });
 
-  it("should handle create quote request as 'proposal'", async () => {
+  it("should route create quote request to 'platform'", async () => {
     const state = makeState({
       messages: [new HumanMessage("crea una cotizacion para Carlos Mendoza con 10 bolsas de semilla")],
       sessionId: "e2e-create-1",
@@ -1468,7 +1468,7 @@ describe("E2E conversation flows", () => {
     expect(routed.mode).toBe("platform");
   });
 
-  it("full flow: query products → modify followup → query", async () => {
+  it("full flow: platform product read → platform followup write → platform report", async () => {
     const sessionId = "e2e-full-1";
 
     const step1 = await routerNode(makeState({
@@ -1490,7 +1490,7 @@ describe("E2E conversation flows", () => {
     expect(step3.mode).toBe("platform");
   });
 
-  it("full flow: greeting → agenda → query → proposal → confirm", async () => {
+  it("full flow: greeting → agenda → platform read → platform report → confirm", async () => {
     const sessionId = "e2e-full-2";
 
     const step1 = await routerNode(makeState({ messages: [new HumanMessage("buenos dias")], sessionId }));
