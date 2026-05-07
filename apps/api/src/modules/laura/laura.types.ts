@@ -87,6 +87,11 @@ export type LauraAssistantResponse =
       sessionId: string;
       message: string;
       agenda: LauraAgendaPayload;
+    }
+  | {
+      mode: "qa";
+      sessionId: string;
+      message: string;
     };
 
 export interface LauraSessionResponse {

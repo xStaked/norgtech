@@ -338,7 +338,95 @@ export class LauraService {
       );
     }
 
-    return response.json() as Promise<LauraAssistantResponse>;
+    const agentResponse = await response.json() as LauraAssistantResponse;
+
+    const persistedSessionId = await this.persistAgentResponse(user.id, dto, agentResponse);
+
+    if (persistedSessionId) {
+      agentResponse.sessionId = persistedSessionId;
+    }
+
+    return agentResponse;
+  }
+
+  private async persistAgentResponse(
+    userId: string,
+    dto: CreateMessageDto,
+    agentResponse: LauraAssistantResponse,
+  ): Promise<string | null> {
+    try {
+      const sessionId = dto.sessionId || agentResponse.sessionId;
+
+      const session = sessionId
+        ? await this.lauraSessionService.findOrCreateSession(
+            userId,
+            sessionId,
+            dto.contextType,
+            dto.contextEntityId,
+          )
+        : await this.lauraSessionService.ensureSession(userId, {
+            contextType: dto.contextType,
+            contextEntityId: dto.contextEntityId,
+          });
+
+      await this.lauraSessionService.appendUserMessage(
+        session.id,
+        LauraMessageKind.report,
+        dto.content,
+      );
+
+      const kind = this.mapModeToKind(agentResponse.mode);
+
+      const assistantMessage = await this.lauraSessionService.appendAssistantMessage(
+        session.id,
+        kind,
+        agentResponse.message,
+        this.buildPayloadForMode(agentResponse),
+      );
+
+      if (agentResponse.mode === "proposal" && "proposalId" in agentResponse && agentResponse.proposalId) {
+        await this.prisma.lauraProposal.create({
+          data: {
+            sessionId: session.id,
+            messageId: assistantMessage.id,
+            status: LauraProposalStatus.draft,
+            payload: toJsonValue(agentResponse.proposal),
+          },
+        });
+      }
+
+      return session.id;
+    } catch (error) {
+      console.error("Failed to persist agent response:", error);
+      return null;
+    }
+  }
+
+  private mapModeToKind(mode: string): LauraMessageKind {
+    switch (mode) {
+      case "agenda":
+        return LauraMessageKind.agenda_query;
+      case "greeting":
+        return LauraMessageKind.report;
+      case "clarification":
+        return LauraMessageKind.report;
+      case "proposal":
+        return LauraMessageKind.proposal;
+      case "qa":
+        return LauraMessageKind.report;
+      default:
+        return LauraMessageKind.report;
+    }
+  }
+
+  private buildPayloadForMode(agentResponse: LauraAssistantResponse): Prisma.InputJsonValue | undefined {
+    if (agentResponse.mode === "agenda" && "agenda" in agentResponse) {
+      return toJsonValue({ agenda: agentResponse.agenda });
+    }
+    if (agentResponse.mode === "clarification" && "clarification" in agentResponse) {
+      return toJsonValue({ clarification: agentResponse.clarification });
+    }
+    return undefined;
   }
 
   streamMessageViaAgent(

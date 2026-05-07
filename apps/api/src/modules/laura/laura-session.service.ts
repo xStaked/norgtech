@@ -46,6 +46,28 @@ export class LauraSessionService {
     return session;
   }
 
+  async findOrCreateSession(userId: string, sessionId: string, contextType?: string, contextEntityId?: string) {
+    const existing = await this.prisma.lauraSession.findUnique({
+      where: { id: sessionId },
+    });
+
+    if (existing) {
+      if (existing.ownerUserId !== userId) {
+        throw new ForbiddenException("Laura session does not belong to the current user");
+      }
+      return existing;
+    }
+
+    return this.prisma.lauraSession.create({
+      data: {
+        id: sessionId,
+        ownerUserId: userId,
+        contextType,
+        contextEntityId,
+      },
+    });
+  }
+
   async appendUserMessage(
     sessionId: string,
     kind: LauraMessageKind,
