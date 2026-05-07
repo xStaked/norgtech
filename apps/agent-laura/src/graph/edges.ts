@@ -16,6 +16,8 @@ export function routerEdge(state: LauraState): string {
       return "refine";
     case "qa":
       return "qa";
+    case "platform":
+      return "platform";
     case "query":
       return "query";
     case "modify":

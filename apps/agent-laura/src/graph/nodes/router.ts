@@ -16,7 +16,7 @@ export async function routerNode(state: LauraState): Promise<Partial<LauraState>
 function classifyWithHeuristics(
   content: string,
   state: LauraState,
-): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" | "qa" | "query" | "modify" {
+): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" | "qa" | "platform" {
   const normalized = content
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -27,6 +27,14 @@ function classifyWithHeuristics(
   const hasActiveProposal = state.proposalStatus === "draft" && state.proposal !== null;
 
   if (hasActiveProposal) {
+    const discardPatterns = [
+      "cancelar", "cancela", "descartar", "descarta", "no guardar",
+      "no lo guardes", "borrar", "borra", "eliminar", "elimina",
+    ];
+    if (discardPatterns.some((p) => normalized.includes(p))) {
+      return "discard";
+    }
+
     const confirmPatterns = [
       "confirmo", "confirmar", "si confirmo", "si, confirmo",
       "sí confirmo", "sí, confirmo", "guarda", "guardalo", "guardá",
@@ -34,14 +42,6 @@ function classifyWithHeuristics(
     ];
     if (confirmPatterns.some((p) => normalized === p || normalized.includes(p))) {
       return "confirm";
-    }
-
-    const discardPatterns = [
-      "cancelar", "cancela", "descartar", "descarta", "no guardar",
-      "no lo guardes", "borrar", "borra", "eliminar", "elimina",
-    ];
-    if (discardPatterns.some((p) => normalized.includes(p))) {
-      return "discard";
     }
 
     const refinePatterns = [
@@ -79,66 +79,32 @@ function classifyWithHeuristics(
   }
 
   if (isCapabilityQuestion(normalized)) {
-    return "qa";
+    return "platform";
   }
 
   if (isQAQuestion(normalized)) {
     return "qa";
   }
 
-  // Action verbs — route to proposal (write/create intent) BEFORE query check
-  const actionVerbs = [
-    "registrar", "registra", "crear", "crea", "agrega", "agregar",
-    "anota", "anotar", "carga", "cargar", "nuevo cliente", "nueva oportunidad",
-    "nueva cotizacion", "nuevo pedido", "nuevo producto", "nuevo segmento",
-    "nuevo contacto", "nueva visita", "nuevo seguimiento",
+  const agendaPatterns = [
+    "agenda",
+    "pendientes",
+    "pendiente",
+    "mis pendientes",
+    "tareas pendientes",
+    "que tengo pendiente",
+    "que tengo hoy",
+    "que tengo que hacer hoy",
+    "que tengo programado",
+    "visitas programadas",
+    "visitas tenemos programadas",
+    "mi agenda",
   ];
-  if (actionVerbs.some((v) => normalized.includes(v))) {
-    return "proposal";
-  }
-
-  const queryKeywords = [
-    "productos", "catalogo", "catalogo", "que productos", "que productos",
-    "cotizaciones", "cotizacion", "pedidos", "pedido",
-    "segmentos", "segmento", "contactos", "contacto",
-    "cuantos", "cuanto", "cuantas", "cual es", "cual es",
-    "datos de", "info de", "informacion de",
-    "detalle de", "detalles de", "detalles del",
-    "buscar", "busca", "encontra",
-    "listado", "lista de", "ver todos", "mostra", "muestra",
-    "cuanto vale", "precio de",
-    "estado de", "status de",
-    "dashboard", "resumen", "kpi",
-    "que clientes", "que oportunidades",
-    "cliente por id", "oportunidad por id",
-  ];
-
-  const modifyKeywords = [
-    "cambia", "cambiar", "modifica", "modificar",
-    "actualiza", "actualizar", "edita", "editar",
-    "reprograma", "reprogramar", "move",
-    "cancela", "cancelar", "elimina", "eliminar",
-    "completa", "completar", "cierra", "cerrar",
-    "avanza", "pasar a",
-    "la hora", "el horario", "la fecha", "el estado",
-  ];
-
-  // CHECK: query patterns (before agenda to avoid false positives)
-  if (queryKeywords.some(kw => normalized.includes(kw))) {
-    return "query";
-  }
-
-  // CHECK: modify patterns
-  if (modifyKeywords.some(kw => normalized.includes(kw))) {
-    return "modify";
-  }
-
-  const agendaKeywords = ["agenda", "pendientes", "pendiente", "tareas", "visitas", "semana", "hoy", "que tengo", "qué tengo", "programado"];
-  if (agendaKeywords.some((k) => normalized.includes(k))) {
+  if (agendaPatterns.some((k) => normalized.includes(k))) {
     return "agenda";
   }
 
-  return "proposal";
+  return "platform";
 }
 
 function isFollowUpQuestion(normalized: string): boolean {

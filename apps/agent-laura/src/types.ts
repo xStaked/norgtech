@@ -9,6 +9,7 @@ export type AgentMode =
   | "discard"
   | "refine"
   | "qa"
+  | "platform"
   | "query"
   | "modify";
 

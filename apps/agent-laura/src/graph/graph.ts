@@ -12,6 +12,7 @@ import { agendaNode } from "./nodes/agenda.js";
 import { qaNode } from "./nodes/qa.js";
 import { queryNode } from "./nodes/query.js";
 import { modifyNode } from "./nodes/modify.js";
+import { platformNode } from "./nodes/platform.js";
 import { routerEdge } from "./edges.js";
 
 const graphBuilder = new StateGraph(LauraState)
@@ -26,7 +27,8 @@ const graphBuilder = new StateGraph(LauraState)
   .addNode("agenda", agendaNode)
   .addNode("qa", qaNode)
   .addNode("query", queryNode)
-  .addNode("modify", modifyNode);
+  .addNode("modify", modifyNode)
+  .addNode("platform", platformNode);
 
 graphBuilder
   .addEdge(START, "router")
@@ -41,6 +43,7 @@ graphBuilder
     qa: "qa",
     query: "query",
     modify: "modify",
+    platform: "platform",
   })
   .addEdge("greeting", END)
   .addEdge("clarify", END)
@@ -48,6 +51,7 @@ graphBuilder
   .addEdge("qa", END)
   .addEdge("query", END)
   .addEdge("modify", END)
+  .addEdge("platform", END)
   .addEdge("extract_intent", "build_proposal")
   .addEdge("build_proposal", END)
   .addEdge("refine", END)

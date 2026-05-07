@@ -9,6 +9,17 @@ const {
   mockGetOpportunityDetails,
   mockGetPendingTasks,
   mockGetScheduledVisits,
+  mockSearchProducts,
+  mockGetProductDetails,
+  mockSearchQuotes,
+  mockGetQuoteDetails,
+  mockSearchOrders,
+  mockGetOrderDetails,
+  mockSearchSegments,
+  mockSearchContacts,
+  mockSearchVisits,
+  mockSearchFollowups,
+  mockGetDashboardSummary,
   mockCreateInteraction,
   mockUpsertOpportunity,
   mockCreateFollowUp,
@@ -30,6 +41,17 @@ const {
   mockGetScheduledVisits: vi.fn().mockResolvedValue([
     { id: "visit-1", summary: "Visita técnica", scheduledAt: "2026-05-11T15:00:00.000Z" },
   ]),
+  mockSearchProducts: vi.fn().mockResolvedValue([{ id: "product-1", name: "Sensor IoT" }]),
+  mockGetProductDetails: vi.fn().mockResolvedValue({ id: "product-1", name: "Sensor IoT" }),
+  mockSearchQuotes: vi.fn().mockResolvedValue([{ id: "quote-1", status: "draft" }]),
+  mockGetQuoteDetails: vi.fn().mockResolvedValue({ id: "quote-1", status: "draft" }),
+  mockSearchOrders: vi.fn().mockResolvedValue([{ id: "order-1", status: "open" }]),
+  mockGetOrderDetails: vi.fn().mockResolvedValue({ id: "order-1", status: "open" }),
+  mockSearchSegments: vi.fn().mockResolvedValue([{ id: "segment-1", name: "Agro" }]),
+  mockSearchContacts: vi.fn().mockResolvedValue([{ id: "contact-1", fullName: "Carlos Mendoza" }]),
+  mockSearchVisits: vi.fn().mockResolvedValue([{ id: "visit-1", summary: "Visita técnica" }]),
+  mockSearchFollowups: vi.fn().mockResolvedValue([{ id: "followup-1", title: "Llamar a cliente" }]),
+  mockGetDashboardSummary: vi.fn().mockResolvedValue({ customers: 2, opportunities: 1 }),
   mockCreateInteraction: vi.fn().mockResolvedValue({ id: "interaction-1" }),
   mockUpsertOpportunity: vi.fn().mockResolvedValue({ id: "opp-created-1" }),
   mockCreateFollowUp: vi.fn().mockResolvedValue({ id: "followup-1" }),
@@ -66,6 +88,17 @@ vi.mock("../tools/nestjs-client.js", () => ({
   getOpportunityDetails: mockGetOpportunityDetails,
   getPendingTasks: mockGetPendingTasks,
   getScheduledVisits: mockGetScheduledVisits,
+  searchProducts: mockSearchProducts,
+  getProductDetails: mockGetProductDetails,
+  searchQuotes: mockSearchQuotes,
+  getQuoteDetails: mockGetQuoteDetails,
+  searchOrders: mockSearchOrders,
+  getOrderDetails: mockGetOrderDetails,
+  searchSegments: mockSearchSegments,
+  searchContacts: mockSearchContacts,
+  searchVisits: mockSearchVisits,
+  searchFollowups: mockSearchFollowups,
+  getDashboardSummary: mockGetDashboardSummary,
   createInteraction: mockCreateInteraction,
   upsertOpportunity: mockUpsertOpportunity,
   createFollowUp: mockCreateFollowUp,
@@ -85,6 +118,7 @@ import { clarifyNode } from "../graph/nodes/clarify.js";
 import { confirmNode } from "../graph/nodes/confirm.js";
 import { refineNode } from "../graph/nodes/refine.js";
 import { extractIntentNode } from "../graph/nodes/extract-intent.js";
+import { platformNode } from "../graph/nodes/platform.js";
 import { routerEdge } from "../graph/edges.js";
 
 function makeState(overrides: Partial<LauraState> = {}): LauraState {
@@ -128,17 +162,17 @@ describe("Router — Tipos de usuarios", () => {
   describe("Vendedor experimentado — lenguaje directo y profesional", () => {
     it("clasifica reporte con 'cotización' como query (keyword catch)", async () => {
       const state = makeState({ messages: [new HumanMessage("Visité a Acme Piscicola, reunión con el gerente Carlos. Solicitaron cotización para sistema de inventario.")] });
-      expect((await routerNode(state)).mode).toBe("query");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("LIMITACIÓN: reporte con 'semana pasada' clasifica como agenda (falso positivo — contiene 'semana')", async () => {
+    it("clasifica reporte con 'semana pasada' como platform sin falso positivo de agenda", async () => {
       const state = makeState({ messages: [new HumanMessage("Llamé a Distribuidores del Norte para dar seguimiento a la propuesta enviada la semana pasada.")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("LIMITACIÓN: reporte con 'hoy' y 'Avanzada' clasifica como modify (contiene 'avanza' → modify keyword)", async () => {
       const state = makeState({ messages: [new HumanMessage("Cerré la venta con Tecnología Avanzada SA, firmaron el contrato hoy.")] });
-      expect((await routerNode(state)).mode).toBe("modify");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica consulta de agenda directa como agenda", async () => {
@@ -170,7 +204,7 @@ describe("Router — Tipos de usuarios", () => {
 
     it("clasifica reporte vago con 'cliente' como proposal", async () => {
       const state = makeState({ messages: [new HumanMessage("fui a ver un cliente y me dijo que le interesa")] });
-      expect((await routerNode(state)).mode).toBe("proposal");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 
@@ -189,22 +223,22 @@ describe("Router — Tipos de usuarios", () => {
   describe("Usuario con typing errors / typos", () => {
     it("clasifica 'ola' como proposal (no greeting — solo matchea hola/buenos/etc exactos)", async () => {
       const state = makeState({ messages: [new HumanMessage("ola")] });
-      expect((await routerNode(state)).mode).toBe("proposal");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica 'hla' como proposal (typo de hola)", async () => {
       const state = makeState({ messages: [new HumanMessage("hla")] });
-      expect((await routerNode(state)).mode).toBe("proposal");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica 'bns dias' como proposal (typo de buenos días)", async () => {
       const state = makeState({ messages: [new HumanMessage("bns dias")] });
-      expect((await routerNode(state)).mode).toBe("proposal");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica 'agnda' como proposal (typo de agenda)", async () => {
       const state = makeState({ messages: [new HumanMessage("agnda")] });
-      expect((await routerNode(state)).mode).toBe("proposal");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 
@@ -212,7 +246,7 @@ describe("Router — Tipos de usuarios", () => {
     it("LIMITACIÓN: 'buenas' no se detecta como greeting (no match en patterns — cae a proposal)", async () => {
       const state = makeState({ messages: [new HumanMessage("buenas")] });
       const result = await routerNode(state);
-      expect(result.mode).toBe("proposal");
+      expect(result.mode).toBe("platform");
     });
 
     it("clasifica 'che, necesito ver mi agenda' como agenda", async () => {
@@ -229,7 +263,7 @@ describe("Router — Tipos de usuarios", () => {
   describe("Usuario con Spanglish / mixto", () => {
     it("clasifica mensaje con inglés + español como proposal", async () => {
       const state = makeState({ messages: [new HumanMessage("Tuve un meeting con el cliente, quieren un follow-up del producto")] });
-      expect((await routerNode(state)).mode).toBe("proposal");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica 'hi, necesito ver mi agenda' como agenda (contiene 'agenda')", async () => {
@@ -364,12 +398,12 @@ const discardCases = [
       expect((await routerNode(state)).mode).not.toBe("discard");
     });
 
-    it("LIMITACIÓN: 'no guardar' coincide con 'guarda' (patrón confirm) → false confirm", async () => {
+    it("'no guardar' descarta antes de evaluar confirmación", async () => {
       const state = makeState({
         messages: [new HumanMessage("no guardar")],
         ...proposalState,
       });
-      expect((await routerNode(state)).mode).toBe("confirm");
+      expect((await routerNode(state)).mode).toBe("discard");
     });
   });
 
@@ -413,35 +447,35 @@ const discardCases = [
 describe("Router — Edge cases", () => {
   it("clasifica mensaje vacío como proposal (fallback)", async () => {
     const state = makeState({ messages: [new HumanMessage("")] });
-    expect((await routerNode(state)).mode).toBe("proposal");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
   it("clasifica mensaje de solo espacios como proposal (fallback)", async () => {
     const state = makeState({ messages: [new HumanMessage("   ")] });
-    expect((await routerNode(state)).mode).toBe("proposal");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
   it("clasifica mensaje con solo emoji como clarification o proposal", async () => {
     const state = makeState({ messages: [new HumanMessage("👍")] });
     const result = await routerNode(state);
-    expect(["clarification", "proposal"]).toContain(result.mode);
+    expect(["clarification", "platform"]).toContain(result.mode);
   });
 
   it("clasifica mensaje muy largo con 'cliente' como proposal", async () => {
     const longMsg = "Estuve con el cliente y ".repeat(50) + "quieren una propuesta";
     const state = makeState({ messages: [new HumanMessage(longMsg)] });
-    expect((await routerNode(state)).mode).toBe("proposal");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
   it("clasifica 'hola, estuve con el cliente' como proposal", async () => {
     const state = makeState({ messages: [new HumanMessage("hola, estuve con el cliente ayer y quieren un sistema")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("proposal");
+    expect(result.mode).toBe("platform");
   });
 
   it("clasifica mensaje con caracteres especiales como proposal", async () => {
     const state = makeState({ messages: [new HumanMessage("@#$%^&*()")] });
-    expect((await routerNode(state)).mode).toBe("proposal");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
   it("clasifica números solos como clarification (short response 'si' check fails, falls through)", async () => {
@@ -452,17 +486,17 @@ describe("Router — Edge cases", () => {
 
   it("clasifica '1' como clarification (short numeric = possible option selection)", async () => {
     const state = makeState({ messages: [new HumanMessage("1")] });
-    expect((await routerNode(state)).mode).toBe("proposal");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
   it("palabras con acentos y ñ se normalizan correctamente", async () => {
     const state = makeState({ messages: [new HumanMessage("visitas")] });
-    expect((await routerNode(state)).mode).toBe("agenda");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
   it("mensaje con HTML/SQL injection attempt → proposal (no special handling)", async () => {
     const state = makeState({ messages: [new HumanMessage("<script>alert('xss')</script>")] });
-    expect((await routerNode(state)).mode).toBe("proposal");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 });
 
@@ -487,7 +521,7 @@ describe("Router — Comportamiento sin propuesta activa", () => {
       proposalStatus: "draft",
     });
     const result = await routerNode(state);
-    expect(result.mode).toBe("modify");
+    expect(result.mode).toBe("platform");
   });
 
   it("'cambia' sin propuesta → modify (match en modifyKeywords)", async () => {
@@ -497,7 +531,7 @@ describe("Router — Comportamiento sin propuesta activa", () => {
       proposalStatus: "draft",
     });
     const result = await routerNode(state);
-    expect(result.mode).toBe("modify");
+    expect(result.mode).toBe("platform");
   });
 
   it("'descartar' sin propuesta → proposal (not in any special category)", async () => {
@@ -519,25 +553,25 @@ describe("Router — Query mode (consultas de lectura)", () => {
   it("should classify product queries as 'query'", async () => {
     const state = makeState({ messages: [new HumanMessage("que productos tenemos?")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify quote queries as 'query'", async () => {
     const state = makeState({ messages: [new HumanMessage("cuantas cotizaciones abiertas hay?")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify show/list queries as 'query'", async () => {
     const state = makeState({ messages: [new HumanMessage("mostra los clientes del segmento agro")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify customer search as 'query'", async () => {
     const state = makeState({ messages: [new HumanMessage("buscar clientes de cordoba")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify opportunity status as 'qa' (isQAQuestion matches 'cual es')", async () => {
@@ -549,13 +583,13 @@ describe("Router — Query mode (consultas de lectura)", () => {
   it("should classify contact info as 'query'", async () => {
     const state = makeState({ messages: [new HumanMessage("datos del contacto Carlos Mendoza")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify catalog/dashboard queries as 'query'", async () => {
     const state = makeState({ messages: [new HumanMessage("mostra el catalogo de productos")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 });
 
@@ -563,43 +597,43 @@ describe("Router — Modify mode (acciones de escritura)", () => {
   it("should classify time changes as 'modify'", async () => {
     const state = makeState({ messages: [new HumanMessage("cambia la hora de la tarea a las 14:20")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("modify");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify status updates on opportunities as 'query' (keyword catch: 'oportunidad')", async () => {
     const state = makeState({ messages: [new HumanMessage("actualiza el estado de la oportunidad a negociacion")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify visit cancellation as 'modify'", async () => {
     const state = makeState({ messages: [new HumanMessage("cancela la visita de mañana")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("modify");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify followup rescheduling as 'modify'", async () => {
     const state = makeState({ messages: [new HumanMessage("reprograma el seguimiento para el lunes")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("modify");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify quote date changes as 'query' (keyword catch: 'cotizacion')", async () => {
     const state = makeState({ messages: [new HumanMessage("actualiza la fecha de la cotizacion al viernes")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify complete/close actions as 'modify'", async () => {
     const state = makeState({ messages: [new HumanMessage("completa la tarea de llamar a Acme")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("modify");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify stage advancement as 'query' (keyword catch: 'oportunidad' + 'cotizacion')", async () => {
     const state = makeState({ messages: [new HumanMessage("avanza la oportunidad a cotizacion")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("query");
+    expect(result.mode).toBe("platform");
   });
 });
 
@@ -619,7 +653,7 @@ describe("Router — Existing modes still work", () => {
   it("should classify reports about clients as 'proposal'", async () => {
     const state = makeState({ messages: [new HumanMessage("estuve con un cliente y cerramos un trato")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("proposal");
+    expect(result.mode).toBe("platform");
   });
 });
 
@@ -666,6 +700,10 @@ describe("Router Edge — flujo del grafo", () => {
 
   it("routes 'qa' mode → 'qa' node", () => {
     expect(routerEdge(makeState({ mode: "qa" }))).toBe("qa");
+  });
+
+  it("routes 'platform' mode → 'platform' node", () => {
+    expect(routerEdge(makeState({ mode: "platform" }))).toBe("platform");
   });
 });
 
@@ -1128,7 +1166,107 @@ describe("Greeting node", () => {
 });
 
 // ============================================================
-// SECTION 15: State transitions — flujo completo simulado
+// SECTION 15: Platform node
+// ============================================================
+
+describe("Platform node — planner orchestration", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function mockPlannerResponse(payload: Record<string, unknown>) {
+    mockCreateLlm.mockReturnValueOnce({
+      invoke: vi.fn().mockResolvedValue(new AIMessage({ content: JSON.stringify(payload) })),
+    });
+  }
+
+  it("retorna clarification cuando la validación encuentra campos faltantes", async () => {
+    mockPlannerResponse({
+      intent: "write",
+      summary: "Crear seguimiento",
+      actions: [
+        {
+          domain: "followups",
+          action: "create",
+          arguments: { title: "Llamar a Acme" },
+          confidence: 0.9,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("crea un seguimiento para Acme")] }));
+
+    expect(result.mode).toBe("clarification");
+    expect(result.lastError).toContain("customerId");
+    expect(result.lastError).toContain("dueAt");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("customerId");
+  });
+
+  it("retorna proposal para planes de escritura validados", async () => {
+    mockPlannerResponse({
+      intent: "write",
+      summary: "Crear seguimiento",
+      actions: [
+        {
+          domain: "followups",
+          action: "create",
+          arguments: {
+            customerId: "customer-1",
+            title: "Llamar a Acme",
+            dueAt: "2026-05-12T15:00:00.000Z",
+            type: "llamada",
+          },
+          confidence: 0.91,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("programa llamada con Acme")] }));
+
+    expect(result.mode).toBe("proposal");
+    expect(result.proposalId).toBeDefined();
+    expect(result.proposalStatus).toBe("draft");
+    expect(result.proposal!.blocks.followUp).toMatchObject({
+      enabled: true,
+      action: "create",
+      title: "Llamar a Acme",
+    });
+    expect(mockCreateFollowUp).not.toHaveBeenCalled();
+  });
+
+  it("retorna query y data para planes de lectura validados", async () => {
+    mockSearchProducts.mockResolvedValueOnce([{ id: "product-1", name: "Sensor IoT" }]);
+    mockPlannerResponse({
+      intent: "read",
+      summary: "Buscar productos",
+      actions: [
+        {
+          domain: "products",
+          action: "search",
+          arguments: { search: "sensor" },
+          confidence: 0.92,
+        },
+      ],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("mostra productos sensor")] }));
+
+    expect(result.mode).toBe("query");
+    expect(result.data).toMatchObject({
+      entityType: "products",
+      action: "list",
+      data: [{ id: "product-1", name: "Sensor IoT" }],
+    });
+    expect(mockSearchProducts).toHaveBeenCalledWith({ search: "sensor", active: undefined });
+  });
+});
+
+// ============================================================
+// SECTION 16: State transitions — flujo completo simulado
 // ============================================================
 
 describe("Flujo completo — simulación de conversación", () => {
@@ -1145,7 +1283,7 @@ describe("Flujo completo — simulación de conversación", () => {
       sessionId,
       mode: "greeting",
     }));
-    expect(step2.mode).toBe("proposal");
+    expect(step2.mode).toBe("platform");
 
     const msg3 = new HumanMessage("confirmo la propuesta");
     const step3 = await routerNode(makeState({
@@ -1170,7 +1308,7 @@ describe("Flujo completo — simulación de conversación", () => {
     expect(step2.mode).toBe("agenda");
 
     const step3 = await routerNode(makeState({ messages: [new HumanMessage("visité a un cliente nuevo")], sessionId }));
-    expect(step3.mode).toBe("proposal");
+    expect(step3.mode).toBe("platform");
 
     const step4 = await routerNode(makeState({
       messages: [new HumanMessage("descartar")],
@@ -1240,7 +1378,7 @@ describe("E2E conversation flows", () => {
       sessionId: "e2e-query-1",
     });
     const routed = await routerNode(state);
-    expect(routed.mode).toBe("query");
+    expect(routed.mode).toBe("platform");
   });
 
   it("should handle modify flow: change followup time with context", async () => {
@@ -1250,7 +1388,7 @@ describe("E2E conversation flows", () => {
       mentionedEntities: { followupId: "test-id-123" },
     });
     const routed = await routerNode(stateWithContext);
-    expect(routed.mode).toBe("modify");
+    expect(routed.mode).toBe("platform");
   });
 
   it("should handle create quote request as 'proposal'", async () => {
@@ -1260,7 +1398,7 @@ describe("E2E conversation flows", () => {
       customerContext: { id: "cust-1", label: "Carlos Mendoza" },
     });
     const routed = await routerNode(state);
-    expect(routed.mode).toBe("proposal");
+    expect(routed.mode).toBe("platform");
   });
 
   it("full flow: query products → modify followup → query", async () => {
@@ -1270,19 +1408,19 @@ describe("E2E conversation flows", () => {
       messages: [new HumanMessage("que productos tenemos?")],
       sessionId,
     }));
-    expect(step1.mode).toBe("query");
+    expect(step1.mode).toBe("platform");
 
     const step2 = await routerNode(makeState({
       messages: [new HumanMessage("reprograma el seguimiento del lunes para el martes")],
       sessionId,
     }));
-    expect(step2.mode).toBe("modify");
+    expect(step2.mode).toBe("platform");
 
     const step3 = await routerNode(makeState({
       messages: [new HumanMessage("estuve con un cliente y quieren cotizacion")],
       sessionId,
     }));
-    expect(step3.mode).toBe("query");
+    expect(step3.mode).toBe("platform");
   });
 
   it("full flow: greeting → agenda → query → proposal → confirm", async () => {
@@ -1295,10 +1433,10 @@ describe("E2E conversation flows", () => {
     expect(step2.mode).toBe("agenda");
 
     const step3 = await routerNode(makeState({ messages: [new HumanMessage("cuantas cotizaciones abiertas hay?")], sessionId }));
-    expect(step3.mode).toBe("query");
+    expect(step3.mode).toBe("platform");
 
     const step4 = await routerNode(makeState({ messages: [new HumanMessage("visite a Agro SA, quieren el sistema")], sessionId }));
-    expect(step4.mode).toBe("proposal");
+    expect(step4.mode).toBe("platform");
 
     const step5 = await routerNode(makeState({
       messages: [new HumanMessage("confirmo")],
