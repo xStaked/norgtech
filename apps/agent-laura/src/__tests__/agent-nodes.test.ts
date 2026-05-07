@@ -202,7 +202,7 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("agenda");
     });
 
-    it("clasifica reporte vago con 'cliente' como proposal", async () => {
+    it("clasifica reporte vago con 'cliente' como platform", async () => {
       const state = makeState({ messages: [new HumanMessage("fui a ver un cliente y me dijo que le interesa")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
@@ -221,29 +221,29 @@ describe("Router — Tipos de usuarios", () => {
   });
 
   describe("Usuario con typing errors / typos", () => {
-    it("clasifica 'ola' como proposal (no greeting — solo matchea hola/buenos/etc exactos)", async () => {
+    it("clasifica 'ola' como platform por default (no greeting)", async () => {
       const state = makeState({ messages: [new HumanMessage("ola")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica 'hla' como proposal (typo de hola)", async () => {
+    it("clasifica 'hla' como platform por default (typo de hola)", async () => {
       const state = makeState({ messages: [new HumanMessage("hla")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica 'bns dias' como proposal (typo de buenos días)", async () => {
+    it("clasifica 'bns dias' como platform por default (typo de buenos días)", async () => {
       const state = makeState({ messages: [new HumanMessage("bns dias")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica 'agnda' como proposal (typo de agenda)", async () => {
+    it("clasifica 'agnda' como platform por default (typo de agenda)", async () => {
       const state = makeState({ messages: [new HumanMessage("agnda")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 
   describe("Usuario con lenguaje regional argentino", () => {
-    it("LIMITACIÓN: 'buenas' no se detecta como greeting (no match en patterns — cae a proposal)", async () => {
+    it("LIMITACIÓN: 'buenas' no se detecta como greeting (cae a platform)", async () => {
       const state = makeState({ messages: [new HumanMessage("buenas")] });
       const result = await routerNode(state);
       expect(result.mode).toBe("platform");
@@ -261,7 +261,7 @@ describe("Router — Tipos de usuarios", () => {
   });
 
   describe("Usuario con Spanglish / mixto", () => {
-    it("clasifica mensaje con inglés + español como proposal", async () => {
+    it("clasifica mensaje con inglés + español como platform", async () => {
       const state = makeState({ messages: [new HumanMessage("Tuve un meeting con el cliente, quieren un follow-up del producto")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
@@ -445,12 +445,12 @@ const discardCases = [
 // ============================================================
 
 describe("Router — Edge cases", () => {
-  it("clasifica mensaje vacío como proposal (fallback)", async () => {
+  it("clasifica mensaje vacío como platform por default", async () => {
     const state = makeState({ messages: [new HumanMessage("")] });
     expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica mensaje de solo espacios como proposal (fallback)", async () => {
+  it("clasifica mensaje de solo espacios como platform por default", async () => {
     const state = makeState({ messages: [new HumanMessage("   ")] });
     expect((await routerNode(state)).mode).toBe("platform");
   });
@@ -461,19 +461,19 @@ describe("Router — Edge cases", () => {
     expect(result.mode).toBe("platform");
   });
 
-  it("clasifica mensaje muy largo con 'cliente' como proposal", async () => {
+  it("clasifica mensaje muy largo con 'cliente' como platform", async () => {
     const longMsg = "Estuve con el cliente y ".repeat(50) + "quieren una propuesta";
     const state = makeState({ messages: [new HumanMessage(longMsg)] });
     expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica 'hola, estuve con el cliente' como proposal", async () => {
+  it("clasifica 'hola, estuve con el cliente' como platform", async () => {
     const state = makeState({ messages: [new HumanMessage("hola, estuve con el cliente ayer y quieren un sistema")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("clasifica mensaje con caracteres especiales como proposal", async () => {
+  it("clasifica mensaje con caracteres especiales como platform por default", async () => {
     const state = makeState({ messages: [new HumanMessage("@#$%^&*()")] });
     expect((await routerNode(state)).mode).toBe("platform");
   });
@@ -510,7 +510,7 @@ describe("Router — Edge cases", () => {
     expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("mensaje con HTML/SQL injection attempt → proposal (no special handling)", async () => {
+  it("mensaje con HTML/SQL injection attempt → platform por default", async () => {
     const state = makeState({ messages: [new HumanMessage("<script>alert('xss')</script>")] });
     expect((await routerNode(state)).mode).toBe("platform");
   });
@@ -672,7 +672,7 @@ describe("Router — Existing modes still work", () => {
     expect(result.mode).toBe("agenda");
   });
 
-  it("should classify reports about clients as 'proposal'", async () => {
+  it("should classify reports about clients as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("estuve con un cliente y cerramos un trato")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
