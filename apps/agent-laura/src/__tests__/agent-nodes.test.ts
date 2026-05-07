@@ -913,6 +913,42 @@ describe("Refine node — refinamiento de propuestas", () => {
     const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
     expect((lastMsg.content as string).toLowerCase()).toContain("no pude");
   });
+
+  it("aplica cambios cuando LLM devuelve bloque directo sin wrapper blocks", async () => {
+    mockCreateLlm.mockReturnValue({
+      invoke: vi.fn().mockResolvedValue({
+        content: JSON.stringify({
+          customer: {
+            phone: "3023444442",
+          },
+        }),
+      }),
+    });
+
+    const state = makeState({
+      messages: [new HumanMessage("agregale este telefono: 3023444442")],
+      proposal: {
+        blocks: {
+          customer: {
+            legalName: "aquavet",
+            displayName: "aquavet",
+            phone: "",
+            email: "aquavet@sbi.com",
+            enabled: true,
+            action: "create",
+          },
+        },
+      },
+      proposalId: "prop-1",
+      proposalStatus: "draft",
+    });
+
+    const result = await refineNode(state);
+    const customerBlock = result.proposal?.blocks.customer;
+    expect(customerBlock).toBeDefined();
+    expect(customerBlock?.phone).toBe("3023444442");
+    expect(customerBlock?.legalName).toBe("aquavet");
+  });
 });
 
 // ============================================================

@@ -1,6 +1,7 @@
 import type { LauraState } from "../state.js";
 import { AIMessage } from "@langchain/core/messages";
 import { createLlm } from "../../config/providers.js";
+import type { ProposalPayload } from "../../types.js";
 
 const REFINE_PROMPT = `El usuario quiere ajustar la propuesta comercial actual. Analizá su feedback y generá una versión mejorada de los campos que menciona.
 
@@ -11,6 +12,57 @@ Feedback del usuario:
 {USER_FEEDBACK}
 
 Respondé SOLO con un JSON que contenga los campos que hay que actualizar, manteniendo los demás igual. Si el usuario no sugiere cambios específicos, devolvé la propuesta sin modificaciones.`;
+
+const PROPOSAL_BLOCK_KEYS: Array<keyof ProposalPayload["blocks"]> = [
+  "interaction",
+  "opportunity",
+  "followUp",
+  "task",
+  "signals",
+  "customer",
+  "contact",
+  "quote",
+  "order",
+  "product",
+  "segment",
+  "visit",
+];
+
+function normalizeBlockUpdates(updates: Record<string, unknown>): Partial<ProposalPayload["blocks"]> {
+  if (updates.blocks && typeof updates.blocks === "object" && !Array.isArray(updates.blocks)) {
+    return updates.blocks as Partial<ProposalPayload["blocks"]>;
+  }
+
+  const directUpdates: Partial<ProposalPayload["blocks"]> = {};
+  for (const key of PROPOSAL_BLOCK_KEYS) {
+    const value = updates[key];
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      directUpdates[key] = value as ProposalPayload["blocks"][typeof key];
+    }
+  }
+  return directUpdates;
+}
+
+function mergeBlocks(
+  current: ProposalPayload["blocks"],
+  updates: Partial<ProposalPayload["blocks"]>,
+): ProposalPayload["blocks"] {
+  const merged: ProposalPayload["blocks"] = { ...current };
+
+  for (const key of PROPOSAL_BLOCK_KEYS) {
+    const update = updates[key];
+    if (!update) continue;
+
+    const existing = merged[key];
+    if (existing && typeof existing === "object") {
+      merged[key] = { ...existing, ...update } as ProposalPayload["blocks"][typeof key];
+    } else {
+      merged[key] = update as ProposalPayload["blocks"][typeof key];
+    }
+  }
+
+  return merged;
+}
 
 export async function refineNode(state: LauraState): Promise<Partial<LauraState>> {
   const lastMessage = state.messages[state.messages.length - 1];
@@ -36,10 +88,20 @@ export async function refineNode(state: LauraState): Promise<Partial<LauraState>
       .replace(/\n?\s*```$/, "")
       .trim();
     const updates = JSON.parse(cleaned) as Record<string, unknown>;
+    const blockUpdates = normalizeBlockUpdates(updates);
+    const hasBlockUpdates = Object.keys(blockUpdates).length > 0;
+
+    if (!hasBlockUpdates) {
+      return {
+        proposal: state.proposal,
+        proposalStatus: "draft",
+        messages: [...state.messages, new AIMessage("No pude aplicar cambios concretos con ese feedback. ¿Podés especificar qué campo querés ajustar?")],
+      };
+    }
 
     const refinedProposal = {
       ...state.proposal,
-      blocks: { ...state.proposal.blocks, ...(updates.blocks as typeof state.proposal.blocks) },
+      blocks: mergeBlocks(state.proposal.blocks, blockUpdates),
     };
 
     return {
