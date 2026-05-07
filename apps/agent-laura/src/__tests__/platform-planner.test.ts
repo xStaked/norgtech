@@ -254,6 +254,43 @@ describe("platform planner", () => {
     expect(mockBindTools).not.toHaveBeenCalled();
   });
 
+  it("unsupported planner action remains unsupported and is rejected by validator", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "unsupported",
+          summary: "Eliminar pedidos en lote",
+          actions: [
+            {
+              domain: "orders",
+              action: "bulk_delete",
+              arguments: { olderThan: "2025-01-01" },
+              confidence: 0.88,
+            },
+          ],
+          requiresConfirmation: false,
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState()));
+    const result = validatePlatformPlan(plan);
+
+    expect(plan.actions[0]).toMatchObject({
+      domain: "orders",
+      action: "bulk_delete",
+      toolName: "",
+      requiredFields: [],
+      missingFields: [],
+      requiresConfirmation: true,
+    });
+    expect(plan.actions[0].toolName).not.toBe("orders_bulk_delete");
+    expect(result.ok).toBe(false);
+    expect(result.executableReads).toEqual([]);
+    expect(result.proposalWrites).toEqual([]);
+    expect(result.errors.join(" ")).toContain("no está disponible");
+  });
+
   it("validatePlatformPlan accepts read plans into executableReads", () => {
     const plan: PlatformPlan = {
       intent: "read",
@@ -374,5 +411,40 @@ describe("platform planner", () => {
 
     expect(result.ok).toBe(false);
     expect(result.missingFields).toEqual(["customerId", "dueAt", "type"]);
+  });
+
+  it("clarification includes missing fields accumulated across multiple actions", () => {
+    const result = validatePlatformPlan({
+      intent: "write",
+      summary: "Crear seguimiento y contacto",
+      actions: [
+        {
+          domain: "followups",
+          action: "create",
+          toolName: "create_followup",
+          arguments: { title: "Llamar a Acme" },
+          requiredFields: ["customerId", "title", "dueAt", "type"],
+          missingFields: [],
+          requiresConfirmation: true,
+        },
+        {
+          domain: "contacts",
+          action: "create",
+          toolName: "create_contact",
+          arguments: { customerId: "customer-1" },
+          requiredFields: ["customerId", "fullName"],
+          missingFields: [],
+          requiresConfirmation: true,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.missingFields).toEqual(["customerId", "dueAt", "type", "fullName"]);
+    expect(result.clarificationQuestion).toContain("customerId");
+    expect(result.clarificationQuestion).toContain("dueAt");
+    expect(result.clarificationQuestion).toContain("type");
+    expect(result.clarificationQuestion).toContain("fullName");
   });
 });

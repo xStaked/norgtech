@@ -105,16 +105,29 @@ function stringifyLlmContent(content: unknown): string {
 
 function normalizeAction(action: ParsedAction): PlannerAction {
   const capability = getCapability(action.domain as CapabilityDomain, action.action as CapabilityAction);
+  if (!capability) {
+    return {
+      domain: action.domain as CapabilityDomain,
+      action: action.action as CapabilityAction,
+      toolName: action.toolName ?? "",
+      arguments: { ...action.arguments },
+      requiredFields: [],
+      missingFields: [],
+      requiresConfirmation: true,
+      confidence: action.confidence,
+    };
+  }
+
   const requiredFields = capability?.requiredFields ? [...capability.requiredFields] : [];
 
   return {
     domain: action.domain as CapabilityDomain,
     action: action.action as CapabilityAction,
-    toolName: action.toolName ?? capability?.toolName ?? `${action.domain}_${action.action}`,
+    toolName: action.toolName ?? capability.toolName,
     arguments: { ...action.arguments },
     requiredFields,
     missingFields: [],
-    requiresConfirmation: capability?.requiresConfirmation ?? false,
+    requiresConfirmation: capability.requiresConfirmation ?? false,
     confidence: action.confidence,
   };
 }

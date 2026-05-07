@@ -65,7 +65,6 @@ export function validatePlatformPlan(plan: PlanForValidation): PlatformPlanValid
     const actionMissingFields = requiredFields.filter((field) => !hasRequiredValue(action.arguments, field));
     if (actionMissingFields.length > 0) {
       missingFields.push(...actionMissingFields);
-      clarificationQuestion = clarificationForMissing(actionMissingFields);
       continue;
     }
 
@@ -91,6 +90,6 @@ export function validatePlatformPlan(plan: PlanForValidation): PlatformPlanValid
     missingFields,
     errors,
     warnings,
-    clarificationQuestion,
+    clarificationQuestion: missingFields.length > 0 ? clarificationForMissing(missingFields) : clarificationQuestion,
   };
 }
