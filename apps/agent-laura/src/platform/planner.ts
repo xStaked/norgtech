@@ -32,6 +32,16 @@ const actionSchema = z.enum([
   "bulk_delete",
 ]);
 
+const intentSchema = z.enum([
+  "read",
+  "write",
+  "mixed",
+  "clarification",
+  "greeting",
+  "help",
+  "unsupported",
+]);
+
 const plannedActionSchema = z
   .object({
     domain: domainSchema,
@@ -44,7 +54,7 @@ const plannedActionSchema = z
 
 const platformPlanSchema = z
   .object({
-    intent: z.string(),
+    intent: intentSchema,
     summary: z.string(),
     actions: z.array(plannedActionSchema),
     requiresConfirmation: z.boolean().default(false),
@@ -132,7 +142,7 @@ Capacidades disponibles:
 ${capabilitiesForPrompt()}
 
 Devolvé solo JSON estricto con esta forma:
-{"intent":"read|write|clarification","summary":"...","actions":[{"domain":"customers","action":"search","arguments":{},"confidence":0.9}],"requiresConfirmation":false,"clarificationQuestion":"..."}`),
+{"intent":"read|write|mixed|clarification|greeting|help|unsupported","summary":"...","actions":[{"domain":"customers","action":"search","arguments":{},"confidence":0.9}],"requiresConfirmation":false,"clarificationQuestion":"..."}`),
     new HumanMessage(`Contexto compacto:\n${compactContext(context)}\n\nPlanificá la intención sin ejecutar herramientas.`),
   ]);
 

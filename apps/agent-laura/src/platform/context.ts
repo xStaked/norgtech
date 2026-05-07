@@ -9,7 +9,7 @@ export interface LauraPlatformContext extends PlatformContext {
   currentMessage: string;
   recentMessages: string[];
   agendaSummary?: string;
-  activeProposal?: ProposalPayload;
+  activeProposal: ProposalPayload | null;
 }
 
 function stringifyContent(content: unknown): string {
@@ -65,6 +65,6 @@ export function buildPlatformContext(state: LauraState): LauraPlatformContext {
     currentMessage: recentMessages.at(-1) ?? "",
     recentMessages,
     agendaSummary: state.agendaItems?.length ? compactAgendaSummary(state.agendaItems) : undefined,
-    activeProposal: state.proposalStatus === "draft" && state.proposal ? state.proposal : undefined,
+    activeProposal: state.proposalStatus === "draft" && state.proposal ? state.proposal : null,
   };
 }

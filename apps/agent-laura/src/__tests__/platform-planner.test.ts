@@ -3,11 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { LauraState } from "../graph/state.js";
 import type { PlannedAction, PlatformPlan } from "../platform/types.js";
 
-const { mockInvoke, mockCreateLlm } = vi.hoisted(() => {
+const { mockInvoke, mockBindTools, mockCreateLlm } = vi.hoisted(() => {
   const mockInvoke = vi.fn();
+  const mockBindTools = vi.fn();
   return {
     mockInvoke,
-    mockCreateLlm: vi.fn(() => ({ invoke: mockInvoke })),
+    mockBindTools,
+    mockCreateLlm: vi.fn(() => ({ bindTools: mockBindTools, invoke: mockInvoke })),
   };
 });
 
@@ -62,6 +64,57 @@ describe("platform planner", () => {
     expect(context.currentMessage).toBe("mostrame el cliente Acme");
   });
 
+  it("buildPlatformContext keeps only the last 8 recent messages", () => {
+    const context = buildPlatformContext(
+      makeState({
+        messages: Array.from({ length: 10 }, (_, index) => new HumanMessage(`mensaje ${index + 1}`)),
+      }),
+    );
+
+    expect(context.recentMessages).toEqual([
+      "mensaje 3",
+      "mensaje 4",
+      "mensaje 5",
+      "mensaje 6",
+      "mensaje 7",
+      "mensaje 8",
+      "mensaje 9",
+      "mensaje 10",
+    ]);
+    expect(context.currentMessage).toBe("mensaje 10");
+  });
+
+  it("buildPlatformContext creates agenda summary", () => {
+    const context = buildPlatformContext(
+      makeState({
+        agendaItems: [
+          { id: "visit-1", type: "visit", label: "Visita Acme", scheduledAt: "2026-05-10T10:00:00.000Z" },
+          { id: "follow-1", type: "follow_up_task", label: "Llamar a Beta" },
+        ],
+      }),
+    );
+
+    expect(context.agendaSummary).toContain("visit: Visita Acme @ 2026-05-10T10:00:00.000Z");
+    expect(context.agendaSummary).toContain("follow_up_task: Llamar a Beta");
+  });
+
+  it("buildPlatformContext includes activeProposal only for draft proposals and null otherwise", () => {
+    const proposal = {
+      blocks: {
+        followUp: {
+          enabled: true,
+          title: "Llamar a Acme",
+          dueAt: "2026-05-10T10:00:00.000Z",
+          type: "llamada",
+        },
+      },
+    };
+
+    expect(buildPlatformContext(makeState({ proposal, proposalStatus: "draft" })).activeProposal).toEqual(proposal);
+    expect(buildPlatformContext(makeState({ proposal, proposalStatus: "confirmed" })).activeProposal).toBeNull();
+    expect(buildPlatformContext(makeState({ proposal, proposalStatus: "discarded" })).activeProposal).toBeNull();
+  });
+
   it("planPlatformIntent parses a strict JSON read plan from the mocked LLM", async () => {
     mockInvoke.mockResolvedValueOnce(
       new AIMessage({
@@ -101,6 +154,104 @@ describe("platform planner", () => {
 
     expect(plan.intent).toBe("clarification");
     expect(plan.clarificationQuestion).toContain("repetir");
+  });
+
+  it("invalid LLM intent falls back to clarification", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "admin",
+          summary: "Intento no soportado",
+          actions: [],
+          requiresConfirmation: false,
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState()));
+
+    expect(plan.intent).toBe("clarification");
+    expect(plan.clarificationQuestion).toContain("repetir");
+  });
+
+  it("planPlatformIntent parses JSON wrapped in markdown fences", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: `\`\`\`json
+{
+  "intent": "read",
+  "summary": "Buscar cotizaciones",
+  "actions": [
+    {
+      "domain": "quotes",
+      "action": "search",
+      "arguments": { "customerId": "customer-1" },
+      "confidence": 0.82
+    }
+  ],
+  "requiresConfirmation": false
+}
+\`\`\``,
+      }),
+    );
+
+    const plan = await planPlatformIntent(
+      buildPlatformContext(makeState({ customerContext: { id: "customer-1", label: "Acme Piscicola" } })),
+    );
+
+    expect(plan.intent).toBe("read");
+    expect(plan.actions[0]).toMatchObject({
+      domain: "quotes",
+      action: "search",
+      toolName: "search_quotes",
+      arguments: { customerId: "customer-1" },
+    });
+  });
+
+  it("prompt passed to LLM includes Laura identity, capabilities, and compact context", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "read",
+          summary: "Buscar cotizaciones del cliente",
+          actions: [],
+          requiresConfirmation: false,
+        }),
+      }),
+    );
+
+    await planPlatformIntent(
+      buildPlatformContext(
+        makeState({
+          customerContext: { id: "customer-1", label: "Acme Piscicola" },
+          messages: [new HumanMessage("mostrame cotizaciones")],
+        }),
+      ),
+    );
+
+    const [messages] = mockInvoke.mock.calls[0];
+    expect(messages[0].content).toContain("Sos Laura, la asistente comercial del CRM de Norgtech");
+    expect(messages[0].content).toContain("quotes.create");
+    expect(messages[1].content).toContain("customer-1");
+  });
+
+  it("planner does not execute or bind tools", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "read",
+          summary: "Buscar clientes",
+          actions: [],
+          requiresConfirmation: false,
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState()));
+
+    expect(plan.intent).toBe("read");
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+    expect(mockBindTools).not.toHaveBeenCalled();
   });
 
   it("validatePlatformPlan accepts read plans into executableReads", () => {
@@ -154,6 +305,31 @@ describe("platform planner", () => {
     expect(result.ok).toBe(true);
     expect(result.executableReads).toEqual([]);
     expect(result.proposalWrites).toEqual([action]);
+  });
+
+  it("low confidence below 0.45 returns clarification and ok false", () => {
+    const result = validatePlatformPlan({
+      intent: "read",
+      summary: "Buscar clientes con baja confianza",
+      actions: [
+        {
+          domain: "customers",
+          action: "search",
+          toolName: "search_customers",
+          arguments: { query: "Acme" },
+          requiredFields: [],
+          missingFields: [],
+          requiresConfirmation: false,
+          confidence: 0.44,
+        },
+      ],
+      requiresConfirmation: false,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.clarificationQuestion).toBeDefined();
+    expect(result.executableReads).toEqual([]);
+    expect(result.proposalWrites).toEqual([]);
   });
 
   it("unsupported orders.bulk_delete is rejected with a Spanish availability error", () => {
