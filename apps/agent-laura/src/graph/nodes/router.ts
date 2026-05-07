@@ -68,8 +68,15 @@ function classifyWithHeuristics(
     }
   }
 
-  if (isClarificationReply(normalized)) {
+  const hasActiveClarification = state.clarificationOptions !== null
+    && state.clarificationOptions.options.length > 0;
+
+  if (hasActiveClarification && isClarificationReply(normalized)) {
     return "clarification";
+  }
+
+  if (isDirectAgendaRequest(normalized)) {
+    return "agenda";
   }
 
   const hasAgendaContext = state.agendaItems !== null && state.agendaItems.length > 0;
@@ -82,29 +89,36 @@ function classifyWithHeuristics(
     return "platform";
   }
 
-  if (isQAQuestion(normalized)) {
-    return "qa";
+  return "platform";
+}
+
+function isDirectAgendaRequest(normalized: string): boolean {
+  if (normalized.includes("equipo")) {
+    return false;
   }
 
-  const agendaPatterns = [
+  const exactAgendaPatterns = [
     "agenda",
     "pendientes",
     "pendiente",
     "mis pendientes",
     "tareas pendientes",
+  ];
+  if (exactAgendaPatterns.includes(normalized)) {
+    return true;
+  }
+
+  const agendaPatterns = [
+    "mi agenda",
     "que tengo pendiente",
     "que tengo hoy",
     "que tengo que hacer hoy",
     "que tengo programado",
     "visitas programadas",
     "visitas tenemos programadas",
-    "mi agenda",
   ];
-  if (agendaPatterns.some((k) => normalized.includes(k))) {
-    return "agenda";
-  }
 
-  return "platform";
+  return agendaPatterns.some((k) => normalized.includes(k));
 }
 
 function isFollowUpQuestion(normalized: string): boolean {
@@ -117,20 +131,6 @@ function isFollowUpQuestion(normalized: string): boolean {
     "ese", "esa", "aquel",
   ];
   return followUpPatterns.some((p) => normalized.includes(p));
-}
-
-function isQAQuestion(normalized: string): boolean {
-  const qaPatterns = [
-    "que hora", "que empresa", "a que empresa", "a qué empresa",
-    "cuando", "cuándo", "cuantos", "cuántos", "cuanto", "cuánto",
-    "cual es", "cuál es", "quien es", "quién es",
-    "donde", "dónde", "pertenece", "telefono de", "teléfono de",
-    "email de", "correo de", "contacto de",
-    "a quien", "a quién", "de quien", "de quién",
-    "que cliente", "qué cliente", "que contacto", "qué contacto",
-    "cuales son", "cuáles son", "listame", "listáme",
-  ];
-  return qaPatterns.some((p) => normalized.includes(p));
 }
 
 function isCapabilityQuestion(normalized: string): boolean {
@@ -154,7 +154,7 @@ function isClarificationReply(normalized: string): boolean {
     return true;
   }
 
-  if (shortResponses.includes(normalized)) {
+  if (shortResponses.includes(normalized) || /^[1-3]$/.test(normalized)) {
     return true;
   }
 

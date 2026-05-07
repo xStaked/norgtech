@@ -160,7 +160,7 @@ function makeProposal(): import("../types.js").ProposalPayload {
 
 describe("Router — Tipos de usuarios", () => {
   describe("Vendedor experimentado — lenguaje directo y profesional", () => {
-    it("clasifica reporte con 'cotización' como query (keyword catch)", async () => {
+    it("clasifica reporte con 'cotización' como platform", async () => {
       const state = makeState({ messages: [new HumanMessage("Visité a Acme Piscicola, reunión con el gerente Carlos. Solicitaron cotización para sistema de inventario.")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
@@ -170,7 +170,7 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("LIMITACIÓN: reporte con 'hoy' y 'Avanzada' clasifica como modify (contiene 'avanza' → modify keyword)", async () => {
+    it("clasifica reporte con 'hoy' y 'Avanzada' como platform", async () => {
       const state = makeState({ messages: [new HumanMessage("Cerré la venta con Tecnología Avanzada SA, firmaron el contrato hoy.")] });
       expect((await routerNode(state)).mode).toBe("platform");
     });
@@ -214,9 +214,9 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("agenda");
     });
 
-    it("clasifica consulta de tareas del equipo como qa (isQAQuestion match)", async () => {
+    it("clasifica consulta de tareas del equipo como platform", async () => {
       const state = makeState({ messages: [new HumanMessage("Cuáles son las tareas pendientes del equipo?")] });
-      expect((await routerNode(state)).mode).toBe("qa");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 
@@ -254,9 +254,9 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("agenda");
     });
 
-    it("clasifica 'dale' como clarification (short affirmative)", async () => {
+    it("clasifica 'dale' como platform sin aclaración activa", async () => {
       const state = makeState({ messages: [new HumanMessage("dale")] });
-      expect((await routerNode(state)).mode).toBe("clarification");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 
@@ -455,10 +455,10 @@ describe("Router — Edge cases", () => {
     expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica mensaje con solo emoji como clarification o proposal", async () => {
+  it("clasifica mensaje con solo emoji como platform", async () => {
     const state = makeState({ messages: [new HumanMessage("👍")] });
     const result = await routerNode(state);
-    expect(["clarification", "platform"]).toContain(result.mode);
+    expect(result.mode).toBe("platform");
   });
 
   it("clasifica mensaje muy largo con 'cliente' como proposal", async () => {
@@ -478,14 +478,30 @@ describe("Router — Edge cases", () => {
     expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica números solos como clarification (short response 'si' check fails, falls through)", async () => {
+  it("clasifica números solos como platform sin aclaración activa", async () => {
     const state = makeState({ messages: [new HumanMessage("123")] });
     const result = await routerNode(state);
-    expect(result.mode).toBeDefined();
+    expect(result.mode).toBe("platform");
   });
 
-  it("clasifica '1' como clarification (short numeric = possible option selection)", async () => {
+  it("clasifica '1' como platform sin aclaración activa", async () => {
     const state = makeState({ messages: [new HumanMessage("1")] });
+    expect((await routerNode(state)).mode).toBe("platform");
+  });
+
+  it("clasifica selección como clarification con aclaración activa", async () => {
+    const state = makeState({
+      messages: [new HumanMessage("opcion 1")],
+      clarificationOptions: {
+        type: "customer",
+        options: [{ id: "customer-1", label: "Acme Piscicola" }],
+      },
+    });
+    expect((await routerNode(state)).mode).toBe("clarification");
+  });
+
+  it("clasifica 'ok' como platform sin aclaración ni propuesta activa", async () => {
+    const state = makeState({ messages: [new HumanMessage("ok")] });
     expect((await routerNode(state)).mode).toBe("platform");
   });
 
@@ -505,16 +521,16 @@ describe("Router — Edge cases", () => {
 // ============================================================
 
 describe("Router — Comportamiento sin propuesta activa", () => {
-  it("'confirmo' sin propuesta → NO es confirm, cae a clarification (match en short responses)", async () => {
+  it("'confirmo' sin propuesta ni aclaración activa → platform", async () => {
     const state = makeState({
       messages: [new HumanMessage("confirmo")],
       proposal: null,
       proposalStatus: "draft",
     });
-    expect((await routerNode(state)).mode).toBe("clarification");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("'cancelar' sin propuesta → modify (match en modifyKeywords)", async () => {
+  it("'cancelar' sin propuesta → platform", async () => {
     const state = makeState({
       messages: [new HumanMessage("cancelar")],
       proposal: null,
@@ -524,7 +540,7 @@ describe("Router — Comportamiento sin propuesta activa", () => {
     expect(result.mode).toBe("platform");
   });
 
-  it("'cambia' sin propuesta → modify (match en modifyKeywords)", async () => {
+  it("'cambia' sin propuesta → platform", async () => {
     const state = makeState({
       messages: [new HumanMessage("cambia algo")],
       proposal: null,
@@ -534,7 +550,7 @@ describe("Router — Comportamiento sin propuesta activa", () => {
     expect(result.mode).toBe("platform");
   });
 
-  it("'descartar' sin propuesta → proposal (not in any special category)", async () => {
+  it("'descartar' sin propuesta → no descarta", async () => {
     const state = makeState({
       messages: [new HumanMessage("descartar")],
       proposal: null,
@@ -550,87 +566,93 @@ describe("Router — Comportamiento sin propuesta activa", () => {
 // ============================================================
 
 describe("Router — Query mode (consultas de lectura)", () => {
-  it("should classify product queries as 'query'", async () => {
+  it("should classify product queries as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("que productos tenemos?")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify quote queries as 'query'", async () => {
+  it("should classify quote queries as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("cuantas cotizaciones abiertas hay?")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify show/list queries as 'query'", async () => {
+  it("should classify show/list queries as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("mostra los clientes del segmento agro")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify customer search as 'query'", async () => {
+  it("should classify customer search as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("buscar clientes de cordoba")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify opportunity status as 'qa' (isQAQuestion matches 'cual es')", async () => {
+  it("should classify opportunity status as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("cual es el estado de la oportunidad?")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("qa");
+    expect(result.mode).toBe("platform");
   });
 
-  it("should classify contact info as 'query'", async () => {
+  it("should classify contact info as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("datos del contacto Carlos Mendoza")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify catalog/dashboard queries as 'query'", async () => {
+  it("should classify catalog/dashboard queries as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("mostra el catalogo de productos")] });
+    const result = await routerNode(state);
+    expect(result.mode).toBe("platform");
+  });
+
+  it("should classify list customer requests as 'platform'", async () => {
+    const state = makeState({ messages: [new HumanMessage("listame clientes")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 });
 
 describe("Router — Modify mode (acciones de escritura)", () => {
-  it("should classify time changes as 'modify'", async () => {
+  it("should classify time changes as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("cambia la hora de la tarea a las 14:20")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify status updates on opportunities as 'query' (keyword catch: 'oportunidad')", async () => {
+  it("should classify status updates on opportunities as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("actualiza el estado de la oportunidad a negociacion")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify visit cancellation as 'modify'", async () => {
+  it("should classify visit cancellation as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("cancela la visita de mañana")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify followup rescheduling as 'modify'", async () => {
+  it("should classify followup rescheduling as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("reprograma el seguimiento para el lunes")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify quote date changes as 'query' (keyword catch: 'cotizacion')", async () => {
+  it("should classify quote date changes as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("actualiza la fecha de la cotizacion al viernes")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify complete/close actions as 'modify'", async () => {
+  it("should classify complete/close actions as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("completa la tarea de llamar a Acme")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
   });
 
-  it("should classify stage advancement as 'query' (keyword catch: 'oportunidad' + 'cotizacion')", async () => {
+  it("should classify stage advancement as 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("avanza la oportunidad a cotizacion")] });
     const result = await routerNode(state);
     expect(result.mode).toBe("platform");
@@ -1202,6 +1224,51 @@ describe("Platform node — planner orchestration", () => {
     expect(result.lastError).toContain("dueAt");
     const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
     expect(lastMsg.content as string).toContain("customerId");
+  });
+
+  it("retorna greeting para planes de saludo", async () => {
+    mockPlannerResponse({
+      intent: "greeting",
+      summary: "Hola, soy Laura. ¿Qué necesitás hacer en el CRM?",
+      actions: [],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("hola")] }));
+
+    expect(result.mode).toBe("greeting");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("Hola");
+  });
+
+  it("retorna qa con mensaje de ayuda para planes help", async () => {
+    mockPlannerResponse({
+      intent: "help",
+      summary: "Puedo ayudarte con clientes, oportunidades y tareas del CRM.",
+      actions: [],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("que podes hacer?")] }));
+
+    expect(result.mode).toBe("qa");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("Puedo ayudarte");
+  });
+
+  it("retorna qa explicando acciones no soportadas", async () => {
+    mockPlannerResponse({
+      intent: "unsupported",
+      summary: "Todavía no puedo eliminar clientes en lote.",
+      actions: [],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("elimina todos los clientes")] }));
+
+    expect(result.mode).toBe("qa");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("no puedo");
   });
 
   it("retorna proposal para planes de escritura validados", async () => {
