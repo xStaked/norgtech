@@ -43,7 +43,7 @@ export function createLlm(): ChatOpenAI {
   return new ChatOpenAI({
     modelName: config.llm.model ?? providerConfig.defaultModel,
     temperature: 0.3,
-    maxTokens: 1024,
+    maxTokens: 2048,
     openAIApiKey: apiKey,
     configuration: {
       baseURL: process.env[`${provider.toUpperCase()}_BASE_URL`] ?? providerConfig.baseUrl,
