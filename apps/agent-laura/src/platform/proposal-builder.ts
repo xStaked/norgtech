@@ -1,14 +1,22 @@
-import type { ProposalBlockAction, ProposalPayload, QuoteBlock } from "../types.js";
+import type {
+  ContactBlock,
+  CustomerBlock,
+  FollowUpBlock,
+  OpportunityBlock,
+  OrderBlock,
+  ProductBlock,
+  ProposalBlockAction,
+  ProposalPayload,
+  QuoteBlock,
+  SegmentBlock,
+  VisitBlock,
+} from "../types.js";
 import type { PlannedAction } from "./types.js";
 
 type Args = Record<string, unknown>;
+type LineItems = NonNullable<QuoteBlock["items"]>;
 
 const READ_ACTIONS = new Set(["search", "detail"]);
-
-function stringArg(args: Args, key: string, fallback = ""): string {
-  const value = args[key];
-  return typeof value === "string" ? value : fallback;
-}
 
 function optionalStringArg(args: Args, key: string): string | undefined {
   const value = args[key];
@@ -25,9 +33,45 @@ function booleanArg(args: Args, key: string): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
-function itemsArg(args: Args): QuoteBlock["items"] {
+function proposalBlock<T extends { enabled: boolean }>(value: Partial<T> & Pick<T, "enabled">): T {
+  return value as T;
+}
+
+function requiredStringArg(args: Args, key: string): string | null {
+  const value = optionalStringArg(args, key);
+  return value && value.trim().length > 0 ? value : null;
+}
+
+function itemArg(value: unknown): LineItems[number] | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record.productId !== "string" ||
+    typeof record.quantity !== "number" ||
+    typeof record.unitPrice !== "number"
+  ) {
+    return null;
+  }
+
+  return {
+    productId: record.productId,
+    quantity: record.quantity,
+    unitPrice: record.unitPrice,
+    notes: typeof record.notes === "string" ? record.notes : undefined,
+  };
+}
+
+function itemsArg(args: Args): { items?: LineItems; malformed: boolean } {
   const value = args.items;
-  return Array.isArray(value) ? value as QuoteBlock["items"] : undefined;
+  if (value === undefined) return { malformed: false };
+  if (!Array.isArray(value)) return { malformed: true };
+
+  const items = value.map(itemArg).filter((item): item is LineItems[number] => item !== null);
+  return {
+    items: items.length > 0 ? items : undefined,
+    malformed: items.length !== value.length,
+  };
 }
 
 function proposalAction(action: PlannedAction): ProposalBlockAction | null {
@@ -57,9 +101,10 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
     const args = action.arguments;
 
     switch (action.domain) {
-      case "customers":
-        blocks.customer = {
-          legalName: stringArg(args, "legalName"),
+      case "customers": {
+        const legalName = requiredStringArg(args, "legalName");
+        blocks.customer = proposalBlock<CustomerBlock>({
+          ...(legalName ? { legalName } : {}),
           displayName: optionalStringArg(args, "displayName"),
           taxId: optionalStringArg(args, "taxId"),
           phone: optionalStringArg(args, "phone"),
@@ -70,106 +115,131 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           notes: optionalStringArg(args, "notes"),
           segmentId: optionalStringArg(args, "segmentId"),
           assignedToUserId: optionalStringArg(args, "assignedToUserId"),
-          enabled: true,
+          enabled: legalName !== null,
           action: blockAction,
           id: optionalStringArg(args, "customerId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "contacts":
-        blocks.contact = {
-          customerId: stringArg(args, "customerId"),
-          fullName: stringArg(args, "fullName"),
+      }
+      case "contacts": {
+        const customerId = requiredStringArg(args, "customerId");
+        const fullName = requiredStringArg(args, "fullName");
+        blocks.contact = proposalBlock<ContactBlock>({
+          ...(customerId ? { customerId } : {}),
+          ...(fullName ? { fullName } : {}),
           roleTitle: optionalStringArg(args, "roleTitle"),
           phone: optionalStringArg(args, "phone"),
           email: optionalStringArg(args, "email"),
           isPrimary: booleanArg(args, "isPrimary"),
           notes: optionalStringArg(args, "notes"),
-          enabled: true,
+          enabled: customerId !== null && fullName !== null,
           action: blockAction,
           id: optionalStringArg(args, "contactId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "opportunities":
-        blocks.opportunity = {
-          title: stringArg(args, "title"),
-          stage: stringArg(args, "stage"),
+      }
+      case "opportunities": {
+        const title = requiredStringArg(args, "title");
+        const stage = requiredStringArg(args, "stage");
+        blocks.opportunity = proposalBlock<OpportunityBlock>({
+          ...(title ? { title } : {}),
+          ...(stage ? { stage } : {}),
           estimatedValue: numberArg(args, "estimatedValue"),
           expectedCloseDate: optionalStringArg(args, "expectedCloseDate"),
           createNew: blockAction === "create",
           opportunityId: optionalStringArg(args, "opportunityId") ?? optionalStringArg(args, "id"),
-          enabled: true,
+          enabled: title !== null && stage !== null,
           action: blockAction,
-        };
+        });
         break;
-      case "quotes":
-        blocks.quote = {
-          customerId: stringArg(args, "customerId"),
+      }
+      case "quotes": {
+        const customerId = requiredStringArg(args, "customerId");
+        const items = itemsArg(args);
+        blocks.quote = proposalBlock<QuoteBlock>({
+          ...(customerId ? { customerId } : {}),
           opportunityId: optionalStringArg(args, "opportunityId"),
           validUntil: optionalStringArg(args, "validUntil"),
           notes: optionalStringArg(args, "notes"),
-          items: itemsArg(args),
-          enabled: true,
+          items: items.items,
+          enabled: customerId !== null && !items.malformed,
           action: blockAction,
           id: optionalStringArg(args, "quoteId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "orders":
-        blocks.order = {
-          customerId: stringArg(args, "customerId"),
+      }
+      case "orders": {
+        const customerId = requiredStringArg(args, "customerId");
+        const items = itemsArg(args);
+        blocks.order = proposalBlock<OrderBlock>({
+          ...(customerId ? { customerId } : {}),
           opportunityId: optionalStringArg(args, "opportunityId"),
           sourceQuoteId: optionalStringArg(args, "sourceQuoteId"),
           notes: optionalStringArg(args, "notes"),
-          items: itemsArg(args),
-          enabled: true,
+          items: items.items,
+          enabled: customerId !== null && !items.malformed,
           action: blockAction,
           id: optionalStringArg(args, "orderId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "products":
-        blocks.product = {
-          sku: stringArg(args, "sku"),
-          name: stringArg(args, "name"),
+      }
+      case "products": {
+        const sku = requiredStringArg(args, "sku");
+        const name = requiredStringArg(args, "name");
+        blocks.product = proposalBlock<ProductBlock>({
+          ...(sku ? { sku } : {}),
+          ...(name ? { name } : {}),
           description: optionalStringArg(args, "description"),
           unit: optionalStringArg(args, "unit"),
           presentation: optionalStringArg(args, "presentation"),
           basePrice: numberArg(args, "basePrice"),
-          enabled: true,
+          enabled: sku !== null && name !== null,
           action: blockAction,
           id: optionalStringArg(args, "productId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "segments":
-        blocks.segment = {
-          name: stringArg(args, "name"),
+      }
+      case "segments": {
+        const name = requiredStringArg(args, "name");
+        blocks.segment = proposalBlock<SegmentBlock>({
+          ...(name ? { name } : {}),
           description: optionalStringArg(args, "description"),
-          enabled: true,
+          enabled: name !== null,
           action: blockAction,
           id: optionalStringArg(args, "segmentId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "visits":
-        blocks.visit = {
-          customerId: stringArg(args, "customerId"),
+      }
+      case "visits": {
+        const customerId = requiredStringArg(args, "customerId");
+        const scheduledAt = requiredStringArg(args, "scheduledAt");
+        blocks.visit = proposalBlock<VisitBlock>({
+          ...(customerId ? { customerId } : {}),
           opportunityId: optionalStringArg(args, "opportunityId"),
-          scheduledAt: stringArg(args, "scheduledAt"),
+          ...(scheduledAt ? { scheduledAt } : {}),
           summary: optionalStringArg(args, "summary"),
           notes: optionalStringArg(args, "notes"),
-          enabled: true,
+          enabled: customerId !== null && scheduledAt !== null,
           action: blockAction,
           id: optionalStringArg(args, "visitId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
-      case "followups":
-        blocks.followUp = {
-          title: stringArg(args, "title"),
-          type: stringArg(args, "type"),
-          dueAt: stringArg(args, "dueAt"),
+      }
+      case "followups": {
+        const title = requiredStringArg(args, "title");
+        const type = requiredStringArg(args, "type");
+        const dueAt = requiredStringArg(args, "dueAt");
+        blocks.followUp = proposalBlock<FollowUpBlock>({
+          ...(title ? { title } : {}),
+          ...(type ? { type } : {}),
+          ...(dueAt ? { dueAt } : {}),
           notes: optionalStringArg(args, "notes"),
-          enabled: true,
+          enabled: title !== null && type !== null && dueAt !== null,
           action: blockAction,
           id: optionalStringArg(args, "followupId") ?? optionalStringArg(args, "id"),
-        };
+        });
         break;
+      }
     }
   }
 

@@ -19,6 +19,10 @@ import {
 import type { PlannedAction } from "./types.js";
 
 type Args = Record<string, unknown>;
+type CombinedReadEntry = {
+  action: string;
+  data: unknown;
+};
 
 function stringArg(args: Args, key: string): string | undefined {
   const value = args[key];
@@ -139,16 +143,35 @@ async function executeReadAction(userId: string, action: PlannedAction): Promise
 }
 
 export async function executeReadActions(userId: string, actions: PlannedAction[]): Promise<DataResult> {
-  let result: DataResult = {
-    entityType: "none",
-    action: "list",
-    data: [],
-    summary: "0 resultados.",
-  };
-
-  for (const action of actions) {
-    result = await executeReadAction(userId, action);
+  if (actions.length === 0) {
+    return {
+      entityType: "none",
+      action: "list",
+      data: [],
+      summary: "0 resultados.",
+    };
   }
 
-  return result;
+  const results: DataResult[] = [];
+
+  for (const action of actions) {
+    results.push(await executeReadAction(userId, action));
+  }
+
+  if (results.length === 1) {
+    return results[0];
+  }
+
+  const combinedData: CombinedReadEntry[] = actions.map((action, index) => ({
+    action: `${action.domain}.${action.action}`,
+    data: results[index].data,
+  }));
+  const resultCount = results.reduce((count, result) => count + (Array.isArray(result.data) ? result.data.length : 1), 0);
+
+  return {
+    entityType: "multiple",
+    action: "list",
+    data: combinedData,
+    summary: `${actions.length} acciones de lectura, ${resultCount} ${resultCount === 1 ? "resultado" : "resultados"} agregados.`,
+  };
 }
