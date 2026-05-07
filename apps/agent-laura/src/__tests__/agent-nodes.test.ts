@@ -120,6 +120,7 @@ import { refineNode } from "../graph/nodes/refine.js";
 import { extractIntentNode } from "../graph/nodes/extract-intent.js";
 import { platformNode } from "../graph/nodes/platform.js";
 import { routerEdge } from "../graph/edges.js";
+import { createLauraGraph } from "../graph/graph.js";
 
 function makeState(overrides: Partial<LauraState> = {}): LauraState {
   return {
@@ -1271,6 +1272,22 @@ describe("Platform node — planner orchestration", () => {
     expect(lastMsg.content as string).toContain("no puedo");
   });
 
+  it("retorna clarification para planes de aclaración explícitos", async () => {
+    mockPlannerResponse({
+      intent: "clarification",
+      summary: "Necesito saber a qué cliente te referís.",
+      actions: [],
+      requiresConfirmation: false,
+      clarificationQuestion: "¿De qué cliente hablamos?",
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("necesito actualizarlo")] }));
+
+    expect(result.mode).toBe("clarification");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("¿De qué cliente hablamos?");
+  });
+
   it("retorna proposal para planes de escritura validados", async () => {
     mockPlannerResponse({
       intent: "write",
@@ -1304,6 +1321,29 @@ describe("Platform node — planner orchestration", () => {
     expect(mockCreateFollowUp).not.toHaveBeenCalled();
   });
 
+  it("retorna clarification cuando la propuesta no tiene bloques habilitados", async () => {
+    mockPlannerResponse({
+      intent: "write",
+      summary: "Actualizar producto",
+      actions: [
+        {
+          domain: "products",
+          action: "update",
+          arguments: { productId: "product-1" },
+          confidence: 0.91,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("actualiza el producto")] }));
+
+    expect(result.mode).toBe("clarification");
+    expect(result.proposal).toBeUndefined();
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("No pude preparar una propuesta valida");
+  });
+
   it("retorna query y data para planes de lectura validados", async () => {
     mockSearchProducts.mockResolvedValueOnce([{ id: "product-1", name: "Sensor IoT" }]);
     mockPlannerResponse({
@@ -1329,6 +1369,31 @@ describe("Platform node — planner orchestration", () => {
       data: [{ id: "product-1", name: "Sensor IoT" }],
     });
     expect(mockSearchProducts).toHaveBeenCalledWith({ search: "sensor", active: undefined });
+  });
+
+  it("compiled graph platform path appends only the AI response message", async () => {
+    mockSearchProducts.mockResolvedValueOnce([{ id: "product-1", name: "Sensor IoT" }]);
+    mockPlannerResponse({
+      intent: "read",
+      summary: "Buscar productos",
+      actions: [
+        {
+          domain: "products",
+          action: "search",
+          arguments: { search: "sensor" },
+          confidence: 0.92,
+        },
+      ],
+      requiresConfirmation: false,
+    });
+
+    const graph = createLauraGraph();
+    const result = await graph.invoke(makeState({ messages: [new HumanMessage("mostra productos sensor")] }));
+
+    expect(result.mode).toBe("query");
+    expect(result.messages).toHaveLength(2);
+    expect(result.messages.filter((message) => message._getType() === "human")).toHaveLength(1);
+    expect(result.messages.filter((message) => message._getType() === "ai")).toHaveLength(1);
   });
 });
 

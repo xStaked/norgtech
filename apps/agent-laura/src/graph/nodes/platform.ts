@@ -6,12 +6,12 @@ import { validatePlatformPlan } from "../../platform/validator.js";
 import { executeReadActions } from "../../platform/read-executor.js";
 import { buildProposalFromActions } from "../../platform/proposal-builder.js";
 
-function appendMessage(state: LauraState, message: string): AIMessage[] {
-  return [...state.messages, new AIMessage(message)];
+function appendMessage(message: string): AIMessage[] {
+  return [new AIMessage(message)];
 }
 
 function hasProposalBlocks(proposal: NonNullable<LauraState["proposal"]>): boolean {
-  return Object.keys(proposal.blocks).length > 0;
+  return Object.values(proposal.blocks).some((block) => block.enabled);
 }
 
 function platformHelpMessage(): string {
@@ -29,21 +29,33 @@ export async function platformNode(state: LauraState): Promise<Partial<LauraStat
   if (plan.intent === "greeting") {
     return {
       mode: "greeting",
-      messages: appendMessage(state, plan.summary || "Hola, soy Laura. Decime que necesitás hacer en el CRM."),
+      messages: appendMessage(plan.summary || "Hola, soy Laura. Decime que necesitás hacer en el CRM."),
     };
   }
 
   if (plan.intent === "help") {
     return {
       mode: "qa",
-      messages: appendMessage(state, plan.summary || platformHelpMessage()),
+      messages: appendMessage(plan.summary || platformHelpMessage()),
     };
   }
 
   if (plan.intent === "unsupported") {
     return {
       mode: "qa",
-      messages: appendMessage(state, plan.summary || "Esa accion no está disponible en Laura por ahora."),
+      messages: appendMessage(plan.summary || "Esa accion no está disponible en Laura por ahora."),
+    };
+  }
+
+  if (plan.intent === "clarification") {
+    return {
+      mode: "clarification",
+      lastError: plan.summary || null,
+      messages: appendMessage(
+        plan.clarificationQuestion
+          ?? plan.summary
+          ?? "Necesito un poco mas de informacion para avanzar.",
+      ),
     };
   }
 
@@ -57,7 +69,7 @@ export async function platformNode(state: LauraState): Promise<Partial<LauraStat
     return {
       mode: "clarification",
       lastError: details.length > 0 ? details.join(" ") : null,
-      messages: appendMessage(state, message),
+      messages: appendMessage(message),
     };
   }
 
@@ -66,7 +78,7 @@ export async function platformNode(state: LauraState): Promise<Partial<LauraStat
     return {
       mode: "query",
       data,
-      messages: appendMessage(state, data.summary),
+      messages: appendMessage(data.summary),
     };
   }
 
@@ -75,7 +87,7 @@ export async function platformNode(state: LauraState): Promise<Partial<LauraStat
     return {
       mode: "clarification",
       lastError: "No se pudo preparar una propuesta con las acciones planificadas.",
-      messages: appendMessage(state, "No pude preparar una propuesta valida con esos datos. ¿Me das un poco mas de detalle?"),
+      messages: appendMessage("No pude preparar una propuesta valida con esos datos. ¿Me das un poco mas de detalle?"),
     };
   }
 
@@ -88,6 +100,6 @@ export async function platformNode(state: LauraState): Promise<Partial<LauraStat
     proposal,
     proposalId: state.proposalId ?? crypto.randomUUID(),
     proposalStatus: "draft",
-    messages: appendMessage(state, `Preparé una propuesta para que la revises antes de guardar.${relatedInfo}`),
+    messages: appendMessage(`Preparé una propuesta para que la revises antes de guardar.${relatedInfo}`),
   };
 }
