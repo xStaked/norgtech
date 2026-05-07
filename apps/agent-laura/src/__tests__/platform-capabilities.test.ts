@@ -18,6 +18,14 @@ describe("platform capabilities", () => {
     expect(capability?.toolName).toBe("create_quote");
   });
 
+  it("does not let callers mutate registry field arrays", () => {
+    const capability = getCapability("quotes", "create");
+
+    capability?.requiredFields?.push("corrupted");
+
+    expect(getCapability("quotes", "create")?.requiredFields).toEqual(["customerId"]);
+  });
+
   it("returns undefined for unsupported actions", () => {
     expect(getCapability("orders", "bulk_delete")).toBeUndefined();
   });

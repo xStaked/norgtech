@@ -282,13 +282,21 @@ const capabilities: PlatformCapability[] = [
   },
 ];
 
+function cloneCapability(capability: PlatformCapability): PlatformCapability {
+  return {
+    ...capability,
+    requiredFields: capability.requiredFields ? [...capability.requiredFields] : undefined,
+    optionalFields: capability.optionalFields ? [...capability.optionalFields] : undefined,
+  };
+}
+
 export function listCapabilities(): PlatformCapability[] {
-  return capabilities.map((capability) => ({ ...capability }));
+  return capabilities.map(cloneCapability);
 }
 
 export function getCapability(domain: CapabilityDomain, action: CapabilityAction): PlatformCapability | undefined {
   const capability = capabilities.find((cap) => cap.domain === domain && cap.action === action);
-  return capability ? { ...capability } : undefined;
+  return capability ? cloneCapability(capability) : undefined;
 }
 
 export function capabilitiesForPrompt(): string {
