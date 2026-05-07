@@ -314,11 +314,18 @@ test("allowed users can use Laura to confirm an edited proposal", async ({
     page.getByText("Listo. Organicé una propuesta editable con los bloques detectados."),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Propuesta de Laura" })).toBeVisible();
+  await expect(page.getByText("Laura preparó 5 acciones para confirmar")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Editar Registrar interacción" })).toBeVisible();
+  await expect(page.getByLabel("Resumen de la interacción")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Editar Registrar interacción" }).click();
   await expect(page.getByLabel("Resumen de la interacción")).toHaveValue(
     "Acme confirmó interés y pidió una visita comercial.",
   );
 
+  await page.getByRole("button", { name: "Editar Crear tarea interna" }).click();
   await page.getByLabel("Guardar bloque de tarea interna").uncheck();
+  await page.getByRole("button", { name: "Editar Crear oportunidad" }).click();
   await page.getByLabel("Título de la oportunidad").fill("Acme - Visita prioritaria");
   await page.getByRole("button", { name: "Confirmar propuesta" }).click();
 

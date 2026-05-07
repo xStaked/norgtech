@@ -1,9 +1,14 @@
 "use client";
 
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { LauraProposalBlock } from "./laura-proposal-block";
+import {
+  LauraProposalSummary,
+  type LauraProposalBlockKey,
+} from "./laura-proposal-summary";
 import { ObjectionsInput } from "./laura-objections-input";
 import type { LauraProposalConfirmationResponse, LauraProposalPayload } from "./laura-types";
 
@@ -150,6 +155,8 @@ export function LauraProposalCard({
   onChange: (proposal: LauraProposalPayload) => void;
   onConfirm: () => Promise<void>;
 }) {
+  const [expandedKey, setExpandedKey] = useState<LauraProposalBlockKey | null>(null);
+
   function updateProposal(mutator: (draft: LauraProposalPayload) => LauraProposalPayload) {
     onChange(mutator(proposal));
   }
@@ -191,7 +198,13 @@ export function LauraProposalCard({
 
       {/* Blocks */}
       <div style={{ display: "grid", gap: 12, padding: 16 }}>
-        {proposal.blocks.interaction && (
+        <LauraProposalSummary
+          proposal={proposal}
+          expandedKey={expandedKey}
+          onExpand={(key) => setExpandedKey((current) => (current === key ? null : key))}
+        />
+
+        {expandedKey === "interaction" && proposal.blocks.interaction && (
           <LauraProposalBlock
             title="Interacción"
             description="Resumen base que se convertirá en el registro principal."
@@ -245,7 +258,7 @@ export function LauraProposalCard({
           </LauraProposalBlock>
         )}
 
-        {proposal.blocks.opportunity && (
+        {expandedKey === "opportunity" && proposal.blocks.opportunity && (
           <LauraProposalBlock
             title="Oportunidad"
             description="Define si Laura actualiza una oportunidad existente o crea una nueva."
@@ -311,7 +324,7 @@ export function LauraProposalCard({
           </LauraProposalBlock>
         )}
 
-        {proposal.blocks.followUp && (
+        {expandedKey === "followUp" && proposal.blocks.followUp && (
           <LauraProposalBlock
             title="Seguimiento"
             description="Próximo movimiento comercial con destino operativo directo."
@@ -410,7 +423,7 @@ export function LauraProposalCard({
           </LauraProposalBlock>
         )}
 
-        {proposal.blocks.task && (
+        {expandedKey === "task" && proposal.blocks.task && (
           <LauraProposalBlock
             title="Tarea interna"
             description="Bloque liviano para notas y tareas internas."
@@ -463,7 +476,7 @@ export function LauraProposalCard({
           </LauraProposalBlock>
         )}
 
-        {proposal.blocks.signals && (
+        {expandedKey === "signals" && proposal.blocks.signals && (
           <LauraProposalBlock
             title="Señales comerciales"
             description="Objeciones, riesgo y nivel de intención detectados."
@@ -545,7 +558,7 @@ export function LauraProposalCard({
         )}
 
         {/* Customer Block */}
-        {proposal.blocks.customer && (
+        {expandedKey === "customer" && proposal.blocks.customer && (
           <LauraProposalBlock
             title="Cliente"
             description={proposal.blocks.customer.action === "create" ? "Crear nuevo cliente en el CRM." : "Actualizar datos del cliente."}
@@ -562,7 +575,7 @@ export function LauraProposalCard({
         )}
 
         {/* Contact Block */}
-        {proposal.blocks.contact && (
+        {expandedKey === "contact" && proposal.blocks.contact && (
           <LauraProposalBlock
             title="Contacto"
             description={proposal.blocks.contact.action === "create" ? "Crear nuevo contacto." : "Actualizar datos del contacto."}
@@ -577,7 +590,7 @@ export function LauraProposalCard({
         )}
 
         {/* Quote Block */}
-        {proposal.blocks.quote && (
+        {expandedKey === "quote" && proposal.blocks.quote && (
           <LauraProposalBlock
             title="Cotizacion"
             description={proposal.blocks.quote.action === "create" ? "Crear nueva cotizacion." : "Actualizar cotizacion."}
@@ -600,7 +613,7 @@ export function LauraProposalCard({
         )}
 
         {/* Order Block */}
-        {proposal.blocks.order && (
+        {expandedKey === "order" && proposal.blocks.order && (
           <LauraProposalBlock
             title="Pedido"
             description={proposal.blocks.order.action === "create" ? "Crear nuevo pedido." : "Actualizar pedido."}
@@ -621,7 +634,7 @@ export function LauraProposalCard({
         )}
 
         {/* Product Block */}
-        {proposal.blocks.product && (
+        {expandedKey === "product" && proposal.blocks.product && (
           <LauraProposalBlock
             title="Producto"
             description={proposal.blocks.product.action === "create" ? "Crear nuevo producto." : "Actualizar producto."}
@@ -638,7 +651,7 @@ export function LauraProposalCard({
         )}
 
         {/* Segment Block */}
-        {proposal.blocks.segment && (
+        {expandedKey === "segment" && proposal.blocks.segment && (
           <LauraProposalBlock
             title="Segmento"
             description={proposal.blocks.segment.action === "create" ? "Crear nuevo segmento." : "Actualizar segmento."}
@@ -652,7 +665,7 @@ export function LauraProposalCard({
         )}
 
         {/* Visit Block (update only — for modify flow) */}
-        {proposal.blocks.visit && (
+        {expandedKey === "visit" && proposal.blocks.visit && (
           <LauraProposalBlock
             title="Visita"
             description={proposal.blocks.visit.action === "update" ? "Actualizar visita existente." : "Crear nueva visita."}
