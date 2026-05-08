@@ -255,6 +255,7 @@ export class LauraService {
         saved: persistence.saved,
         discarded: persistence.discarded,
         createdIds: persistence.createdIds,
+        errors: persistence.errors,
       };
     });
   }
@@ -520,7 +521,7 @@ export class LauraService {
       },
       body: JSON.stringify({
         proposal,
-        customerId: customerId ?? "",
+        customerId: customerId ?? this.inferCustomerIdFromAgentProposal(proposal),
         opportunityId: opportunityId ?? "",
       }),
     });
@@ -537,6 +538,7 @@ export class LauraService {
         saved: string[];
         discarded: string[];
         createdIds: Record<string, string>;
+        errors?: Array<{ block: string; message: string }>;
       };
       proposal: LauraProposalPayload;
     };
@@ -548,7 +550,19 @@ export class LauraService {
       saved: result.confirmation.saved,
       discarded: result.confirmation.discarded,
       createdIds: result.confirmation.createdIds,
+      errors: result.confirmation.errors ?? [],
     };
+  }
+
+  private inferCustomerIdFromAgentProposal(proposal: LauraProposalPayload): string {
+    return proposal.blocks.followUp?.customerId
+      ?? proposal.blocks.task?.customerId
+      ?? proposal.blocks.opportunity?.customerId
+      ?? proposal.blocks.visit?.customerId
+      ?? proposal.blocks.quote?.customerId
+      ?? proposal.blocks.order?.customerId
+      ?? proposal.blocks.contact?.customerId
+      ?? "";
   }
 
   private buildProposalPayload(

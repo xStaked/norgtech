@@ -1,6 +1,7 @@
 import { FollowUpTaskType, OpportunityStage } from "@prisma/client";
 import { Type } from "class-transformer";
 import {
+  Allow,
   IsArray,
   IsBoolean,
   IsDefined,
@@ -20,6 +21,11 @@ class LauraInteractionBlockDto implements NonNullable<LauraProposalPayload["bloc
   @IsBoolean()
   enabled!: boolean;
 
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  relatedTo?: string;
+
   @IsString()
   @Matches(/\S/)
   summary!: string;
@@ -32,6 +38,16 @@ class LauraInteractionBlockDto implements NonNullable<LauraProposalPayload["bloc
 class LauraOpportunityBlockDto implements NonNullable<LauraProposalPayload["blocks"]["opportunity"]> {
   @IsBoolean()
   enabled!: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  relatedTo?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  customerId?: string;
 
   @IsOptional()
   @IsString()
@@ -56,26 +72,44 @@ class LauraFollowUpBlockDto implements NonNullable<LauraProposalPayload["blocks"
   @IsBoolean()
   enabled!: boolean;
 
+  @IsOptional()
   @IsString()
   @Matches(/\S/)
-  title!: string;
+  relatedTo?: string;
 
+  @IsOptional()
   @IsString()
   @Matches(/\S/)
-  dueAt!: string;
+  customerId?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  dueAt?: string;
 
   @IsOptional()
   @IsString()
   @Matches(/\S/)
   opportunityId?: string;
 
+  @IsOptional()
   @IsEnum(FollowUpTaskType)
-  type!: FollowUpTaskType;
+  type?: FollowUpTaskType;
 }
 
 class LauraTaskBlockDto implements NonNullable<LauraProposalPayload["blocks"]["task"]> {
   @IsBoolean()
   enabled!: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  relatedTo?: string;
 
   @IsString()
   @Matches(/\S/)
@@ -89,11 +123,21 @@ class LauraTaskBlockDto implements NonNullable<LauraProposalPayload["blocks"]["t
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  customerId?: string;
 }
 
 class LauraSignalsBlockDto implements NonNullable<LauraProposalPayload["blocks"]["signals"]> {
   @IsBoolean()
   enabled!: boolean;
+
+  @IsOptional()
+  @IsString()
+  @Matches(/\S/)
+  relatedTo?: string;
 
   @IsArray()
   @IsString({ each: true })
@@ -106,6 +150,96 @@ class LauraSignalsBlockDto implements NonNullable<LauraProposalPayload["blocks"]
   @IsOptional()
   @IsString()
   buyingIntent?: string;
+}
+
+class LauraCustomerBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() legalName?: string;
+  @Allow() displayName?: string;
+  @Allow() taxId?: string;
+  @Allow() phone?: string;
+  @Allow() email?: string;
+  @Allow() address?: string;
+  @Allow() city?: string;
+  @Allow() department?: string;
+  @Allow() notes?: string;
+  @Allow() segmentId?: string;
+  @Allow() assignedToUserId?: string;
+}
+
+class LauraContactBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() customerId?: string;
+  @Allow() fullName?: string;
+  @Allow() roleTitle?: string;
+  @Allow() phone?: string;
+  @Allow() email?: string;
+  @Allow() isPrimary?: boolean;
+  @Allow() notes?: string;
+}
+
+class LauraQuoteBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() customerId?: string;
+  @Allow() opportunityId?: string;
+  @Allow() validUntil?: string;
+  @Allow() notes?: string;
+  @Allow() items?: Array<{ productId: string; quantity: number; unitPrice: number; notes?: string }>;
+}
+
+class LauraOrderBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() customerId?: string;
+  @Allow() opportunityId?: string;
+  @Allow() sourceQuoteId?: string;
+  @Allow() notes?: string;
+  @Allow() items?: Array<{ productId: string; quantity: number; unitPrice: number; notes?: string }>;
+}
+
+class LauraProductBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() sku?: string;
+  @Allow() name?: string;
+  @Allow() description?: string;
+  @Allow() unit?: string;
+  @Allow() presentation?: string;
+  @Allow() basePrice?: number;
+}
+
+class LauraSegmentBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() name?: string;
+  @Allow() description?: string;
+}
+
+class LauraVisitBlockDto {
+  @Allow() enabled!: boolean;
+  @Allow() action!: "create" | "update" | "delete";
+  @Allow() id?: string;
+  @Allow() relatedTo?: string;
+  @Allow() customerId?: string;
+  @Allow() opportunityId?: string;
+  @Allow() scheduledAt?: string;
+  @Allow() summary?: string;
+  @Allow() notes?: string;
 }
 
 class LauraProposalBlocksDto implements LauraProposalBlocks {
@@ -133,6 +267,41 @@ class LauraProposalBlocksDto implements LauraProposalBlocks {
   @ValidateNested()
   @Type(() => LauraSignalsBlockDto)
   signals?: LauraSignalsBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraCustomerBlockDto)
+  customer?: LauraCustomerBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraContactBlockDto)
+  contact?: LauraContactBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraQuoteBlockDto)
+  quote?: LauraQuoteBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraOrderBlockDto)
+  order?: LauraOrderBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraProductBlockDto)
+  product?: LauraProductBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraSegmentBlockDto)
+  segment?: LauraSegmentBlockDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => LauraVisitBlockDto)
+  visit?: LauraVisitBlockDto;
 }
 
 class LauraProposalPayloadDto implements LauraProposalPayload {

@@ -88,16 +88,17 @@ export async function handleInvoke(
 ): Promise<AgentResponse> {
   const checkpointer = await getCheckpointer();
   const graph = createLauraGraph(checkpointer);
+  const threadId = sessionId || crypto.randomUUID();
 
   const threadConfig = {
-    configurable: { thread_id: sessionId || crypto.randomUUID() },
+    configurable: { thread_id: threadId },
   };
 
   const currentState = await graph.getState(threadConfig);
   const isNewThread = currentState.values.messages === undefined || currentState.values.messages.length === 0;
 
   const input = isNewThread
-    ? buildInitialState(userId, sessionId, content, contextType, contextEntityId)
+    ? buildInitialState(userId, threadId, content, contextType, contextEntityId)
     : { messages: [new HumanMessage(content)] };
 
   const result = await graph.invoke(input, threadConfig);
@@ -115,16 +116,17 @@ export async function handleStream(
 ): Promise<void> {
   const checkpointer = await getCheckpointer();
   const graph = createLauraGraph(checkpointer);
+  const threadId = sessionId || crypto.randomUUID();
 
   const threadConfig = {
-    configurable: { thread_id: sessionId || crypto.randomUUID() },
+    configurable: { thread_id: threadId },
   };
 
   const currentState = await graph.getState(threadConfig);
   const isNewThread = currentState.values.messages === undefined || currentState.values.messages.length === 0;
 
   const input = isNewThread
-    ? buildInitialState(userId, sessionId, content, contextType, contextEntityId)
+    ? buildInitialState(userId, threadId, content, contextType, contextEntityId)
     : { messages: [new HumanMessage(content)] };
 
   res.writeHead(200, {
@@ -243,6 +245,7 @@ async function startServer() {
             saved: result.saved,
             discarded: result.discarded,
             createdIds: result.createdIds,
+            errors: result.errors,
           },
         }));
       } catch (error) {
