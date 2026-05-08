@@ -244,6 +244,35 @@ export class LauraAgentsController {
     return { id: task.id };
   }
 
+  @Post("visits")
+  async createVisit(
+    @Body() body: {
+      customerId: string;
+      scheduledAt: string;
+      summary?: string;
+      notes?: string;
+      nextStep?: string;
+      opportunityId?: string;
+      assignedToUserId?: string;
+    },
+  ) {
+    const visit = await this.prisma.visit.create({
+      data: {
+        customerId: body.customerId,
+        opportunityId: body.opportunityId,
+        scheduledAt: new Date(body.scheduledAt),
+        summary: body.summary,
+        notes: body.notes,
+        nextStep: body.nextStep,
+        assignedToUserId: body.assignedToUserId,
+        status: VisitStatus.programada,
+        createdBy: SYSTEM_USER_ID,
+        updatedBy: SYSTEM_USER_ID,
+      },
+    });
+    return { id: visit.id };
+  }
+
   @Post("tasks")
   async createTask(
     @Body() body: {

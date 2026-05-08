@@ -261,6 +261,10 @@ export async function updateSegment(id: string, data: Record<string, any>) {
   return nestjsRequest<any>(`/laura/agents/segments/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 }
 
+export async function createVisit(data: Record<string, any>) {
+  return nestjsRequest<any>("/laura/agents/visits", { method: "POST", body: JSON.stringify(data) });
+}
+
 export async function updateVisit(id: string, data: Record<string, any>) {
   return nestjsRequest<any>(`/laura/agents/visits/${id}`, { method: "PATCH", body: JSON.stringify(data) });
 }

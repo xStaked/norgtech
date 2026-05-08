@@ -42,13 +42,22 @@ const intentSchema = z.enum([
   "unsupported",
 ]);
 
+const kindSchema = z.enum(["read", "write"]);
+const roleSchema = z.enum(["primary", "related"]);
+
 const plannedActionSchema = z
   .object({
     domain: domainSchema,
     action: actionSchema,
+    kind: kindSchema.optional(),
     toolName: z.string().optional(),
-    arguments: z.record(z.unknown()).default({}),
+    arguments: z.record(z.unknown()).optional(),
+    fields: z.record(z.unknown()).optional(),
     confidence: z.number().min(0).max(1).optional(),
+    role: roleSchema.optional(),
+    relatedTo: z.string().optional(),
+    entityRef: z.string().optional(),
+    humanSummary: z.string().optional(),
   })
   .strict();
 
@@ -59,6 +68,10 @@ const platformPlanSchema = z
     actions: z.array(plannedActionSchema),
     requiresConfirmation: z.boolean().default(false),
     clarificationQuestion: z.string().optional(),
+    missingFields: z.array(z.string()).default([]),
+    ambiguity: z.array(z.string()).default([]),
+    confidence: z.number().min(0).max(1).optional(),
+    responseStyle: z.enum(["brief", "adaptive"]).optional(),
   })
   .strict();
 
@@ -73,6 +86,8 @@ function clarificationFallback(): PlannerPlatformPlan {
     summary: "No pude interpretar la solicitud como JSON valido.",
     actions: [],
     requiresConfirmation: false,
+    missingFields: [],
+    ambiguity: [],
     clarificationQuestion: "No pude entender bien el pedido. ¿Me lo podés repetir con un poco más de detalle?",
   };
 }
@@ -104,17 +119,25 @@ function stringifyLlmContent(content: unknown): string {
 }
 
 function normalizeAction(action: ParsedAction): PlannerAction {
+  const normalizedArguments = {
+    ...(action.fields ?? {}),
+    ...(action.arguments ?? {}),
+  };
   const capability = getCapability(action.domain as CapabilityDomain, action.action as CapabilityAction);
   if (!capability) {
     return {
       domain: action.domain as CapabilityDomain,
       action: action.action as CapabilityAction,
       toolName: action.toolName ?? "",
-      arguments: { ...action.arguments },
+      arguments: normalizedArguments,
       requiredFields: [],
       missingFields: [],
       requiresConfirmation: true,
       confidence: action.confidence,
+      role: action.role,
+      relatedTo: action.relatedTo,
+      entityRef: action.entityRef,
+      humanSummary: action.humanSummary,
     };
   }
 
@@ -124,11 +147,15 @@ function normalizeAction(action: ParsedAction): PlannerAction {
     domain: action.domain as CapabilityDomain,
     action: action.action as CapabilityAction,
     toolName: action.toolName ?? capability.toolName,
-    arguments: { ...action.arguments },
+    arguments: normalizedArguments,
     requiredFields,
     missingFields: [],
     requiresConfirmation: capability.requiresConfirmation ?? false,
     confidence: action.confidence,
+    role: action.role,
+    relatedTo: action.relatedTo,
+    entityRef: action.entityRef,
+    humanSummary: action.humanSummary,
   };
 }
 
@@ -143,6 +170,8 @@ function compactContext(context: LauraPlatformContext): string {
     recentMessages: context.recentMessages,
     agendaSummary: context.agendaSummary,
     activeProposal: context.activeProposal,
+    activeProposalSummary: context.activeProposalSummary,
+    relatedEntities: context.relatedEntities,
   });
 }
 
@@ -155,7 +184,15 @@ Capacidades disponibles:
 ${capabilitiesForPrompt()}
 
 Devolvé solo JSON estricto con esta forma:
-{"intent":"read|write|mixed|clarification|greeting|help|unsupported","summary":"...","actions":[{"domain":"customers","action":"search","arguments":{},"confidence":0.9}],"requiresConfirmation":false,"clarificationQuestion":"..."}`),
+{"intent":"read|write|mixed|clarification|greeting|help|unsupported","summary":"...","actions":[{"domain":"customers","action":"search","kind":"read","fields":{},"role":"primary","relatedTo":"action-1","confidence":0.9,"entityRef":"customer-1","humanSummary":"Buscar cliente"}],"requiresConfirmation":false,"missingFields":[],"ambiguity":[],"clarificationQuestion":"...","confidence":0.9,"responseStyle":"brief|adaptive"}
+
+Reglas de planificación:
+- Priorizá un plan balanceado entre quotes, orders, followups y visits; no sesgues agenda por encima de operaciones comerciales si el pedido mezcla ambas.
+- Si hay ambigüedad o falta información para escribir, devolvé la intención correspondiente con \`missingFields\`, \`ambiguity\` y \`clarificationQuestion\` antes de preparar propuestas.
+- Cada action puede usar \`fields\` como payload principal; si necesitás compatibilidad, \`arguments\` también es válido.
+- Marcá \`kind\`, \`role\` (\`primary\` o \`related\`) y \`relatedTo\` cuando una acción dependa de otra.
+- Incluí \`confidence\` a nivel plan y acción, y \`responseStyle\` (\`brief\` o \`adaptive\`) cuando aporte a la respuesta.
+- No ejecutes herramientas.`),
     new HumanMessage(`Contexto compacto:\n${compactContext(context)}\n\nPlanificá la intención sin ejecutar herramientas.`),
   ]);
 
@@ -167,7 +204,11 @@ Devolvé solo JSON estricto con esta forma:
       summary: parsed.summary,
       actions: parsed.actions.map(normalizeAction),
       requiresConfirmation: parsed.requiresConfirmation,
+      missingFields: parsed.missingFields,
+      ambiguity: parsed.ambiguity,
       clarificationQuestion: parsed.clarificationQuestion,
+      confidence: parsed.confidence,
+      responseStyle: parsed.responseStyle,
     };
   } catch {
     return clarificationFallback();

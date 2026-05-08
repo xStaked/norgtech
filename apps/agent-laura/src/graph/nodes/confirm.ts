@@ -17,6 +17,7 @@ import {
   updateProduct,
   createSegment,
   updateSegment,
+  createVisit,
   updateVisit,
   updateFollowup,
 } from "../../tools/nestjs-client.js";
@@ -74,9 +75,9 @@ export async function confirmNode(state: LauraState): Promise<Partial<LauraState
   if (blocks.followUp?.enabled && customerId) {
     await createFollowUp({
       customerId,
-      title: blocks.followUp.title,
-      dueAt: blocks.followUp.dueAt,
-      type: blocks.followUp.type,
+      title: blocks.followUp.title!,
+      dueAt: blocks.followUp.dueAt!,
+      type: blocks.followUp.type!,
       opportunityId,
     });
     saved.push("followUp");
@@ -222,14 +223,24 @@ export async function confirmNode(state: LauraState): Promise<Partial<LauraState
     }
   }
 
-  // Visit update (only updates, not create — creation is handled by interaction block)
-  if (blocks.visit?.enabled && blocks.visit.action === "update" && blocks.visit.id) {
-    await updateVisit(blocks.visit.id, {
-      scheduledAt: blocks.visit.scheduledAt,
-      summary: blocks.visit.summary,
-      notes: blocks.visit.notes,
-    });
-    saved.push("visit");
+  if (blocks.visit?.enabled) {
+    if (blocks.visit.action === "create" && customerId && blocks.visit.scheduledAt) {
+      await createVisit({
+        customerId,
+        opportunityId,
+        scheduledAt: blocks.visit.scheduledAt,
+        summary: blocks.visit.summary,
+        notes: blocks.visit.notes,
+      });
+      saved.push("visit");
+    } else if (blocks.visit.action === "update" && blocks.visit.id) {
+      await updateVisit(blocks.visit.id, {
+        scheduledAt: blocks.visit.scheduledAt,
+        summary: blocks.visit.summary,
+        notes: blocks.visit.notes,
+      });
+      saved.push("visit");
+    }
   }
 
   // FollowUp update (for modify actions where we update instead of create)

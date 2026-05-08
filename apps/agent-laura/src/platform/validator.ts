@@ -18,12 +18,75 @@ type PlanForValidation = Omit<PlatformPlan, "actions"> & {
   actions: Array<PlannedAction & { confidence?: number }>;
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  customerId: "cliente",
+  items: "items",
+  pricing: "precios",
+  conditions: "condiciones",
+  status: "estado",
+  dueAt: "fecha y hora",
+  scheduledAt: "fecha y hora de la visita",
+  type: "tipo de seguimiento",
+  fullName: "nombre del contacto",
+  legalName: "nombre del cliente",
+  title: "titulo",
+  stage: "etapa",
+};
+
 function hasRequiredValue(args: Record<string, unknown>, field: string): boolean {
   const value = args[field];
   if (value == null) {
     return false;
   }
   return typeof value !== "string" || value.trim().length > 0;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasPositiveNumber(value: unknown): boolean {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function hasCompleteCommercialItems(items: unknown): boolean {
+  if (!Array.isArray(items) || items.length === 0) {
+    return false;
+  }
+
+  return items.every((item) => (
+    isRecord(item)
+    && typeof item.productId === "string"
+    && item.productId.trim().length > 0
+    && hasPositiveNumber(item.quantity)
+    && hasPositiveNumber(item.unitPrice)
+  ));
+}
+
+function hasCommercialPricing(args: Record<string, unknown>): boolean {
+  if (!hasRequiredValue(args, "pricing")) {
+    return false;
+  }
+
+  return hasCompleteCommercialItems(args.items);
+}
+
+const FIELD_VALIDATORS: Partial<Record<string, (args: Record<string, unknown>) => boolean>> = {
+  items: (args) => hasCompleteCommercialItems(args.items),
+  pricing: (args) => hasCommercialPricing(args),
+};
+
+function missingFieldsForRequirements(args: Record<string, unknown>, requiredFields: string[]): string[] {
+  return requiredFields.filter((field) => {
+    const validator = FIELD_VALIDATORS[field];
+    return validator ? !validator(args) : !hasRequiredValue(args, field);
+  });
+}
+
+function isCommercialCreateAction(action: PlannedAction, requiredFields: string[]): boolean {
+  return action.action === "create"
+    && (action.domain === "quotes" || action.domain === "orders")
+    && ["customerId", "items", "pricing", "conditions", "status"].every((field) => requiredFields.includes(field));
 }
 
 function cloneAction(action: PlannedAction & { confidence?: number }, requiredFields: string[], missingFields: string[], requiresConfirmation: boolean): ValidatedPlatformAction {
@@ -36,8 +99,13 @@ function cloneAction(action: PlannedAction & { confidence?: number }, requiredFi
   };
 }
 
-function clarificationForMissing(fields: string[]): string {
-  return `Para avanzar necesito estos datos: ${fields.join(", ")}. ¿Me los podés pasar?`;
+function humanizeField(field: string): string {
+  return FIELD_LABELS[field] ?? field;
+}
+
+export function clarificationForMissing(fields: string[]): string {
+  const labels = Array.from(new Set(fields.map(humanizeField)));
+  return `Para avanzar necesito estos datos: ${labels.join(", ")}. ¿Me los podés pasar?`;
 }
 
 export function validatePlatformPlan(plan: PlanForValidation): PlatformPlanValidationResult {
@@ -47,6 +115,20 @@ export function validatePlatformPlan(plan: PlanForValidation): PlatformPlanValid
   const errors: string[] = [];
   const warnings: string[] = [];
   let clarificationQuestion: string | undefined;
+
+  if ((plan.ambiguity?.length ?? 0) > 0) {
+    const prompt = plan.clarificationQuestion ?? "Necesito confirmar a cuál registro te referís.";
+    return {
+      ok: false,
+      intent: plan.intent,
+      executableReads,
+      proposalWrites,
+      missingFields: [],
+      errors: ["ambiguous_reference"],
+      warnings,
+      clarificationQuestion: /visita/i.test(plan.summary) ? `${prompt} ¿Cuál visita querés usar?` : prompt,
+    };
+  }
 
   for (const action of plan.actions) {
     if (typeof action.confidence === "number" && action.confidence < 0.45) {
@@ -62,7 +144,17 @@ export function validatePlatformPlan(plan: PlanForValidation): PlatformPlanValid
     }
 
     const requiredFields = capability.requiredFields ? [...capability.requiredFields] : [];
-    const actionMissingFields = requiredFields.filter((field) => !hasRequiredValue(action.arguments, field));
+    if (isCommercialCreateAction(action, requiredFields)) {
+      const commercialMissing = missingFieldsForRequirements(action.arguments, requiredFields);
+      if (commercialMissing.length > 0) {
+        missingFields.push(...commercialMissing);
+        errors.push("missing_commercial_fields");
+        clarificationQuestion = clarificationForMissing(commercialMissing);
+        continue;
+      }
+    }
+
+    const actionMissingFields = missingFieldsForRequirements(action.arguments, requiredFields);
     if (actionMissingFields.length > 0) {
       missingFields.push(...actionMissingFields);
       continue;
@@ -90,6 +182,6 @@ export function validatePlatformPlan(plan: PlanForValidation): PlatformPlanValid
     missingFields,
     errors,
     warnings,
-    clarificationQuestion: missingFields.length > 0 ? clarificationForMissing(missingFields) : clarificationQuestion,
+    clarificationQuestion: clarificationQuestion ?? (missingFields.length > 0 ? clarificationForMissing(missingFields) : undefined),
   };
 }

@@ -52,6 +52,11 @@ export interface PlannedAction {
   requiredFields: string[];
   missingFields: string[];
   requiresConfirmation: boolean;
+  confidence?: number;
+  entityRef?: string;
+  humanSummary?: string;
+  relatedTo?: string;
+  role?: "primary" | "related";
 }
 
 export interface PlatformPlan {
@@ -60,6 +65,10 @@ export interface PlatformPlan {
   actions: PlannedAction[];
   requiresConfirmation: boolean;
   clarificationQuestion?: string;
+  missingFields?: string[];
+  ambiguity?: string[];
+  confidence?: number;
+  responseStyle?: "brief" | "adaptive";
 }
 
 export interface ValidationResult {

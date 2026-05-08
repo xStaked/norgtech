@@ -37,7 +37,7 @@ function normalizeBlockUpdates(updates: Record<string, unknown>): Partial<Propos
   for (const key of PROPOSAL_BLOCK_KEYS) {
     const value = updates[key];
     if (value && typeof value === "object" && !Array.isArray(value)) {
-      directUpdates[key] = value as ProposalPayload["blocks"][typeof key];
+      (directUpdates as Record<string, unknown>)[key] = value;
     }
   }
   return directUpdates;
@@ -55,13 +55,96 @@ function mergeBlocks(
 
     const existing = merged[key];
     if (existing && typeof existing === "object") {
-      merged[key] = { ...existing, ...update } as ProposalPayload["blocks"][typeof key];
+      (merged as Record<string, unknown>)[key] = { ...existing, ...update };
     } else {
-      merged[key] = update as ProposalPayload["blocks"][typeof key];
+      (merged as Record<string, unknown>)[key] = update;
     }
   }
 
   return merged;
+}
+
+function extractEmail(text: string): string | undefined {
+  return text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)?.[0];
+}
+
+function extractPhone(text: string): string | undefined {
+  const withoutEmail = text.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, " ");
+  const phoneCandidate = withoutEmail.match(/(?:\+?\d[\d\s().-]{6,}\d)/)?.[0];
+  if (!phoneCandidate) return undefined;
+
+  const normalized = phoneCandidate.replace(/[^\d+]/g, "");
+  return normalized.replace(/^\+/, "").length >= 7 ? normalized : undefined;
+}
+
+function extractCustomerName(text: string): string | undefined {
+  const normalizedText = text.trim();
+  const patterns = [
+    /(?:se\s+llama|el\s+nombre\s+es|nombre\s*:)\s*([^,.;\n]+)/i,
+    /(?:cliente|empresa|compania|compañia|compañía)\s+(?:se\s+llama\s+)?([^,.;\n]+)/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalizedText.match(pattern);
+    const rawName = match?.[1]?.trim();
+    if (!rawName) continue;
+
+    const cleanedName = rawName
+      .replace(/\s+/g, " ")
+      .replace(/^(es|seria|sería)\s+/i, "")
+      .trim();
+
+    if (cleanedName.length > 0) {
+      return cleanedName;
+    }
+  }
+
+  return undefined;
+}
+
+function isDataAcknowledgement(feedback: string): boolean {
+  const normalized = feedback
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+
+  const patterns = [
+    "ya te pase los datos",
+    "ya te pase los info",
+    "ya te di los datos",
+    "ya te mande los datos",
+    "ya te comparti los datos",
+    "ya los pase",
+    "ya pase los datos",
+  ];
+
+  return patterns.some((pattern) => normalized.includes(pattern));
+}
+
+function directCustomerContactUpdate(
+  proposal: ProposalPayload,
+  feedback: string,
+): ProposalPayload | null {
+  if (!proposal.blocks.customer) return null;
+
+  const customerName = extractCustomerName(feedback);
+  const email = extractEmail(feedback);
+  const phone = extractPhone(feedback);
+  if (!customerName && !email && !phone) return null;
+
+  return {
+    ...proposal,
+    blocks: {
+      ...proposal.blocks,
+      customer: {
+        ...proposal.blocks.customer,
+        ...(customerName ? { legalName: customerName, displayName: customerName } : {}),
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+      },
+    },
+  };
 }
 
 export async function refineNode(state: LauraState): Promise<Partial<LauraState>> {
@@ -72,6 +155,23 @@ export async function refineNode(state: LauraState): Promise<Partial<LauraState>
     return {
       mode: "proposal",
       lastError: "No hay propuesta activa para refinar",
+    };
+  }
+
+  const directUpdate = directCustomerContactUpdate(state.proposal, feedback);
+  if (directUpdate) {
+    return {
+      proposal: directUpdate,
+      proposalStatus: "draft",
+      messages: [...state.messages, new AIMessage("Ajusté la propuesta según tu feedback. Revisala.")],
+    };
+  }
+
+  if (isDataAcknowledgement(feedback)) {
+    return {
+      proposal: state.proposal,
+      proposalStatus: "draft",
+      messages: [...state.messages, new AIMessage("Ya tomé esos datos en la propuesta. Si querés, la confirmamos.")],
     };
   }
 

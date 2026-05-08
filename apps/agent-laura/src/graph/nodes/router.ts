@@ -16,7 +16,7 @@ export async function routerNode(state: LauraState): Promise<Partial<LauraState>
 function classifyWithHeuristics(
   content: string,
   state: LauraState,
-): "greeting" | "agenda" | "clarification" | "proposal" | "confirm" | "discard" | "refine" | "qa" | "platform" {
+): "clarification" | "confirm" | "discard" | "refine" | "platform" {
   const normalized = content
     .normalize("NFD")
     .replace(/\p{Diacritic}/gu, "")
@@ -47,24 +47,14 @@ function classifyWithHeuristics(
     const refinePatterns = [
       "cambia", "cambiar", "modifica", "modificar", "ajusta", "ajustar",
       "editar", "edita", "no quiero", "quitale", "quítale", "agrega",
-      "agregale", "pone", "poné", "ponle", "mejor", "en vez de",
+      "agregale", "anade", "anadele", "añade", "añadele", "pone", "poné", "ponle", "mejor", "en vez de",
     ];
     if (refinePatterns.some((p) => normalized.includes(p))) {
       return "refine";
     }
-  }
 
-  const wordCount = normalized.split(/\s+/).length;
-
-  if (wordCount <= 8) {
-    const greetingPatterns = [
-      "hola", "buenos dias", "buenas tardes", "buenas noches",
-      "hey", "hi", "que tal", "como estas", "como andas",
-      "como va", "como te va", "como andas", "todo bien",
-      "todo liso", "que onda", "que haces", "que me cuentas",
-    ];
-    if (greetingPatterns.some((g) => normalized === g || normalized.startsWith(`${g} `) || normalized.endsWith(g))) {
-      return "greeting";
+    if (containsContactDetail(content, normalized)) {
+      return "refine";
     }
   }
 
@@ -75,75 +65,19 @@ function classifyWithHeuristics(
     return "clarification";
   }
 
-  if (isDirectAgendaRequest(normalized)) {
-    return "agenda";
-  }
-
-  const hasAgendaContext = state.agendaItems !== null && state.agendaItems.length > 0;
-
-  if (hasAgendaContext && isFollowUpQuestion(normalized)) {
-    return "qa";
-  }
-
-  if (isCapabilityQuestion(normalized)) {
-    return "platform";
+  if (hasActiveProposal) {
+    return "refine";
   }
 
   return "platform";
 }
 
-function isDirectAgendaRequest(normalized: string): boolean {
-  if (normalized.includes("equipo")) {
-    return false;
-  }
+function containsContactDetail(content: string, normalized: string): boolean {
+  const hasEmail = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(content);
+  const hasPhoneHint = /\b(telefono|tel|celular|numero|whatsapp|wpp)\b/.test(normalized)
+    && /\d{7,}/.test(normalized.replace(/\D/g, ""));
 
-  const exactAgendaPatterns = [
-    "agenda",
-    "pendientes",
-    "pendiente",
-    "mis pendientes",
-    "tareas pendientes",
-  ];
-  if (exactAgendaPatterns.includes(normalized)) {
-    return true;
-  }
-
-  const agendaPatterns = [
-    "mi agenda",
-    "que tengo pendiente",
-    "que tengo hoy",
-    "que tengo que hacer hoy",
-    "que tengo programado",
-    "visitas programadas",
-    "visitas tenemos programadas",
-  ];
-
-  return agendaPatterns.some((k) => normalized.includes(k));
-}
-
-function isFollowUpQuestion(normalized: string): boolean {
-  const followUpPatterns = [
-    "esa llamada", "ese pendiente", "esa tarea", "esa visita",
-    "ese cliente", "esa empresa", "ese contacto",
-    "a que hora", "a qué hora", "cuando es", "cuándo es",
-    "de que se trata", "de qué se trata",
-    "el primero", "la primera", "el segundo", "la segunda",
-    "ese", "esa", "aquel",
-  ];
-  return followUpPatterns.some((p) => normalized.includes(p));
-}
-
-function isCapabilityQuestion(normalized: string): boolean {
-  const capabilityPatterns = [
-    "que podes hacer", "que puedes hacer", "que sabes hacer",
-    "que mas podes", "que mas puedes", "como me podes ayudar",
-    "como me puedes ayudar", "como ayudas", "que funcionalidades",
-    "para que servis", "para que sirves", "que haces",
-    "en que me podes ayudar", "en que me puedes ayudar",
-    "cuales son tus capacidades", "que mas haces",
-    "explicame que podes", "decime que podes",
-  ];
-  return capabilityPatterns.some((p) => normalized.includes(p));
+  return hasEmail || hasPhoneHint;
 }
 
 function isClarificationReply(normalized: string): boolean {

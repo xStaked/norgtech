@@ -20,6 +20,7 @@ vi.mock("../config/providers.js", () => ({
 import { buildPlatformContext } from "../platform/context.js";
 import { planPlatformIntent } from "../platform/planner.js";
 import { validatePlatformPlan } from "../platform/validator.js";
+import { platformNode } from "../graph/nodes/platform.js";
 
 function makeState(overrides: Partial<LauraState> = {}): LauraState {
   return {
@@ -64,10 +65,10 @@ describe("platform planner", () => {
     expect(context.currentMessage).toBe("mostrame el cliente Acme");
   });
 
-  it("buildPlatformContext keeps only the last 8 recent messages", () => {
+  it("buildPlatformContext keeps the last 16 recent messages for conversational references", () => {
     const context = buildPlatformContext(
       makeState({
-        messages: Array.from({ length: 10 }, (_, index) => new HumanMessage(`mensaje ${index + 1}`)),
+        messages: Array.from({ length: 18 }, (_, index) => new HumanMessage(`mensaje ${index + 1}`)),
       }),
     );
 
@@ -80,8 +81,16 @@ describe("platform planner", () => {
       "mensaje 8",
       "mensaje 9",
       "mensaje 10",
+      "mensaje 11",
+      "mensaje 12",
+      "mensaje 13",
+      "mensaje 14",
+      "mensaje 15",
+      "mensaje 16",
+      "mensaje 17",
+      "mensaje 18",
     ]);
-    expect(context.currentMessage).toBe("mensaje 10");
+    expect(context.currentMessage).toBe("mensaje 18");
   });
 
   it("buildPlatformContext creates agenda summary", () => {
@@ -208,6 +217,243 @@ describe("platform planner", () => {
     });
   });
 
+  it("preserves balanced commercial write planning across visits and followups", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "write",
+          summary: "Reprogramar visita y mover seguimiento asociado",
+          actions: [
+            {
+              domain: "visits",
+              action: "update",
+              kind: "write",
+              fields: {
+                visitId: "visit-1",
+                scheduledAt: "2026-05-15T10:00:00.000Z",
+              },
+              role: "primary",
+              humanSummary: "Mover visita principal",
+              confidence: 0.93,
+            },
+            {
+              domain: "followups",
+              action: "update",
+              kind: "write",
+              fields: {
+                followupId: "followup-1",
+                dueAt: "2026-05-16T09:00:00.000Z",
+                title: "Mover seguimiento post visita",
+              },
+              role: "related",
+              relatedTo: "visit-1",
+              humanSummary: "Mover seguimiento relacionado",
+              confidence: 0.9,
+            },
+          ],
+          requiresConfirmation: true,
+          confidence: 0.91,
+          responseStyle: "adaptive",
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState({
+      messages: [new HumanMessage("Reprograma la visita del jueves y move tambien el seguimiento")],
+    })));
+
+    expect(plan.intent).toBe("write");
+    expect(plan.confidence).toBe(0.91);
+    expect(plan.responseStyle).toBe("adaptive");
+    expect(plan.actions.map((action) => action.domain)).toEqual(["visits", "followups"]);
+    expect(plan.actions).toMatchObject([
+      {
+        action: "update",
+        toolName: "update_visit",
+        arguments: { visitId: "visit-1", scheduledAt: "2026-05-15T10:00:00.000Z" },
+        role: "primary",
+        humanSummary: "Mover visita principal",
+      },
+      {
+        action: "update",
+        toolName: "update_followup",
+        arguments: { followupId: "followup-1", dueAt: "2026-05-16T09:00:00.000Z", title: "Mover seguimiento post visita" },
+        role: "related",
+        relatedTo: "visit-1",
+        humanSummary: "Mover seguimiento relacionado",
+      },
+    ]);
+  });
+
+  it("accepts richer planner action contracts and normalizes fields into arguments", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "mixed",
+          summary: "Crear cotizacion y preparar seguimiento relacionado",
+          actions: [
+            {
+              domain: "quotes",
+              action: "create",
+              kind: "write",
+              fields: {
+                customerId: "customer-1",
+                items: [{ productId: "product-1", quantity: 2, unitPrice: 1500 }],
+                pricing: { currency: "COP" },
+                conditions: "Pago 50/50",
+                status: "draft",
+              },
+              role: "primary",
+              entityRef: "customer-1",
+              humanSummary: "Crear cotizacion inicial",
+              confidence: 0.94,
+            },
+            {
+              domain: "followups",
+              action: "create",
+              kind: "write",
+              fields: {
+                customerId: "customer-1",
+                title: "Confirmar envio de cotizacion",
+                dueAt: "2026-05-16T12:00:00.000Z",
+                type: "llamada",
+              },
+              role: "related",
+              relatedTo: "quotes:create:0",
+              humanSummary: "Crear seguimiento comercial",
+              confidence: 0.89,
+            },
+          ],
+          requiresConfirmation: true,
+          missingFields: [],
+          ambiguity: [],
+          confidence: 0.92,
+          responseStyle: "adaptive",
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState({
+      messages: [new HumanMessage("Crea una cotizacion para Acme y agenda un seguimiento")],
+    })));
+
+    expect(plan.intent).toBe("mixed");
+    expect(plan.confidence).toBe(0.92);
+    expect(plan.responseStyle).toBe("adaptive");
+    expect(plan.actions).toMatchObject([
+      {
+        domain: "quotes",
+        action: "create",
+        toolName: "create_quote",
+        arguments: {
+          customerId: "customer-1",
+          items: [{ productId: "product-1", quantity: 2, unitPrice: 1500 }],
+          pricing: { currency: "COP" },
+          conditions: "Pago 50/50",
+          status: "draft",
+        },
+        role: "primary",
+        entityRef: "customer-1",
+        humanSummary: "Crear cotizacion inicial",
+      },
+      {
+        domain: "followups",
+        action: "create",
+        toolName: "create_followup",
+        arguments: {
+          customerId: "customer-1",
+          title: "Confirmar envio de cotizacion",
+          dueAt: "2026-05-16T12:00:00.000Z",
+          type: "llamada",
+        },
+        role: "related",
+        relatedTo: "quotes:create:0",
+        humanSummary: "Crear seguimiento comercial",
+      },
+    ]);
+  });
+
+  it("merges fields and arguments without dropping fields, with arguments taking precedence", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "write",
+          summary: "Actualizar visita con payload mixto",
+          actions: [
+            {
+              domain: "visits",
+              action: "update",
+              kind: "write",
+              fields: {
+                visitId: "visit-1",
+                scheduledAt: "2026-05-15T10:00:00.000Z",
+                summary: "Visita original",
+              },
+              arguments: {
+                summary: "Visita reprogramada",
+                notes: "Mover por lluvia",
+              },
+              confidence: 0.9,
+            },
+          ],
+          requiresConfirmation: true,
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState({
+      messages: [new HumanMessage("Reprograma la visita y agrega una nota")],
+    })));
+
+    expect(plan.actions).toMatchObject([
+      {
+        domain: "visits",
+        action: "update",
+        toolName: "update_visit",
+        arguments: {
+          visitId: "visit-1",
+          scheduledAt: "2026-05-15T10:00:00.000Z",
+          summary: "Visita reprogramada",
+          notes: "Mover por lluvia",
+        },
+      },
+    ]);
+  });
+
+  it("parses ambiguity and missing info metadata for clarification-first planning", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "write",
+          summary: "Actualizar visita sin referencia unica",
+          actions: [
+            {
+              domain: "visits",
+              action: "update",
+              arguments: {
+                scheduledAt: "2026-05-15T10:00:00.000Z",
+              },
+              confidence: 0.88,
+            },
+          ],
+          requiresConfirmation: true,
+          missingFields: ["visitId"],
+          ambiguity: ["multiple_visits"],
+          clarificationQuestion: "¿Cuál visita querés mover?",
+        }),
+      }),
+    );
+
+    const plan = await planPlatformIntent(buildPlatformContext(makeState({
+      messages: [new HumanMessage("Move la visita del jueves")],
+    })));
+
+    expect(plan.intent).toBe("write");
+    expect(plan.missingFields).toEqual(["visitId"]);
+    expect(plan.ambiguity).toEqual(["multiple_visits"]);
+    expect(plan.clarificationQuestion).toBe("¿Cuál visita querés mover?");
+  });
+
   it("prompt passed to LLM includes Laura identity, capabilities, and compact context", async () => {
     mockInvoke.mockResolvedValueOnce(
       new AIMessage({
@@ -224,6 +470,20 @@ describe("platform planner", () => {
       buildPlatformContext(
         makeState({
           customerContext: { id: "customer-1", label: "Acme Piscicola" },
+          proposal: {
+            blocks: {},
+            summary: {
+              primaryCount: 1,
+              relatedCount: 1,
+              primaryActions: ["visits.update"],
+              relatedActions: ["followups.update"],
+              relatedToIds: ["visit-1"],
+              labels: ["Mover visita", "Mover seguimiento"],
+            },
+          },
+          proposalStatus: "draft",
+          agendaItems: [{ id: "visit-2", type: "visit", label: "Visita Acme", scheduledAt: "2026-05-18T09:00:00.000Z" }],
+          mentionedEntities: { quoteId: "quote-1", followupId: "followup-1" },
           messages: [new HumanMessage("mostrame cotizaciones")],
         }),
       ),
@@ -232,7 +492,18 @@ describe("platform planner", () => {
     const [messages] = mockInvoke.mock.calls[0];
     expect(messages[0].content).toContain("Sos Laura, la asistente comercial del CRM de Norgtech");
     expect(messages[0].content).toContain("quotes.create");
+    expect(messages[0].content).toContain("plan balanceado");
+    expect(messages[0].content).toContain("missingFields");
+    expect(messages[0].content).toContain("ambiguity");
+    expect(messages[0].content).toContain("responseStyle");
+    expect(messages[0].content).toContain("role");
+    expect(messages[0].content).toContain("relatedTo");
     expect(messages[1].content).toContain("customer-1");
+    expect(messages[1].content).toContain("activeProposalSummary");
+    expect(messages[1].content).toContain("relatedEntities");
+    expect(messages[1].content).toContain("visit-1");
+    expect(messages[1].content).toContain("quote-1");
+    expect(messages[1].content).toContain("followup-1");
   });
 
   it("planner does not execute or bind tools", async () => {
@@ -344,6 +615,37 @@ describe("platform planner", () => {
     expect(result.proposalWrites).toEqual([action]);
   });
 
+  it("commercial create clarification mentions only the actually missing subset", () => {
+    const result = validatePlatformPlan({
+      intent: "write",
+      summary: "Crear cotizacion parcial",
+      actions: [
+        {
+          domain: "quotes",
+          action: "create",
+          toolName: "create_quote",
+          arguments: {
+            customerId: "customer-1",
+            items: [{ productId: "product-1", quantity: 2, unitPrice: 1500 }],
+            pricing: { currency: "COP" },
+          },
+          requiredFields: ["customerId", "items", "pricing", "conditions", "status"],
+          missingFields: [],
+          requiresConfirmation: true,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.missingFields).toEqual(["conditions", "status"]);
+    expect(result.clarificationQuestion).toContain("condiciones");
+    expect(result.clarificationQuestion).toContain("estado");
+    expect(result.clarificationQuestion).not.toContain("cliente");
+    expect(result.clarificationQuestion).not.toContain("items");
+    expect(result.clarificationQuestion).not.toContain("precios");
+  });
+
   it("low confidence below 0.45 returns clarification and ok false", () => {
     const result = validatePlatformPlan({
       intent: "read",
@@ -411,6 +713,9 @@ describe("platform planner", () => {
 
     expect(result.ok).toBe(false);
     expect(result.missingFields).toEqual(["customerId", "dueAt", "type"]);
+    expect(result.clarificationQuestion).toContain("cliente");
+    expect(result.clarificationQuestion).toContain("fecha y hora");
+    expect(result.clarificationQuestion).toContain("tipo de seguimiento");
   });
 
   it("clarification includes missing fields accumulated across multiple actions", () => {
@@ -442,9 +747,76 @@ describe("platform planner", () => {
 
     expect(result.ok).toBe(false);
     expect(result.missingFields).toEqual(["customerId", "dueAt", "type", "fullName"]);
-    expect(result.clarificationQuestion).toContain("customerId");
-    expect(result.clarificationQuestion).toContain("dueAt");
-    expect(result.clarificationQuestion).toContain("type");
-    expect(result.clarificationQuestion).toContain("fullName");
+    expect(result.clarificationQuestion).toContain("cliente");
+    expect(result.clarificationQuestion).toContain("fecha y hora");
+    expect(result.clarificationQuestion).toContain("tipo de seguimiento");
+    expect(result.clarificationQuestion).toContain("nombre del contacto");
+  });
+
+  it("platformNode stops for ambiguity before proposal creation", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "write",
+          summary: "Actualizar visita ambigua",
+          actions: [
+            {
+              domain: "visits",
+              action: "update",
+              arguments: {
+                scheduledAt: "2026-05-18T11:00:00.000Z",
+              },
+              confidence: 0.9,
+            },
+          ],
+          requiresConfirmation: true,
+          ambiguity: ["multiple_visits"],
+          clarificationQuestion: "¿Cuál visita querés mover?",
+        }),
+      }),
+    );
+
+    const result = await platformNode(makeState({
+      messages: [new HumanMessage("Pasame la visita del jueves para la semana que viene")],
+    }));
+
+    expect(result.mode).toBe("clarification");
+    expect(result.proposal).toBeUndefined();
+    expect(result.messages?.[0].content).toContain("¿Cuál visita querés mover?");
+  });
+
+  it("platformNode uses validator-style humanized clarification for planner missing fields", async () => {
+    mockInvoke.mockResolvedValueOnce(
+      new AIMessage({
+        content: JSON.stringify({
+          intent: "write",
+          summary: "Crear seguimiento con datos faltantes",
+          actions: [
+            {
+              domain: "followups",
+              action: "create",
+              kind: "write",
+              fields: {
+                title: "Llamar a Acme",
+              },
+              confidence: 0.87,
+            },
+          ],
+          requiresConfirmation: true,
+          missingFields: ["customerId", "dueAt", "type"],
+          ambiguity: [],
+        }),
+      }),
+    );
+
+    const result = await platformNode(makeState({
+      messages: [new HumanMessage("Crea un seguimiento para Acme")],
+    }));
+
+    expect(result.mode).toBe("clarification");
+    expect(result.proposal).toBeUndefined();
+    expect(result.messages?.[0].content).toContain("cliente");
+    expect(result.messages?.[0].content).toContain("fecha y hora");
+    expect(result.messages?.[0].content).toContain("tipo de seguimiento");
   });
 });

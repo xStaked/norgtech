@@ -7,6 +7,7 @@ import type {
   ProductBlock,
   ProposalBlockAction,
   ProposalPayload,
+  ProposalSummary,
   QuoteBlock,
   SegmentBlock,
   VisitBlock,
@@ -88,8 +89,75 @@ function hasRequiredFields(action: PlannedAction): boolean {
   return action.requiredFields.every((field) => action.arguments[field] !== undefined && action.arguments[field] !== null);
 }
 
+function hasAnyArg(args: Args, fields: string[]): boolean {
+  return fields.some((field) => {
+    const value = args[field];
+    if (value == null) return false;
+    return typeof value !== "string" || value.trim().length > 0;
+  });
+}
+
+function entityId(args: Args, ...fields: string[]): string | undefined {
+  for (const field of fields) {
+    const value = optionalStringArg(args, field);
+    if (value && value.trim().length > 0) return value;
+  }
+  return undefined;
+}
+
+function enabledForWrite(
+  action: PlannedAction,
+  createRequiredFields: string[],
+  updateIdFields: string[],
+  updateMutableFields: string[],
+): boolean {
+  if (action.action === "create") {
+    return createRequiredFields.every((field) => requiredStringArg(action.arguments, field) !== null);
+  }
+
+  if (action.action === "update" || action.action === "change_status" || action.action === "add_item" || action.action === "cancel" || action.action === "complete") {
+    return entityId(action.arguments, ...updateIdFields) !== undefined
+      && hasAnyArg(action.arguments, updateMutableFields);
+  }
+
+  return hasRequiredFields(action);
+}
+
+function proposalLabel(action: PlannedAction): string {
+  const label = action.humanSummary?.trim();
+  return label && label.length > 0 ? label : `${action.action}:${action.domain}`;
+}
+
+function appendSummaryAction(summary: ProposalSummary, action: PlannedAction): void {
+  const actionKey = `${action.domain}.${action.action}`;
+  summary.labels.push(proposalLabel(action));
+  if (action.role === "related") {
+    summary.relatedCount += 1;
+    summary.relatedActions.push(actionKey);
+    if (typeof action.relatedTo === "string" && action.relatedTo.length > 0) {
+      summary.relatedToIds.push(action.relatedTo);
+    }
+    return;
+  }
+
+  summary.primaryCount += 1;
+  summary.primaryActions.push(actionKey);
+}
+
+function createProposalSummary(): ProposalSummary {
+  return {
+    primaryCount: 0,
+    relatedCount: 0,
+    primaryActions: [],
+    relatedActions: [],
+    relatedToIds: [],
+    labels: [],
+  };
+}
+
 export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayload {
   const blocks: ProposalPayload["blocks"] = {};
+  const summary = createProposalSummary();
 
   for (const action of actions) {
     if (READ_ACTIONS.has(action.action)) continue;
@@ -115,10 +183,23 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           notes: optionalStringArg(args, "notes"),
           segmentId: optionalStringArg(args, "segmentId"),
           assignedToUserId: optionalStringArg(args, "assignedToUserId"),
-          enabled: legalName !== null,
+          enabled: enabledForWrite(action, ["legalName"], ["customerId", "id"], [
+            "legalName",
+            "displayName",
+            "taxId",
+            "phone",
+            "email",
+            "address",
+            "city",
+            "department",
+            "notes",
+            "segmentId",
+            "assignedToUserId",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "customerId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "customerId", "id"),
         });
+        if (blocks.customer.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "contacts": {
@@ -132,25 +213,42 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           email: optionalStringArg(args, "email"),
           isPrimary: booleanArg(args, "isPrimary"),
           notes: optionalStringArg(args, "notes"),
-          enabled: customerId !== null && fullName !== null,
+          enabled: enabledForWrite(action, ["customerId", "fullName"], ["contactId", "id"], [
+            "customerId",
+            "fullName",
+            "roleTitle",
+            "phone",
+            "email",
+            "isPrimary",
+            "notes",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "contactId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "contactId", "id"),
         });
+        if (blocks.contact.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "opportunities": {
         const title = requiredStringArg(args, "title");
         const stage = requiredStringArg(args, "stage");
         blocks.opportunity = proposalBlock<OpportunityBlock>({
+          customerId: optionalStringArg(args, "customerId"),
           ...(title ? { title } : {}),
           ...(stage ? { stage } : {}),
           estimatedValue: numberArg(args, "estimatedValue"),
           expectedCloseDate: optionalStringArg(args, "expectedCloseDate"),
           createNew: blockAction === "create",
-          opportunityId: optionalStringArg(args, "opportunityId") ?? optionalStringArg(args, "id"),
-          enabled: title !== null && stage !== null,
+          opportunityId: entityId(args, "opportunityId", "id"),
+          enabled: enabledForWrite(action, ["customerId", "title", "stage"], ["opportunityId", "id"], [
+            "title",
+            "stage",
+            "estimatedValue",
+            "expectedCloseDate",
+            "customerId",
+          ]),
           action: blockAction,
         });
+        if (blocks.opportunity.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "quotes": {
@@ -162,10 +260,18 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           validUntil: optionalStringArg(args, "validUntil"),
           notes: optionalStringArg(args, "notes"),
           items: items.items,
-          enabled: customerId !== null && !items.malformed,
+          enabled: !items.malformed && enabledForWrite(action, ["customerId"], ["quoteId", "id"], [
+            "customerId",
+            "opportunityId",
+            "validUntil",
+            "notes",
+            "items",
+            "status",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "quoteId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "quoteId", "id"),
         });
+        if (blocks.quote.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "orders": {
@@ -177,10 +283,18 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           sourceQuoteId: optionalStringArg(args, "sourceQuoteId"),
           notes: optionalStringArg(args, "notes"),
           items: items.items,
-          enabled: customerId !== null && !items.malformed,
+          enabled: !items.malformed && enabledForWrite(action, ["customerId"], ["orderId", "id"], [
+            "customerId",
+            "opportunityId",
+            "sourceQuoteId",
+            "notes",
+            "items",
+            "status",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "orderId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "orderId", "id"),
         });
+        if (blocks.order.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "products": {
@@ -193,10 +307,18 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           unit: optionalStringArg(args, "unit"),
           presentation: optionalStringArg(args, "presentation"),
           basePrice: numberArg(args, "basePrice"),
-          enabled: sku !== null && name !== null,
+          enabled: enabledForWrite(action, ["sku", "name"], ["productId", "id"], [
+            "sku",
+            "name",
+            "description",
+            "unit",
+            "presentation",
+            "basePrice",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "productId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "productId", "id"),
         });
+        if (blocks.product.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "segments": {
@@ -204,10 +326,11 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
         blocks.segment = proposalBlock<SegmentBlock>({
           ...(name ? { name } : {}),
           description: optionalStringArg(args, "description"),
-          enabled: name !== null,
+          enabled: enabledForWrite(action, ["name"], ["segmentId", "id"], ["name", "description"]),
           action: blockAction,
-          id: optionalStringArg(args, "segmentId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "segmentId", "id"),
         });
+        if (blocks.segment.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "visits": {
@@ -219,10 +342,17 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
           ...(scheduledAt ? { scheduledAt } : {}),
           summary: optionalStringArg(args, "summary"),
           notes: optionalStringArg(args, "notes"),
-          enabled: customerId !== null && scheduledAt !== null,
+          enabled: enabledForWrite(action, ["customerId", "scheduledAt"], ["visitId", "id"], [
+            "customerId",
+            "opportunityId",
+            "scheduledAt",
+            "summary",
+            "notes",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "visitId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "visitId", "id"),
         });
+        if (blocks.visit.enabled) appendSummaryAction(summary, action);
         break;
       }
       case "followups": {
@@ -230,18 +360,34 @@ export function buildProposalFromActions(actions: PlannedAction[]): ProposalPayl
         const type = requiredStringArg(args, "type");
         const dueAt = requiredStringArg(args, "dueAt");
         blocks.followUp = proposalBlock<FollowUpBlock>({
+          customerId: optionalStringArg(args, "customerId"),
           ...(title ? { title } : {}),
           ...(type ? { type } : {}),
           ...(dueAt ? { dueAt } : {}),
           notes: optionalStringArg(args, "notes"),
-          enabled: title !== null && type !== null && dueAt !== null,
+          opportunityId: optionalStringArg(args, "opportunityId"),
+          enabled: enabledForWrite(action, ["customerId", "title", "dueAt", "type"], ["followupId", "id"], [
+            "customerId",
+            "opportunityId",
+            "title",
+            "dueAt",
+            "type",
+            "notes",
+          ]),
           action: blockAction,
-          id: optionalStringArg(args, "followupId") ?? optionalStringArg(args, "id"),
+          id: entityId(args, "followupId", "id"),
         });
+        if (blocks.followUp.enabled) appendSummaryAction(summary, action);
         break;
       }
     }
   }
 
-  return { blocks };
+  return {
+    blocks,
+    summary: {
+      ...summary,
+      relatedToIds: Array.from(new Set(summary.relatedToIds)),
+    },
+  };
 }

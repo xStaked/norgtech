@@ -1,4 +1,7 @@
+import { HumanMessage } from "@langchain/core/messages";
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import type { LauraState } from "../graph/state.js";
+import type { ProposalPayload, ProposalSummary } from "../types.js";
 import type { PlannedAction } from "../platform/types.js";
 
 const {
@@ -17,6 +20,7 @@ const {
   searchVisits,
   searchFollowups,
   getDashboardSummary,
+  createVisit,
 } = vi.hoisted(() => ({
   searchCustomers: vi.fn(),
   getCustomerDetails: vi.fn(),
@@ -33,6 +37,7 @@ const {
   searchVisits: vi.fn(),
   searchFollowups: vi.fn(),
   getDashboardSummary: vi.fn(),
+  createVisit: vi.fn(),
 }));
 
 vi.mock("../tools/nestjs-client.js", () => ({
@@ -51,9 +56,11 @@ vi.mock("../tools/nestjs-client.js", () => ({
   searchVisits,
   searchFollowups,
   getDashboardSummary,
+  createVisit,
 }));
 
 import { buildProposalFromActions } from "../platform/proposal-builder.js";
+import { buildPlatformContext } from "../platform/context.js";
 import { executeReadActions } from "../platform/read-executor.js";
 
 function makeAction(overrides: Partial<PlannedAction>): PlannedAction {
@@ -65,6 +72,27 @@ function makeAction(overrides: Partial<PlannedAction>): PlannedAction {
     requiredFields: [],
     missingFields: [],
     requiresConfirmation: false,
+    ...overrides,
+  };
+}
+
+function makeState(overrides: Partial<LauraState> = {}): LauraState {
+  return {
+    sessionId: "session-1",
+    userId: "user-1",
+    messages: [new HumanMessage("test")],
+    mode: "proposal",
+    customerContext: null,
+    opportunityContext: null,
+    clarificationOptions: null,
+    proposal: null,
+    proposalId: null,
+    proposalStatus: "draft",
+    agendaItems: null,
+    lastError: null,
+    _extractionResult: null,
+    mentionedEntities: {},
+    data: null,
     ...overrides,
   };
 }
@@ -150,7 +178,7 @@ describe("platform actions", () => {
     });
   });
 
-  it("buildProposalFromActions does not enable customer updates with empty legalName overwrites", () => {
+  it("buildProposalFromActions enables customer updates with only the changed fields", () => {
     const proposal = buildProposalFromActions([
       makeAction({
         domain: "customers",
@@ -163,7 +191,7 @@ describe("platform actions", () => {
     ]);
 
     expect(proposal.blocks.customer).toMatchObject({
-      enabled: false,
+      enabled: true,
       action: "update",
       id: "customer-1",
       phone: "+57 300 123 4567",
@@ -171,7 +199,7 @@ describe("platform actions", () => {
     expect(proposal.blocks.customer?.legalName).toBeUndefined();
   });
 
-  it("buildProposalFromActions does not enable follow-up updates with empty title or type overwrites", () => {
+  it("buildProposalFromActions enables follow-up reschedules without requiring title or type overwrites", () => {
     const proposal = buildProposalFromActions([
       makeAction({
         domain: "followups",
@@ -184,13 +212,264 @@ describe("platform actions", () => {
     ]);
 
     expect(proposal.blocks.followUp).toMatchObject({
-      enabled: false,
+      enabled: true,
       action: "update",
       id: "followup-1",
       dueAt: "2026-05-14T10:00:00.000Z",
     });
     expect(proposal.blocks.followUp?.title).toBeUndefined();
     expect(proposal.blocks.followUp?.type).toBeUndefined();
+  });
+
+  it("buildProposalFromActions keeps related impact metadata for visit reschedules with follow-up moves", () => {
+    const proposal = buildProposalFromActions([
+      makeAction({
+        domain: "visits",
+        action: "update",
+        toolName: "update_visit",
+        arguments: {
+          visitId: "visit-1",
+          scheduledAt: "2026-05-14T13:00:00.000Z",
+          summary: "Visita reprogramada",
+        },
+        requiredFields: ["visitId"],
+        requiresConfirmation: true,
+        role: "primary",
+        humanSummary: "Reprogramar visita",
+      }),
+      makeAction({
+        domain: "followups",
+        action: "update",
+        toolName: "update_followup",
+        arguments: {
+          followupId: "followup-1",
+          dueAt: "2026-05-14T17:00:00.000Z",
+          notes: "Mover por cambio de visita",
+        },
+        requiredFields: ["followupId"],
+        requiresConfirmation: true,
+        role: "related",
+        relatedTo: "visit-1",
+        humanSummary: "Mover seguimiento relacionado",
+      }),
+    ]);
+
+    expect(proposal.blocks.visit).toMatchObject({
+      enabled: true,
+      action: "update",
+      id: "visit-1",
+      scheduledAt: "2026-05-14T13:00:00.000Z",
+    });
+    expect(proposal.blocks.followUp).toMatchObject({
+      enabled: true,
+      action: "update",
+      id: "followup-1",
+      dueAt: "2026-05-14T17:00:00.000Z",
+    });
+    expect(proposal.summary).toMatchObject({
+      primaryCount: 1,
+      relatedCount: 1,
+      primaryActions: ["visits.update"],
+      relatedActions: ["followups.update"],
+      relatedToIds: ["visit-1"],
+      labels: ["Reprogramar visita", "Mover seguimiento relacionado"],
+    });
+  });
+
+  it("buildProposalFromActions falls back to action:domain labels when humanSummary is missing", () => {
+    const proposal = buildProposalFromActions([
+      makeAction({
+        domain: "orders",
+        action: "cancel",
+        toolName: "update_order",
+        arguments: {
+          orderId: "order-1",
+          status: "cancelled",
+        },
+        requiredFields: ["orderId"],
+        requiresConfirmation: true,
+      }),
+    ]);
+
+    expect(proposal.summary?.labels).toEqual(["cancel:orders"]);
+  });
+
+  it("buildProposalFromActions excludes disabled writes from summary metadata", () => {
+    const proposal = buildProposalFromActions([
+      makeAction({
+        domain: "visits",
+        action: "update",
+        toolName: "update_visit",
+        arguments: {
+          visitId: "visit-1",
+          scheduledAt: "2026-05-14T13:00:00.000Z",
+        },
+        requiredFields: ["visitId"],
+        requiresConfirmation: true,
+        role: "primary",
+        humanSummary: "Reprogramar visita",
+      }),
+      makeAction({
+        domain: "quotes",
+        action: "create",
+        toolName: "create_quote",
+        arguments: {
+          customerId: "customer-1",
+          items: ["malformed"],
+        },
+        requiredFields: ["customerId"],
+        requiresConfirmation: true,
+        role: "related",
+        relatedTo: "visit-1",
+        humanSummary: "Crear cotizacion derivada",
+      }),
+    ]);
+
+    expect(proposal.blocks.visit?.enabled).toBe(true);
+    expect(proposal.blocks.quote?.enabled).toBe(false);
+    expect(proposal.summary).toMatchObject({
+      primaryCount: 1,
+      relatedCount: 0,
+      primaryActions: ["visits.update"],
+      relatedActions: [],
+      relatedToIds: [],
+      labels: ["Reprogramar visita"],
+    });
+  });
+
+  it("buildProposalFromActions preserves customer context on follow-up creates", () => {
+    const proposal = buildProposalFromActions([
+      makeAction({
+        domain: "followups",
+        action: "create",
+        toolName: "create_followup",
+        arguments: {
+          customerId: "customer-1",
+          title: "Llamar a Acme",
+          dueAt: "2026-05-14T10:00:00.000Z",
+          type: "llamada",
+        },
+        requiredFields: ["customerId", "title", "dueAt", "type"],
+        requiresConfirmation: true,
+      }),
+    ]);
+
+    expect(proposal.blocks.followUp).toMatchObject({
+      enabled: true,
+      action: "create",
+      customerId: "customer-1",
+      title: "Llamar a Acme",
+    });
+  });
+
+  it("buildProposalFromActions maps visit creates into a visit proposal block", () => {
+    const proposal = buildProposalFromActions([
+      makeAction({
+        domain: "visits",
+        action: "create",
+        toolName: "create_visit",
+        arguments: {
+          customerId: "customer-1",
+          scheduledAt: "2026-05-14T13:00:00.000Z",
+          summary: "Visita comercial",
+        },
+        requiredFields: ["customerId", "scheduledAt"],
+        requiresConfirmation: true,
+      }),
+    ]);
+
+    expect(proposal.blocks.visit).toMatchObject({
+      enabled: true,
+      action: "create",
+      customerId: "customer-1",
+      scheduledAt: "2026-05-14T13:00:00.000Z",
+      summary: "Visita comercial",
+    });
+  });
+
+  it("buildPlatformContext carries active proposal summary metadata for nearby impact detection", () => {
+    const proposal = buildProposalFromActions([
+      makeAction({
+        domain: "visits",
+        action: "update",
+        toolName: "update_visit",
+        arguments: {
+          visitId: "visit-1",
+          scheduledAt: "2026-05-14T13:00:00.000Z",
+        },
+        requiredFields: ["visitId"],
+        requiresConfirmation: true,
+        role: "primary",
+      }),
+      makeAction({
+        domain: "followups",
+        action: "update",
+        toolName: "update_followup",
+        arguments: {
+          followupId: "followup-1",
+          dueAt: "2026-05-14T17:00:00.000Z",
+        },
+        requiredFields: ["followupId"],
+        requiresConfirmation: true,
+        role: "related",
+        relatedTo: "visit-1",
+      }),
+    ]);
+
+    const context = buildPlatformContext(makeState({
+      proposal,
+      proposalStatus: "draft",
+      messages: [new HumanMessage("movelo tambien")],
+      mentionedEntities: {
+        followupId: "followup-2",
+        quoteId: "quote-9",
+        orderId: "order-7",
+        visitId: "visit-2",
+      },
+      agendaItems: [
+        { id: "followup-3", type: "follow_up_task", label: "Llamar a Acme" },
+        { id: "visit-3", type: "visit", label: "Visita Acme", scheduledAt: "2026-05-20T10:00:00.000Z" },
+      ],
+    }));
+
+    expect(context.activeProposal).toEqual(proposal);
+    expect(context.activeProposalSummary).toMatchObject({
+      primaryCount: 1,
+      relatedCount: 1,
+      labels: ["update:visits", "update:followups"],
+    });
+    expect(context.relatedEntities).toMatchObject({
+      openFollowUpIds: expect.arrayContaining(["followup-1", "followup-2", "followup-3"]),
+      openQuoteIds: ["quote-9"],
+      openOrderIds: ["order-7"],
+      upcomingVisitIds: expect.arrayContaining(["visit-1", "visit-2", "visit-3"]),
+    });
+  });
+
+  it("buildPlatformContext keeps relationship-only relatedTo ids in relatedEntities", () => {
+    const proposal: ProposalPayload = {
+      blocks: {},
+      summary: {
+        primaryCount: 0,
+        relatedCount: 1,
+        primaryActions: [],
+        relatedActions: ["followups.update"],
+        relatedToIds: ["visit-9", "quote-4", "order-3", "followup-7"],
+        labels: ["Mover seguimiento"],
+      } satisfies ProposalSummary,
+    };
+
+    const context = buildPlatformContext(makeState({
+      proposal,
+      proposalStatus: "draft",
+    }));
+
+    expect(context.relatedEntities).toMatchObject({
+      openFollowUpIds: ["followup-7"],
+      openQuoteIds: ["quote-4"],
+      openOrderIds: ["order-3"],
+      upcomingVisitIds: ["visit-9"],
+    });
   });
 
   it("buildProposalFromActions disables malformed quote items instead of creating enabled malformed items", () => {

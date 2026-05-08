@@ -24,6 +24,7 @@ const {
   mockUpsertOpportunity,
   mockCreateFollowUp,
   mockCreateTask,
+  mockCreateVisit,
   mockCreateLlm,
 } = vi.hoisted(() => ({
   mockSearchCustomers: vi.fn().mockResolvedValue([
@@ -56,6 +57,7 @@ const {
   mockUpsertOpportunity: vi.fn().mockResolvedValue({ id: "opp-created-1" }),
   mockCreateFollowUp: vi.fn().mockResolvedValue({ id: "followup-1" }),
   mockCreateTask: vi.fn().mockResolvedValue({ id: "task-created-1" }),
+  mockCreateVisit: vi.fn().mockResolvedValue({ id: "visit-created-1" }),
   mockCreateLlm: vi.fn().mockReturnValue({
     invoke: vi.fn().mockResolvedValue({
       content: JSON.stringify({
@@ -103,6 +105,7 @@ vi.mock("../tools/nestjs-client.js", () => ({
   upsertOpportunity: mockUpsertOpportunity,
   createFollowUp: mockCreateFollowUp,
   createTask: mockCreateTask,
+  createVisit: mockCreateVisit,
 }));
 
 vi.mock("../config/providers.js", () => ({
@@ -176,31 +179,31 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica consulta de agenda directa como agenda", async () => {
+    it("envía consulta de agenda directa a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("agenda")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica pedido de tareas pendientes como agenda", async () => {
+    it("envía pedido de tareas pendientes a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("pendientes")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 
   describe("Vendedor nuevo — lenguaje informal e inseguro", () => {
-    it("clasifica saludo casual como greeting", async () => {
+    it("envía saludo casual a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("hola!")] });
-      expect((await routerNode(state)).mode).toBe("greeting");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica 'hey' como greeting", async () => {
+    it("envía 'hey' a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("hey")] });
-      expect((await routerNode(state)).mode).toBe("greeting");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica pregunta informal sobre agenda como agenda (contiene 'hoy')", async () => {
+    it("envía pregunta informal sobre agenda a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("que tengo que hacer hoy?")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica reporte vago con 'cliente' como platform", async () => {
@@ -210,9 +213,9 @@ describe("Router — Tipos de usuarios", () => {
   });
 
   describe("Gerente — consultas estratégicas", () => {
-    it("clasifica consulta de visitas programadas como agenda", async () => {
+    it("envía consulta de visitas programadas a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("Qué visitas tenemos programadas esta semana?")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica consulta de tareas del equipo como platform", async () => {
@@ -250,9 +253,9 @@ describe("Router — Tipos de usuarios", () => {
       expect(result.mode).toBe("platform");
     });
 
-    it("clasifica 'che, necesito ver mi agenda' como agenda", async () => {
+    it("envía 'che, necesito ver mi agenda' a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("che, necesito ver mi agenda")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
 
     it("clasifica 'dale' como platform sin aclaración activa", async () => {
@@ -267,9 +270,9 @@ describe("Router — Tipos de usuarios", () => {
       expect((await routerNode(state)).mode).toBe("platform");
     });
 
-    it("clasifica 'hi, necesito ver mi agenda' como agenda (contiene 'agenda')", async () => {
+    it("envía 'hi, necesito ver mi agenda' a platform", async () => {
       const state = makeState({ messages: [new HumanMessage("hi, necesito ver mi agenda")] });
-      expect((await routerNode(state)).mode).toBe("agenda");
+      expect((await routerNode(state)).mode).toBe("platform");
     });
   });
 });
@@ -279,39 +282,39 @@ describe("Router — Tipos de usuarios", () => {
 // ============================================================
 
 describe("Router — Normalización de texto", () => {
-  it("clasifica con acentos: 'qué tengo pendiente?' como agenda", async () => {
+  it("envía con acentos: 'qué tengo pendiente?' a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("¿Qué tengo pendiente?")] });
-    expect((await routerNode(state)).mode).toBe("agenda");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica sin acentos: 'que tengo pendiente' como agenda", async () => {
+  it("envía sin acentos: 'que tengo pendiente' a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("que tengo pendiente")] });
-    expect((await routerNode(state)).mode).toBe("agenda");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica 'buenos días!' con signo de exclamación → greeting", async () => {
+  it("envía 'buenos días!' con signo de exclamación a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("buenos días!")] });
-    expect((await routerNode(state)).mode).toBe("greeting");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica 'buenos días???' con múltiples signos → greeting", async () => {
+  it("envía 'buenos días???' con múltiples signos a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("buenos días???")] });
-    expect((await routerNode(state)).mode).toBe("greeting");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica 'hola.' con punto → greeting", async () => {
+  it("envía 'hola.' con punto a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("hola.")] });
-    expect((await routerNode(state)).mode).toBe("greeting");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica con MAYÚSCULAS: 'BUENOS DÍAS' → greeting", async () => {
+  it("envía con MAYÚSCULAS: 'BUENOS DÍAS' a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("BUENOS DÍAS")] });
-    expect((await routerNode(state)).mode).toBe("greeting");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 
-  it("clasifica 'QUÉ TENGO HOY' en mayúsculas → agenda", async () => {
+  it("envía 'QUÉ TENGO HOY' en mayúsculas a platform", async () => {
     const state = makeState({ messages: [new HumanMessage("QUÉ TENGO HOY?")] });
-    expect((await routerNode(state)).mode).toBe("agenda");
+    expect((await routerNode(state)).mode).toBe("platform");
   });
 });
 
@@ -416,8 +419,11 @@ const discardCases = [
       "editar",
       "no quiero eso",
       "agrega más opciones",
+      "añadele este correo aquavet@gmail.com y este numero 32945819033",
+      "mira el correo aquavet@sbi.com y telefono 3728393827839",
       "mejor poné otra cosa",
       "en vez de eso, poné el monto correcto",
+      "ya te pase los datos",
     ];
 
     for (const input of refineCases) {
@@ -660,17 +666,17 @@ describe("Router — Platform routing for CRM writes", () => {
   });
 });
 
-describe("Router — Existing modes still work", () => {
-  it("should still classify greetings as 'greeting'", async () => {
+describe("Router — Existing proposal and planner entry behavior", () => {
+  it("should route greetings to 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("hola laura")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("greeting");
+    expect(result.mode).toBe("platform");
   });
 
-  it("should still classify agenda queries as 'agenda'", async () => {
+  it("should route agenda queries to 'platform'", async () => {
     const state = makeState({ messages: [new HumanMessage("que tengo pendiente hoy?")] });
     const result = await routerNode(state);
-    expect(result.mode).toBe("agenda");
+    expect(result.mode).toBe("platform");
   });
 
   it("should classify reports about clients as 'platform'", async () => {
@@ -948,6 +954,88 @@ describe("Refine node — refinamiento de propuestas", () => {
     expect(customerBlock).toBeDefined();
     expect(customerBlock?.phone).toBe("3023444442");
     expect(customerBlock?.legalName).toBe("aquavet");
+  });
+
+  it("aplica correo y telefono mencionados directamente al cliente activo sin crear contacto", async () => {
+    const state = makeState({
+      messages: [new HumanMessage("añadele este correo aquavet@gmail.com y este numero 32945819033")],
+      proposal: {
+        blocks: {
+          customer: {
+            legalName: "aquavet",
+            displayName: "aquavet",
+            enabled: true,
+            action: "create",
+          },
+        },
+      },
+      proposalId: "prop-1",
+      proposalStatus: "draft",
+    });
+
+    const result = await refineNode(state);
+
+    expect(result.proposal?.blocks.customer).toMatchObject({
+      legalName: "aquavet",
+      displayName: "aquavet",
+      email: "aquavet@gmail.com",
+      phone: "32945819033",
+    });
+    expect(result.proposal?.blocks.contact).toBeUndefined();
+  });
+
+  it("aplica nombre, correo y telefono al cliente activo cuando el usuario pasa todos los datos juntos", async () => {
+    const state = makeState({
+      messages: [new HumanMessage("se llama aquavet, el correo es aquavet@sbi.com y el numero es 39205938574")],
+      proposal: {
+        blocks: {
+          customer: {
+            legalName: "",
+            displayName: "",
+            enabled: true,
+            action: "create",
+          },
+        },
+      },
+      proposalId: "prop-1",
+      proposalStatus: "draft",
+    });
+
+    const result = await refineNode(state);
+
+    expect(result.proposal?.blocks.customer).toMatchObject({
+      legalName: "aquavet",
+      displayName: "aquavet",
+      email: "aquavet@sbi.com",
+      phone: "39205938574",
+    });
+  });
+
+  it("si el usuario solo recuerda que ya pasó los datos, mantiene la propuesta y lo confirma sin regenerarla", async () => {
+    const state = makeState({
+      messages: [new HumanMessage("ya te pase los datos")],
+      proposal: {
+        blocks: {
+          customer: {
+            legalName: "aquavet",
+            displayName: "aquavet",
+            email: "aquavet@sbi.com",
+            phone: "39205938574",
+            enabled: true,
+            action: "create",
+          },
+        },
+      },
+      proposalId: "prop-1",
+      proposalStatus: "draft",
+    });
+
+    const result = await refineNode(state);
+
+    expect(result.proposal).toEqual(state.proposal);
+    expect(result.proposalStatus).toBe("draft");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect((lastMsg.content as string).toLowerCase()).toContain("ya tom");
   });
 });
 
@@ -1260,7 +1348,8 @@ describe("Platform node — planner orchestration", () => {
     expect(result.lastError).toContain("customerId");
     expect(result.lastError).toContain("dueAt");
     const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
-    expect(lastMsg.content as string).toContain("customerId");
+    expect(lastMsg.content as string).toContain("cliente");
+    expect(lastMsg.content as string).toContain("fecha y hora");
   });
 
   it("retorna greeting para planes de saludo", async () => {
@@ -1278,6 +1367,22 @@ describe("Platform node — planner orchestration", () => {
     expect(lastMsg.content as string).toContain("Hola");
   });
 
+  it("normaliza saludos robóticos del planner a una respuesta natural", async () => {
+    mockPlannerResponse({
+      intent: "greeting",
+      summary: "El usuario está saludando de manera informal.",
+      actions: [],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("dimelo my girl")] }));
+
+    expect(result.mode).toBe("greeting");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("Hola");
+    expect((lastMsg.content as string).toLowerCase()).not.toContain("el usuario");
+  });
+
   it("retorna qa con mensaje de ayuda para planes help", async () => {
     mockPlannerResponse({
       intent: "help",
@@ -1291,6 +1396,47 @@ describe("Platform node — planner orchestration", () => {
     expect(result.mode).toBe("qa");
     const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
     expect(lastMsg.content as string).toContain("Puedo ayudarte");
+  });
+
+  it("normaliza ayudas interrogativas del planner a una explicación directa sobre oportunidades", async () => {
+    mockPlannerResponse({
+      intent: "help",
+      summary: "¿Querés que te explique los pasos para crear una oportunidad en el CRM?",
+      actions: [],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("como creamos una oportunidad?")] }));
+
+    expect(result.mode).toBe("qa");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect((lastMsg.content as string).toLowerCase()).toContain("oportunidad");
+    expect((lastMsg.content as string).toLowerCase()).toContain("cliente");
+    expect((lastMsg.content as string).toLowerCase()).toContain("etapa");
+    expect((lastMsg.content as string)).not.toContain("¿Querés");
+  });
+
+  it("usa el contexto reciente para responder una confirmación corta sobre cotizaciones", async () => {
+    mockPlannerResponse({
+      intent: "help",
+      summary: "¿Querés que te explique los requisitos para crear una cotización en el CRM?",
+      actions: [],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({
+      messages: [
+        new HumanMessage("y para hacer una cotizacion que necesitamos?"),
+        new AIMessage("¿Querés que te explique los requisitos para crear una cotización en el CRM?"),
+        new HumanMessage("que si"),
+      ],
+    }));
+
+    expect(result.mode).toBe("qa");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect((lastMsg.content as string).toLowerCase()).toContain("cotización");
+    expect((lastMsg.content as string).toLowerCase()).toContain("cliente");
+    expect((lastMsg.content as string).toLowerCase()).not.toContain("¿querés");
   });
 
   it("retorna qa explicando acciones no soportadas", async () => {
@@ -1322,6 +1468,37 @@ describe("Platform node — planner orchestration", () => {
     expect(result.mode).toBe("clarification");
     const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
     expect(lastMsg.content as string).toContain("¿De qué cliente hablamos?");
+  });
+
+  it("pide aclaración antes de modificar una visita ambigua", async () => {
+    mockPlannerResponse({
+      intent: "write",
+      summary: "Cancelar visita",
+      actions: [
+        {
+          domain: "visits",
+          action: "cancel",
+          arguments: {
+            reason: "Conflicto de agenda",
+          },
+          confidence: 0.94,
+          role: "primary",
+          humanSummary: "Cancelar visita",
+        },
+      ],
+      ambiguity: ["multiple_visits"],
+      clarificationQuestion: "Encontré más de una visita posible. ¿Cuál visita querés cancelar?",
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("cancela la visita de mañana")] }));
+
+    expect(result.mode).toBe("clarification");
+    expect(result.proposal).toBeUndefined();
+    expect(result.lastError).toContain("multiple_visits");
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect((lastMsg.content as string).toLowerCase()).toContain("visita");
+    expect((lastMsg.content as string).toLowerCase()).toContain("cuál");
   });
 
   it("retorna proposal para planes de escritura validados", async () => {
@@ -1357,6 +1534,80 @@ describe("Platform node — planner orchestration", () => {
     expect(mockCreateFollowUp).not.toHaveBeenCalled();
   });
 
+  it("infiere legalName desde el mensaje cuando el planner omite el nombre del cliente a crear", async () => {
+    mockPlannerResponse({
+      intent: "write",
+      summary: "Crear cliente",
+      actions: [
+        {
+          domain: "customers",
+          action: "create",
+          arguments: {},
+          confidence: 0.91,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("registrame este cliente aquavet")] }));
+
+    expect(result.mode).toBe("proposal");
+    expect(result.proposal?.blocks.customer).toMatchObject({
+      enabled: true,
+      action: "create",
+      legalName: "aquavet",
+      displayName: "aquavet",
+    });
+  });
+
+  it("convierte datos de contacto en actualizacion del cliente activo aunque el planner proponga contacto", async () => {
+    mockPlannerResponse({
+      intent: "write",
+      summary: "Crear contacto",
+      actions: [
+        {
+          domain: "contacts",
+          action: "create",
+          arguments: {
+            customerId: "customer-1",
+            fullName: "aquavet",
+            email: "aquavet@sbi.com",
+            phone: "3728393827839",
+          },
+          confidence: 0.91,
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({
+      messages: [new HumanMessage("mira el correo aquavet@sbi.com y telefono 3728393827839")],
+      proposal: {
+        blocks: {
+          customer: {
+            enabled: true,
+            action: "create",
+            legalName: "aquavet",
+            displayName: "aquavet",
+          },
+        },
+      },
+      proposalStatus: "draft",
+      proposalId: "prop-1",
+    }));
+
+    expect(result.mode).toBe("proposal");
+    expect(result.proposalId).toBe("prop-1");
+    expect(result.proposal?.blocks.customer).toMatchObject({
+      enabled: true,
+      action: "create",
+      legalName: "aquavet",
+      email: "aquavet@sbi.com",
+      phone: "3728393827839",
+    });
+    expect(result.proposal?.blocks.contact).toBeUndefined();
+  });
+
   it("retorna clarification cuando la propuesta no tiene bloques habilitados", async () => {
     mockPlannerResponse({
       intent: "write",
@@ -1378,6 +1629,127 @@ describe("Platform node — planner orchestration", () => {
     expect(result.proposal).toBeUndefined();
     const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
     expect(lastMsg.content as string).toContain("No pude preparar una propuesta valida");
+  });
+
+  it("responde estado de cotización con detalle contextual cuando el planner marca lectura adaptativa", async () => {
+    mockGetQuoteDetails.mockResolvedValueOnce({
+      id: "quote-9",
+      status: "pending_approval",
+      customerName: "Acme Piscicola",
+      opportunityId: "opp-77",
+      riskLabel: "alto",
+      validUntil: "2026-05-30T15:00:00.000Z",
+    });
+    mockPlannerResponse({
+      intent: "read",
+      summary: "Voy a revisar el estado de la cotización y el riesgo comercial asociado.",
+      responseStyle: "adaptive",
+      actions: [
+        {
+          domain: "quotes",
+          action: "detail",
+          arguments: { quoteId: "quote-9" },
+          confidence: 0.93,
+          role: "primary",
+          humanSummary: "Consultar estado de cotización",
+        },
+      ],
+      requiresConfirmation: false,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("cómo va la cotización de Acme?")] }));
+
+    expect(result.mode).toBe("query");
+    expect(result.data).toMatchObject({
+      entityType: "quotes",
+      action: "detail",
+      data: {
+        id: "quote-9",
+        status: "pending_approval",
+        customerName: "Acme Piscicola",
+        riskLabel: "alto",
+        opportunityId: "opp-77",
+      },
+    });
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toBe("Detalle de quotes.");
+  });
+
+  it("genera propuesta multiacción con impacto relacionado y lecturas mixtas", async () => {
+    mockGetOrderDetails.mockResolvedValueOnce({
+      id: "order-4",
+      status: "open",
+      customerName: "Acme Piscicola",
+    });
+    mockPlannerResponse({
+      intent: "mixed",
+      summary: "Reprogramar visita y mover seguimiento relacionado.",
+      responseStyle: "adaptive",
+      actions: [
+        {
+          domain: "visits",
+          action: "update",
+          arguments: {
+            visitId: "visit-1",
+            scheduledAt: "2026-05-20T14:00:00.000Z",
+            summary: "Visita reprogramada con Acme",
+          },
+          confidence: 0.95,
+          role: "primary",
+          humanSummary: "Reprogramar visita",
+        },
+        {
+          domain: "followups",
+          action: "update",
+          arguments: {
+            followupId: "followup-1",
+            dueAt: "2026-05-20T17:00:00.000Z",
+            notes: "Mover seguimiento después de la visita",
+          },
+          confidence: 0.92,
+          role: "related",
+          relatedTo: "visit-1",
+          humanSummary: "Mover seguimiento relacionado",
+        },
+        {
+          domain: "orders",
+          action: "detail",
+          arguments: { orderId: "order-4" },
+          confidence: 0.88,
+          role: "primary",
+          humanSummary: "Consultar pedido asociado",
+        },
+      ],
+      requiresConfirmation: true,
+    });
+
+    const result = await platformNode(makeState({ messages: [new HumanMessage("reprograma la visita del jueves y mové también el seguimiento")] }));
+
+    expect(result.mode).toBe("proposal");
+    expect(result.proposalStatus).toBe("draft");
+    expect(result.proposal?.summary).toMatchObject({
+      primaryCount: 1,
+      relatedCount: 1,
+      primaryActions: ["visits.update"],
+      relatedActions: ["followups.update"],
+      relatedToIds: ["visit-1"],
+      labels: ["Reprogramar visita", "Mover seguimiento relacionado"],
+    });
+    expect(result.proposal?.blocks.visit).toMatchObject({
+      enabled: true,
+      action: "update",
+      id: "visit-1",
+      scheduledAt: "2026-05-20T14:00:00.000Z",
+    });
+    expect(result.proposal?.blocks.followUp).toMatchObject({
+      enabled: true,
+      action: "update",
+      id: "followup-1",
+      dueAt: "2026-05-20T17:00:00.000Z",
+    });
+    const lastMsg = result.messages![result.messages!.length - 1] as AIMessage;
+    expect(lastMsg.content as string).toContain("Preparé una propuesta");
+    expect(lastMsg.content as string).toContain("Tambien detecté informacion relacionada");
   });
 
   it("retorna query y data para planes de lectura validados", async () => {
@@ -1443,7 +1815,7 @@ describe("Flujo completo — simulación de conversación", () => {
 
     const msg1 = new HumanMessage("hola");
     const step1 = await routerNode(makeState({ messages: [msg1], sessionId }));
-    expect(step1.mode).toBe("greeting");
+    expect(step1.mode).toBe("platform");
 
     const msg2 = new HumanMessage("Estuve con Acme Piscicola, quieren el sistema");
     const step2 = await routerNode(makeState({
@@ -1470,10 +1842,10 @@ describe("Flujo completo — simulación de conversación", () => {
     const sessionId = "flow-test-2";
 
     const step1 = await routerNode(makeState({ messages: [new HumanMessage("hola")], sessionId }));
-    expect(step1.mode).toBe("greeting");
+    expect(step1.mode).toBe("platform");
 
     const step2 = await routerNode(makeState({ messages: [new HumanMessage("qué tengo pendiente hoy?")], sessionId }));
-    expect(step2.mode).toBe("agenda");
+    expect(step2.mode).toBe("platform");
 
     const step3 = await routerNode(makeState({ messages: [new HumanMessage("visité a un cliente nuevo")], sessionId }));
     expect(step3.mode).toBe("platform");
@@ -1595,10 +1967,10 @@ describe("E2E conversation flows", () => {
     const sessionId = "e2e-full-2";
 
     const step1 = await routerNode(makeState({ messages: [new HumanMessage("buenos dias")], sessionId }));
-    expect(step1.mode).toBe("greeting");
+    expect(step1.mode).toBe("platform");
 
     const step2 = await routerNode(makeState({ messages: [new HumanMessage("que tengo pendiente")], sessionId }));
-    expect(step2.mode).toBe("agenda");
+    expect(step2.mode).toBe("platform");
 
     const step3 = await routerNode(makeState({ messages: [new HumanMessage("cuantas cotizaciones abiertas hay?")], sessionId }));
     expect(step3.mode).toBe("platform");

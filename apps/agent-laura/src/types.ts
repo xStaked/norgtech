@@ -23,8 +23,9 @@ export interface InteractionBlock {
 }
 
 export interface OpportunityBlock {
-  title: string;
-  stage: string;
+  customerId?: string;
+  title?: string;
+  stage?: string;
   estimatedValue?: number;
   expectedCloseDate?: string;
   createNew: boolean;
@@ -34,10 +35,12 @@ export interface OpportunityBlock {
 }
 
 export interface FollowUpBlock {
-  title: string;
-  type: string;
-  dueAt: string;
+  customerId?: string;
+  title?: string;
+  type?: string;
+  dueAt?: string;
   notes?: string;
+  opportunityId?: string;
   enabled: boolean;
   action?: ProposalBlockAction;
   id?: string;
@@ -47,6 +50,7 @@ export interface TaskBlock {
   title: string;
   dueAt: string;
   notes?: string;
+  customerId?: string;
   enabled: boolean;
   action?: ProposalBlockAction;
 }
@@ -60,7 +64,7 @@ export interface SignalsBlock {
 }
 
 export interface CustomerBlock {
-  legalName: string;
+  legalName?: string;
   displayName?: string;
   taxId?: string;
   phone?: string;
@@ -77,8 +81,8 @@ export interface CustomerBlock {
 }
 
 export interface ContactBlock {
-  customerId: string;
-  fullName: string;
+  customerId?: string;
+  fullName?: string;
   roleTitle?: string;
   phone?: string;
   email?: string;
@@ -122,8 +126,8 @@ export interface OrderBlock {
 }
 
 export interface ProductBlock {
-  sku: string;
-  name: string;
+  sku?: string;
+  name?: string;
   description?: string;
   unit?: string;
   presentation?: string;
@@ -134,7 +138,7 @@ export interface ProductBlock {
 }
 
 export interface SegmentBlock {
-  name: string;
+  name?: string;
   description?: string;
   enabled: boolean;
   action: ProposalBlockAction;
@@ -142,14 +146,23 @@ export interface SegmentBlock {
 }
 
 export interface VisitBlock {
-  customerId: string;
+  customerId?: string;
   opportunityId?: string;
-  scheduledAt: string;
+  scheduledAt?: string;
   summary?: string;
   notes?: string;
   enabled: boolean;
   action: ProposalBlockAction;
   id?: string;
+}
+
+export interface ProposalSummary {
+  primaryCount: number;
+  relatedCount: number;
+  primaryActions: string[];
+  relatedActions: string[];
+  relatedToIds: string[];
+  labels: string[];
 }
 
 export interface ProposalPayload {
@@ -167,6 +180,7 @@ export interface ProposalPayload {
     segment?: SegmentBlock;
     visit?: VisitBlock;
   };
+  summary?: ProposalSummary;
 }
 
 export interface MentionedEntities {
