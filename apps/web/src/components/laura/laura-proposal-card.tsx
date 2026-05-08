@@ -161,6 +161,11 @@ export function LauraProposalCard({
     onChange(mutator(proposal));
   }
 
+  const confirmationErrors = confirmation?.errors ?? [];
+  const hasPartialErrors = confirmationErrors.length > 0;
+  const savedCount = confirmation?.saved.length ?? 0;
+  const discardedCount = confirmation?.discarded.length ?? 0;
+
   return (
     <div
       style={{
@@ -192,7 +197,7 @@ export function LauraProposalCard({
           </span>
         </div>
         <StatusBadge tone={confirmation ? "success" : "info"}>
-          {confirmation ? "Confirmada" : "Borrador"}
+          {confirmation ? (hasPartialErrors ? "Confirmada con alertas" : "Confirmada") : "Borrador"}
         </StatusBadge>
       </div>
 
@@ -203,6 +208,56 @@ export function LauraProposalCard({
           expandedKey={expandedKey}
           onExpand={(key) => setExpandedKey((current) => (current === key ? null : key))}
         />
+
+        {confirmation && (
+          <div
+            style={{
+              display: "grid",
+              gap: 10,
+              padding: "12px 14px",
+              borderRadius: crmTheme.radius.md,
+              border: `1px solid ${hasPartialErrors ? "#e8c07d" : crmTheme.laura.border}`,
+              background: hasPartialErrors ? "#fff8ea" : crmTheme.laura.soft,
+            }}
+          >
+            <div style={{ display: "grid", gap: 4 }}>
+              <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: crmTheme.laura.textPrimary }}>
+                {hasPartialErrors ? "Confirmación parcial" : "Confirmación completada"}
+              </p>
+              <p style={{ margin: 0, fontSize: 12, color: crmTheme.laura.textMuted, lineHeight: 1.45 }}>
+                Laura guardó {savedCount} bloque{savedCount === 1 ? "" : "s"} y descartó {discardedCount} para esta confirmación.
+              </p>
+            </div>
+
+            {hasPartialErrors && (
+              <div style={{ display: "grid", gap: 8 }}>
+                <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: "#9a6700" }}>
+                  Revisá estos impactos no guardados:
+                </p>
+                <div style={{ display: "grid", gap: 6 }}>
+                  {confirmationErrors.map((error) => (
+                    <div
+                      key={`${error.block}-${error.message}`}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: crmTheme.radius.sm,
+                        border: "1px solid #efd7a3",
+                        background: "#fffdf7",
+                      }}
+                    >
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: crmTheme.laura.textPrimary }}>
+                        {error.block}
+                      </p>
+                      <p style={{ margin: "2px 0 0", fontSize: 12, color: crmTheme.laura.textMuted, lineHeight: 1.4 }}>
+                        {error.message}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {expandedKey === "interaction" && proposal.blocks.interaction && (
           <LauraProposalBlock
@@ -351,7 +406,7 @@ export function LauraProposalCard({
             >
               <TextField
                 label="Título del seguimiento"
-                value={proposal.blocks.followUp.title}
+                value={proposal.blocks.followUp.title ?? ""}
                 onChange={(title) =>
                   updateProposal((draft) => ({
                     ...draft,
@@ -371,7 +426,7 @@ export function LauraProposalCard({
                 </span>
                 <select
                   aria-label="Tipo de seguimiento"
-                  value={proposal.blocks.followUp.type}
+                  value={proposal.blocks.followUp.type ?? ""}
                   onChange={(event) =>
                     updateProposal((draft) => ({
                       ...draft,
@@ -566,7 +621,7 @@ export function LauraProposalCard({
             onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, enabled } : undefined } }))}
             toggleLabel="Guardar bloque de cliente"
           >
-            <TextField label="Nombre legal" value={proposal.blocks.customer.legalName} onChange={(legalName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, legalName } : undefined } }))} disabled={confirming} />
+            <TextField label="Nombre legal" value={proposal.blocks.customer.legalName ?? ""} onChange={(legalName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, legalName } : undefined } }))} disabled={confirming} />
             <TextField label="Nombre para mostrar" value={proposal.blocks.customer.displayName ?? ""} onChange={(displayName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, displayName } : undefined } }))} disabled={confirming} />
             <TextField label="Telefono" value={proposal.blocks.customer.phone ?? ""} onChange={(phone) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, phone } : undefined } }))} disabled={confirming} />
             <TextField label="Email" value={proposal.blocks.customer.email ?? ""} onChange={(email) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, email } : undefined } }))} disabled={confirming} />
@@ -583,7 +638,7 @@ export function LauraProposalCard({
             onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, enabled } : undefined } }))}
             toggleLabel="Guardar bloque de contacto"
           >
-            <TextField label="Nombre completo" value={proposal.blocks.contact.fullName} onChange={(fullName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, fullName } : undefined } }))} disabled={confirming} />
+            <TextField label="Nombre completo" value={proposal.blocks.contact.fullName ?? ""} onChange={(fullName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, fullName } : undefined } }))} disabled={confirming} />
             <TextField label="Telefono" value={proposal.blocks.contact.phone ?? ""} onChange={(phone) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, phone } : undefined } }))} disabled={confirming} />
             <TextField label="Email" value={proposal.blocks.contact.email ?? ""} onChange={(email) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, contact: draft.blocks.contact ? { ...draft.blocks.contact, email } : undefined } }))} disabled={confirming} />
           </LauraProposalBlock>
@@ -642,8 +697,8 @@ export function LauraProposalCard({
             onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, enabled } : undefined } }))}
             toggleLabel="Guardar bloque de producto"
           >
-            <TextField label="SKU" value={proposal.blocks.product.sku} onChange={(sku) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, sku } : undefined } }))} disabled={confirming} />
-            <TextField label="Nombre" value={proposal.blocks.product.name} onChange={(name) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, name } : undefined } }))} disabled={confirming} />
+            <TextField label="SKU" value={proposal.blocks.product.sku ?? ""} onChange={(sku) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, sku } : undefined } }))} disabled={confirming} />
+            <TextField label="Nombre" value={proposal.blocks.product.name ?? ""} onChange={(name) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, name } : undefined } }))} disabled={confirming} />
             {proposal.blocks.product.basePrice !== undefined && (
               <TextField label="Precio base" value={String(proposal.blocks.product.basePrice)} onChange={(basePrice) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, product: draft.blocks.product ? { ...draft.blocks.product, basePrice: Number(basePrice) } : undefined } }))} disabled={confirming} />
             )}
@@ -659,7 +714,7 @@ export function LauraProposalCard({
             onToggle={(enabled) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, enabled } : undefined } }))}
             toggleLabel="Guardar bloque de segmento"
           >
-            <TextField label="Nombre" value={proposal.blocks.segment.name} onChange={(name) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, name } : undefined } }))} disabled={confirming} />
+            <TextField label="Nombre" value={proposal.blocks.segment.name ?? ""} onChange={(name) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, name } : undefined } }))} disabled={confirming} />
             <TextAreaField label="Descripcion" value={proposal.blocks.segment.description ?? ""} onChange={(description) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, segment: draft.blocks.segment ? { ...draft.blocks.segment, description } : undefined } }))} disabled={confirming} />
           </LauraProposalBlock>
         )}
@@ -687,12 +742,14 @@ export function LauraProposalCard({
               margin: 0,
               fontSize: 13,
               fontWeight: 600,
-              color: crmTheme.colors.success,
+              color: hasPartialErrors ? "#9a6700" : crmTheme.colors.success,
               textAlign: "center",
               padding: "8px 0",
             }}
           >
-            Laura guardó {confirmation.saved.length} bloques y descartó {confirmation.discarded.length}.
+            {hasPartialErrors
+              ? `Laura confirmó la operación con ${confirmationErrors.length} alerta${confirmationErrors.length === 1 ? "" : "s"} pendiente${confirmationErrors.length === 1 ? "" : "s"}.`
+              : `Laura guardó ${savedCount} bloques y descartó ${discardedCount}.`}
           </p>
         ) : (
           <button

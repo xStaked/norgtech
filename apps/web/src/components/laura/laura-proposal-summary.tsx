@@ -26,6 +26,8 @@ type ProposalActionRow = {
   title: string;
   summary: string;
   enabled: boolean;
+  role: "primary" | "related";
+  relatedTo?: string;
   Icon: LucideIcon;
 };
 
@@ -65,6 +67,21 @@ function itemSummary(items?: Array<{ quantity: number; unitPrice: number }>) {
   })}`;
 }
 
+function summarizeRelationship(relatedTo?: string) {
+  if (!relatedTo) return "Impacto relacionado";
+
+  if (relatedTo.startsWith("visit")) return "Depende de una visita";
+  if (relatedTo.startsWith("followup")) return "Depende de un seguimiento";
+  if (relatedTo.startsWith("quote")) return "Depende de una cotización";
+  if (relatedTo.startsWith("order")) return "Depende de un pedido";
+
+  return `Relacionado con ${relatedTo}`;
+}
+
+function inferRole(block: { relatedTo?: string } | undefined): "primary" | "related" {
+  return block?.relatedTo ? "related" : "primary";
+}
+
 function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
   const { blocks } = proposal;
   const rows: ProposalActionRow[] = [];
@@ -75,6 +92,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: `${actionLabel[blocks.customer.action]} cliente`,
       summary: compactText(blocks.customer.displayName ?? blocks.customer.legalName, "Cliente sin nombre"),
       enabled: blocks.customer.enabled,
+      role: inferRole(blocks.customer),
+      relatedTo: blocks.customer.relatedTo,
       Icon: Building2,
     });
   }
@@ -85,6 +104,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: `${actionLabel[blocks.contact.action]} contacto`,
       summary: compactText(blocks.contact.fullName, "Contacto sin nombre"),
       enabled: blocks.contact.enabled,
+      role: inferRole(blocks.contact),
+      relatedTo: blocks.contact.relatedTo,
       Icon: UserRound,
     });
   }
@@ -95,6 +116,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: blocks.opportunity.createNew ? "Crear oportunidad" : "Actualizar oportunidad",
       summary: compactText(blocks.opportunity.title, blocks.opportunity.stage ? `Etapa ${blocks.opportunity.stage}` : "Oportunidad sin titulo"),
       enabled: blocks.opportunity.enabled,
+      role: inferRole(blocks.opportunity),
+      relatedTo: blocks.opportunity.relatedTo,
       Icon: Target,
     });
   }
@@ -105,6 +128,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: `${actionLabel[blocks.quote.action]} cotización`,
       summary: compactText(blocks.quote.notes, itemSummary(blocks.quote.items)),
       enabled: blocks.quote.enabled,
+      role: inferRole(blocks.quote),
+      relatedTo: blocks.quote.relatedTo,
       Icon: FileText,
     });
   }
@@ -115,6 +140,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: `${actionLabel[blocks.order.action]} pedido`,
       summary: compactText(blocks.order.notes, itemSummary(blocks.order.items)),
       enabled: blocks.order.enabled,
+      role: inferRole(blocks.order),
+      relatedTo: blocks.order.relatedTo,
       Icon: ReceiptText,
     });
   }
@@ -123,8 +150,10 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
     rows.push({
       key: "product",
       title: `${actionLabel[blocks.product.action]} producto`,
-      summary: compactText(blocks.product.name, blocks.product.sku),
+      summary: compactText(blocks.product.name, blocks.product.sku ?? "Producto sin nombre"),
       enabled: blocks.product.enabled,
+      role: inferRole(blocks.product),
+      relatedTo: blocks.product.relatedTo,
       Icon: Package,
     });
   }
@@ -135,6 +164,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: `${actionLabel[blocks.segment.action]} segmento`,
       summary: compactText(blocks.segment.name, "Segmento sin nombre"),
       enabled: blocks.segment.enabled,
+      role: inferRole(blocks.segment),
+      relatedTo: blocks.segment.relatedTo,
       Icon: Tag,
     });
   }
@@ -145,6 +176,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: `${actionLabel[blocks.visit.action]} visita`,
       summary: compactText(blocks.visit.summary, formatDate(blocks.visit.scheduledAt)),
       enabled: blocks.visit.enabled,
+      role: inferRole(blocks.visit),
+      relatedTo: blocks.visit.relatedTo,
       Icon: Handshake,
     });
   }
@@ -155,6 +188,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: "Crear seguimiento",
       summary: `${compactText(blocks.followUp.title, "Seguimiento sin titulo")} - ${formatDate(blocks.followUp.dueAt)}`,
       enabled: blocks.followUp.enabled,
+      role: inferRole(blocks.followUp),
+      relatedTo: blocks.followUp.relatedTo,
       Icon: CalendarClock,
     });
   }
@@ -165,6 +200,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: "Crear tarea interna",
       summary: compactText(blocks.task.title, blocks.task.notes ?? "Tarea sin titulo"),
       enabled: blocks.task.enabled,
+      role: inferRole(blocks.task),
+      relatedTo: blocks.task.relatedTo,
       Icon: ClipboardList,
     });
   }
@@ -175,6 +212,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
       title: "Registrar interacción",
       summary: compactText(blocks.interaction.summary, "Resumen pendiente"),
       enabled: blocks.interaction.enabled,
+      role: inferRole(blocks.interaction),
+      relatedTo: blocks.interaction.relatedTo,
       Icon: MessageSquare,
     });
   }
@@ -191,6 +230,8 @@ function buildActionRows(proposal: LauraProposalPayload): ProposalActionRow[] {
         .filter(Boolean)
         .join(", ") || "Sin señales detectadas",
       enabled: blocks.signals.enabled,
+      role: inferRole(blocks.signals),
+      relatedTo: blocks.signals.relatedTo,
       Icon: Activity,
     });
   }
@@ -208,6 +249,16 @@ export function LauraProposalSummary({
   onExpand: (key: LauraProposalBlockKey) => void;
 }) {
   const rows = buildActionRows(proposal);
+  const enabledRows = rows.filter((row) => row.enabled);
+  const summary = proposal.summary;
+  const primaryRows = enabledRows.filter((row) => row.role === "primary");
+  const relatedRows = enabledRows.filter((row) => row.role === "related");
+  const primaryCount = summary?.primaryCount ?? primaryRows.length;
+  const relatedCount = summary?.relatedCount ?? relatedRows.length;
+  const labels = summary?.labels?.filter(Boolean) ?? [];
+  const heading = relatedCount > 0
+    ? `${primaryCount} acción${primaryCount === 1 ? "" : "es"} principal${primaryCount === 1 ? "" : "es"} y ${relatedCount} impacto${relatedCount === 1 ? "" : "s"} relacionado${relatedCount === 1 ? "" : "s"}`
+    : `Laura preparó ${primaryCount} acción${primaryCount === 1 ? "" : "es"} para confirmar`;
 
   return (
     <section
@@ -226,7 +277,7 @@ export function LauraProposalSummary({
             color: crmTheme.laura.textPrimary,
           }}
         >
-          Laura preparó {rows.length} acciones para confirmar
+          {heading}
         </p>
         <p
           style={{
@@ -236,13 +287,36 @@ export function LauraProposalSummary({
             lineHeight: 1.4,
           }}
         >
-          Revisa o edita una acción antes de confirmar.
+          {labels.length > 0
+            ? labels.slice(0, 3).join(" • ")
+            : "Revisa o edita una acción antes de confirmar."}
         </p>
       </div>
 
+      {relatedCount > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gap: 4,
+            padding: "10px 12px",
+            borderRadius: crmTheme.radius.md,
+            background: crmTheme.laura.soft,
+            border: `1px solid ${crmTheme.laura.border}`,
+          }}
+        >
+          <p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: crmTheme.laura.textPrimary }}>
+            Impacto relacionado
+          </p>
+          <p style={{ margin: 0, fontSize: 12, color: crmTheme.laura.textMuted, lineHeight: 1.45 }}>
+            Laura detectó cambios asociados que conviene revisar junto con la acción principal.
+          </p>
+        </div>
+      )}
+
       <div style={{ display: "grid", gap: 8 }}>
-        {rows.map(({ key, title, summary, enabled, Icon }) => {
+        {rows.map(({ key, title, summary: rowSummary, enabled, role, relatedTo, Icon }) => {
           const expanded = expandedKey === key;
+          const tone = role === "related";
 
           return (
             <button
@@ -254,10 +328,20 @@ export function LauraProposalSummary({
               style={{
                 appearance: "none",
                 width: "100%",
-                minHeight: 56,
-                border: `1px solid ${expanded ? crmTheme.laura.primary : crmTheme.laura.border}`,
+                minHeight: 64,
+                border: `1px solid ${
+                  expanded
+                    ? crmTheme.laura.primary
+                    : tone
+                      ? "#d8c6a4"
+                      : crmTheme.laura.border
+                }`,
                 borderRadius: crmTheme.radius.md,
-                background: expanded ? crmTheme.laura.soft : crmTheme.colors.surface,
+                background: expanded
+                  ? crmTheme.laura.soft
+                  : tone
+                    ? "#fffaf1"
+                    : crmTheme.colors.surface,
                 boxShadow: expanded ? crmTheme.laura.focusRing : "none",
                 padding: "10px 12px",
                 display: "grid",
@@ -276,7 +360,11 @@ export function LauraProposalSummary({
                   width: 32,
                   height: 32,
                   borderRadius: 8,
-                  background: enabled ? crmTheme.laura.gradient : crmTheme.colors.surfaceMuted,
+                  background: enabled
+                    ? tone
+                      ? "linear-gradient(135deg, #c98b2b, #e7a33d)"
+                      : crmTheme.laura.gradient
+                    : crmTheme.colors.surfaceMuted,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -286,6 +374,17 @@ export function LauraProposalSummary({
               </span>
 
               <span style={{ display: "grid", gap: 2, minWidth: 0 }}>
+                <span
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 700,
+                    letterSpacing: "0.02em",
+                    textTransform: "uppercase",
+                    color: tone ? "#9a6700" : crmTheme.laura.textMuted,
+                  }}
+                >
+                  {role === "related" ? "Impacto relacionado" : "Acción principal"}
+                </span>
                 <span
                   style={{
                     fontSize: 13,
@@ -309,8 +408,30 @@ export function LauraProposalSummary({
                     whiteSpace: "nowrap",
                   }}
                 >
-                  {summary}
+                  {rowSummary}
                 </span>
+                {role === "related" && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: "#9a6700",
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {summarizeRelationship(relatedTo)}
+                  </span>
+                )}
+                {!enabled && (
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: crmTheme.laura.textMuted,
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    Desactivada para esta confirmación
+                  </span>
+                )}
               </span>
 
               <ChevronDown

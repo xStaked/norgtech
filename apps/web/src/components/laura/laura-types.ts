@@ -1,5 +1,5 @@
 export type LauraCustomerBlock = {
-  legalName: string;
+  legalName?: string;
   displayName?: string;
   taxId?: string;
   phone?: string;
@@ -13,11 +13,12 @@ export type LauraCustomerBlock = {
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
 
 export type LauraContactBlock = {
-  customerId: string;
-  fullName: string;
+  customerId?: string;
+  fullName?: string;
   roleTitle?: string;
   phone?: string;
   email?: string;
@@ -26,6 +27,7 @@ export type LauraContactBlock = {
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
 
 export type LauraQuoteBlock = {
@@ -37,6 +39,7 @@ export type LauraQuoteBlock = {
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
 
 export type LauraOrderBlock = {
@@ -48,11 +51,12 @@ export type LauraOrderBlock = {
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
 
 export type LauraProductBlock = {
-  sku: string;
-  name: string;
+  sku?: string;
+  name?: string;
   description?: string;
   unit?: string;
   presentation?: string;
@@ -60,26 +64,44 @@ export type LauraProductBlock = {
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
 
 export type LauraSegmentBlock = {
-  name: string;
+  name?: string;
   description?: string;
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
 
 export type LauraVisitBlock = {
-  customerId: string;
+  customerId?: string;
   opportunityId?: string;
-  scheduledAt: string;
+  scheduledAt?: string;
   summary?: string;
   notes?: string;
   enabled: boolean;
   action: "create" | "update" | "delete";
   id?: string;
+  relatedTo?: string;
 };
+
+export interface LauraProposalSummaryMeta {
+  primaryCount: number;
+  relatedCount: number;
+  primaryActions: string[];
+  relatedActions: string[];
+  relatedToIds: string[];
+  labels: string[];
+}
+
+export interface LauraAdaptiveReadMeta {
+  responseStyle: "brief" | "adaptive";
+  riskLabel?: string;
+  relatedEntities?: string[];
+}
 
 export interface LauraProposalPayload {
   blocks: {
@@ -96,28 +118,34 @@ export interface LauraProposalPayload {
     segment?: LauraSegmentBlock;
     visit?: LauraVisitBlock;
   };
+  summary?: LauraProposalSummaryMeta;
 }
 
 export type LauraInteractionBlock = {
   enabled: boolean;
   summary: string;
   rawMessage: string;
+  relatedTo?: string;
 };
 
 export type LauraOpportunityBlock = {
   enabled: boolean;
+  customerId?: string;
   opportunityId?: string;
   createNew?: boolean;
   title?: string;
   stage?: string;
+  relatedTo?: string;
 };
 
 export type LauraFollowUpBlock = {
   enabled: boolean;
-  title: string;
-  dueAt: string;
+  customerId?: string;
+  title?: string;
+  dueAt?: string;
   opportunityId?: string;
-  type: string;
+  type?: string;
+  relatedTo?: string;
 };
 
 export type LauraTaskBlock = {
@@ -125,6 +153,8 @@ export type LauraTaskBlock = {
   title: string;
   dueAt?: string;
   notes?: string;
+  customerId?: string;
+  relatedTo?: string;
 };
 
 export type LauraSignalsBlock = {
@@ -132,6 +162,7 @@ export type LauraSignalsBlock = {
   objections: string[];
   risk?: string;
   buyingIntent?: string;
+  relatedTo?: string;
 };
 
 export interface LauraAgendaItem {
@@ -186,6 +217,7 @@ export type LauraAssistantResponse =
         action: "list" | "detail";
         data: unknown;
         summary: string;
+        meta?: LauraAdaptiveReadMeta;
       };
     }
   | {
@@ -225,6 +257,11 @@ export interface LauraSessionResponse {
   updatedAt: string;
 }
 
+export interface LauraProposalExecutionError {
+  block: string;
+  message: string;
+}
+
 export interface LauraProposalConfirmationResponse {
   proposalId: string;
   status: "confirmed";
@@ -232,6 +269,7 @@ export interface LauraProposalConfirmationResponse {
   saved: string[];
   discarded: string[];
   createdIds: Record<string, string>;
+  errors?: LauraProposalExecutionError[];
 }
 
 export type LauraMessageStatus = "pending" | "confirmed" | "error";
