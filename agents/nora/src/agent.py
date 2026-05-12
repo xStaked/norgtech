@@ -52,6 +52,13 @@ def create_llm() -> ChatOpenAI:
             temperature=settings.llm_temperature,
             streaming=True,
         )
+    elif settings.llm_provider == "openai":
+        return ChatOpenAI(
+            model=settings.llm_model or "gpt-4o-mini",
+            api_key=settings.openai_api_key,
+            temperature=settings.llm_temperature,
+            streaming=True,
+        )
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
 
