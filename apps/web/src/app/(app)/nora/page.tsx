@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-importChat } from "@/components/nora/nora-chat";
+import { NoraChat } from "@/components/nora/nora-chat";
 import { PageHeader } from "@/components/ui/page-header";
 import { canAccess } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth.server";
@@ -33,12 +33,21 @@ export default async function LauraPage({
       ? {
           contextType: contextTypeRaw,
           contextEntityId: contextEntityIdRaw,
-          contextLabel: typeof contextLabelRaw === "string" ? contextLabelRaw : null,
+          contextLabel:
+            typeof contextLabelRaw === "string" ? contextLabelRaw : null,
         }
       : null;
 
   return (
-    <div style={{ display: "grid", gap: 24, maxWidth: 680, margin: "0 auto", width: "100%" }}>
+    <div
+      style={{
+        display: "grid",
+        gap: 24,
+        maxWidth: 680,
+        margin: "0 auto",
+        width: "100%",
+      }}
+    >
       <PageHeader
         eyebrow="Asistente comercial"
         title="Laura"

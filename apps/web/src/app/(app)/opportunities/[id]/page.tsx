@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-importContextLauncher } from "@/components/nora/nora-context-launcher";
+import { NoraContextLauncher } from "@/components/nora/nora-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 
 interface Customer {

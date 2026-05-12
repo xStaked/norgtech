@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { MessageSquare, Target, CalendarClock, ClipboardList, Activity } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
-importToggle } from "./nora-toggle";
+import { NoraToggle } from "./nora-toggle";
 
 const blockIcons: Record<string, typeof MessageSquare> = {
   Interacción: MessageSquare,

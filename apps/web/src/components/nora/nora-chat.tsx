@@ -1,12 +1,7 @@
 "use client";
 
 import { useState } from "react";
-importAgendaCard } from "@/components/nora/nora-agenda-card";
-importChatHeader } from "@/components/nora/nora-chat-header";
-importComposer } from "@/components/nora/nora-composer";
-importMessageList } from "@/components/nora/nora-message-list";
-importDataCard } from "@/components/nora/nora-data-card";
-importProposalCard } from "@/components/nora/nora-proposal-card";
+import {  NoraAgendaCard } from "@/components/nora/nora-agenda-card";
 import { crmTheme } from "@/components/ui/theme";
 import { apiFetchClient } from "@/lib/api.client";
 import { getSessionTokenClient } from "@/lib/auth";
@@ -20,6 +15,11 @@ import type {
   NoraProposalPayload,
   NoraSessionResponse,
 } from "./nora-types";
+import { NoraChatHeader } from "./nora-chat-header";
+import { NoraMessageList } from "./nora-message-list";
+import { NoraDataCard } from "./nora-data-card";
+import { NoraProposalCard } from "./nora-proposal-card";
+import { NoraComposer } from "./nora-composer";
 
 const NEXT_PUBLIC_USE_NORA_STREAMING = process.env.NEXT_PUBLIC_USE_NORA_STREAMING === "true";
 const NORA_API_URL = process.env.NEXT_PUBLIC_NORA_API_URL ?? "http://localhost:8000";

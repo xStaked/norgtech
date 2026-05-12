@@ -4,13 +4,13 @@ import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
 import { StatusBadge } from "@/components/ui/status-badge";
-importProposalBlock } from "./nora-proposal-block";
+import { NoraProposalBlock } from "./nora-proposal-block";
 import {
   NoraProposalSummary,
   type NoraProposalBlockKey,
 } from "./nora-proposal-summary";
 import { ObjectionsInput } from "./nora-objections-input";
-importProposalPayload } from "./nora-types";
+import { NoraProposalPayload } from "./nora-types";
 
 const opportunityStages = [
   { value: "prospecto", label: "Prospecto" },

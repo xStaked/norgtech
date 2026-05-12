@@ -2,7 +2,7 @@
 
 import { MessageSquare } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
-importMessageItem } from "./nora-types";
+import { NoraMessageItem } from "./nora-types";
 
 function formatMessageTime(value: string) {
   const date = new Date(value);

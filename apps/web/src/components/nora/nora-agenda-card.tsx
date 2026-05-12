@@ -2,7 +2,7 @@
 
 import { MapPin, Phone } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
-importAgendaItem } from "./nora-types";
+import { NoraAgendaItem } from "./nora-types";
 
 const priorityLabels: Record<number, { label: string; bg: string; color: string }> = {
   0: { label: "Vencida", bg: "rgba(220,38,38,0.12)", color: "#dc2626" },

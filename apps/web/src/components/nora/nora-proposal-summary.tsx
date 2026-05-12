@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
-importProposalPayload } from "./nora-types";
+import { NoraProposalPayload } from "./nora-types";
 
 export type NoraProposalBlockKey = keyof NoraProposalPayload["blocks"];
 

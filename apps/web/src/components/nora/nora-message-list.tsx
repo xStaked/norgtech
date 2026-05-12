@@ -1,10 +1,10 @@
 "use client";
 
 import { crmTheme } from "@/components/ui/theme";
-importEmptyState } from "./nora-empty-state";
-importEntryCard } from "./nora-entry-card";
-importTypingIndicator } from "./nora-typing-indicator";
-importMessageItem } from "./nora-types";
+import { NoraEmptyState } from "./nora-empty-state";
+import { NoraEntryCard } from "./nora-entry-card";
+import { NoraTypingIndicator } from "./nora-typing-indicator";
+import { NoraMessageItem } from "./nora-types";
 import { useAutoScroll } from "@/hooks/use-auto-scroll";
 
 export function NoraMessageList({
