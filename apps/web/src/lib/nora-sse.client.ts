@@ -1,0 +1,66 @@
+import { getSessionTokenClient } from "./auth";
+
+const NORA_API_URL = process.env.NEXT_PUBLIC_NORA_API_URL ?? "http://localhost:8000";
+
+export function streamNoraMessage(
+  payload: { sessionId?: string; content: string; contextType?: string; contextEntityId?: string },
+  onEvent: (event: unknown) => void,
+  onError: (error: Error) => void,
+  onDone?: () => void,
+): AbortController {
+  const controller = new AbortController();
+  const token = getSessionTokenClient();
+  const params = new URLSearchParams({ content: payload.content });
+  if (payload.sessionId) params.set("sessionId", payload.sessionId);
+  if (payload.contextType) params.set("contextType", payload.contextType);
+  if (payload.contextEntityId) params.set("contextEntityId", payload.contextEntityId);
+
+  const url = `${NORA_API_URL}/messages/stream?${params.toString()}`;
+
+  fetch(url, {
+    headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Laura streaming failed: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error("No readable stream");
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+
+        for (const line of lines) {
+          if (line.startsWith("data:")) {
+            const data = line.slice(5).trim();
+            if (data === "[DONE]") {
+              onDone?.();
+              continue;
+            }
+            try {
+              onEvent(JSON.parse(data));
+            } catch {
+              // Skip non-JSON lines
+            }
+          }
+        }
+      }
+    })
+    .catch((error: unknown) => {
+      if (error instanceof Error && error.name !== "AbortError") {
+        onError(error);
+      }
+    });
+
+  return controller;
+}

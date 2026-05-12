@@ -37,7 +37,7 @@ export class FollowUpTasksService {
     return this.prisma.$transaction((tx) => this.createRecord(user, dto, tx));
   }
 
-  createFromLaura(
+  createFromNora(
     user: AuthUser,
     input: {
       customerId: string;

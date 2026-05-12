@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LauraContextLauncher } from "@/components/laura/laura-context-launcher";
+importContextLauncher } from "@/components/nora/nora-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
@@ -136,7 +136,7 @@ export default async function OpportunityDetailPage({
       </div>
 
       <div style={{ marginTop: "1.25rem" }}>
-        <LauraContextLauncher
+        <NoraContextLauncher
           contextType="opportunity"
           contextEntityId={opportunity.id}
           contextLabel={opportunity.title}

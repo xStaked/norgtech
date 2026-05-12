@@ -49,7 +49,7 @@ export const crmTheme = {
     stack: "20px",
     chat: "12px",
   },
-  laura: {
+  nora: {
     primary: "#6366f1",
     primaryHover: "#4f46e5",
     gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)",

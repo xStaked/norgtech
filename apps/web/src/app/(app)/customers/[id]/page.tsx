@@ -7,7 +7,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { crmTheme } from "@/components/ui/theme";
 import { CustomerHistorySection } from "@/components/customers/customer-history-section";
 import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
-import { LauraContextLauncher } from "@/components/laura/laura-context-launcher";
+importContextLauncher } from "@/components/nora/nora-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -199,7 +199,7 @@ export default async function CustomerDetailPage({
         billingRequestsCount={customer.billingRequests.length}
       />
 
-      <LauraContextLauncher
+      <NoraContextLauncher
         contextType="customer"
         contextEntityId={customer.id}
         contextLabel={customer.displayName}

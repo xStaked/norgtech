@@ -15,7 +15,7 @@ const protectedPaths = [
   "/visits",
   "/follow-ups",
   "/agenda",
-  "/laura",
+  "/nora",
 ];
 
 export function middleware(request: NextRequest) {
@@ -51,7 +51,7 @@ export const config = {
     "/visits/:path*",
     "/follow-ups/:path*",
     "/agenda/:path*",
-    "/laura",
-    "/laura/:path*",
+    "/nora",
+    "/nora/:path*",
   ],
 };

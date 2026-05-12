@@ -31,7 +31,7 @@ export class OpportunitiesService {
     return this.prisma.$transaction((tx) => this.updateStageRecord(user, opportunityId, dto.stage, tx));
   }
 
-  createFromLaura(
+  createFromNora(
     user: AuthUser,
     input: Pick<CreateOpportunityDto, "customerId" | "title" | "stage">,
     client?: Prisma.TransactionClient,
@@ -43,7 +43,7 @@ export class OpportunitiesService {
     return this.create(user, input);
   }
 
-  updateStageFromLaura(
+  updateStageFromNora(
     user: AuthUser,
     opportunityId: string,
     stage: OpportunityStage,

@@ -10,10 +10,10 @@ import {
   type UserRole,
 } from "@/components/ui/theme";
 
-const lauraNavItem: NavItem = {
-  href: "/laura",
-  label: "Laura",
-  shortLabel: "LA",
+const noraNavItem: NavItem = {
+  href: "/nora",
+  label: "Nora",
+  shortLabel: "NA",
   description: "Asistente conversacional para reportes y confirmaciones",
   group: "Operacion",
   requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"],
@@ -109,16 +109,16 @@ function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
 }
 
 function filterNavGroups(role: UserRole) {
-  const groupsWithLaura = navGroups.map((group) =>
+  const groupsWithNora = navGroups.map((group) =>
     group.label === "Operacion"
       ? {
           ...group,
-          items: [...group.items, lauraNavItem],
+          items: [...group.items, noraNavItem],
         }
       : group,
   );
 
-  return groupsWithLaura
+  return groupsWithNora
     .map((group) => ({
       ...group,
       items: group.items.filter((item) => item.requiredRoles.includes(role)),
