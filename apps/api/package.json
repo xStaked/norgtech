@@ -6,7 +6,8 @@
     "build": "nest build -p tsconfig.build.json",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
-    "test": "jest --watchman=false --config ./test/jest-e2e.json"
+    "test": "jest --watchman=false --config ./test/jest-e2e.json",
+    "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.1.6",
