@@ -22,6 +22,7 @@ import type {
 } from "./laura-types";
 
 const NEXT_PUBLIC_USE_LAURO_STREAMING = process.env.NEXT_PUBLIC_USE_LAURO_STREAMING === "true";
+const LAURA_API_URL = process.env.NEXT_PUBLIC_LAURA_API_URL ?? "http://localhost:8000";
 
 interface LauraChatInitialContext {
   contextType: "customer" | "opportunity";
@@ -80,7 +81,7 @@ async function fetchLauraStream(
   const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
   const token = getSessionTokenClient();
 
-  const response = await fetch(`${apiUrl}/laura/messages/stream`, {
+  const response = await fetch(`${LAURA_API_URL}/messages/stream`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -161,7 +162,7 @@ export function LauraChat({
 
   async function loadSession(nextSessionId: string) {
     const response = await apiFetchClient(
-      `/laura/sessions/${nextSessionId}?includeMessages=true&includeProposals=true`,
+      `${LAURA_API_URL}/sessions/${nextSessionId}?includeMessages=true&includeProposals=true`,
     );
 
     if (!response.ok) {
@@ -196,7 +197,7 @@ export function LauraChat({
           sessionId ? undefined : initialContext?.contextEntityId,
         );
       } else {
-        const response = await apiFetchClient("/laura/messages", {
+        const response = await apiFetchClient(`${LAURA_API_URL}/messages`, {
           method: "POST",
           body: JSON.stringify({
             sessionId: sessionId ?? undefined,
@@ -286,7 +287,7 @@ export function LauraChat({
 
     try {
       const response = await apiFetchClient(
-        `/laura/proposals/${draftProposal.proposalId}/confirm`,
+        `${LAURA_API_URL}/proposals/${draftProposal.proposalId}/confirm`,
         {
           method: "POST",
           body: JSON.stringify({
