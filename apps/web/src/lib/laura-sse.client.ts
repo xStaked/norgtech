@@ -1,11 +1,12 @@
 import { getSessionTokenClient } from "./auth";
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+const LAURA_API_URL = process.env.NEXT_PUBLIC_LAURA_API_URL ?? "http://localhost:8000";
 
 export function streamLauraMessage(
   payload: { sessionId?: string; content: string; contextType?: string; contextEntityId?: string },
   onEvent: (event: unknown) => void,
   onError: (error: Error) => void,
+  onDone?: () => void,
 ): AbortController {
   const controller = new AbortController();
   const token = getSessionTokenClient();
@@ -14,7 +15,7 @@ export function streamLauraMessage(
   if (payload.contextType) params.set("contextType", payload.contextType);
   if (payload.contextEntityId) params.set("contextEntityId", payload.contextEntityId);
 
-  const url = `${API_URL}/laura/messages/stream?${params.toString()}`;
+  const url = `${LAURA_API_URL}/messages/stream?${params.toString()}`;
 
   fetch(url, {
     headers: { Authorization: `Bearer ${token}`, Accept: "text/event-stream" },
@@ -42,6 +43,10 @@ export function streamLauraMessage(
         for (const line of lines) {
           if (line.startsWith("data:")) {
             const data = line.slice(5).trim();
+            if (data === "[DONE]") {
+              onDone?.();
+              continue;
+            }
             try {
               onEvent(JSON.parse(data));
             } catch {
