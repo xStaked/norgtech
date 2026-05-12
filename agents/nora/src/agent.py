@@ -36,9 +36,16 @@ class NoraState(TypedDict):
 # ── LLM ────────────────────────────────────────────────
 def create_llm() -> ChatOpenAI:
     """Crea el LLM configurado según settings."""
-    if settings.llm_provider == "deepseek":
+    if settings.llm_provider == "openai":
         return ChatOpenAI(
-            model=settings.llm_model,
+            model=settings.openai_model,
+            api_key=settings.openai_api_key,
+            temperature=settings.llm_temperature,
+            streaming=True,
+        )
+    elif settings.llm_provider == "deepseek":
+        return ChatOpenAI(
+            model=settings.deepseek_model,
             api_key=settings.deepseek_api_key,
             base_url=settings.deepseek_base_url,
             temperature=settings.llm_temperature,
@@ -46,7 +53,7 @@ def create_llm() -> ChatOpenAI:
         )
     elif settings.llm_provider == "qwen":
         return ChatOpenAI(
-            model=settings.llm_model,
+            model=settings.qwen_model,
             api_key=settings.qwen_api_key,
             base_url=settings.qwen_base_url,
             temperature=settings.llm_temperature,
