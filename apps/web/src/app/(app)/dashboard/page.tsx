@@ -2,8 +2,10 @@ import Link from "next/link";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { KpiCard } from "@/components/dashboard/kpi-card";
+import { ShiftKpiCard } from "@/components/dashboard/shift-kpi-card";
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { QueueList } from "@/components/dashboard/queue-list";
+import { MorphSurface } from "@/components/ui/morph-surface";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -89,9 +91,36 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* KPI Grid */}
+      {/* Featured KPIs with ShiftCard (Cult UI) */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {kpiConfig.map((card, index) => (
+        <ShiftKpiCard
+          label="Valor pipeline"
+          value={formatKpiValue(summary, "pipelineValue")}
+          tone="success"
+          detail="Valor total estimado de oportunidades en todas las etapas del pipeline comercial."
+        />
+        <ShiftKpiCard
+          label="Ventas cerradas 30d"
+          value={formatKpiValue(summary, "closedDeals")}
+          tone="success"
+          detail="Número de oportunidades cerradas como ganadas en los últimos 30 días."
+        />
+        <ShiftKpiCard
+          label="Seguimientos pendientes"
+          value={formatKpiValue(summary, "pendingFollowUps")}
+          tone="danger"
+          detail="Tareas y seguimientos que requieren acción inmediata del equipo comercial."
+        />
+      </div>
+
+      {/* Secondary KPIs */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const, icon: <FileText className="h-5 w-5" /> },
+          { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const, icon: <Package className="h-5 w-5" /> },
+          { key: "weeklyVisits" as const, label: "Visitas esta semana", tone: "info" as const, icon: <CalendarDays className="h-5 w-5" /> },
+          { key: "pendingFollowUps" as const, label: "Seguimientos pendientes", tone: "danger" as const, icon: <AlertCircle className="h-5 w-5" /> },
+        ].map((card, index) => (
           <KpiCard
             key={card.key}
             label={card.label}
@@ -195,6 +224,25 @@ export default async function DashboardPage() {
               </Link>
             </CardContent>
           </Card>
+
+          {/* MorphSurface Feedback Widget (Cult UI) */}
+          <div className="flex justify-center">
+            <MorphSurface
+              triggerLabel="Enviar feedback"
+              placeholder="¿Qué podemos mejorar? Tu opinión nos ayuda a crecer..."
+              onSubmit={async (formData) => {
+                const message = formData.get("message") as string;
+                console.log("Feedback submitted:", message);
+                // Aquí se conectaría con un endpoint de feedback
+              }}
+              onSuccess={() => {
+                console.log("Feedback enviado exitosamente");
+              }}
+              className="w-full"
+              collapsedWidth={340}
+              expandedWidth={340}
+            />
+          </div>
         </div>
       </div>
     </div>
