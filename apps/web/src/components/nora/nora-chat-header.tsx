@@ -1,7 +1,6 @@
 "use client";
 
 import { MessageSquare } from "lucide-react";
-import { crmTheme } from "@/components/ui/theme";
 
 interface NoraChatHeaderProps {
   hasActiveSession: boolean;
@@ -9,78 +8,25 @@ interface NoraChatHeaderProps {
 
 export function NoraChatHeader({ hasActiveSession }: NoraChatHeaderProps) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 12,
-        padding: "14px 16px",
-        background: crmTheme.colors.surface,
-        borderRadius: crmTheme.radius.lg,
-        border: `1px solid ${crmTheme.colors.border}`,
-        boxShadow: crmTheme.shadow.card,
-        marginBottom: 16,
-      }}
-    >
-      <div
-        style={{
-          width: 32,
-          height: 32,
-          borderRadius: 10,
-          background: crmTheme.nora.gradient,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <MessageSquare size={18} color="#ffffff" strokeWidth={2} />
+    <div className="mb-4 flex items-center gap-3 rounded-xl border border-border/50 bg-card/80 p-3.5 shadow-sm backdrop-blur-sm">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-nora-500 to-nora-600">
+        <MessageSquare className="h-4 w-4 text-white" strokeWidth={2.5} />
       </div>
-      <div style={{ display: "grid", gap: 2 }}>
-        <span style={{ fontSize: 15, fontWeight: 700, color: crmTheme.nora.textPrimary }}>
-          Laura
-        </span>
-        <span style={{ fontSize: 12, color: crmTheme.nora.textMuted }}>
-          Asistente comercial
-        </span>
+      <div className="min-w-0">
+        <div className="text-[15px] font-bold text-foreground">Nora</div>
+        <div className="text-xs text-muted-foreground">Asistente comercial</div>
       </div>
-      <div style={{ marginLeft: "auto" }}>
+      <div className="ml-auto">
         {hasActiveSession ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              fontWeight: 600,
-              color: crmTheme.colors.success,
-              background: "rgba(31, 143, 95, 0.08)",
-              padding: "4px 10px",
-              borderRadius: crmTheme.radius.pill,
-            }}
-          >
-            <span
-              className="laura-session-dot"
-              style={{
-                width: 6,
-                height: 6,
-                borderRadius: "50%",
-                background: crmTheme.colors.success,
-                animation: "noraPulse 2s infinite",
-              }}
-            />
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-semibold text-emerald-400">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            </span>
             Sesión activa
           </span>
         ) : (
-          <span
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              color: crmTheme.colors.textMuted,
-              background: crmTheme.colors.surfaceMuted,
-              padding: "4px 10px",
-              borderRadius: crmTheme.radius.pill,
-            }}
-          >
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs font-semibold text-muted-foreground">
             Sin sesión
           </span>
         )}

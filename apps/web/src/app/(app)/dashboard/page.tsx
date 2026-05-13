@@ -1,14 +1,25 @@
 import Link from "next/link";
-import { ButtonLink } from "@/components/ui/button-link";
-import { EmptyState } from "@/components/ui/empty-state";
-import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
-import { StatCard } from "@/components/ui/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { KpiCard } from "@/components/dashboard/kpi-card";
+import { ActivityList } from "@/components/dashboard/activity-list";
+import { QueueList } from "@/components/dashboard/queue-list";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
+import {
+  FileText,
+  TrendingUp,
+  DollarSign,
+  Package,
+  CalendarDays,
+  AlertCircle,
+  ArrowRight,
+  Zap,
+  Users,
+  Briefcase,
+  ShoppingCart,
+} from "lucide-react";
 
 interface ActivityItem {
   id: string;
@@ -41,20 +52,20 @@ interface DashboardSummary {
   recentActivity: ActivityItem[];
 }
 
-const kpiCards = [
-  { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const },
-  { key: "pipelineValue" as const, label: "Valor pipeline", tone: "success" as const },
-  { key: "closedDeals" as const, label: "Ventas cerradas 30d", tone: "success" as const },
-  { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const },
-  { key: "weeklyVisits" as const, label: "Visitas esta semana", tone: "info" as const },
-  { key: "pendingFollowUps" as const, label: "Seguimientos pendientes", tone: "danger" as const },
+const kpiConfig = [
+  { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const, icon: <FileText className="h-5 w-5" /> },
+  { key: "pipelineValue" as const, label: "Valor pipeline", tone: "success" as const, icon: <TrendingUp className="h-5 w-5" /> },
+  { key: "closedDeals" as const, label: "Ventas cerradas 30d", tone: "success" as const, icon: <DollarSign className="h-5 w-5" /> },
+  { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const, icon: <Package className="h-5 w-5" /> },
+  { key: "weeklyVisits" as const, label: "Visitas esta semana", tone: "info" as const, icon: <CalendarDays className="h-5 w-5" /> },
+  { key: "pendingFollowUps" as const, label: "Seguimientos pendientes", tone: "danger" as const, icon: <AlertCircle className="h-5 w-5" /> },
 ] as const;
 
 const quickLinks = [
-  { href: "/customers/new", label: "Nuevo cliente" },
-  { href: "/opportunities/new", label: "Nueva oportunidad" },
-  { href: "/quotes/new", label: "Nueva cotización" },
-  { href: "/orders/new", label: "Nuevo pedido" },
+  { href: "/customers/new", label: "Nuevo cliente", icon: <Users className="h-4 w-4" /> },
+  { href: "/opportunities/new", label: "Nueva oportunidad", icon: <Briefcase className="h-4 w-4" /> },
+  { href: "/quotes/new", label: "Nueva cotización", icon: <FileText className="h-4 w-4" /> },
+  { href: "/orders/new", label: "Nuevo pedido", icon: <ShoppingCart className="h-4 w-4" /> },
 ] as const;
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
@@ -63,44 +74,11 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-const timeFormatter = new Intl.DateTimeFormat("es-CO", {
-  hour: "2-digit",
-  minute: "2-digit",
-});
-
-function formatDateTime(value: string) {
-  return dateTimeFormatter.format(new Date(value));
-}
-
-function formatKpiValue(
-  summary: DashboardSummary | null,
-  key: (typeof kpiCards)[number]["key"],
-) {
+function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig)[number]["key"]) {
   const value = summary?.[key] ?? 0;
-
-  if (key === "pipelineValue") {
-    return currencyFormatter.format(Math.round(value));
-  }
-
+  if (key === "pipelineValue") return currencyFormatter.format(Math.round(value));
   return value.toLocaleString("es-CO");
 }
-
-const queueStatusTone: Record<string, CrmStatusTone> = {
-  programada: "warning",
-  pendiente: "warning",
-  vencida: "danger",
-  completada: "success",
-  no_realizada: "neutral",
-  cancelada: "danger",
-};
 
 export default async function DashboardPage() {
   const user = await getCurrentUser();
@@ -110,159 +88,113 @@ export default async function DashboardPage() {
   const summary: DashboardSummary | null = response.ok ? await response.json() : null;
 
   return (
-    <div style={{ display: "grid", gap: 24 }}>
-      <PageHeader
-        eyebrow="Centro operativo"
-        title="Dashboard operativo"
-        description="Resumen comercial, actividad reciente y próximas acciones del equipo."
-        actions={
-          <>
-            {canCreate(userRole, "opportunity") && <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>}
-            <ButtonLink href="/agenda" variant="secondary">
-              Ver agenda
-            </ButtonLink>
-          </>
-        }
-      />
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 16,
-        }}
-      >
-        {kpiCards.map((card) => (
-          <StatCard
+    <div className="space-y-6">
+      {/* KPI Grid */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {kpiConfig.map((card, index) => (
+          <KpiCard
             key={card.key}
             label={card.label}
-            tone={card.tone}
             value={formatKpiValue(summary, card.key)}
+            tone={card.tone}
+            icon={card.icon}
+            index={index}
           />
         ))}
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "minmax(0, 1.5fr) minmax(320px, 1fr)",
-          gap: 16,
-        }}
-      >
-        <SectionCard
-          title="Actividad reciente"
-          description="Eventos relevantes generados por cotizaciones, pedidos, visitas y seguimiento."
-        >
-          {summary && summary.recentActivity.length > 0 ? (
-            <div style={{ display: "grid", gap: 12 }}>
-              {summary.recentActivity.map((item) => (
-                <div
-                  key={item.id}
-                  style={{
-                    display: "grid",
-                    gap: 6,
-                    padding: "14px 16px",
-                    borderRadius: 14,
-                    background: "rgba(238, 243, 248, 0.62)",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: 12,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <strong>{item.entityType} · {item.action}</strong>
-                    <span style={{ color: "#6b7c93", fontSize: 13 }}>
-                      {formatDateTime(item.createdAt)}
-                    </span>
-                  </div>
-                  <span style={{ color: "#52637a", fontSize: 14 }}>
-                    Usuario: {item.actorName}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="Sin actividad reciente"
-              description="Cuando el equipo registre movimientos comerciales, aparecerán aquí."
-            />
-          )}
-        </SectionCard>
-
-        <div style={{ display: "grid", gap: 16 }}>
-          <SectionCard
-            title="Mi cola de trabajo"
-            description="Próximas visitas y tareas asignadas a ti, ordenadas por urgencia."
-            actions={
-              <ButtonLink href="/agenda" variant="ghost" size="sm">
-                Ver agenda
-              </ButtonLink>
-            }
-          >
-            {summary && summary.myQueue.length > 0 ? (
-              <div style={{ display: "grid", gap: 12 }}>
-                {summary.myQueue.map((item) => {
-                  const href = item.kind === "visit" ? `/visits/${item.id}` : `/follow-ups/${item.id}`;
-                  return (
-                    <Link
-                      key={`${item.kind}-${item.id}`}
-                      href={href}
-                      style={{
-                        display: "grid",
-                        gap: 8,
-                        padding: "12px 14px",
-                        borderRadius: crmTheme.radius.md,
-                        background: crmTheme.colors.surfaceMuted,
-                        border: `1px solid ${crmTheme.colors.border}`,
-                        textDecoration: "none",
-                        color: "inherit",
-                      }}
-                    >
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", color: item.kind === "visit" ? crmTheme.colors.info : crmTheme.colors.textMuted }}>
-                          {item.kind === "visit" ? "Visita" : "Seguimiento"}
-                        </span>
-                        <StatusBadge tone={queueStatusTone[item.status] ?? "neutral"}>
-                          {item.status.replace(/_/g, " ")}
-                        </StatusBadge>
-                      </div>
-                      <strong style={{ fontSize: 14, color: crmTheme.colors.text }}>{item.title}</strong>
-                      <span style={{ fontSize: 13, color: crmTheme.colors.textMuted }}>{item.customerName}</span>
-                      <span style={{ fontSize: 12, color: crmTheme.colors.textSubtle }}>{timeFormatter.format(new Date(item.scheduledAt))}</span>
-                    </Link>
-                  );
-                })}
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-[1.5fr_380px]">
+        {/* Activity Section */}
+        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-lg font-bold">Actividad reciente</CardTitle>
+                <CardDescription>
+                  Eventos relevantes generados por cotizaciones, pedidos, visitas y seguimiento.
+                </CardDescription>
               </div>
-            ) : (
-              <EmptyState
-                title="Sin elementos asignados"
-                description="No tienes visitas ni tareas pendientes asignadas a tu usuario."
-              />
-            )}
-          </SectionCard>
-
-          <SectionCard
-            title="Acciones rápidas"
-            description="Atajos a los flujos que más se repiten en la operación diaria."
-          >
-            <div style={{ display: "grid", gap: 10 }}>
-              {quickLinks.map((link) => (
-                <ButtonLink
-                  key={link.href}
-                  href={link.href}
-                  variant="secondary"
-                  style={{ justifyContent: "space-between" }}
-                  trailing={<span aria-hidden="true">›</span>}
-                >
-                  {link.label}
-                </ButtonLink>
-              ))}
+              <Zap className="h-5 w-5 text-muted-foreground/40" />
             </div>
-          </SectionCard>
+          </CardHeader>
+          <CardContent>
+            <ActivityList items={summary?.recentActivity ?? []} />
+          </CardContent>
+        </Card>
+
+        {/* Right Column */}
+        <div className="space-y-6">
+          {/* Queue */}
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg font-bold">Mi cola de trabajo</CardTitle>
+                  <CardDescription>
+                    Próximas visitas y tareas asignadas a ti.
+                  </CardDescription>
+                </div>
+                <Link
+                  href="/agenda"
+                  className="inline-flex h-7 items-center justify-center gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
+                >
+                  Ver agenda
+                </Link>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <QueueList items={summary?.myQueue ?? []} />
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-lg font-bold">Acciones rápidas</CardTitle>
+              <CardDescription>Atajos a los flujos más frecuentes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {quickLinks.map((link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="group inline-flex h-8 w-full items-center justify-between gap-1.5 rounded-lg border border-transparent bg-secondary px-2.5 text-sm font-medium whitespace-nowrap text-secondary-foreground transition-all hover:bg-secondary/80"
+                  >
+                    <span className="flex items-center gap-2">
+                      {link.icon}
+                      {link.label}
+                    </span>
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Nora Widget */}
+          <Card className="relative overflow-hidden border-nora-500/20 bg-gradient-to-br from-nora-500/10 to-nora-600/5">
+            <CardContent className="p-5">
+              <div className="flex items-start justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-nora-300">Nora</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Tu asistente comercial inteligente.
+                  </p>
+                </div>
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-nora-500/20">
+                  <Zap className="h-4 w-4 text-nora-400" />
+                </div>
+              </div>
+              <Link
+                href="/nora"
+                className="mt-4 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-transparent bg-nora-600 px-2.5 text-sm font-medium whitespace-nowrap text-white transition-all hover:bg-nora-500"
+              >
+                Abrir conversación
+              </Link>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

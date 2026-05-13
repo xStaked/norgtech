@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {  NoraAgendaCard } from "@/components/nora/nora-agenda-card";
-import { crmTheme } from "@/components/ui/theme";
+
 import { apiFetchClient } from "@/lib/api.client";
 import { getSessionTokenClient } from "@/lib/auth";
 import type {
@@ -332,169 +332,102 @@ export function NoraChat({
   }
 
   return (
-    <div style={{ display: "grid", gap: 0 }}>
+    <div className="relative flex h-[calc(100vh-120px)] flex-col">
       <NoraChatHeader hasActiveSession={!!sessionId} />
 
-      {/* Context Banner */}
-      {initialContext && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 14px",
-            borderRadius: crmTheme.radius.md,
-            background: crmTheme.nora.soft,
-            border: `1px solid ${crmTheme.nora.border}`,
-            color: crmTheme.nora.primary,
-            fontSize: 13,
-            lineHeight: 1.5,
-            marginBottom: 16,
-          }}
-        >
-          Contexto: <strong>{initialContext.contextLabel ?? initialContext.contextEntityId}</strong>
-        </div>
-      )}
-
-      {/* Notice Banner */}
-      {notice && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 14px",
-            borderRadius: crmTheme.radius.md,
-            background: "rgba(34,197,94,0.08)",
-            borderLeft: `3px solid #22c55e`,
-            color: crmTheme.colors.success,
-            fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 16,
-          }}
-        >
-          {notice}
-        </div>
-      )}
-
-      {/* Error Banner */}
-      {error && (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            padding: "10px 14px",
-            borderRadius: crmTheme.radius.md,
-            background: "rgba(220,38,38,0.08)",
-            borderLeft: `3px solid #dc2626`,
-            color: crmTheme.colors.danger,
-            fontSize: 13,
-            fontWeight: 600,
-            marginBottom: 16,
-          }}
-        >
-          {error}
-        </div>
-      )}
-
-      {/* Message List */}
-      <NoraMessageList
-        messages={messages}
-        busy={busy}
-        onRetry={handleRetry}
-        onSend={handleSend}
-      />
-
-      {/* Clarification Options */}
-      {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
-        <div style={{ display: "grid", gap: 8, padding: "8px 0" }}>
-          <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: crmTheme.nora.textSubtle }}>
-            Selecciona una opción:
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {clarificationOptions.options.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                disabled={busy}
-                onClick={() => handleSend(option.label)}
-                style={{
-                  appearance: "none",
-                  border: `1px solid ${crmTheme.nora.border}`,
-                  borderRadius: crmTheme.radius.md,
-                  padding: "8px 16px",
-                  background: crmTheme.nora.soft,
-                  color: crmTheme.nora.primary,
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: busy ? "not-allowed" : "pointer",
-                  transition: "all 0.15s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!busy) {
-                    e.currentTarget.style.background = crmTheme.colors.surface;
-                    e.currentTarget.style.borderColor = crmTheme.nora.primary;
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = crmTheme.nora.soft;
-                  e.currentTarget.style.borderColor = crmTheme.nora.border;
-                }}
-              >
-                {option.label}
-              </button>
-            ))}
+      {/* Scrollable Messages Area */}
+      <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1 pb-4">
+        {/* Context Banner */}
+        {initialContext && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-nora-500/20 bg-nora-500/10 px-3.5 py-2.5 text-sm text-nora-300">
+            <span className="text-muted-foreground">Contexto:</span>
+            <strong>{initialContext.contextLabel ?? initialContext.contextEntityId}</strong>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Agenda */}
-      {agendaItems.length > 0 && (
-        <div style={{ padding: "8px 0" }}>
-          <NoraAgendaCard items={agendaItems} />
-        </div>
-      )}
+        {/* Notice Banner */}
+        {notice && (
+          <div className="mb-4 rounded-lg border-l-3 border-emerald-500 bg-emerald-500/10 px-3.5 py-2.5 text-sm font-semibold text-emerald-400">
+            {notice}
+          </div>
+        )}
 
-      {/* Query Data Card */}
-      {queryData && (
-        <div style={{ padding: "8px 0" }}>
-          <NoraDataCard
-            entityType={queryData.entityType}
-            action={queryData.action}
-            data={queryData.data}
-            summary={queryData.summary}
-          />
-        </div>
-      )}
+        {/* Error Banner */}
+        {error && (
+          <div className="mb-4 rounded-lg border-l-3 border-destructive bg-destructive/10 px-3.5 py-2.5 text-sm font-semibold text-destructive">
+            {error}
+          </div>
+        )}
 
-      {/* Inline Proposal Card */}
-      {draftProposal && (
-        <div style={{ padding: "12px 0" }}>
-          <NoraProposalCard
-            proposal={draftProposal.proposal}
-            confirming={confirming}
-            confirmation={confirmation}
-            onChange={(proposal) =>
-              setDraftProposal((current) =>
-                current ? { ...current, proposal } : current
-              )
-            }
-            onConfirm={handleConfirm}
-          />
-        </div>
-      )}
+        {/* Message List */}
+        <NoraMessageList
+          messages={messages}
+          busy={busy}
+          onRetry={handleRetry}
+          onSend={handleSend}
+        />
+
+        {/* Clarification Options */}
+        {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
+          <div className="space-y-2 py-2">
+            <p className="text-sm font-semibold text-muted-foreground">
+              Selecciona una opción:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {clarificationOptions.options.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => handleSend(option.label)}
+                  className="rounded-lg border border-nora-500/30 bg-nora-500/10 px-4 py-2 text-sm font-semibold text-nora-300 transition-all hover:border-nora-500/60 hover:bg-nora-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Agenda */}
+        {agendaItems.length > 0 && (
+          <div className="py-2">
+            <NoraAgendaCard items={agendaItems} />
+          </div>
+        )}
+
+        {/* Query Data Card */}
+        {queryData && (
+          <div className="py-2">
+            <NoraDataCard
+              entityType={queryData.entityType}
+              action={queryData.action}
+              data={queryData.data}
+              summary={queryData.summary}
+            />
+          </div>
+        )}
+
+        {/* Inline Proposal Card */}
+        {draftProposal && (
+          <div className="py-3">
+            <NoraProposalCard
+              proposal={draftProposal.proposal}
+              confirming={confirming}
+              confirmation={confirmation}
+              onChange={(proposal) =>
+                setDraftProposal((current) =>
+                  current ? { ...current, proposal } : current
+                )
+              }
+              onConfirm={handleConfirm}
+            />
+          </div>
+        )}
+      </div>
 
       {/* Sticky Composer */}
-      <div
-        style={{
-          position: "sticky",
-          bottom: 0,
-          paddingTop: 16,
-          paddingBottom: 8,
-          background: "linear-gradient(180deg, rgba(248,246,255,0) 0%, rgba(248,246,255,0.94) 18%, rgba(248,246,255,1) 100%)",
-        }}
-      >
+      <div className="shrink-0 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-2">
         <NoraComposer disabled={busy || confirming} onSubmit={handleSend} />
       </div>
     </div>

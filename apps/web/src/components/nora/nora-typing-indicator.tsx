@@ -1,49 +1,34 @@
 "use client";
 
-import { crmTheme } from "@/components/ui/theme";
+import { motion } from "framer-motion";
 
 export function NoraTypingIndicator() {
   return (
     <div
       role="status"
       aria-live="polite"
-      aria-label="Laura está procesando tu mensaje"
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 10,
-        padding: "10px 14px",
-        borderRadius: "20px 20px 20px 6px",
-        background: crmTheme.colors.surface,
-        border: `1px solid ${crmTheme.nora.border}`,
-        color: crmTheme.colors.textMuted,
-        fontSize: 13,
-        fontWeight: 600,
-        width: "fit-content",
-      }}
+      aria-label="Nora está procesando tu mensaje"
+      className="inline-flex items-center gap-2.5 rounded-[20px_20px_20px_6px] border border-border/40 bg-card/80 px-3.5 py-2.5 text-sm font-semibold text-muted-foreground backdrop-blur-sm"
     >
-      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-        {[0, 0.2, 0.4].map((delay) => (
-          <span
-            key={delay}
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: "50%",
-              background: crmTheme.nora.primary,
-              animation: "noraBounce 1.4s infinite",
-              animationDelay: `${delay}s`,
+      <div className="flex items-center gap-1">
+        {[0, 1, 2].map((i) => (
+          <motion.span
+            key={i}
+            className="h-1.5 w-1.5 rounded-full bg-nora-500"
+            animate={{
+              y: [0, -5, 0],
+              opacity: [0.5, 1, 0.5],
+            }}
+            transition={{
+              duration: 1.2,
+              repeat: Infinity,
+              delay: i * 0.15,
+              ease: "easeInOut",
             }}
           />
         ))}
       </div>
-      Laura está procesando
-      <style>{`
-        @keyframes noraBounce {
-          0%, 80%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-6px); }
-        }
-      `}</style>
+      <span className="text-xs">Nora está pensando...</span>
     </div>
   );
 }

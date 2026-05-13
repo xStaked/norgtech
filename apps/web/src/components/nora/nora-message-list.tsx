@@ -1,6 +1,5 @@
 "use client";
 
-import { crmTheme } from "@/components/ui/theme";
 import { NoraEmptyState } from "./nora-empty-state";
 import { NoraEntryCard } from "./nora-entry-card";
 import { NoraTypingIndicator } from "./nora-typing-indicator";
@@ -25,7 +24,7 @@ export function NoraMessageList({
   }
 
   return (
-    <div style={{ display: "grid", gap: crmTheme.spacing.chat }}>
+    <div className="space-y-3">
       {messages.map((message) => (
         <NoraEntryCard key={message.id} message={message} />
       ))}
@@ -36,21 +35,7 @@ export function NoraMessageList({
             key={`retry-${message.id}`}
             type="button"
             onClick={() => onRetry!(message.content)}
-            style={{
-              appearance: "none",
-              border: `1px solid ${crmTheme.colors.danger}`,
-              borderRadius: crmTheme.radius.md,
-              padding: "6px 14px",
-              background: "rgba(186, 58, 47, 0.08)",
-              color: crmTheme.colors.danger,
-              fontSize: 12,
-              fontWeight: 700,
-              cursor: "pointer",
-              width: "fit-content",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-            }}
+            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive transition-colors hover:bg-destructive/20"
           >
             Reintentar
           </button>

@@ -1,17 +1,13 @@
 "use client";
 
+import { motion } from "framer-motion";
 import { MessageSquare } from "lucide-react";
-import { crmTheme } from "@/components/ui/theme";
 import { NoraMessageItem } from "./nora-types";
 import { NoraMarkdownContent } from "./nora-markdown-content";
 
 function formatMessageTime(value: string) {
   const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Ahora";
-  }
-
+  if (Number.isNaN(date.getTime())) return "Ahora";
   return new Intl.DateTimeFormat("es-CO", {
     hour: "2-digit",
     minute: "2-digit",
@@ -20,7 +16,7 @@ function formatMessageTime(value: string) {
 
 const roleCopy: Record<NoraMessageItem["role"], string> = {
   user: "Tú",
-  assistant: "Laura",
+  assistant: "Nora",
   system: "Sistema",
 };
 
@@ -28,85 +24,42 @@ export function NoraEntryCard({ message }: { message: NoraMessageItem }) {
   const isUser = message.role === "user";
 
   return (
-    <article
-      style={{
-        display: "grid",
-        justifyItems: isUser ? "end" : "start",
-      }}
+    <motion.article
+      initial={{ opacity: 0, y: 10, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.3, ease: "easeOut" }}
+      className={isUser ? "flex justify-end" : "flex justify-start"}
     >
       <div
-        style={{
-          width: "min(100%, 680px)",
-          display: "grid",
-          gap: 6,
-          padding: "12px 16px",
-          borderRadius: 16,
-          border: `1px solid ${isUser ? "transparent" : crmTheme.nora.border}`,
-          background: isUser
-            ? "linear-gradient(135deg, #10233f 0%, #1f4875 100%)"
-            : crmTheme.colors.surface,
-          boxShadow: isUser ? "none" : crmTheme.nora.shadow,
-          color: isUser ? "#ffffff" : crmTheme.nora.textPrimary,
-        }}
+        className={`w-full max-w-[680px] space-y-1.5 rounded-2xl px-4 py-3 ${
+          isUser
+            ? "rounded-br-md bg-gradient-to-br from-primary to-primary/90 text-primary-foreground"
+            : "rounded-bl-md border border-border/40 bg-card/80 shadow-sm backdrop-blur-sm"
+        }`}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 12,
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
             {!isUser && (
-              <div
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 6,
-                  background: crmTheme.nora.gradient,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <MessageSquare size={12} color="#ffffff" strokeWidth={2.5} />
+              <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-gradient-to-br from-nora-500 to-nora-600">
+                <MessageSquare className="h-3 w-3 text-white" strokeWidth={2.5} />
               </div>
             )}
-            <strong style={{ fontSize: 12, fontWeight: 700 }}>{roleCopy[message.role]}</strong>
+            <span className="text-xs font-bold">{roleCopy[message.role]}</span>
           </div>
-          <span
-            style={{
-              fontSize: 11,
-              color: isUser ? "rgba(255, 255, 255, 0.6)" : crmTheme.nora.textSubtle,
-            }}
-          >
+          <span className={`text-[11px] ${isUser ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
             {formatMessageTime(message.createdAt)}
           </span>
         </div>
         {isUser ? (
-          <p
-            style={{
-              margin: 0,
-              fontSize: 15,
-              lineHeight: 1.6,
-              whiteSpace: "pre-wrap",
-            }}
-          >
+          <p className="m-0 whitespace-pre-wrap text-[15px] leading-relaxed">
             {message.content}
           </p>
         ) : (
-          <div
-            style={{
-              fontSize: 15,
-              lineHeight: 1.6,
-            }}
-          >
+          <div className="text-[15px] leading-relaxed">
             <NoraMarkdownContent content={message.content} />
           </div>
         )}
       </div>
-    </article>
+    </motion.article>
   );
 }
