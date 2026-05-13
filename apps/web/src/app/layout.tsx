@@ -10,16 +10,26 @@ export const metadata: Metadata = {
   description: "Base operativa compartida del CRM comercial de Norgtech.",
 };
 
+const themeScript = `
+  (function() {
+    try {
+      var theme = localStorage.getItem("theme");
+      if (!theme || theme === "system") {
+        theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+      }
+      document.documentElement.classList.toggle("dark", theme === "dark");
+    } catch (e) {}
+  })();
+`;
+
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="es" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
       <body className="min-w-[320px] antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="dark"
-          enableSystem
-          disableTransitionOnChange={false}
-        >
+        <ThemeProvider defaultTheme="dark">
           <TooltipProvider delay={200}>
             {children}
             <Toaster
