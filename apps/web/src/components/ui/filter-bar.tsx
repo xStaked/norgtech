@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { crmTheme } from "@/components/ui/theme";
 
 interface FilterBarProps {
   children?: ReactNode;
@@ -7,34 +6,15 @@ interface FilterBarProps {
   actions?: ReactNode;
 }
 
-export function FilterBar({
-  children,
-  summary,
-  actions,
-}: FilterBarProps) {
+export function FilterBar({ children, summary, actions }: FilterBarProps) {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
-        alignItems: "center",
-        gap: 12,
-        padding: "14px 16px",
-        borderRadius: crmTheme.radius.lg,
-        background: crmTheme.colors.surface,
-        border: `1px solid ${crmTheme.colors.border}`,
-        boxShadow: crmTheme.shadow.card,
-      }}
-    >
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border/40 bg-card/60 p-3.5 shadow-sm backdrop-blur-sm">
+      <div className="flex flex-wrap items-center gap-2.5">
         {children}
       </div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+      <div className="flex flex-wrap items-center gap-2.5">
         {summary ? (
-          <div style={{ fontSize: 13, color: crmTheme.colors.textMuted }}>
-            {summary}
-          </div>
+          <div className="text-sm text-muted-foreground">{summary}</div>
         ) : null}
         {actions}
       </div>

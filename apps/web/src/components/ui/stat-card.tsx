@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { SectionCard } from "@/components/ui/section-card";
-import { crmTheme, type CrmStatusTone, getStatusToneColor } from "@/components/ui/theme";
+import { cn } from "@/lib/utils";
+
+export type CrmStatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 interface StatCardProps {
   label: ReactNode;
@@ -9,45 +11,25 @@ interface StatCardProps {
   meta?: ReactNode;
 }
 
-export function StatCard({
-  label,
-  value,
-  tone = "info",
-  meta,
-}: StatCardProps) {
-  const accent = getStatusToneColor(tone);
+const toneBarClasses: Record<CrmStatusTone, string> = {
+  neutral: "bg-muted-foreground",
+  info: "bg-blue-500",
+  success: "bg-emerald-500",
+  warning: "bg-amber-500",
+  danger: "bg-red-500",
+};
 
+export function StatCard({ label, value, tone = "info", meta }: StatCardProps) {
   return (
-    <SectionCard
-      padding="18px"
-      style={{
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
+    <SectionCard className="relative overflow-hidden" style={{ padding: "18px" }}>
       <div
         aria-hidden="true"
-        style={{
-          position: "absolute",
-          inset: "0 auto auto 0",
-          width: 64,
-          height: 4,
-          background: accent,
-          borderBottomRightRadius: 999,
-        }}
+        className={cn("absolute top-0 left-0 h-1 w-16 rounded-br-full", toneBarClasses[tone])}
       />
-      <div style={{ display: "grid", gap: 10 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: crmTheme.colors.textMuted }}>
-          {label}
-        </div>
-        <div style={{ fontSize: 32, lineHeight: 1, fontWeight: 800, color: crmTheme.colors.text }}>
-          {value}
-        </div>
-        {meta ? (
-          <div style={{ fontSize: 13, color: crmTheme.colors.textSubtle }}>
-            {meta}
-          </div>
-        ) : null}
+      <div className="space-y-2.5">
+        <div className="text-[13px] font-bold text-muted-foreground">{label}</div>
+        <div className="text-[32px] font-extrabold leading-none text-foreground">{value}</div>
+        {meta ? <div className="text-[13px] text-muted-foreground">{meta}</div> : null}
       </div>
     </SectionCard>
   );

@@ -1,5 +1,4 @@
 import type { CSSProperties, ReactNode } from "react";
-import { crmTheme } from "@/components/ui/theme";
 
 interface SectionCardProps {
   children: ReactNode;
@@ -7,6 +6,7 @@ interface SectionCardProps {
   description?: ReactNode;
   actions?: ReactNode;
   padding?: string | number;
+  className?: string;
   style?: CSSProperties;
 }
 
@@ -16,45 +16,31 @@ export function SectionCard({
   description,
   actions,
   padding = "20px",
+  className,
   style,
 }: SectionCardProps) {
   return (
     <section
-      style={{
-        background: crmTheme.colors.surface,
-        border: `1px solid ${crmTheme.colors.border}`,
-        borderRadius: crmTheme.radius.lg,
-        boxShadow: crmTheme.shadow.card,
-        padding,
-        ...style,
-      }}
+      className={`rounded-xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-sm ${className ?? ""}`}
+      style={{ padding, ...style }}
     >
       {title || description || actions ? (
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: 16,
-            marginBottom: 16,
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div className="min-w-0">
             {title ? (
-              <h2 style={{ margin: 0, fontSize: 18, lineHeight: 1.15, color: crmTheme.colors.text }}>
+              <h2 className="m-0 text-lg font-bold leading-tight text-foreground">
                 {title}
               </h2>
             ) : null}
             {description ? (
-              <div style={{ marginTop: 6, fontSize: 14, color: crmTheme.colors.textMuted }}>
+              <div className="mt-1.5 text-sm text-muted-foreground">
                 {description}
               </div>
             ) : null}
           </div>
-          {actions ? <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>{actions}</div> : null}
+          {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
         </div>
       ) : null}
-
       {children}
     </section>
   );

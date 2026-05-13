@@ -1,44 +1,36 @@
 import type { ReactNode } from "react";
-import { crmTheme, type CrmStatusTone, getStatusToneColor } from "@/components/ui/theme";
+import { cn } from "@/lib/utils";
+
+export type CrmStatusTone = "neutral" | "info" | "success" | "warning" | "danger";
 
 interface StatusBadgeProps {
   children: ReactNode;
   tone?: CrmStatusTone;
 }
 
-export function StatusBadge({
-  children,
-  tone = "neutral",
-}: StatusBadgeProps) {
-  const color = getStatusToneColor(tone);
-  const background =
-    tone === "neutral" ? crmTheme.colors.surfaceEmphasis : `${color}1a`;
+const toneClasses: Record<CrmStatusTone, string> = {
+  neutral: "bg-muted text-muted-foreground",
+  info: "bg-blue-500/15 text-blue-400",
+  success: "bg-emerald-500/15 text-emerald-400",
+  warning: "bg-amber-500/15 text-amber-400",
+  danger: "bg-red-500/15 text-red-400",
+};
 
+const dotClasses: Record<CrmStatusTone, string> = {
+  neutral: "bg-muted-foreground",
+  info: "bg-blue-400",
+  success: "bg-emerald-400",
+  warning: "bg-amber-400",
+  danger: "bg-red-400",
+};
+
+export function StatusBadge({ children, tone = "neutral" }: StatusBadgeProps) {
   return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 8,
-        minHeight: 28,
-        padding: "4px 10px",
-        borderRadius: crmTheme.radius.pill,
-        background,
-        color,
-        fontSize: 12,
-        fontWeight: 700,
-        letterSpacing: "0.02em",
-      }}
-    >
-      <span
-        aria-hidden="true"
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 999,
-          background: color,
-        }}
-      />
+    <span className={cn(
+      "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold tracking-wide",
+      toneClasses[tone]
+    )}>
+      <span aria-hidden="true" className={cn("h-2 w-2 rounded-full", dotClasses[tone])} />
       {children}
     </span>
   );

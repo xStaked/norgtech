@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { crmTheme } from "@/components/ui/theme";
 
 interface PageHeaderProps {
   title: ReactNode;
@@ -15,54 +14,23 @@ export function PageHeader({
   actions,
 }: PageHeaderProps) {
   return (
-    <div
-      style={{
-        display: "flex",
-        flexWrap: "wrap",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        gap: 18,
-      }}
-    >
-      <div style={{ minWidth: 0, maxWidth: 820 }}>
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="min-w-0 max-w-[820px]">
         {eyebrow ? (
-          <div
-            style={{
-              marginBottom: 8,
-              fontSize: 12,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: crmTheme.colors.info,
-            }}
-          >
+          <div className="mb-2 text-xs font-bold uppercase tracking-widest text-primary">
             {eyebrow}
           </div>
         ) : null}
-        <h1
-          style={{
-            margin: 0,
-            fontSize: 32,
-            lineHeight: 1.02,
-            letterSpacing: "-0.04em",
-            color: crmTheme.colors.text,
-          }}
-        >
+        <h1 className="m-0 text-3xl font-extrabold tracking-tight text-foreground md:text-[32px]">
           {title}
         </h1>
         {description ? (
-          <p
-            style={{
-              margin: "10px 0 0",
-              fontSize: 15,
-              color: crmTheme.colors.textMuted,
-            }}
-          >
+          <p className="mt-2 text-[15px] text-muted-foreground">
             {description}
           </p>
         ) : null}
       </div>
-      {actions ? <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap gap-2.5">{actions}</div> : null}
     </div>
   );
 }

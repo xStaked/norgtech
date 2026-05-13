@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { crmTheme } from "@/components/ui/theme";
 
 interface EmptyStateProps {
   title: ReactNode;
@@ -7,46 +6,19 @@ interface EmptyStateProps {
   action?: ReactNode;
 }
 
-export function EmptyState({
-  title,
-  description,
-  action,
-}: EmptyStateProps) {
+export function EmptyState({ title, description, action }: EmptyStateProps) {
   return (
-    <div
-      style={{
-        display: "grid",
-        justifyItems: "start",
-        gap: 10,
-        padding: "28px",
-        borderRadius: crmTheme.radius.lg,
-        border: `1px dashed ${crmTheme.colors.borderStrong}`,
-        background: crmTheme.colors.surfaceMuted,
-      }}
-    >
-      <div
-        style={{
-          width: 48,
-          height: 48,
-          display: "grid",
-          placeItems: "center",
-          borderRadius: 16,
-          background: crmTheme.colors.primarySoft,
-          color: crmTheme.colors.primary,
-          fontWeight: 800,
-        }}
-      >
+    <div className="grid justify-items-start gap-2.5 rounded-xl border border-dashed border-border/60 bg-muted/30 p-7">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-xl font-extrabold text-primary">
         0
       </div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: crmTheme.colors.text }}>
-        {title}
-      </div>
+      <div className="text-lg font-bold text-foreground">{title}</div>
       {description ? (
-        <div style={{ maxWidth: 540, fontSize: 14, color: crmTheme.colors.textMuted }}>
+        <div className="max-w-[540px] text-sm text-muted-foreground">
           {description}
         </div>
       ) : null}
-      {action ? <div style={{ marginTop: 4 }}>{action}</div> : null}
+      {action ? <div className="mt-1">{action}</div> : null}
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { CSSProperties, ReactNode } from "react";
-import { crmTheme, type ButtonLinkVariant } from "@/components/ui/theme";
+import { cn } from "@/lib/utils";
+
+export type ButtonLinkVariant = "primary" | "secondary" | "ghost" | "danger";
 
 interface ButtonLinkProps {
   href: string;
@@ -10,44 +12,20 @@ interface ButtonLinkProps {
   leading?: ReactNode;
   trailing?: ReactNode;
   fullWidth?: boolean;
+  className?: string;
   style?: CSSProperties;
 }
 
-const variantStyles: Record<ButtonLinkVariant, CSSProperties> = {
-  primary: {
-    background: crmTheme.colors.primary,
-    color: "#ffffff",
-    border: `1px solid ${crmTheme.colors.primary}`,
-    boxShadow: crmTheme.shadow.card,
-  },
-  secondary: {
-    background: crmTheme.colors.surface,
-    color: crmTheme.colors.text,
-    border: `1px solid ${crmTheme.colors.borderStrong}`,
-  },
-  ghost: {
-    background: "transparent",
-    color: crmTheme.colors.primary,
-    border: `1px solid ${crmTheme.colors.primarySoft}`,
-  },
-  danger: {
-    background: "#fff4f2",
-    color: crmTheme.colors.danger,
-    border: "1px solid rgba(186, 58, 47, 0.2)",
-  },
+const variantClasses: Record<ButtonLinkVariant, string> = {
+  primary: "bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/90",
+  secondary: "bg-secondary text-secondary-foreground border-border hover:bg-secondary/80",
+  ghost: "bg-transparent text-primary border-primary/20 hover:bg-primary/5",
+  danger: "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20",
 };
 
-const sizeStyles = {
-  sm: {
-    minHeight: 38,
-    padding: "9px 12px",
-    fontSize: 13,
-  },
-  md: {
-    minHeight: 44,
-    padding: "11px 16px",
-    fontSize: 14,
-  },
+const sizeClasses = {
+  sm: "min-h-[38px] px-3 py-2 text-[13px]",
+  md: "min-h-11 px-4 py-2.5 text-sm",
 } as const;
 
 export function ButtonLink({
@@ -58,25 +36,20 @@ export function ButtonLink({
   leading,
   trailing,
   fullWidth = false,
+  className,
   style,
 }: ButtonLinkProps) {
   return (
     <Link
       href={href}
-      style={{
-        display: "inline-flex",
-        width: fullWidth ? "100%" : undefined,
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        borderRadius: crmTheme.radius.md,
-        fontWeight: 700,
-        lineHeight: 1,
-        transition: crmTheme.motion.fast,
-        ...sizeStyles[size],
-        ...variantStyles[variant],
-        ...style,
-      }}
+      className={cn(
+        "inline-flex items-center justify-center gap-2 rounded-lg border font-bold leading-none transition-colors",
+        sizeClasses[size],
+        variantClasses[variant],
+        fullWidth && "w-full",
+        className
+      )}
+      style={style}
     >
       {leading}
       <span>{children}</span>
