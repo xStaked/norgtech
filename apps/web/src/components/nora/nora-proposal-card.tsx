@@ -10,7 +10,7 @@ import {
   type NoraProposalBlockKey,
 } from "./nora-proposal-summary";
 import { ObjectionsInput } from "./nora-objections-input";
-import { NoraProposalPayload } from "./nora-types";
+import { NoraProposalPayload, NoraProposalConfirmationResponse } from "./nora-types";
 
 const opportunityStages = [
   { value: "prospecto", label: "Prospecto" },

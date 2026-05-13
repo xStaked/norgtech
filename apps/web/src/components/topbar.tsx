@@ -4,11 +4,18 @@ import { startTransition } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   buildBreadcrumbs,
-  crmTheme,
   findActiveNavItem,
   getPageTitle,
-} from "@/components/ui/theme";
+} from "@/lib/theme";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { LogOut, User, ChevronRight } from "lucide-react";
 
 function formatToday() {
   return new Intl.DateTimeFormat("es-CO", {
@@ -36,136 +43,60 @@ export function Topbar() {
   }
 
   return (
-    <>
-      <header className="crm-topbar">
-        <div style={{ minWidth: 0, display: "grid", gap: 8 }}>
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 8,
-              color: crmTheme.colors.textSubtle,
-              fontSize: 12,
-              letterSpacing: "0.03em",
-              textTransform: "uppercase",
-            }}
-          >
-            {breadcrumbs.map((crumb, index) => (
-              <span key={`${crumb.label}-${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
-                {index > 0 ? <span aria-hidden="true">/</span> : null}
-                <span>{crumb.label}</span>
-              </span>
-            ))}
+    <header className="sticky top-0 z-20 border-b border-border/40 bg-background/70 backdrop-blur-xl">
+      <div className="flex flex-col gap-4 px-4 py-4 md:px-6">
+        {/* Breadcrumbs */}
+        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+          {breadcrumbs.map((crumb, index) => (
+            <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
+              {index > 0 && <ChevronRight className="h-3 w-3 opacity-50" />}
+              <span>{crumb.label}</span>
+            </span>
+          ))}
+        </nav>
+
+        {/* Title row */}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-extrabold tracking-tight text-foreground md:text-[28px]">
+              {title}
+            </h1>
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span>{activeItem?.description ?? "Operacion diaria del CRM"}</span>
+              <span className="text-border">•</span>
+              <span className="capitalize">{formatToday()}</span>
+            </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <h1
-                style={{
-                  margin: 0,
-                  fontSize: 28,
-                  lineHeight: 1.05,
-                  fontWeight: 800,
-                  letterSpacing: "-0.03em",
-                  color: crmTheme.colors.text,
-                }}
-              >
-                {title}
-              </h1>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 10,
-                  marginTop: 6,
-                  color: crmTheme.colors.textMuted,
-                  fontSize: 14,
-                }}
-              >
-                <span>{activeItem?.description ?? "Operacion diaria del CRM"}</span>
-                <span aria-hidden="true">•</span>
-                <span style={{ textTransform: "capitalize" }}>{formatToday()}</span>
-              </div>
-            </div>
+          {/* Actions */}
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
 
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                flexWrap: "wrap",
-                justifyContent: "flex-end",
-              }}
-            >
-              <div
-                style={{
-                  display: "grid",
-                  gap: 2,
-                  padding: "10px 14px",
-                  borderRadius: crmTheme.radius.lg,
-                  background: crmTheme.colors.surface,
-                  border: `1px solid ${crmTheme.colors.border}`,
-                  boxShadow: crmTheme.shadow.card,
-                }}
-              >
-                <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: crmTheme.colors.textSubtle }}>
+            <div className="hidden items-center gap-2 rounded-lg border border-border/50 bg-card px-3 py-2 shadow-sm sm:flex">
+              <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Sesion
-                </span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: crmTheme.colors.text }}>
-                  Activa
-                </span>
+                </div>
+                <div className="text-sm font-bold text-foreground">Activa</div>
               </div>
-
-              <button
-                type="button"
-                onClick={handleLogout}
-                style={{
-                  appearance: "none",
-                  border: 0,
-                  borderRadius: crmTheme.radius.md,
-                  background: crmTheme.colors.primary,
-                  color: "#ffffff",
-                  padding: "11px 16px",
-                  fontSize: 14,
-                  fontWeight: 700,
-                  cursor: "pointer",
-                  boxShadow: crmTheme.shadow.card,
-                  transition: crmTheme.motion.fast,
-                }}
-              >
-                Salir
-              </button>
             </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex h-9 w-9 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
+                <User className="h-5 w-5" />
+                <span className="sr-only">Menu de usuario</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
+                  <LogOut className="h-4 w-4" />
+                  Cerrar sesion
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
-      </header>
-
-      <style>{`
-        .crm-topbar {
-          position: sticky;
-          top: 0;
-          z-index: 20;
-          padding: 20px ${crmTheme.spacing.page} 18px;
-          border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-          background: rgba(248, 251, 255, 0.82);
-          backdrop-filter: blur(14px);
-        }
-
-        @media (max-width: 860px) {
-          .crm-topbar {
-            padding: 18px ${crmTheme.spacing.pageMobile} 16px;
-          }
-        }
-      `}</style>
-    </>
+      </div>
+    </header>
   );
 }

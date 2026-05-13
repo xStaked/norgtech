@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  crmTheme,
   navGroups,
+  primaryNavItems,
   type NavItem,
   type NavGroup,
   type UserRole,
-} from "@/components/ui/theme";
+} from "@/lib/theme";
+import { Separator } from "@/components/ui/separator";
 
 const noraNavItem: NavItem = {
   href: "/nora",
@@ -31,79 +32,54 @@ function NavSection({
   pathname: string;
 }) {
   return (
-    <section style={{ display: "grid", gap: 10 }}>
-      <div
-        style={{
-          fontSize: 11,
-          letterSpacing: "0.12em",
-          textTransform: "uppercase",
-          color: "rgba(220, 231, 247, 0.58)",
-          padding: "0 14px",
-        }}
-      >
+    <div className="space-y-2.5">
+      <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
         {group.label}
       </div>
-
-      <div style={{ display: "grid", gap: 4 }}>
+      <div className="space-y-0.5">
         {group.items.map((item) => (
-          <SidebarNavItem key={item.href} item={item} active={isActive(pathname, item.href)} />
+          <SidebarNavItem
+            key={item.href}
+            item={item}
+            active={isActive(pathname, item.href)}
+          />
         ))}
       </div>
-    </section>
+    </div>
   );
 }
 
-function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
+function SidebarNavItem({
+  item,
+  active,
+}: {
+  item: NavItem;
+  active: boolean;
+}) {
   return (
     <Link
       href={item.href}
-      style={{
-        display: "grid",
-        gridTemplateColumns: "36px minmax(0, 1fr)",
-        alignItems: "center",
-        gap: 12,
-        padding: "11px 14px",
-        borderRadius: crmTheme.radius.md,
-        color: active ? "#ffffff" : "rgba(220, 231, 247, 0.84)",
-        background: active ? "rgba(255, 255, 255, 0.12)" : "transparent",
-        border: active ? "1px solid rgba(255, 255, 255, 0.12)" : "1px solid transparent",
-        boxShadow: active ? "inset 0 1px 0 rgba(255, 255, 255, 0.05)" : "none",
-        transition: crmTheme.motion.fast,
-      }}
+      className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
+      }`}
     >
       <span
-        aria-hidden="true"
-        style={{
-          display: "grid",
-          placeItems: "center",
-          width: 36,
-          height: 36,
-          borderRadius: 12,
-          background: active ? "rgba(255, 255, 255, 0.14)" : "rgba(255, 255, 255, 0.06)",
-          fontSize: 12,
-          fontWeight: 700,
-          letterSpacing: "0.04em",
-        }}
+        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-bold tracking-wide ${
+          active
+            ? "bg-sidebar-primary text-sidebar-primary-foreground"
+            : "bg-sidebar-accent/50 text-sidebar-foreground/70 group-hover:bg-sidebar-accent group-hover:text-sidebar-accent-foreground"
+        }`}
       >
         {item.shortLabel}
       </span>
-      <span style={{ minWidth: 0 }}>
-        <span style={{ display: "block", fontWeight: 600, fontSize: 14 }}>
-          {item.label}
-        </span>
-        <span
-          style={{
-            display: "block",
-            fontSize: 12,
-            color: active ? "rgba(255, 255, 255, 0.72)" : "rgba(220, 231, 247, 0.58)",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            whiteSpace: "nowrap",
-          }}
-        >
+      <div className="flex min-w-0 flex-col">
+        <span className="truncate text-sm font-semibold">{item.label}</span>
+        <span className="truncate text-[11px] text-sidebar-foreground/50">
           {item.description}
         </span>
-      </span>
+      </div>
     </Link>
   );
 }
@@ -111,10 +87,7 @@ function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
 function filterNavGroups(role: UserRole) {
   const groupsWithNora = navGroups.map((group) =>
     group.label === "Operacion"
-      ? {
-          ...group,
-          items: [...group.items, noraNavItem],
-        }
+      ? { ...group, items: [...group.items, noraNavItem] }
       : group,
   );
 
@@ -131,153 +104,43 @@ export function SidebarNav({ userRole }: { userRole: UserRole | null }) {
   const visibleGroups = userRole ? filterNavGroups(userRole) : [];
 
   return (
-    <>
-      <div className="crm-sidebar">
-        <div className="crm-sidebar__brand">
-          <div className="crm-sidebar__brand-mark">NT</div>
-          <div className="crm-sidebar__brand-copy">
-            <div className="crm-sidebar__brand-title">Norgtech CRM</div>
-            <div className="crm-sidebar__brand-subtitle">Operacion comercial</div>
-          </div>
+    <div className="flex h-full flex-col gap-5 p-4">
+      {/* Brand */}
+      <div className="flex items-center gap-3 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/50 p-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-yellow-300 text-lg font-extrabold text-brand-800">
+          NT
         </div>
-
-        <nav className="crm-sidebar__nav" aria-label="Navegacion principal">
-          {visibleGroups.map((group) => (
-            <NavSection key={group.label} group={group} pathname={pathname} />
-          ))}
-        </nav>
-
-        <div className="crm-sidebar__footer">
-          <div style={{ fontSize: 12, fontWeight: 600 }}>Base compartida</div>
-          <div style={{ fontSize: 12, color: "rgba(220, 231, 247, 0.6)" }}>
-            Shell, tokens y primitives listos para el resto del CRM.
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-sidebar-foreground">
+            Norgtech CRM
+          </div>
+          <div className="text-xs text-sidebar-foreground/60">
+            Operacion comercial
           </div>
         </div>
       </div>
 
-      <style>{`
-        .crm-sidebar {
-          position: sticky;
-          top: 0;
-          display: grid;
-          grid-template-rows: auto minmax(0, 1fr) auto;
-          gap: 24px;
-          height: 100vh;
-          padding: 20px 16px 18px;
-        }
+      {/* Navigation */}
+      <nav className="flex-1 space-y-6 overflow-auto pr-1" aria-label="Navegacion principal">
+        {visibleGroups.map((group, index) => (
+          <div key={group.label}>
+            {index > 0 && (
+              <Separator className="mb-6 bg-sidebar-border/50" />
+            )}
+            <NavSection group={group} pathname={pathname} />
+          </div>
+        ))}
+      </nav>
 
-        .crm-sidebar__brand {
-          display: grid;
-          grid-template-columns: 48px minmax(0, 1fr);
-          align-items: center;
-          gap: 14px;
-          padding: 10px 12px;
-          border-radius: ${crmTheme.radius.lg};
-          background: rgba(255, 255, 255, 0.06);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .crm-sidebar__brand-mark {
-          width: 48px;
-          height: 48px;
-          display: grid;
-          place-items: center;
-          border-radius: 16px;
-          background: linear-gradient(135deg, #f0b543 0%, #f7d06b 100%);
-          color: ${crmTheme.colors.primary};
-          font-size: 16px;
-          font-weight: 800;
-        }
-
-        .crm-sidebar__brand-title {
-          color: #ffffff;
-          font-size: 15px;
-          font-weight: 700;
-        }
-
-        .crm-sidebar__brand-subtitle {
-          color: rgba(220, 231, 247, 0.68);
-          font-size: 12px;
-        }
-
-        .crm-sidebar__nav {
-          min-height: 0;
-          display: grid;
-          gap: 18px;
-          align-content: start;
-          overflow: auto;
-          padding-right: 4px;
-        }
-
-        .crm-sidebar__footer {
-          display: grid;
-          gap: 4px;
-          padding: 14px;
-          border-radius: ${crmTheme.radius.lg};
-          background: rgba(255, 255, 255, 0.05);
-          border: 1px solid rgba(255, 255, 255, 0.08);
-          color: #ffffff;
-        }
-
-        @media (max-width: 1080px) {
-          .crm-sidebar {
-            padding-inline: 12px;
-          }
-
-          .crm-sidebar__brand {
-            grid-template-columns: 1fr;
-            justify-items: center;
-            text-align: center;
-          }
-
-          .crm-sidebar__brand-copy,
-          .crm-sidebar__footer,
-          nav section > div:first-child,
-          nav a span > span:last-child {
-            display: none;
-          }
-
-          nav a {
-            grid-template-columns: 1fr;
-            justify-items: center;
-            padding-inline: 8px;
-          }
-        }
-
-        @media (max-width: 860px) {
-          .crm-sidebar {
-            position: static;
-            height: auto;
-            grid-template-rows: auto auto;
-          }
-
-          .crm-sidebar__nav {
-            grid-auto-flow: column;
-            grid-auto-columns: minmax(92px, 1fr);
-            overflow-x: auto;
-            overflow-y: hidden;
-            padding-bottom: 2px;
-          }
-
-          .crm-sidebar__footer {
-            display: none;
-          }
-
-          nav section {
-            min-width: max-content;
-          }
-
-          nav section > div:first-child {
-            display: none;
-          }
-
-          nav a {
-            grid-template-columns: 1fr;
-            justify-items: center;
-            min-height: 76px;
-          }
-        }
-      `}</style>
-    </>
+      {/* Footer */}
+      <div className="space-y-1 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/30 p-3">
+        <div className="text-xs font-semibold text-sidebar-foreground">
+          Base compartida
+        </div>
+        <div className="text-xs text-sidebar-foreground/50">
+          Shell, tokens y primitives listos para el resto del CRM.
+        </div>
+      </div>
+    </div>
   );
 }
