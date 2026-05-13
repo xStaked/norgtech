@@ -3,6 +3,7 @@
 import { MessageSquare } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
 import { NoraMessageItem } from "./nora-types";
+import { NoraMarkdownContent } from "./nora-markdown-content";
 
 function formatMessageTime(value: string) {
   const date = new Date(value);
@@ -84,16 +85,27 @@ export function NoraEntryCard({ message }: { message: NoraMessageItem }) {
             {formatMessageTime(message.createdAt)}
           </span>
         </div>
-        <p
-          style={{
-            margin: 0,
-            fontSize: 15,
-            lineHeight: 1.6,
-            whiteSpace: "pre-wrap",
-          }}
-        >
-          {message.content}
-        </p>
+        {isUser ? (
+          <p
+            style={{
+              margin: 0,
+              fontSize: 15,
+              lineHeight: 1.6,
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {message.content}
+          </p>
+        ) : (
+          <div
+            style={{
+              fontSize: 15,
+              lineHeight: 1.6,
+            }}
+          >
+            <NoraMarkdownContent content={message.content} />
+          </div>
+        )}
       </div>
     </article>
   );
