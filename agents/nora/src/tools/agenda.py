@@ -32,17 +32,21 @@ async def get_agenda(auth_token: Annotated[str, InjectedState("auth_token")]) ->
         
         agenda_items = []
         for v in visits[:10]:
+            summary = v.get("summary")
+            display_name = v.get("customer", {}).get("displayName", "Cliente")
+            label = summary if summary and summary != "None" else display_name
             agenda_items.append({
                 "id": v["id"],
                 "type": "visit",
-                "label": f"Visita: {v.get('customer', {}).get('displayName', 'Cliente')} - {v.get('summary', 'Sin resumen')}",
+                "label": label,
                 "scheduledAt": v.get("scheduledAt"),
             })
         for t in tasks[:10]:
+            title = t.get("title", "Sin título")
             agenda_items.append({
                 "id": t["id"],
                 "type": "follow_up_task",
-                "label": f"Tarea: {t.get('title', 'Sin título')} - Vence: {t.get('dueAt', 'N/A')}",
+                "label": title,
                 "scheduledAt": t.get("dueAt"),
             })
         

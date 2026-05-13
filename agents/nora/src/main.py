@@ -224,13 +224,15 @@ async def get_session(
     messages = []
     if state and state.values and "messages" in state.values:
         for msg in state.values["messages"]:
-            messages.append({
-                "id": getattr(msg, "id", str(uuid.uuid4())),
-                "role": "user" if msg.type == "human" else "assistant",
-                "kind": "report",
-                "content": msg.content if hasattr(msg, "content") else "",
-                "createdAt": "2026-05-11T00:00:00Z",
-            })
+            # Solo incluir mensajes humanos y del asistente (excluir tool messages)
+            if msg.type in ("human", "ai"):
+                messages.append({
+                    "id": getattr(msg, "id", str(uuid.uuid4())),
+                    "role": "user" if msg.type == "human" else "assistant",
+                    "kind": "report",
+                    "content": msg.content if hasattr(msg, "content") else "",
+                    "createdAt": "2026-05-11T00:00:00Z",
+                })
     
     return {
         "id": session_id,
@@ -278,6 +280,8 @@ async def stream_message(
     
     async def event_stream():
         full_response = ""
+        tool_outputs = []
+        tool_results = []
         async for event in nora_graph.astream_events(initial_state, config=config, version="v2"):
             kind = event.get("event")
             
@@ -289,18 +293,39 @@ async def stream_message(
                     yield f"data: {data}\n\n"
             
             elif kind == "on_tool_start":
-                data = json_lib.dumps({"event": "tool_start", "tool": event.get("name", "unknown")})
+                tool_name = event.get("name", "unknown")
+                tool_outputs.append(tool_name)
+                data = json_lib.dumps({"event": "tool_start", "tool": tool_name})
                 yield f"data: {data}\n\n"
             
             elif kind == "on_tool_end":
-                data = json_lib.dumps({"event": "tool_end", "tool": event.get("name", "unknown")})
+                tool_name = event.get("name", "unknown")
+                tool_output = event.get("data", {}).get("output", "")
+                tool_results.append({"name": tool_name, "output": tool_output})
+                data = json_lib.dumps({"event": "tool_end", "tool": tool_name})
                 yield f"data: {data}\n\n"
         
-        # Evento final con el resultado completo
-        result = GreetingResponse(
-            sessionId=session_id,
-            message=full_response,
-        )
+        # Detectar modo de respuesta basado en tools ejecutadas
+        if "get_agenda" in tool_outputs:
+            agenda_data = {"items": []}
+            for tr in tool_results:
+                if tr["name"] == "get_agenda" and tr["output"]:
+                    try:
+                        parsed = json_lib.loads(tr["output"]) if isinstance(tr["output"], str) else tr["output"]
+                        if isinstance(parsed, dict) and "items" in parsed:
+                            agenda_data = parsed
+                    except Exception:
+                        pass
+            result = AgendaResponse(
+                sessionId=session_id,
+                message=full_response,
+                agenda=agenda_data,
+            )
+        else:
+            result = GreetingResponse(
+                sessionId=session_id,
+                message=full_response,
+            )
         yield f"data: {json_lib.dumps(result.model_dump())}\n\n"
         yield "data: [DONE]\n\n"
     
