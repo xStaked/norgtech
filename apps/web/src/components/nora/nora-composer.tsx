@@ -43,6 +43,15 @@ export function NoraComposer({
   const canSend = !disabled && value.trim().length >= MIN_LENGTH;
   const showLengthHint = value.trim().length > 0 && value.trim().length < MIN_LENGTH;
 
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      if (canSend) {
+        event.currentTarget.form?.requestSubmit();
+      }
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit}>
       <div
@@ -82,6 +91,7 @@ export function NoraComposer({
             e.currentTarget.style.borderColor = crmTheme.nora.border;
             e.currentTarget.style.boxShadow = "none";
           }}
+          onKeyDown={handleKeyDown}
         />
         <button
           type="submit"
