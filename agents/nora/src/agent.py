@@ -9,6 +9,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from .config import settings
 from .prompts.system import NORA_SYSTEM_PROMPT
 from .tools.customers import search_customers, create_customer
+from .tools.segments import get_customer_segments
 from .tools.agenda import get_agenda
 from .tools.visits import create_visit
 from .tools.opportunities import get_customer_opportunities, create_opportunity, update_opportunity_stage
@@ -19,6 +20,7 @@ from .tools.nestjs_client import NestJSClient
 ALL_TOOLS = [
     search_customers,
     create_customer,
+    get_customer_segments,
     get_agenda,
     create_visit,
     get_customer_opportunities,
