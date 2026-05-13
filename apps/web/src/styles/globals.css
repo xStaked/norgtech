@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-sans: "Poppins", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "SFMono-Regular", "SF Mono", Consolas, monospace;
 
   /* Nora brand colors */
