@@ -271,7 +271,7 @@ export function NoraChat({
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Laura no pudo procesar el mensaje.",
+          : "Nora no pudo procesar el mensaje.",
       );
     } finally {
       setBusy(false);
@@ -313,13 +313,13 @@ export function NoraChat({
       }
 
       setNotice(
-        `Laura guardó ${body.saved.length} bloques y descartó ${body.discarded.length}.`,
+        `Nora guardó ${body.saved.length} bloques y descartó ${body.discarded.length}.`,
       );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Laura no pudo confirmar la propuesta.",
+          : "Nora no pudo confirmar la propuesta.",
       );
     } finally {
       setConfirming(false);

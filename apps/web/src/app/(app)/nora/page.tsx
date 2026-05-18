@@ -50,8 +50,8 @@ export default async function LauraPage({
     >
       <PageHeader
         eyebrow="Asistente comercial"
-        title="Laura"
-        description="Conversá en lenguaje natural y Laura arma los registros por vos."
+        title="Nora"
+        description="Conversá en lenguaje natural y Nora arma los registros por vos."
       />
 
       <NoraChat initialContext={initialContext} />

@@ -193,7 +193,7 @@ export function NoraProposalCard({
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <Sparkles size={18} color={crmTheme.nora.primary} strokeWidth={2} />
           <span style={{ fontSize: 14, fontWeight: 700, color: crmTheme.nora.textPrimary }}>
-            Propuesta de Laura
+            Propuesta de Nora
           </span>
         </div>
         <StatusBadge tone={confirmation ? "success" : "info"}>
@@ -225,7 +225,7 @@ export function NoraProposalCard({
                 {hasPartialErrors ? "Confirmación parcial" : "Confirmación completada"}
               </p>
               <p style={{ margin: 0, fontSize: 12, color: crmTheme.nora.textMuted, lineHeight: 1.45 }}>
-                Laura guardó {savedCount} bloque{savedCount === 1 ? "" : "s"} y descartó {discardedCount} para esta confirmación.
+                Nora guardó {savedCount} bloque{savedCount === 1 ? "" : "s"} y descartó {discardedCount} para esta confirmación.
               </p>
             </div>
 
@@ -748,8 +748,8 @@ export function NoraProposalCard({
             }}
           >
             {hasPartialErrors
-              ? `Laura confirmó la operación con ${confirmationErrors.length} alerta${confirmationErrors.length === 1 ? "" : "s"} pendiente${confirmationErrors.length === 1 ? "" : "s"}.`
-              : `Laura guardó ${savedCount} bloques y descartó ${discardedCount}.`}
+              ? `Nora confirmó la operación con ${confirmationErrors.length} alerta${confirmationErrors.length === 1 ? "" : "s"} pendiente${confirmationErrors.length === 1 ? "" : "s"}.`
+              : `Nora guardó ${savedCount} bloques y descartó ${discardedCount}.`}
           </p>
         ) : (
           <button

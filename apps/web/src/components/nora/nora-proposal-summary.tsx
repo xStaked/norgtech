@@ -258,7 +258,7 @@ export function NoraProposalSummary({
   const labels = summary?.labels?.filter(Boolean) ?? [];
   const heading = relatedCount > 0
     ? `${primaryCount} acción${primaryCount === 1 ? "" : "es"} principal${primaryCount === 1 ? "" : "es"} y ${relatedCount} impacto${relatedCount === 1 ? "" : "s"} relacionado${relatedCount === 1 ? "" : "s"}`
-    : `Laura preparó ${primaryCount} acción${primaryCount === 1 ? "" : "es"} para confirmar`;
+    : `Nora preparó ${primaryCount} acción${primaryCount === 1 ? "" : "es"} para confirmar`;
 
   return (
     <section
