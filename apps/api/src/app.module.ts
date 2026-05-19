@@ -17,6 +17,7 @@ import { QuotesModule } from "./modules/quotes/quotes.module";
 import { ReportsModule } from "./modules/reports/reports.module";
 import { VisitsModule } from "./modules/visits/visits.module";
 import { BillingRequestsModule } from "./modules/billing-requests/billing-requests.module";
+import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -38,6 +39,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     FollowUpTasksModule,
     ReportsModule,
     CalculatorsModule,
+    CustomerGoalsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
