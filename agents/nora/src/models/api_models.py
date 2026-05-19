@@ -50,12 +50,24 @@ class NoraSignalsBlock(BaseModel):
     risk: Optional[str] = None
     buyingIntent: Optional[str] = None
 
+class NoraOrderBlock(BaseModel):
+    enabled: bool
+    action: Literal["create", "update", "delete"] = "create"
+    customerId: Optional[str] = None
+    opportunityId: Optional[str] = None
+    sourceQuoteId: Optional[str] = None
+    notes: Optional[str] = None
+    items: Optional[list[dict]] = None
+    id: Optional[str] = None
+    relatedTo: Optional[str] = None
+
 class NoraProposalBlocks(BaseModel):
     interaction: Optional[NoraInteractionBlock] = None
     opportunity: Optional[NoraOpportunityBlock] = None
     followUp: Optional[NoraFollowUpBlock] = None
     task: Optional[NoraTaskBlock] = None
     signals: Optional[NoraSignalsBlock] = None
+    order: Optional[NoraOrderBlock] = None
 
 class NoraProposalPayload(BaseModel):
     blocks: NoraProposalBlocks

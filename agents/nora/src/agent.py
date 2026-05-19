@@ -14,6 +14,7 @@ from .tools.agenda import get_agenda
 from .tools.visits import create_visit
 from .tools.opportunities import get_customer_opportunities, create_opportunity, update_opportunity_stage
 from .tools.follow_ups import create_follow_up
+from .tools.orders import search_products, get_customer_quotes, create_order
 from .tools.nestjs_client import NestJSClient
 
 # ── Tools ──────────────────────────────────────────────
@@ -27,6 +28,9 @@ ALL_TOOLS = [
     create_opportunity,
     update_opportunity_stage,
     create_follow_up,
+    search_products,
+    get_customer_quotes,
+    create_order,
 ]
 
 # ── State ──────────────────────────────────────────────

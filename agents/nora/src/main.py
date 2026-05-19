@@ -76,6 +76,7 @@ def detect_response_mode(result: dict, session_id: str) -> NoraResponse:
         "search_customers", "create_customer",
         "create_visit", "create_opportunity",
         "update_opportunity_stage", "create_follow_up",
+        "create_order",
     ]
     if any(t in tool_outputs for t in crm_tools):
         # Generar propuesta basada en tools ejecutadas
@@ -100,6 +101,7 @@ def build_proposal_from_tool_outputs(messages: list, tool_names: list[str]) -> N
         NoraFollowUpBlock,
         NoraTaskBlock,
         NoraSignalsBlock,
+        NoraOrderBlock,
     )
     
     blocks = NoraProposalBlocks()
@@ -119,7 +121,59 @@ def build_proposal_from_tool_outputs(messages: list, tool_names: list[str]) -> N
             type="llamada",
         )
     
+    if "create_order" in tool_names:
+        # Intentar extraer datos del pedido creado desde los tool messages
+        order_data = _extract_order_data_from_messages(messages)
+        blocks.order = NoraOrderBlock(
+            enabled=True,
+            action="create",
+            customerId=order_data.get("customerId"),
+            opportunityId=order_data.get("opportunityId"),
+            sourceQuoteId=order_data.get("sourceQuoteId"),
+            notes=order_data.get("notes"),
+            items=order_data.get("items"),
+            id=order_data.get("id"),
+        )
+        # Agregar también un bloque de interacción si no existe
+        if not blocks.interaction:
+            blocks.interaction = NoraInteractionBlock(
+                enabled=True,
+                summary="Pedido creado",
+                rawMessage="Pedido registrado en el sistema",
+            )
+    
     return NoraProposalPayload(blocks=blocks)
+
+
+def _extract_order_data_from_messages(messages: list) -> dict:
+    """Busca en los tool messages el output de create_order y extrae datos."""
+    for msg in reversed(messages):
+        if getattr(msg, "type", None) == "tool" and getattr(msg, "name", None) == "create_order":
+            content = getattr(msg, "content", "") or ""
+            # Intentar extraer JSON del final del mensaje
+            try:
+                if "Detalle completo:" in content:
+                    json_part = content.split("Detalle completo:", 1)[1].strip()
+                    data = json_lib.loads(json_part)
+                    return {
+                        "id": data.get("id"),
+                        "customerId": data.get("customerId"),
+                        "opportunityId": data.get("opportunityId"),
+                        "sourceQuoteId": data.get("sourceQuoteId"),
+                        "notes": data.get("notes"),
+                        "items": [
+                            {
+                                "productId": i.get("productId"),
+                                "quantity": i.get("quantity"),
+                                "unitPrice": i.get("unitPrice"),
+                                "notes": i.get("notes"),
+                            }
+                            for i in data.get("items", [])
+                        ] if data.get("items") else None,
+                    }
+            except Exception:
+                pass
+    return {}
 
 def get_auth_header(authorization: str = Header(...)) -> str:
     """Extrae y valida el header de autorización."""
