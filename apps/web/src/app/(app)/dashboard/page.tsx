@@ -92,7 +92,7 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       {/* Featured KPIs with ShiftCard (Cult UI) */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <ShiftKpiCard
           label="Valor pipeline"
           value={formatKpiValue(summary, "pipelineValue")}
@@ -114,7 +114,7 @@ export default async function DashboardPage() {
       </div>
 
       {/* Secondary KPIs */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const, icon: <FileText className="h-5 w-5" /> },
           { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const, icon: <Package className="h-5 w-5" /> },

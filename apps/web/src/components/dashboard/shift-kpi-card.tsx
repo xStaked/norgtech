@@ -22,7 +22,7 @@ const toneDotClasses: Record<string, string> = {
 export function ShiftKpiCard({ label, value, tone = "neutral", detail, index = 0 }: ShiftKpiCardProps) {
   return (
     <ShiftCard
-      className="h-[200px] w-full md:h-[220px]"
+      className="h-[180px] w-full md:h-[200px]"
       topContent={
         <div className="flex items-center gap-2 px-2 pt-1">
           <div className={cn("h-2 w-2 rounded-full", toneDotClasses[tone])} />
@@ -43,7 +43,7 @@ export function ShiftKpiCard({ label, value, tone = "neutral", detail, index = 0
       }
       middleContent={
         <div className="flex flex-col items-center justify-center pb-4">
-          <span className="text-4xl font-extrabold tracking-tight text-foreground md:text-5xl">
+          <span className="text-2xl font-extrabold tracking-tight text-foreground md:text-3xl">
             {value}
           </span>
         </div>

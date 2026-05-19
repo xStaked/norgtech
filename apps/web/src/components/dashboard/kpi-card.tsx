@@ -39,7 +39,7 @@ export function KpiCard({ label, value, tone = "neutral", icon, index = 0 }: Kpi
         "relative overflow-hidden border bg-gradient-to-br transition-all duration-300 hover:scale-[1.02] hover:shadow-lg",
         toneClasses[tone]
       )}>
-        <CardContent className="p-5">
+        <CardContent className="p-4">
           <div className="flex items-start justify-between">
             <div className="space-y-2">
               <div className="flex items-center gap-2">
@@ -52,7 +52,7 @@ export function KpiCard({ label, value, tone = "neutral", icon, index = 0 }: Kpi
                 initial={{ opacity: 0, scale: 0.8 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.5, delay: index * 0.08 + 0.2 }}
-                className="text-2xl font-extrabold tracking-tight text-foreground md:text-3xl"
+                className="text-xl font-extrabold tracking-tight text-foreground md:text-2xl"
               >
                 {value}
               </motion.div>
