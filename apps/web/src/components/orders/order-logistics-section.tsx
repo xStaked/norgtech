@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface User {
   id: string;
@@ -66,123 +70,66 @@ export function OrderLogisticsSection({
   }
 
   return (
-    <div style={{ marginTop: 24 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h3 style={{ margin: 0, fontSize: 16 }}>Logística</h3>
+    <div className="mt-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold text-foreground">Logística</h3>
         {canEdit && !editing && (
-          <button
-            onClick={() => setEditing(true)}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 8,
-              border: "1px solid #c8d3e0",
-              background: "#fff",
-              fontSize: 13,
-              cursor: "pointer",
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             Editar
-          </button>
+          </Button>
         )}
       </div>
 
-      {error && <p style={{ color: "#c0392b", fontSize: 14, marginTop: 8 }}>{error}</p>}
+      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-          gap: 12,
-          marginTop: 12,
-          padding: 16,
-          borderRadius: 12,
-          backgroundColor: "#f8fafc",
-          border: "1px solid #e2e8f0",
-        }}
-      >
+      <div className="mt-3 grid gap-4 rounded-xl border border-border bg-muted p-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
         {editing ? (
           <>
-            <div>
-              <label style={{ fontSize: 13, fontWeight: 600, color: "#6b7c93" }}>Usuario asignado (ID)</label>
-              <input
+            <div className="grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Usuario asignado (ID)
+              </Label>
+              <Input
                 value={form.assignedLogisticsUserId}
-                onChange={(e) => setForm({ ...form, assignedLogisticsUserId: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, assignedLogisticsUserId: e.target.value })
+                }
                 placeholder="ID de usuario"
-                style={{
-                  marginTop: 4,
-                  width: "100%",
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #c8d3e0",
-                  fontSize: 14,
-                }}
               />
             </div>
-            <div>
-              <label style={{ fontSize: 13, fontWeight: 600, color: "#6b7c93" }}>Fecha comprometida</label>
-              <input
+            <div className="grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Fecha comprometida
+              </Label>
+              <Input
                 type="date"
                 value={form.committedDeliveryDate}
-                onChange={(e) => setForm({ ...form, committedDeliveryDate: e.target.value })}
-                style={{
-                  marginTop: 4,
-                  width: "100%",
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #c8d3e0",
-                  fontSize: 14,
-                }}
+                onChange={(e) =>
+                  setForm({ ...form, committedDeliveryDate: e.target.value })
+                }
               />
             </div>
-            <div style={{ gridColumn: "1 / -1" }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: "#6b7c93" }}>Notas</label>
-              <textarea
+            <div className="col-span-full grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">Notas</Label>
+              <Textarea
                 value={form.logisticsNotes}
-                onChange={(e) => setForm({ ...form, logisticsNotes: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, logisticsNotes: e.target.value })
+                }
                 rows={2}
-                style={{
-                  marginTop: 4,
-                  width: "100%",
-                  padding: "6px 10px",
-                  borderRadius: 8,
-                  border: "1px solid #c8d3e0",
-                  fontSize: 14,
-                  resize: "vertical",
-                }}
               />
             </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "end", gridColumn: "1 / -1" }}>
-              <button
-                onClick={handleSave}
-                disabled={loading}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  border: "none",
-                  backgroundColor: "#10233f",
-                  color: "#fff",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  cursor: loading ? "not-allowed" : "pointer",
-                  opacity: loading ? 0.7 : 1,
-                }}
-              >
+            <div className="col-span-full flex items-end gap-2">
+              <Button onClick={handleSave} disabled={loading}>
                 {loading ? "Guardando..." : "Guardar"}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="outline"
                 onClick={() => setEditing(false)}
                 disabled={loading}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: 8,
-                  border: "1px solid #c8d3e0",
-                  backgroundColor: "#fff",
-                  fontSize: 14,
-                  cursor: "pointer",
-                }}
               >
                 Cancelar
-              </button>
+              </Button>
             </div>
           </>
         ) : (
@@ -190,7 +137,11 @@ export function OrderLogisticsSection({
             <Info label="Usuario asignado" value={assignedLogisticsUser?.name ?? "Sin asignar"} />
             <Info
               label="Fecha comprometida"
-              value={committedDeliveryDate ? new Date(committedDeliveryDate).toLocaleDateString("es-CO") : null}
+              value={
+                committedDeliveryDate
+                  ? new Date(committedDeliveryDate).toLocaleDateString("es-CO")
+                  : null
+              }
             />
             <Info
               label="Fecha de despacho"
@@ -201,9 +152,11 @@ export function OrderLogisticsSection({
               value={deliveryDate ? new Date(deliveryDate).toLocaleDateString("es-CO") : null}
             />
             {logisticsNotes && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7c93" }}>Notas de logística</div>
-                <div style={{ marginTop: 4, color: "#10233f" }}>{logisticsNotes}</div>
+              <div className="col-span-full">
+                <div className="text-sm font-semibold text-muted-foreground">
+                  Notas de logística
+                </div>
+                <div className="mt-1 text-foreground">{logisticsNotes}</div>
               </div>
             )}
           </>
@@ -217,8 +170,8 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   if (!value) return null;
   return (
     <div>
-      <div style={{ fontSize: 13, fontWeight: 600, color: "#6b7c93" }}>{label}</div>
-      <div style={{ marginTop: 4, color: "#10233f" }}>{value}</div>
+      <div className="text-sm font-semibold text-muted-foreground">{label}</div>
+      <div className="mt-1 text-foreground">{value}</div>
     </div>
   );
 }

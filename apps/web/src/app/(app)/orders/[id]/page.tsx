@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { OrderActions } from "@/components/orders/order-actions";
 import { OrderStatusTimeline } from "@/components/orders/order-status-timeline";
 import { OrderLogisticsSection } from "@/components/orders/order-logistics-section";
@@ -108,61 +110,43 @@ export default async function OrderDetailPage({
     : "Pedido completado";
 
   return (
-    <div>
+    <div className="grid gap-6">
       <Link
         href="/orders"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         ← Volver a pedidos
       </Link>
 
-      <div
-        style={{
-          backgroundColor: "#ffffff",
-          padding: "1.5rem",
-          borderRadius: "0.75rem",
-          boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-          <h1 style={{ margin: 0 }}>Pedido #{order.id.slice(-6)}</h1>
+      <PageHeader
+        title={`Pedido #${order.id.slice(-6)}`}
+        eyebrow={statusLabels[order.status] || order.status}
+        actions={
           <span
+            className="inline-flex items-center rounded-md px-3 py-1 text-sm font-semibold text-white"
             style={{
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              padding: "0.375rem 0.75rem",
-              borderRadius: "0.375rem",
               backgroundColor: statusColors[order.status] || "#6b7c93",
-              color: "#ffffff",
             }}
           >
             {statusLabels[order.status] || order.status}
           </span>
-        </div>
+        }
+      />
 
+      <SectionCard>
         <OrderStatusTimeline currentStatus={order.status} />
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "1rem",
-            marginTop: "1.5rem",
-          }}
-        >
+        <div className="mt-6 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
           <Info label="Cliente" value={order.customer?.displayName} />
           <Info label="Oportunidad" value={order.opportunity?.title} />
           <Info
             label="Cotización origen"
             value={
               order.sourceQuote ? (
-                <Link href={`/quotes/${order.sourceQuote.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+                <Link
+                  href={`/quotes/${order.sourceQuote.id}`}
+                  className="font-semibold text-primary hover:underline"
+                >
                   Cotización #{order.sourceQuote.id.slice(-6)}
                 </Link>
               ) : null
@@ -179,60 +163,43 @@ export default async function OrderDetailPage({
         </div>
 
         {order.notes && (
-          <div style={{ marginTop: "1.5rem" }}>
-            <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>Notas</div>
-            <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{order.notes}</div>
+          <div className="mt-6">
+            <div className="text-sm font-semibold text-muted-foreground">Notas</div>
+            <div className="mt-1 text-foreground">{order.notes}</div>
           </div>
         )}
 
-        <div style={{ marginTop: "1.5rem" }}>
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Items</h3>
-          <div style={{ display: "grid", gap: "0.75rem", marginTop: "0.75rem" }}>
+        <div className="mt-6">
+          <h3 className="text-base font-semibold text-foreground">Items</h3>
+          <div className="mt-3 grid gap-3">
             {order.items.map((item) => (
               <div
                 key={item.id}
-                style={{
-                  padding: "0.75rem 1rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #e2e8f0",
-                  backgroundColor: "#f8fafc",
-                }}
+                className="flex flex-col gap-1 rounded-lg border border-border bg-muted p-3 sm:flex-row sm:items-start sm:justify-between"
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ fontWeight: 600 }}>{item.productSnapshotName}</div>
-                  <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#27ae60" }}>
-                    ${Number(item.subtotal).toLocaleString("es-CO")}
+                <div>
+                  <div className="font-semibold text-foreground">
+                    {item.productSnapshotName}
                   </div>
-                </div>
-                <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                  {item.productSnapshotSku} · {Number(item.quantity).toLocaleString("es-CO")} {item.unit} · ${" "}
-                  {Number(item.unitPrice).toLocaleString("es-CO")}/{item.unit}
-                </div>
-                {item.notes && (
-                  <div style={{ fontSize: "0.8125rem", color: "#6b7c93", marginTop: "0.25rem" }}>
-                    {item.notes}
+                  <div className="mt-1 text-sm text-muted-foreground">
+                    {item.productSnapshotSku} · {Number(item.quantity).toLocaleString("es-CO")}{" "}
+                    {item.unit} · ${Number(item.unitPrice).toLocaleString("es-CO")}/{item.unit}
                   </div>
-                )}
+                  {item.notes && (
+                    <div className="mt-1 text-sm text-muted-foreground">{item.notes}</div>
+                  )}
+                </div>
+                <div className="text-sm font-semibold text-emerald-500 sm:text-base">
+                  ${Number(item.subtotal).toLocaleString("es-CO")}
+                </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            padding: "1rem",
-            borderRadius: "0.5rem",
-            backgroundColor: "#f0f4f8",
-            marginTop: "1.5rem",
-            fontWeight: 600,
-            fontSize: "1.125rem",
-          }}
-        >
+        <div className="mt-6 flex items-center justify-between rounded-lg bg-muted p-4 text-lg font-semibold text-foreground">
           <span>Total</span>
-          <span style={{ color: "#10233f" }}>${Number(order.total).toLocaleString("es-CO")}</span>
+          <span>${Number(order.total).toLocaleString("es-CO")}</span>
         </div>
 
         <OrderBillingHistory billingRequests={order.billingRequests} />
@@ -247,14 +214,14 @@ export default async function OrderDetailPage({
           canEdit={canEditLogistics}
         />
 
-        <div style={{ marginTop: "1.5rem", fontSize: "0.875rem", color: "#6b7c93", fontWeight: 500 }}>
+        <div className="mt-6 text-sm font-medium text-muted-foreground">
           {nextAction}
         </div>
 
-        <div style={{ marginTop: "1.5rem" }}>
+        <div className="mt-6">
           <OrderActions orderId={order.id} currentStatus={order.status} />
         </div>
-      </div>
+      </SectionCard>
     </div>
   );
 }
@@ -263,8 +230,8 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
   if (!value) return null;
   return (
     <div>
-      <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>{label}</div>
-      <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{value}</div>
+      <div className="text-sm font-semibold text-muted-foreground">{label}</div>
+      <div className="mt-1 text-foreground">{value}</div>
     </div>
   );
 }

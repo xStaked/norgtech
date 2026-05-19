@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { getSessionTokenClient, getUserRoleFromToken } from "@/lib/auth";
+import { Button } from "@/components/ui/button";
 
 interface OrderActionsProps {
   orderId: string;
@@ -90,47 +91,21 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
 
   return (
     <div>
-      {error && (
-        <p style={{ color: "#c0392b", fontSize: "0.875rem", marginBottom: "0.75rem" }}>{error}</p>
-      )}
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+      {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
+      <div className="flex flex-wrap gap-3">
         {canAdvance && (
-          <button
-            onClick={advanceStatus}
-            disabled={loading}
-            style={{
-              padding: "0.625rem 1.25rem",
-              borderRadius: "0.5rem",
-              border: "none",
-              backgroundColor: "#10233f",
-              color: "#ffffff",
-              fontSize: "1rem",
-              fontWeight: 600,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
+          <Button onClick={advanceStatus} disabled={loading}>
             {loading ? "Procesando..." : `Avanzar a ${statusLabels[nextStatusMap[currentStatus]]}`}
-          </button>
+          </Button>
         )}
         {canBill && (
-          <button
+          <Button
             onClick={createBillingRequest}
             disabled={loading}
-            style={{
-              padding: "0.625rem 1.25rem",
-              borderRadius: "0.5rem",
-              border: "none",
-              backgroundColor: "#9b59b6",
-              color: "#ffffff",
-              fontSize: "1rem",
-              fontWeight: 600,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.7 : 1,
-            }}
+            variant="secondary"
           >
             {loading ? "Procesando..." : "Generar solicitud de facturación"}
-          </button>
+          </Button>
         )}
       </div>
     </div>

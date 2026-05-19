@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 const statuses = [
   { key: "recibido", label: "Recibido" },
   { key: "orden_facturacion", label: "Orden de facturación" },
@@ -15,32 +17,28 @@ interface OrderStatusTimelineProps {
 export function OrderStatusTimeline({ currentStatus }: OrderStatusTimelineProps) {
   const currentIndex = statuses.findIndex((s) => s.key === currentStatus);
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 16, flexWrap: "wrap" }}>
+    <div className="mt-4 flex flex-wrap items-center gap-2">
       {statuses.map((s, i) => {
         const isCompleted = i <= currentIndex;
         const isCurrent = i === currentIndex;
         return (
-          <div key={s.key} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div key={s.key} className="flex items-center gap-2">
             <div
-              style={{
-                padding: "6px 12px",
-                borderRadius: 999,
-                backgroundColor: isCurrent ? "#10233f" : isCompleted ? "#1f8f5f" : "#eef3f8",
-                color: isCompleted ? "#ffffff" : "#6b7c93",
-                fontSize: 13,
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
+              className={cn(
+                "whitespace-nowrap rounded-full px-3 py-1.5 text-[13px] font-semibold transition-colors",
+                isCurrent && "bg-primary text-primary-foreground",
+                isCompleted && !isCurrent && "bg-emerald-600 text-white",
+                !isCompleted && "bg-muted text-muted-foreground"
+              )}
             >
               {s.label}
             </div>
             {i < statuses.length - 1 && (
               <div
-                style={{
-                  width: 24,
-                  height: 2,
-                  backgroundColor: i < currentIndex ? "#1f8f5f" : "#dbe4ef",
-                }}
+                className={cn(
+                  "h-0.5 w-6 transition-colors",
+                  i < currentIndex ? "bg-emerald-600" : "bg-border"
+                )}
               />
             )}
           </div>

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NoraContextLauncher } from "@/components/nora/nora-context-launcher";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 
 interface Customer {
@@ -58,52 +60,31 @@ export default async function OpportunityDetailPage({
   const opportunity: Opportunity = await response.json();
 
   return (
-    <div>
+    <div className="grid gap-6">
       <Link
         href="/opportunities"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
       >
         ← Volver a oportunidades
       </Link>
 
-      <div
-        style={{
-          backgroundColor: "#ffffff",
-          padding: "1.5rem",
-          borderRadius: "0.75rem",
-          boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.5rem" }}>
-          <h1 style={{ margin: 0 }}>{opportunity.title}</h1>
+      <PageHeader
+        title={opportunity.title}
+        eyebrow={stageLabels[opportunity.stage] || opportunity.stage}
+        actions={
           <span
+            className="inline-flex items-center rounded-md px-3 py-1 text-sm font-semibold text-white"
             style={{
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              padding: "0.375rem 0.75rem",
-              borderRadius: "0.375rem",
               backgroundColor: stageColors[opportunity.stage] || "#6b7c93",
-              color: "#ffffff",
             }}
           >
             {stageLabels[opportunity.stage] || opportunity.stage}
           </span>
-        </div>
+        }
+      />
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(14rem, 1fr))",
-            gap: "1rem",
-            marginTop: "1.5rem",
-          }}
-        >
+      <SectionCard>
+        <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
           <Info label="Cliente" value={opportunity.customer?.displayName} />
           <Info
             label="Valor estimado"
@@ -133,15 +114,13 @@ export default async function OpportunityDetailPage({
             <Info label="Motivo de pérdida" value={opportunity.lostReason} />
           )}
         </div>
-      </div>
+      </SectionCard>
 
-      <div style={{ marginTop: "1.25rem" }}>
-        <NoraContextLauncher
-          contextType="opportunity"
-          contextEntityId={opportunity.id}
-          contextLabel={opportunity.title}
-        />
-      </div>
+      <NoraContextLauncher
+        contextType="opportunity"
+        contextEntityId={opportunity.id}
+        contextLabel={opportunity.title}
+      />
     </div>
   );
 }
@@ -150,8 +129,8 @@ function Info({ label, value }: { label: string; value: string | null | undefine
   if (!value) return null;
   return (
     <div>
-      <div style={{ fontSize: "0.875rem", fontWeight: 600, color: "#6b7c93" }}>{label}</div>
-      <div style={{ marginTop: "0.25rem", color: "#10233f" }}>{value}</div>
+      <div className="text-sm font-semibold text-muted-foreground">{label}</div>
+      <div className="mt-1 text-foreground">{value}</div>
     </div>
   );
 }
