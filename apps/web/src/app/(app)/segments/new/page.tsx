@@ -1,23 +1,19 @@
 import Link from "next/link";
 import { SegmentForm } from "@/components/segments/segment-form";
+import { PageHeader } from "@/components/ui/page-header";
+import { buttonVariants } from "@/components/ui/button";
 
 export default function NewSegmentPage() {
   return (
-    <div>
+    <div className="space-y-6">
       <Link
         href="/segments"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
+        className={buttonVariants({ variant: "ghost", size: "sm" })}
       >
-        ← Volver a segmentos
+        ← Volver
       </Link>
 
-      <h1 style={{ marginTop: 0 }}>Nuevo segmento</h1>
+      <PageHeader title="Nuevo segmento" />
 
       <SegmentForm />
     </div>
