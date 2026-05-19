@@ -152,15 +152,18 @@ model AuditLog {
 }
 
 model CustomerSegment {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  description String?
-  active      Boolean  @default(true)
-  createdBy   String
-  updatedBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  customers   Customer[]
+  id              String   @id @default(cuid())
+  name            String   @unique
+  description     String?
+  discountPercent Decimal  @db.Decimal(5, 2) @default(0)
+  minGoalAmount   Decimal  @db.Decimal(14, 2)
+  maxGoalAmount   Decimal? @db.Decimal(14, 2)
+  active          Boolean  @default(true)
+  createdBy       String
+  updatedBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  customers       Customer[]
 }
 
 model Customer {
@@ -191,6 +194,7 @@ model Customer {
   orders           Order[]
   billingRequests  BillingRequest[]
   reports          ExecutiveReport[]
+  goals            CustomerGoal[]
 }
 
 model Contact {
@@ -270,17 +274,19 @@ model Quote {
 }
 
 model QuoteItem {
-  id                  String  @id @default(cuid())
+  id                  String   @id @default(cuid())
   quoteId             String
   productId           String?
   productSnapshotName String
   productSnapshotSku  String
   unit                String
-  quantity            Decimal @db.Decimal(14, 4)
-  unitPrice           Decimal @db.Decimal(14, 2)
-  subtotal            Decimal @db.Decimal(14, 2)
+  quantity            Decimal  @db.Decimal(14, 4)
+  originalUnitPrice   Decimal? @db.Decimal(14, 2)
+  discountPercent     Decimal? @db.Decimal(5, 2)
+  unitPrice           Decimal  @db.Decimal(14, 2)
+  subtotal            Decimal  @db.Decimal(14, 2)
   notes               String?
-  quote               Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quote               Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product             Product? @relation(fields: [productId], references: [id])
 }
 
@@ -361,6 +367,8 @@ model OrderItem {
   productSnapshotSku  String
   unit                String
   quantity            Decimal  @db.Decimal(14, 4)
+  originalUnitPrice   Decimal? @db.Decimal(14, 2)
+  discountPercent     Decimal? @db.Decimal(5, 2)
   unitPrice           Decimal  @db.Decimal(14, 2)
   subtotal            Decimal  @db.Decimal(14, 2)
   notes               String?
@@ -381,6 +389,22 @@ model ExecutiveReport {
   updatedAt DateTime @updatedAt
   createdBy String
   creator   User     @relation(fields: [createdBy], references: [id])
+}
+
+model CustomerGoal {
+  id           String   @id @default(cuid())
+  customerId   String
+  periodType   String   @default("anual")
+  periodValue  String
+  targetAmount Decimal  @db.Decimal(14, 2)
+  notes        String?
+  createdBy    String
+  updatedBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
 }
 
 model BillingRequest {

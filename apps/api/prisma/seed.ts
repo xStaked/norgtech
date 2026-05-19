@@ -19,6 +19,7 @@ const user_logistica = "e405b989-5227-4da7-9bba-639225125d0d";
 const segment_oro = "754a9936-081f-42a6-9ebb-7a5e7a1a8ea4";
 const segment_plata = "f6c48d99-916a-4c25-aaea-b7c0d55afd03";
 const segment_bronce = "f003a568-d395-434d-9e74-6de3f2f0e618";
+const segment_platino = "c9e1a2b3-4d5e-6f7a-8b9c-0d1e2f3a4b5c";
 const segment_retail = "ed8440f7-2768-4ac3-8986-b362917f194e";
 const segment_industria = "26c81d48-808d-4793-9d34-6df05e57bb4f";
 
@@ -92,18 +93,26 @@ async function main() {
 
   // ── Customer Segments ────────────────────────────────
   const segments = [
-    { id: segment_oro, name: "Oro", description: "Clientes estrategicos con alto volumen de compra" },
-    { id: segment_plata, name: "Plata", description: "Clientes con buen potencial de crecimiento" },
-    { id: segment_bronce, name: "Bronce", description: "Clientes nuevos o de bajo volumen" },
-    { id: segment_retail, name: "Retail", description: "Cadenas de tiendas y distribuidores" },
-    { id: segment_industria, name: "Industria", description: "Manufactura y sector industrial" },
+    { id: segment_bronce, name: "Bronce", description: "Clientes nuevos o de bajo volumen", discountPercent: 3, minGoalAmount: 0, maxGoalAmount: 50000000 },
+    { id: segment_plata, name: "Plata", description: "Clientes con buen potencial de crecimiento", discountPercent: 5, minGoalAmount: 50000000, maxGoalAmount: 150000000 },
+    { id: segment_oro, name: "Oro", description: "Clientes estrategicos con alto volumen de compra", discountPercent: 8, minGoalAmount: 150000000, maxGoalAmount: 300000000 },
+    { id: segment_platino, name: "Platino", description: "Clientes VIP con volumen excepcional", discountPercent: 12, minGoalAmount: 300000000, maxGoalAmount: null },
+    { id: segment_retail, name: "Retail", description: "Cadenas de tiendas y distribuidores", discountPercent: 4, minGoalAmount: 0, maxGoalAmount: 100000000 },
+    { id: segment_industria, name: "Industria", description: "Manufactura y sector industrial", discountPercent: 6, minGoalAmount: 100000000, maxGoalAmount: null },
   ];
 
   for (const seg of segments) {
     await prisma.customerSegment.upsert({
       where: { name: seg.name },
-      update: {},
-      create: { id: seg.id, name: seg.name, description: seg.description, active: true, createdBy: user_director, updatedBy: user_director },
+      update: {
+        description: seg.description,
+        discountPercent: seg.discountPercent,
+        minGoalAmount: seg.minGoalAmount,
+        maxGoalAmount: seg.maxGoalAmount,
+        active: true,
+        updatedBy: user_director,
+      },
+      create: { id: seg.id, name: seg.name, description: seg.description, discountPercent: seg.discountPercent, minGoalAmount: seg.minGoalAmount, maxGoalAmount: seg.maxGoalAmount, active: true, createdBy: user_director, updatedBy: user_director },
     });
   }
 
@@ -293,7 +302,7 @@ async function main() {
 
   console.log("✅ Seed completado con exito.");
   console.log("   - 6 usuarios");
-  console.log("   - 5 segmentos");
+  console.log("   - 6 segmentos");
   console.log("   - 8 clientes");
   console.log("   - 9 contactos");
   console.log("   - 8 productos");
