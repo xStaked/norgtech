@@ -48,4 +48,14 @@ export class ProductsController {
   findOne(@Param("id") id: string) {
     return this.productsService.findOne(id);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "director_comercial", "comercial")
+  @Get(":id/price-for-customer/:customerId")
+  getPriceForCustomer(
+    @Param("id") id: string,
+    @Param("customerId") customerId: string,
+  ) {
+    return this.productsService.getPriceForCustomer(id, customerId);
+  }
 }

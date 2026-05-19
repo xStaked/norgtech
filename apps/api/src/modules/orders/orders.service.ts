@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -16,7 +16,13 @@ export class OrdersService {
   ) {}
 
   async create(user: AuthUser, dto: CreateOrderDto) {
-    await this.assertCustomerExists(dto.customerId);
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: dto.customerId },
+      include: { segment: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
     if (dto.opportunityId) {
       await this.assertOpportunityExists(dto.opportunityId);
     }
@@ -27,6 +33,8 @@ export class OrdersService {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
 
+    const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
+
     const itemsWithSnapshot = await Promise.all(
       dto.items.map(async (item) => {
         if (item.productId) {
@@ -36,14 +44,24 @@ export class OrdersService {
           if (!product) {
             throw new NotFoundException(`Product ${item.productId} not found`);
           }
+          const basePrice = product.basePrice;
+          const discountMultiplier = new Prisma.Decimal(1).minus(
+            new Prisma.Decimal(discountPercent).dividedBy(100),
+          );
+          const unitPrice = new Prisma.Decimal(basePrice).times(discountMultiplier);
+          const unitPriceRounded = unitPrice.toDecimalPlaces(2);
+          const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded);
+
           return {
             productId: item.productId,
             productSnapshotName: product.name,
             productSnapshotSku: product.sku,
             unit: product.unit,
             quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            subtotal: item.quantity * item.unitPrice,
+            originalUnitPrice: basePrice,
+            discountPercent,
+            unitPrice: unitPriceRounded,
+            subtotal,
             notes: item.notes,
           };
         }
@@ -53,14 +71,19 @@ export class OrdersService {
           productSnapshotSku: "CUSTOM",
           unit: "unit",
           quantity: item.quantity,
+          originalUnitPrice: null,
+          discountPercent: null,
           unitPrice: item.unitPrice,
-          subtotal: item.quantity * item.unitPrice,
+          subtotal: new Prisma.Decimal(item.quantity).times(new Prisma.Decimal(item.unitPrice)),
           notes: item.notes,
         };
       }),
     );
 
-    const subtotal = itemsWithSnapshot.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal = itemsWithSnapshot.reduce(
+      (sum, item) => sum.plus(new Prisma.Decimal(item.subtotal)),
+      new Prisma.Decimal(0),
+    );
     const total = subtotal;
 
     return this.prisma.$transaction(async (tx) => {
@@ -262,13 +285,6 @@ export class OrdersService {
 
       return billingRequest;
     });
-  }
-
-  private async assertCustomerExists(customerId: string) {
-    const customer = await this.prisma.customer.findUnique({ where: { id: customerId } });
-    if (!customer) {
-      throw new NotFoundException("Customer not found");
-    }
   }
 
   private async assertOpportunityExists(opportunityId: string) {

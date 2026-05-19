@@ -68,6 +68,16 @@ describe("Orders", () => {
             displayName: "Agro Norte",
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
+            segment: { discountPercent: 0 },
+          };
+        }
+        if (id === "customer-2") {
+          return {
+            id: "customer-2",
+            displayName: "Agro Sur",
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+            segment: { discountPercent: 10 },
           };
         }
         return null;
@@ -227,6 +237,44 @@ describe("Orders", () => {
 
     expect(response.body.items).toHaveLength(1);
     expect(Number(response.body.total)).toBe(100000);
+  });
+
+  it("creates an order with automatic discount applied", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-2",
+        items: [
+          { productId: "product-1", quantity: 2, unitPrice: 50000 },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.items).toHaveLength(1);
+    expect(Number(response.body.total)).toBe(90000);
+    expect(Number(response.body.items[0].originalUnitPrice)).toBe(50000);
+    expect(Number(response.body.items[0].discountPercent)).toBe(10);
+    expect(Number(response.body.items[0].unitPrice)).toBe(45000);
+  });
+
+  it("creates an order with custom item without discount", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-2",
+        items: [
+          { quantity: 3, unitPrice: 25000, notes: "Servicio especial" },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.items).toHaveLength(1);
+    expect(Number(response.body.total)).toBe(75000);
+    expect(response.body.items[0].originalUnitPrice).toBeNull();
+    expect(response.body.items[0].discountPercent).toBeNull();
+    expect(Number(response.body.items[0].unitPrice)).toBe(25000);
   });
 
   it("transitions order status and sets dispatch/delivery dates", async () => {

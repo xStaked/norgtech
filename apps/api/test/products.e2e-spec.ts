@@ -17,6 +17,8 @@ describe("Products", () => {
   let moduleRef: TestingModule;
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const products: Array<Record<string, unknown>> = [];
+  const customerId = "customer-id";
+  const discountCustomerId = "discount-customer-id";
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -36,6 +38,16 @@ describe("Products", () => {
                   active: true,
                 }
               : null,
+        },
+        customer: {
+          findUnique: async ({ where: { id }, include }: { where: { id: string }; include?: Record<string, boolean> }) => {
+            if (id !== customerId && id !== discountCustomerId) return null;
+            const result: Record<string, unknown> = { id };
+            if (include?.segment) {
+              result.segment = { discountPercent: id === discountCustomerId ? 5 : 0 };
+            }
+            return result;
+          },
         },
         product: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -101,5 +113,85 @@ describe("Products", () => {
 
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("returns price for customer without discount", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        sku: "VAC-002",
+        name: "Vacuna Carbunco",
+        unit: "dosis",
+        presentation: "Caja x10",
+        basePrice: 100000,
+      })
+      .expect(201);
+
+    const productId = productResponse.body.id;
+
+    const response = await request(globalThis.__APP__)
+      .get(`/products/${productId}/price-for-customer/${customerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(response.body.productId).toBe(productId);
+    expect(response.body.customerId).toBe(customerId);
+    expect(response.body.basePrice).toBe(100000);
+    expect(response.body.discountPercent).toBe(0);
+    expect(response.body.finalPrice).toBe("100000");
+  });
+
+  it("returns discounted price for customer with segment discount", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        sku: "VAC-003",
+        name: "Vacuna Brucelosis",
+        unit: "dosis",
+        presentation: "Caja x10",
+        basePrice: 200000,
+      })
+      .expect(201);
+
+    const productId = productResponse.body.id;
+
+    const response = await request(globalThis.__APP__)
+      .get(`/products/${productId}/price-for-customer/${discountCustomerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(response.body.productId).toBe(productId);
+    expect(response.body.customerId).toBe(discountCustomerId);
+    expect(response.body.basePrice).toBe(200000);
+    expect(response.body.discountPercent).toBe(5);
+    expect(response.body.finalPrice).toBe("190000");
+  });
+
+  it("returns 404 for invalid product in price-for-customer", async () => {
+    await request(globalThis.__APP__)
+      .get(`/products/invalid-product/price-for-customer/${customerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(404);
+  });
+
+  it("returns 404 for invalid customer in price-for-customer", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        sku: "VAC-004",
+        name: "Vacuna Rabia",
+        unit: "dosis",
+        presentation: "Caja x10",
+        basePrice: 50000,
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .get(`/products/${productResponse.body.id}/price-for-customer/invalid-customer`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(404);
   });
 });

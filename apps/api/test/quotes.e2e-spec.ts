@@ -17,6 +17,7 @@ describe("Quotes", () => {
   let moduleRef: TestingModule;
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const customerId = "customer-id";
+  const discountCustomerId = "discount-customer-id";
   const productId = "product-id";
   const quotes: Array<Record<string, unknown>> = [];
   const quoteItems: Array<Record<string, unknown>> = [];
@@ -40,8 +41,14 @@ describe("Quotes", () => {
     };
 
     const customer = {
-      findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-        id === customerId ? { id: customerId } : null,
+      findUnique: async ({ where: { id }, include }: { where: { id: string }; include?: Record<string, boolean> }) => {
+        if (id !== customerId && id !== discountCustomerId) return null;
+        const result: Record<string, unknown> = { id };
+        if (include?.segment) {
+          result.segment = { discountPercent: id === discountCustomerId ? 10 : 0 };
+        }
+        return result;
+      },
     };
 
     const product = {
@@ -52,6 +59,7 @@ describe("Quotes", () => {
               name: "Vacuna Aftosa",
               sku: "VAC-001",
               unit: "dosis",
+              basePrice: 45000,
             }
           : null,
     };
@@ -99,9 +107,18 @@ describe("Quotes", () => {
         const pendingItems: Array<Record<string, unknown>> = [];
         const pendingAudits: Array<Record<string, unknown>> = [];
 
-        const result = await callback({
+        const tx = {
           quote: {
-            create: async ({ data, include }) => {
+            create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, boolean> }) => {
+              const quoteItemsArray: Array<Record<string, unknown>> = [];
+              const itemsCreate = (data.items as { create?: unknown } | undefined)?.create;
+              if (itemsCreate) {
+                const itemsToCreate = Array.isArray(itemsCreate) ? itemsCreate : [itemsCreate];
+                for (const itemData of itemsToCreate) {
+                  const item = await tx.quoteItem.create({ data: itemData as Record<string, unknown> });
+                  quoteItemsArray.push(item);
+                }
+              }
               const quote = {
                 id: `quote-${pendingQuotes.length + quotes.length + 1}`,
                 ...data,
@@ -109,14 +126,14 @@ describe("Quotes", () => {
                 updatedAt: new Date("2026-04-29T00:00:00.000Z"),
                 customer: { id: customerId, displayName: "Ganaderia Andina" },
                 opportunity: null,
-                items: include?.items ? [] : undefined,
+                items: include?.items ? quoteItemsArray : undefined,
               };
               pendingQuotes.push(quote);
               return quote;
             },
           },
           quoteItem: {
-            create: async ({ data }) => {
+            create: async ({ data }: { data: Record<string, unknown> }) => {
               const item = {
                 id: `item-${pendingItems.length + quoteItems.length + 1}`,
                 ...data,
@@ -126,7 +143,7 @@ describe("Quotes", () => {
             },
           },
           auditLog: {
-            create: async ({ data }) => {
+            create: async ({ data }: { data: Record<string, unknown> }) => {
               const entry = {
                 id: `audit-${pendingAudits.length + auditLogs.length + 1}`,
                 createdAt: new Date("2026-04-29T00:00:00.000Z"),
@@ -136,7 +153,9 @@ describe("Quotes", () => {
               return entry;
             },
           },
-        });
+        };
+
+        const result = await callback(tx);
 
         quotes.push(...pendingQuotes);
         quoteItems.push(...pendingItems);
@@ -190,8 +209,8 @@ describe("Quotes", () => {
       })
       .expect(201);
 
-    expect(response.body.subtotal).toBe(450000);
-    expect(response.body.total).toBe(450000);
+    expect(response.body.subtotal).toBe("450000");
+    expect(response.body.total).toBe("450000");
   });
 
   it("treats empty opportunityId as null", async () => {
@@ -228,5 +247,52 @@ describe("Quotes", () => {
         ],
       })
       .expect(404);
+  });
+
+  it("applies customer segment discount to quote items", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/quotes")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: discountCustomerId,
+        items: [
+          {
+            productId,
+            quantity: 10,
+            unitPrice: 45000,
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.subtotal).toBe("405000");
+    expect(response.body.total).toBe("405000");
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0].originalUnitPrice).toBe(45000);
+    expect(response.body.items[0].discountPercent).toBe(10);
+    expect(response.body.items[0].unitPrice).toBe("40500");
+    expect(response.body.items[0].subtotal).toBe("405000");
+  });
+
+  it("stores null originalUnitPrice and discountPercent for custom items", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/quotes")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId,
+        items: [
+          {
+            quantity: 5,
+            unitPrice: 20000,
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0].originalUnitPrice).toBeNull();
+    expect(response.body.items[0].discountPercent).toBeNull();
+    expect(response.body.items[0].unitPrice).toBe(20000);
+    expect(response.body.items[0].subtotal).toBe("100000");
   });
 });
