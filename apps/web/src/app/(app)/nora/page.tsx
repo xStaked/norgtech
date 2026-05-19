@@ -39,22 +39,18 @@ export default async function LauraPage({
       : null;
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gap: 24,
-        maxWidth: 680,
-        margin: "0 auto",
-        width: "100%",
-      }}
-    >
-      <PageHeader
-        eyebrow="Asistente comercial"
-        title="Nora"
-        description="Conversá en lenguaje natural y Nora arma los registros por vos."
-      />
+    <div className="flex h-full flex-col gap-4">
+      <div className="mx-auto w-full max-w-3xl shrink-0">
+        <PageHeader
+          eyebrow="Asistente comercial"
+          title="Nora"
+          description="Conversá en lenguaje natural y Nora arma los registros por vos."
+        />
+      </div>
 
-      <NoraChat initialContext={initialContext} />
+      <div className="min-h-0 flex-1">
+        <NoraChat initialContext={initialContext} />
+      </div>
 
       <style>{`
         @keyframes noraBounce {

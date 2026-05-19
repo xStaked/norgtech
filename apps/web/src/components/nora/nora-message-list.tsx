@@ -20,7 +20,11 @@ export function NoraMessageList({
   const scrollRef = useAutoScroll(messages.length + (busy ? 1 : 0));
 
   if (messages.length === 0) {
-    return <NoraEmptyState onSend={onSend} />;
+    return (
+      <div className="flex h-full flex-col items-center justify-center">
+        <NoraEmptyState onSend={onSend} />
+      </div>
+    );
   }
 
   return (

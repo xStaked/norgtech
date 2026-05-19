@@ -31,10 +31,10 @@ export function NoraEntryCard({ message }: { message: NoraMessageItem }) {
       className={isUser ? "flex justify-end" : "flex justify-start"}
     >
       <div
-        className={`w-full max-w-[680px] space-y-1.5 rounded-2xl px-4 py-3 ${
+        className={`max-w-[85%] space-y-1.5 rounded-2xl px-4 py-3 ${
           isUser
-            ? "rounded-br-md bg-gradient-to-br from-primary to-primary/90 text-primary-foreground"
-            : "rounded-bl-md border border-border/40 bg-card/80 shadow-sm backdrop-blur-sm"
+            ? "rounded-br-md bg-gradient-to-br from-nora-500 to-nora-600 text-white shadow-md shadow-nora-500/20"
+            : "w-full max-w-[680px] rounded-bl-md border border-border/40 bg-card/80 shadow-sm backdrop-blur-sm"
         }`}
       >
         <div className="flex items-center justify-between gap-3">
@@ -46,7 +46,7 @@ export function NoraEntryCard({ message }: { message: NoraMessageItem }) {
             )}
             <span className="text-xs font-bold">{roleCopy[message.role]}</span>
           </div>
-          <span className={`text-[11px] ${isUser ? "text-primary-foreground/60" : "text-muted-foreground"}`}>
+          <span className={`text-[11px] ${isUser ? "text-white/60" : "text-muted-foreground"}`}>
             {formatMessageTime(message.createdAt)}
           </span>
         </div>

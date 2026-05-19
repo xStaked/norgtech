@@ -15,7 +15,7 @@ import type {
   NoraProposalPayload,
   NoraSessionResponse,
 } from "./nora-types";
-import { NoraChatHeader } from "./nora-chat-header";
+// NoraChatHeader removed — header info already shown in PageHeader
 import { NoraMessageList } from "./nora-message-list";
 import { NoraDataCard } from "./nora-data-card";
 import { NoraProposalCard } from "./nora-proposal-card";
@@ -332,11 +332,9 @@ export function NoraChat({
   }
 
   return (
-    <div className="relative flex h-[calc(100vh-120px)] flex-col">
-      <NoraChatHeader hasActiveSession={!!sessionId} />
-
+    <div className="relative flex h-full flex-col">
       {/* Scrollable Messages Area */}
-      <div className="flex-1 min-h-0 space-y-4 overflow-y-auto pr-1 pb-4">
+      <div className="mx-auto w-full max-w-3xl flex-1 min-h-0 space-y-4 overflow-y-auto px-1 pb-4">
         {/* Context Banner */}
         {initialContext && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-nora-500/20 bg-nora-500/10 px-3.5 py-2.5 text-sm text-nora-300">
@@ -428,7 +426,9 @@ export function NoraChat({
 
       {/* Sticky Composer */}
       <div className="shrink-0 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-2">
-        <NoraComposer disabled={busy || confirming} onSubmit={handleSend} />
+        <div className="mx-auto w-full max-w-3xl">
+          <NoraComposer disabled={busy || confirming} onSubmit={handleSend} />
+        </div>
       </div>
     </div>
   );
