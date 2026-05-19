@@ -3,13 +3,33 @@ import {
   ArrayMinSize,
   IsArray,
   IsEmail,
+  IsIn,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
   Matches,
+  Min,
   ValidateNested,
 } from "class-validator";
 import { CreateContactDto } from "../../contacts/dto/create-contact.dto";
+
+class CreateInitialGoalDto {
+  @IsString()
+  @IsIn(["mensual", "trimestral", "anual"])
+  periodType!: string;
+
+  @IsString()
+  periodValue!: string;
+
+  @IsNumber()
+  @Min(0)
+  targetAmount!: number;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
 
 export class CreateCustomerDto {
   @IsString()
@@ -64,4 +84,9 @@ export class CreateCustomerDto {
   @ValidateNested({ each: true })
   @Type(() => CreateContactDto)
   contacts!: CreateContactDto[];
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateInitialGoalDto)
+  initialGoal?: CreateInitialGoalDto;
 }

@@ -23,6 +23,35 @@ describe("Customers", () => {
   const segmentId = "segment-id";
   const assignedUserId = "assigned-user-id";
 
+  const segments = [
+    {
+      id: "segment-bronze",
+      name: "Bronce",
+      description: "Segmento base",
+      discountPercent: 0,
+      minGoalAmount: 0,
+      maxGoalAmount: 1000000,
+      active: true,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    },
+    {
+      id: "segment-silver",
+      name: "Plata",
+      description: "Segmento intermedio",
+      discountPercent: 10,
+      minGoalAmount: 1000000,
+      maxGoalAmount: 5000000,
+      active: true,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    },
+  ];
+
   beforeAll(async () => {
     const user = {
       findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
@@ -33,6 +62,17 @@ describe("Customers", () => {
             email: "admin@norgtech.local",
             passwordHash,
             role: UserRole.administrador,
+            active: true,
+          };
+        }
+
+        if (where.email === "director@norgtech.local") {
+          return {
+            id: "director-user-id",
+            name: "Director",
+            email: "director@norgtech.local",
+            passwordHash,
+            role: UserRole.director_comercial,
             active: true,
           };
         }
@@ -66,11 +106,19 @@ describe("Customers", () => {
               updatedAt: new Date("2026-04-29T00:00:00.000Z"),
             }
           : null,
+      findMany: async () => segments,
+    };
+
+    const orderAggregate = {
+      aggregate: async () => ({
+        _sum: { total: 0 },
+      }),
     };
 
     const prismaStub = {
       user,
       customerSegment,
+      order: orderAggregate,
       customer: {
         create: async () => {
           throw new Error("customer.create must run inside a transaction");
@@ -129,6 +177,10 @@ describe("Customers", () => {
           }
           return result;
         },
+        findMany: async () => customers,
+        update: async () => {
+          throw new Error("customer.update must run inside a transaction");
+        },
       },
       auditLog: {
         create: async () => {
@@ -177,6 +229,10 @@ describe("Customers", () => {
                 };
               };
               include?: { contacts?: boolean };
+            }) => Promise<Record<string, unknown>>;
+            update: (args: {
+              where: { id: string };
+              data: { segmentId?: string; updatedBy?: string };
             }) => Promise<Record<string, unknown>>;
           };
           auditLog: {
@@ -262,6 +318,24 @@ describe("Customers", () => {
 
               pendingCustomers.push(customer);
               return customer;
+            },
+            update: async ({
+              where,
+              data,
+            }: {
+              where: { id: string };
+              data: { segmentId?: string; updatedBy?: string };
+            }) => {
+              const idx = customers.findIndex((c) => c.id === where.id);
+              if (idx !== -1) {
+                customers[idx] = {
+                  ...customers[idx],
+                  ...data,
+                  updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+                };
+                return customers[idx];
+              }
+              return {};
             },
           },
           auditLog: {
@@ -521,5 +595,23 @@ describe("Customers", () => {
     expect(getResponse.body.quotes).toBeDefined();
     expect(getResponse.body.orders).toBeDefined();
     expect(getResponse.body.billingRequests).toBeDefined();
+  });
+
+  it("allows director_comercial to refresh segments", async () => {
+    const directorLogin = await request(globalThis.__APP__)
+      .post("/auth/login")
+      .send({ email: "director@norgtech.local", password: "Admin123*" })
+      .expect(200);
+
+    const directorToken = directorLogin.body.accessToken;
+
+    const response = await request(globalThis.__APP__)
+      .post("/customers/refresh-segments")
+      .set("Authorization", `Bearer ${directorToken}`)
+      .expect(201);
+
+    expect(response.body.totalCustomers).toBeDefined();
+    expect(response.body.updated).toBeDefined();
+    expect(Array.isArray(response.body.details)).toBe(true);
   });
 });
