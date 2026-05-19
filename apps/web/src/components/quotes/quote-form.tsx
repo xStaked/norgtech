@@ -9,6 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 
+interface Segment {
+  id: string;
+  name: string;
+  discountPercent: string | number;
+}
+
 interface Product {
   id: string;
   name: string;
@@ -20,6 +26,7 @@ interface Product {
 interface Customer {
   id: string;
   displayName: string;
+  segment: Segment | null;
 }
 
 interface Opportunity {
@@ -31,6 +38,8 @@ interface QuoteItem {
   productId: string;
   quantity: number;
   unitPrice: number;
+  originalUnitPrice: number;
+  discountPercent: number;
   notes: string;
 }
 
@@ -47,12 +56,13 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [items, setItems] = useState<QuoteItem[]>([
-    { productId: "", quantity: 1, unitPrice: 0, notes: "" },
+    { productId: "", quantity: 1, unitPrice: 0, originalUnitPrice: 0, discountPercent: 0, notes: "" },
   ]);
 
   function addItem() {
-    setItems([...items, { productId: "", quantity: 1, unitPrice: 0, notes: "" }]);
+    setItems([...items, { productId: "", quantity: 1, unitPrice: 0, originalUnitPrice: 0, discountPercent: 0, notes: "" }]);
   }
 
   function removeItem(index: number) {
@@ -65,13 +75,23 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
     if (field === "productId") {
       const product = products.find((p) => p.id === value);
       if (product) {
-        updated[index].unitPrice = Number(product.basePrice);
+        const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
+        const discountPercent = Number(selectedCustomer?.segment?.discountPercent ?? 0);
+        const basePrice = Number(product.basePrice);
+        const discountedPrice = Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100;
+        updated[index].originalUnitPrice = basePrice;
+        updated[index].discountPercent = discountPercent;
+        updated[index].unitPrice = discountedPrice;
       }
     }
     setItems(updated);
   }
 
-  const total = items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
+  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.originalUnitPrice, 0);
+  const totalDiscount = items.reduce((sum, item) => sum + item.quantity * (item.originalUnitPrice - item.unitPrice), 0);
+  const finalTotal = subtotal - totalDiscount;
+
+  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -133,7 +153,13 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
 
       <div className="grid gap-1">
         <Label>Cliente *</Label>
-        <select name="customerId" required className={selectClasses}>
+        <select
+          name="customerId"
+          required
+          className={selectClasses}
+          value={selectedCustomerId}
+          onChange={(e) => setSelectedCustomerId(e.target.value)}
+        >
           <option value="">Seleccionar cliente</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
@@ -141,6 +167,14 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
             </option>
           ))}
         </select>
+        {selectedCustomerId && selectedCustomer?.segment && (
+          <div className="text-sm text-muted-foreground">
+            Segmento:{" "}
+            <span className="font-medium text-foreground">{selectedCustomer.segment.name}</span>
+            {" "}• Descuento: {" "}
+            <span className="font-medium text-foreground">{Number(selectedCustomer.segment.discountPercent)}%</span>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-1">
@@ -189,6 +223,15 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
                   </option>
                 ))}
               </select>
+              {item.discountPercent > 0 && (
+                <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-1.5 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                  <span className="font-medium">Descuento {item.discountPercent}% aplicado</span>
+                  <span className="text-muted-foreground">•</span>
+                  <span>Precio base: ${item.originalUnitPrice.toLocaleString("es-CO")}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-semibold">${item.unitPrice.toLocaleString("es-CO")}</span>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -255,9 +298,21 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         + Agregar item
       </Button>
 
-      <div className="flex items-center justify-between rounded-lg bg-muted p-4 text-lg font-semibold">
-        <span>Total estimado</span>
-        <span className="text-foreground">${total.toLocaleString("es-CO")}</span>
+      <div className="grid gap-2 rounded-lg bg-muted p-4">
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Subtotal</span>
+          <span>${subtotal.toLocaleString("es-CO")}</span>
+        </div>
+        {totalDiscount > 0 && (
+          <div className="flex justify-between text-sm text-emerald-600">
+            <span>Descuento por segmento</span>
+            <span>-${totalDiscount.toLocaleString("es-CO")}</span>
+          </div>
+        )}
+        <div className="flex justify-between border-t border-border pt-2 text-lg font-semibold">
+          <span>Total</span>
+          <span>${finalTotal.toLocaleString("es-CO")}</span>
+        </div>
       </div>
 
       <div className="flex gap-3 pt-2">

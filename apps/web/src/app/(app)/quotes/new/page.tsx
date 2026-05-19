@@ -4,9 +4,16 @@ import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { QuoteForm } from "@/components/quotes/quote-form";
 
+interface Segment {
+  id: string;
+  name: string;
+  discountPercent: string | number;
+}
+
 interface Customer {
   id: string;
   displayName: string;
+  segment: Segment | null;
 }
 
 interface Opportunity {
