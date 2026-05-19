@@ -6,6 +6,7 @@ import { ShiftKpiCard } from "@/components/dashboard/shift-kpi-card";
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { QueueList } from "@/components/dashboard/queue-list";
 import { FeedbackWidget } from "@/components/dashboard/feedback-widget";
+import { CustomerGoalsDashboard } from "@/components/dashboard/customer-goals-dashboard";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -131,6 +132,9 @@ export default async function DashboardPage() {
           />
         ))}
       </div>
+
+      {/* Goals Progress Section */}
+      <CustomerGoalsDashboard />
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-[1.5fr_380px]">

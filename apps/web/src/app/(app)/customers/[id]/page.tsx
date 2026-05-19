@@ -5,6 +5,7 @@ import { DetailSection } from "@/components/ui/detail-section";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { crmTheme } from "@/components/ui/theme";
+import { CustomerGoalsSection } from "@/components/customers/customer-goals-section";
 import { CustomerHistorySection } from "@/components/customers/customer-history-section";
 import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
 import { NoraContextLauncher } from "@/components/nora/nora-context-launcher";
@@ -112,6 +113,32 @@ interface Customer {
   createdAt: string;
 }
 
+interface GoalProgress {
+  customerId: string;
+  periodType: string;
+  periodValue: string;
+  targetAmount: string | number;
+  soldAmount: string | number;
+  percentage: number;
+  remainingAmount: string | number;
+  ordersCount: number;
+}
+
+function formatMillions(value: string | number): string {
+  const num = typeof value === "string" ? parseFloat(value) : value;
+  return `$${(num / 1_000_000).toFixed(1)}M`;
+}
+
+function formatPeriodLabel(periodType: string, periodValue: string): string {
+  const typeLabels: Record<string, string> = {
+    anual: "Anual",
+    trimestral: "Trimestral",
+    mensual: "Mensual",
+  };
+  const label = typeLabels[periodType.toLowerCase()] ?? periodType;
+  return `${periodValue} (${label})`;
+}
+
 export default async function CustomerDetailPage({
   params,
 }: {
@@ -127,6 +154,11 @@ export default async function CustomerDetailPage({
   const customer: Customer = await response.json();
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
+
+  const goalsResponse = await apiFetch(`/customers/${id}/goal-progress`);
+  const goalProgress: GoalProgress | null = goalsResponse.ok
+    ? await goalsResponse.json()
+    : null;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -150,6 +182,13 @@ export default async function CustomerDetailPage({
         description={customer.legalName}
         actions={
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+            <ButtonLink
+              href={`/customers/${id}/edit`}
+              variant="ghost"
+              size="sm"
+            >
+              Editar
+            </ButtonLink>
             {canCreate(userRole, "visit") && (
               <ButtonLink
                 href={`/visits/new?customerId=${customer.id}`}
@@ -189,6 +228,59 @@ export default async function CustomerDetailPage({
           </div>
         }
       />
+
+      {goalProgress ? (
+        <SectionCard title="Meta comercial activa">
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: "8px 16px",
+              fontSize: "0.9375rem",
+              color: crmTheme.colors.text,
+            }}
+          >
+            <span style={{ fontWeight: 600 }}>
+              {formatPeriodLabel(goalProgress.periodType, goalProgress.periodValue)}
+            </span>
+            <span style={{ color: crmTheme.colors.textMuted }}>·</span>
+            <span>Meta: {formatMillions(goalProgress.targetAmount)}</span>
+            <span style={{ color: crmTheme.colors.textMuted }}>·</span>
+            <span>{goalProgress.percentage.toFixed(1)}% cumplido</span>
+            <span style={{ color: crmTheme.colors.textMuted }}>·</span>
+            <span>{formatMillions(goalProgress.soldAmount)} vendidos</span>
+          </div>
+        </SectionCard>
+      ) : (
+        <SectionCard title="Meta comercial">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              flexWrap: "wrap",
+              gap: 12,
+            }}
+          >
+            <span
+              style={{
+                fontSize: "0.9375rem",
+                color: crmTheme.colors.textMuted,
+              }}
+            >
+              Sin meta asignada
+            </span>
+            <ButtonLink
+              href={`/customers/${id}#metas-comerciales`}
+              variant="secondary"
+              size="sm"
+            >
+              + Asignar meta
+            </ButtonLink>
+          </div>
+        </SectionCard>
+      )}
 
       <CustomerRelatedRecords
         opportunitiesCount={customer.opportunities.length}
@@ -283,6 +375,8 @@ export default async function CustomerDetailPage({
           </div>
         </SectionCard>
       )}
+
+      <CustomerGoalsSection customerId={customer.id} />
 
       <CustomerHistorySection
         history={{

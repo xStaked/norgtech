@@ -14,17 +14,51 @@ interface Segment {
   name: string;
 }
 
+interface Customer {
+  id: string;
+  legalName: string;
+  displayName: string;
+  taxId: string | null;
+  phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  department: string | null;
+  notes: string | null;
+  segmentId: string | null;
+  assignedToUserId: string | null;
+}
+
 interface CustomerFormProps {
   segments: Segment[];
+  customer?: Customer;
 }
 
 const selectClasses =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
-export function CustomerForm({ segments }: CustomerFormProps) {
+function periodPlaceholder(periodType: string): string {
+  switch (periodType.toLowerCase()) {
+    case "trimestral":
+      return "2025-Q1";
+    case "mensual":
+      return "2025-03";
+    default:
+      return "2025";
+  }
+}
+
+export function CustomerForm({ segments, customer }: CustomerFormProps) {
   const router = useRouter();
+  const isEditing = Boolean(customer);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [hasInitialGoal, setHasInitialGoal] = useState(false);
+  const [initialGoalPeriodType, setInitialGoalPeriodType] = useState("anual");
+  const [initialGoalPeriodValue, setInitialGoalPeriodValue] = useState("");
+  const [initialGoalTargetAmount, setInitialGoalTargetAmount] = useState("");
+  const [initialGoalNotes, setInitialGoalNotes] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -38,7 +72,7 @@ export function CustomerForm({ segments }: CustomerFormProps) {
       return value && String(value).trim() ? String(value).trim() : undefined;
     };
 
-    const body = {
+    const body: Record<string, unknown> = {
       legalName: String(formData.get("legalName")),
       displayName: String(formData.get("displayName")),
       taxId: optionalString("taxId"),
@@ -49,7 +83,11 @@ export function CustomerForm({ segments }: CustomerFormProps) {
       department: optionalString("department"),
       notes: optionalString("notes"),
       segmentId: String(formData.get("segmentId")),
-      contacts: [
+      assignedToUserId: optionalString("assignedToUserId") || undefined,
+    };
+
+    if (!isEditing) {
+      body.contacts = [
         {
           fullName: String(formData.get("contactFullName")),
           roleTitle: optionalString("contactRoleTitle"),
@@ -58,26 +96,40 @@ export function CustomerForm({ segments }: CustomerFormProps) {
           isPrimary: true,
           notes: optionalString("contactNotes"),
         },
-      ],
-    };
+      ];
+
+      if (hasInitialGoal) {
+        body.initialGoal = {
+          periodType: initialGoalPeriodType,
+          periodValue: initialGoalPeriodValue.trim(),
+          targetAmount: Number(initialGoalTargetAmount),
+          notes: initialGoalNotes.trim() || undefined,
+        };
+      }
+    }
 
     try {
-      const response = await apiFetchClient("/customers", {
-        method: "POST",
+      const url = isEditing
+        ? `/customers/${customer!.id}`
+        : "/customers";
+      const method = isEditing ? "PATCH" : "POST";
+
+      const response = await apiFetchClient(url, {
+        method,
         body: JSON.stringify(body),
       });
 
       if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        setError(data.message || "Error al crear el cliente");
+        setError(data.message || "Error al guardar el cliente");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
-      router.push(`/customers/${created.id}`);
+      const result = await response.json();
+      router.push(`/customers/${result.id}`);
     } catch {
-      setError("Error de conexión");
+      setError("Error de conexion");
       setLoading(false);
     }
   }
@@ -88,7 +140,12 @@ export function CustomerForm({ segments }: CustomerFormProps) {
 
       <div className="grid gap-1">
         <Label>Segmento *</Label>
-        <select name="segmentId" required className={selectClasses}>
+        <select
+          name="segmentId"
+          required
+          className={selectClasses}
+          defaultValue={customer?.segmentId ?? ""}
+        >
           <option value="">Seleccionar segmento</option>
           {segments.map((s) => (
             <option key={s.id} value={s.id}>
@@ -99,12 +156,13 @@ export function CustomerForm({ segments }: CustomerFormProps) {
       </div>
 
       <div className="grid gap-1">
-        <Label>Razón social *</Label>
+        <Label>Razon social *</Label>
         <Input
           name="legalName"
           type="text"
           required
           aria-label="Razon social"
+          defaultValue={customer?.legalName ?? ""}
         />
       </div>
 
@@ -115,83 +173,161 @@ export function CustomerForm({ segments }: CustomerFormProps) {
           type="text"
           required
           aria-label="Nombre comercial"
+          defaultValue={customer?.displayName ?? ""}
         />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-1">
           <Label>NIT</Label>
-          <Input name="taxId" type="text" />
+          <Input name="taxId" type="text" defaultValue={customer?.taxId ?? ""} />
         </div>
         <div className="grid gap-1">
-          <Label>Teléfono</Label>
-          <Input name="phone" type="text" />
+          <Label>Telefono</Label>
+          <Input name="phone" type="text" defaultValue={customer?.phone ?? ""} />
         </div>
       </div>
 
       <div className="grid gap-1">
-        <Label>Correo electrónico</Label>
-        <Input name="email" type="email" />
+        <Label>Correo electronico</Label>
+        <Input name="email" type="email" defaultValue={customer?.email ?? ""} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-1">
           <Label>Ciudad</Label>
-          <Input name="city" type="text" />
+          <Input name="city" type="text" defaultValue={customer?.city ?? ""} />
         </div>
         <div className="grid gap-1">
           <Label>Departamento</Label>
-          <Input name="department" type="text" />
+          <Input name="department" type="text" defaultValue={customer?.department ?? ""} />
         </div>
       </div>
 
       <div className="grid gap-1">
-        <Label>Dirección</Label>
-        <Input name="address" type="text" />
+        <Label>Direccion</Label>
+        <Input name="address" type="text" defaultValue={customer?.address ?? ""} />
       </div>
 
       <div className="grid gap-1">
         <Label>Notas</Label>
-        <Textarea name="notes" rows={3} />
+        <Textarea name="notes" rows={3} defaultValue={customer?.notes ?? ""} />
       </div>
 
-      <Separator className="my-2" />
-
-      <h3 className="text-base font-semibold">Contacto principal</h3>
-
       <div className="grid gap-1">
-        <Label>Nombre completo *</Label>
+        <Label>Asignado a (ID de usuario)</Label>
         <Input
-          name="contactFullName"
+          name="assignedToUserId"
           type="text"
-          required
+          defaultValue={customer?.assignedToUserId ?? ""}
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="grid gap-1">
-          <Label>Cargo</Label>
-          <Input name="contactRoleTitle" type="text" />
-        </div>
-        <div className="grid gap-1">
-          <Label>Teléfono</Label>
-          <Input name="contactPhone" type="text" />
-        </div>
-      </div>
+      {!isEditing && (
+        <>
+          <Separator className="my-2" />
 
-      <div className="grid gap-1">
-        <Label>Correo del contacto</Label>
-        <Input name="contactEmail" type="email" />
-      </div>
+          <h3 className="text-base font-semibold">Contacto principal</h3>
 
-      <div className="grid gap-1">
-        <Label>Notas del contacto</Label>
-        <Textarea name="contactNotes" rows={2} />
-      </div>
+          <div className="grid gap-1">
+            <Label>Nombre completo *</Label>
+            <Input name="contactFullName" type="text" required />
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="grid gap-1">
+              <Label>Cargo</Label>
+              <Input name="contactRoleTitle" type="text" />
+            </div>
+            <div className="grid gap-1">
+              <Label>Telefono</Label>
+              <Input name="contactPhone" type="text" />
+            </div>
+          </div>
+
+          <div className="grid gap-1">
+            <Label>Correo del contacto</Label>
+            <Input name="contactEmail" type="email" />
+          </div>
+
+          <div className="grid gap-1">
+            <Label>Notas del contacto</Label>
+            <Textarea name="contactNotes" rows={2} />
+          </div>
+
+          <Separator className="my-2" />
+
+          <div className="flex items-center gap-2">
+            <input
+              id="hasInitialGoal"
+              type="checkbox"
+              className="h-4 w-4 rounded border-border text-primary"
+              checked={hasInitialGoal}
+              onChange={(e) => setHasInitialGoal(e.target.checked)}
+            />
+            <Label htmlFor="hasInitialGoal" className="cursor-pointer">
+              Asignar meta comercial inicial
+            </Label>
+          </div>
+
+          {hasInitialGoal && (
+            <div className="grid gap-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid gap-1">
+                  <Label>Tipo de periodo</Label>
+                  <select
+                    className={selectClasses}
+                    value={initialGoalPeriodType}
+                    onChange={(e) => {
+                      setInitialGoalPeriodType(e.target.value);
+                      setInitialGoalPeriodValue("");
+                    }}
+                  >
+                    <option value="anual">Anual</option>
+                    <option value="trimestral">Trimestral</option>
+                    <option value="mensual">Mensual</option>
+                  </select>
+                </div>
+                <div className="grid gap-1">
+                  <Label>Periodo</Label>
+                  <Input
+                    type="text"
+                    placeholder={periodPlaceholder(initialGoalPeriodType)}
+                    value={initialGoalPeriodValue}
+                    onChange={(e) => setInitialGoalPeriodValue(e.target.value)}
+                    required={hasInitialGoal}
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <Label>Meta ($)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={1}
+                    placeholder="120000000"
+                    value={initialGoalTargetAmount}
+                    onChange={(e) => setInitialGoalTargetAmount(e.target.value)}
+                    required={hasInitialGoal}
+                  />
+                </div>
+              </div>
+              <div className="grid gap-1">
+                <Label>Notas (opcional)</Label>
+                <Textarea
+                  placeholder="Notas adicionales sobre la meta..."
+                  value={initialGoalNotes}
+                  onChange={(e) => setInitialGoalNotes(e.target.value)}
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       <div className="flex gap-3 pt-2">
         <Button type="submit" disabled={loading}>
-          {loading ? "Guardando..." : "Guardar cliente"}
+          {loading ? "Guardando..." : isEditing ? "Guardar cambios" : "Guardar cliente"}
         </Button>
       </div>
     </form>
