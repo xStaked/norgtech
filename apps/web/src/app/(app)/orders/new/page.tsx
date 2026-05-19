@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { OrderForm } from "@/components/orders/order-form";
 
@@ -39,28 +41,24 @@ export default async function NewOrderPage() {
   const quotes: Quote[] = quotesRes.ok ? await quotesRes.json() : [];
 
   return (
-    <div>
-      <Link
-        href="/orders"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
-      >
-        ← Volver a pedidos
-      </Link>
-
-      <h1 style={{ marginTop: 0 }}>Nuevo pedido</h1>
-
-      <OrderForm
-        customers={customers}
-        opportunities={opportunities}
-        products={products}
-        quotes={quotes}
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Pedidos"
+        title="Nuevo pedido"
+        actions={
+          <ButtonLink href="/orders" variant="secondary">
+            Volver a pedidos
+          </ButtonLink>
+        }
       />
+      <SectionCard>
+        <OrderForm
+          customers={customers}
+          opportunities={opportunities}
+          products={products}
+          quotes={quotes}
+        />
+      </SectionCard>
     </div>
   );
 }

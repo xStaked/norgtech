@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 interface Customer {
   id: string;
@@ -27,6 +31,9 @@ const types = [
   { value: "recordatorio", label: "Recordatorio" },
   { value: "otro", label: "Otro" },
 ];
+
+const selectClasses =
+  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormProps) {
   const router = useRouter();
@@ -76,34 +83,12 @@ export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormP
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "40rem",
-        backgroundColor: "#ffffff",
-        padding: "1.5rem",
-        borderRadius: "0.75rem",
-        boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-      }}
-    >
-      {error && (
-        <p style={{ color: "#c0392b", fontSize: "0.875rem", margin: 0 }}>{error}</p>
-      )}
+    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Cliente *</label>
-        <select
-          name="customerId"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Cliente *</Label>
+        <select name="customerId" required className={selectClasses}>
           <option value="">Seleccionar cliente</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
@@ -113,17 +98,9 @@ export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormP
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Oportunidad</label>
-        <select
-          name="opportunityId"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Oportunidad</Label>
+        <select name="opportunityId" className={selectClasses}>
           <option value="">Seleccionar oportunidad</option>
           {opportunities.map((o) => (
             <option key={o.id} value={o.id}>
@@ -133,18 +110,9 @@ export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormP
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Tipo *</label>
-        <select
-          name="type"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Tipo *</Label>
+        <select name="type" required className={selectClasses}>
           {types.map((t) => (
             <option key={t.value} value={t.value}>
               {t.label}
@@ -153,70 +121,34 @@ export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormP
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Título *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Título *</Label>
+        <Input
           name="title"
           type="text"
           required
           aria-label="Titulo"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Fecha y hora *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Fecha y hora *</Label>
+        <Input
           name="dueAt"
           type="datetime-local"
           required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Notas</label>
-        <textarea
-          name="notes"
-          rows={3}
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-            resize: "vertical",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Notas</Label>
+        <Textarea name="notes" rows={3} />
       </div>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: "0.625rem 1.25rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            fontSize: "1rem",
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={loading}>
           {loading ? "Guardando..." : "Guardar tarea"}
-        </button>
+        </Button>
       </div>
     </form>
   );

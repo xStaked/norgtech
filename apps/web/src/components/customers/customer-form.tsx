@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 
 interface Segment {
   id: string;
@@ -12,6 +17,9 @@ interface Segment {
 interface CustomerFormProps {
   segments: Segment[];
 }
+
+const selectClasses =
+  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function CustomerForm({ segments }: CustomerFormProps) {
   const router = useRouter();
@@ -75,34 +83,12 @@ export function CustomerForm({ segments }: CustomerFormProps) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "40rem",
-        backgroundColor: "#ffffff",
-        padding: "1.5rem",
-        borderRadius: "0.75rem",
-        boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-      }}
-    >
-      {error && (
-        <p style={{ color: "#c0392b", fontSize: "0.875rem", margin: 0 }}>{error}</p>
-      )}
+    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Segmento *</label>
-        <select
-          name="segmentId"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Segmento *</Label>
+        <select name="segmentId" required className={selectClasses}>
           <option value="">Seleccionar segmento</option>
           {segments.map((s) => (
             <option key={s.id} value={s.id}>
@@ -112,252 +98,101 @@ export function CustomerForm({ segments }: CustomerFormProps) {
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Razón social *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Razón social *</Label>
+        <Input
           name="legalName"
           type="text"
           required
           aria-label="Razon social"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Nombre comercial *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Nombre comercial *</Label>
+        <Input
           name="displayName"
           type="text"
           required
           aria-label="Nombre comercial"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>NIT</label>
-          <input
-            name="taxId"
-            type="text"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
-          />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <Label>NIT</Label>
+          <Input name="taxId" type="text" />
         </div>
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Teléfono</label>
-          <input
-            name="phone"
-            type="text"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
-          />
+        <div className="grid gap-1">
+          <Label>Teléfono</Label>
+          <Input name="phone" type="text" />
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Correo electrónico</label>
-        <input
-          name="email"
-          type="email"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Correo electrónico</Label>
+        <Input name="email" type="email" />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Ciudad</label>
-          <input
-            name="city"
-            type="text"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
-          />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <Label>Ciudad</Label>
+          <Input name="city" type="text" />
         </div>
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Departamento</label>
-          <input
-            name="department"
-            type="text"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
-          />
+        <div className="grid gap-1">
+          <Label>Departamento</Label>
+          <Input name="department" type="text" />
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Dirección</label>
-        <input
-          name="address"
-          type="text"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Dirección</Label>
+        <Input name="address" type="text" />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Notas</label>
-        <textarea
-          name="notes"
-          rows={3}
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-            resize: "vertical",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Notas</Label>
+        <Textarea name="notes" rows={3} />
       </div>
 
-      <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "0.5rem 0" }} />
+      <Separator className="my-2" />
 
-      <h3 style={{ margin: 0, fontSize: "1rem" }}>Contacto principal</h3>
+      <h3 className="text-base font-semibold">Contacto principal</h3>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Nombre completo *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Nombre completo *</Label>
+        <Input
           name="contactFullName"
           type="text"
           required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Cargo</label>
-          <input
-            name="contactRoleTitle"
-            type="text"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
-          />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <Label>Cargo</Label>
+          <Input name="contactRoleTitle" type="text" />
         </div>
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Teléfono</label>
-          <input
-            name="contactPhone"
-            type="text"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
-          />
+        <div className="grid gap-1">
+          <Label>Teléfono</Label>
+          <Input name="contactPhone" type="text" />
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Correo del contacto</label>
-        <input
-          name="contactEmail"
-          type="email"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Correo del contacto</Label>
+        <Input name="contactEmail" type="email" />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Notas del contacto</label>
-        <textarea
-          name="contactNotes"
-          rows={2}
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-            resize: "vertical",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Notas del contacto</Label>
+        <Textarea name="contactNotes" rows={2} />
       </div>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: "0.625rem 1.25rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            fontSize: "1rem",
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={loading}>
           {loading ? "Guardando..." : "Guardar cliente"}
-        </button>
+        </Button>
       </div>
     </form>
   );

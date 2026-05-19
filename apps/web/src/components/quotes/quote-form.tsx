@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 
 interface Product {
   id: string;
@@ -34,6 +39,9 @@ interface QuoteFormProps {
   opportunities: Opportunity[];
   products: Product[];
 }
+
+const selectClasses =
+  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function QuoteForm({ customers, opportunities, products }: QuoteFormProps) {
   const router = useRouter();
@@ -120,34 +128,12 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "48rem",
-        backgroundColor: "#ffffff",
-        padding: "1.5rem",
-        borderRadius: "0.75rem",
-        boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-      }}
-    >
-      {error && (
-        <p style={{ color: "#c0392b", fontSize: "0.875rem", margin: 0 }}>{error}</p>
-      )}
+    <form onSubmit={handleSubmit} className="grid max-w-3xl gap-4">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Cliente *</label>
-        <select
-          name="customerId"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Cliente *</Label>
+        <select name="customerId" required className={selectClasses}>
           <option value="">Seleccionar cliente</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
@@ -157,17 +143,9 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Oportunidad (opcional)</label>
-        <select
-          name="opportunityId"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Oportunidad (opcional)</Label>
+        <select name="opportunityId" className={selectClasses}>
           <option value="">Ninguna</option>
           {opportunities.map((o) => (
             <option key={o.id} value={o.id}>
@@ -177,63 +155,32 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Notas</label>
-        <textarea
-          name="notes"
-          rows={2}
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-            resize: "vertical",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Notas</Label>
+        <Textarea name="notes" rows={2} />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Válida hasta</label>
-        <input
-          name="validUntil"
-          type="date"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Válida hasta</Label>
+        <Input name="validUntil" type="date" />
       </div>
 
-      <hr style={{ border: "none", borderTop: "1px solid #e2e8f0", margin: "0.5rem 0" }} />
+      <Separator className="my-2" />
 
-      <h3 style={{ margin: 0, fontSize: "1rem" }}>Items</h3>
+      <h3 className="text-base font-semibold">Items</h3>
 
-      <div style={{ display: "grid", gap: "1rem" }}>
+      <div className="grid gap-4">
         {items.map((item, index) => (
           <div
             key={index}
-            style={{
-              padding: "1rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #e2e8f0",
-              backgroundColor: "#f8fafc",
-              display: "grid",
-              gap: "0.75rem",
-            }}
+            className="grid gap-3 rounded-lg border border-border bg-muted p-4"
           >
-            <div style={{ display: "grid", gap: "0.25rem" }}>
-              <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Producto</label>
+            <div className="grid gap-1">
+              <Label>Producto</Label>
               <select
                 value={item.productId}
                 onChange={(e) => updateItem(index, "productId", e.target.value)}
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #c8d3e0",
-                  fontSize: "1rem",
-                }}
+                className={selectClasses}
               >
                 <option value="">Seleccionar producto</option>
                 {products.map((p) => (
@@ -244,152 +191,79 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
               </select>
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr",
-                gap: "0.75rem",
-              }}
-            >
-              <div style={{ display: "grid", gap: "0.25rem" }}>
-                <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Cantidad</label>
-                <input
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="grid gap-1">
+                <Label>Cantidad</Label>
+                <Input
                   type="number"
                   min={0.0001}
                   step={0.0001}
-                  value={item.quantity}
+                  value={String(item.quantity)}
                   onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #c8d3e0",
-                    fontSize: "1rem",
-                  }}
                 />
               </div>
-              <div style={{ display: "grid", gap: "0.25rem" }}>
-                <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Precio unitario</label>
-                <input
+              <div className="grid gap-1">
+                <Label>Precio unitario</Label>
+                <Input
                   type="number"
                   min={0}
                   step={0.01}
-                  value={item.unitPrice}
+                  value={String(item.unitPrice)}
                   onChange={(e) => updateItem(index, "unitPrice", Number(e.target.value))}
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #c8d3e0",
-                    fontSize: "1rem",
-                  }}
                 />
               </div>
-              <div style={{ display: "grid", gap: "0.25rem" }}>
-                <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Subtotal</label>
-                <div
-                  style={{
-                    padding: "0.5rem 0.75rem",
-                    borderRadius: "0.5rem",
-                    border: "1px solid #e2e8f0",
-                    backgroundColor: "#ffffff",
-                    fontSize: "1rem",
-                    color: "#10233f",
-                    fontWeight: 600,
-                  }}
-                >
+              <div className="grid gap-1">
+                <Label>Subtotal</Label>
+                <div className="flex h-8 items-center rounded-lg border border-border bg-card px-2.5 text-sm font-semibold text-card-foreground">
                   ${(item.quantity * item.unitPrice).toLocaleString("es-CO")}
                 </div>
               </div>
             </div>
 
-            <div style={{ display: "grid", gap: "0.25rem" }}>
-              <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Notas del item</label>
-              <input
+            <div className="grid gap-1">
+              <Label>Notas del item</Label>
+              <Input
                 type="text"
                 value={item.notes}
                 onChange={(e) => updateItem(index, "notes", e.target.value)}
                 placeholder="Notas opcionales"
-                style={{
-                  padding: "0.5rem 0.75rem",
-                  borderRadius: "0.5rem",
-                  border: "1px solid #c8d3e0",
-                  fontSize: "1rem",
-                }}
               />
             </div>
 
             {items.length > 1 && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
+                className="w-fit border-destructive text-destructive hover:bg-destructive/10"
                 onClick={() => removeItem(index)}
-                style={{
-                  justifySelf: "start",
-                  padding: "0.375rem 0.75rem",
-                  borderRadius: "0.375rem",
-                  border: "1px solid #c0392b",
-                  backgroundColor: "transparent",
-                  color: "#c0392b",
-                  fontSize: "0.875rem",
-                  cursor: "pointer",
-                }}
               >
                 Eliminar item
-              </button>
+              </Button>
             )}
           </div>
         ))}
       </div>
 
-      <button
+      <Button
         type="button"
+        variant="outline"
+        size="sm"
+        className="w-fit border-dashed"
         onClick={addItem}
-        style={{
-          justifySelf: "start",
-          padding: "0.5rem 1rem",
-          borderRadius: "0.5rem",
-          border: "1px dashed #6b7c93",
-          backgroundColor: "transparent",
-          color: "#6b7c93",
-          fontSize: "0.875rem",
-          cursor: "pointer",
-        }}
       >
         + Agregar item
-      </button>
+      </Button>
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          padding: "1rem",
-          borderRadius: "0.5rem",
-          backgroundColor: "#f0f4f8",
-          fontWeight: 600,
-          fontSize: "1.125rem",
-        }}
-      >
+      <div className="flex items-center justify-between rounded-lg bg-muted p-4 text-lg font-semibold">
         <span>Total estimado</span>
-        <span style={{ color: "#10233f" }}>${total.toLocaleString("es-CO")}</span>
+        <span className="text-foreground">${total.toLocaleString("es-CO")}</span>
       </div>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: "0.625rem 1.25rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            fontSize: "1rem",
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={loading}>
           {loading ? "Guardando..." : "Guardar cotización"}
-        </button>
+        </Button>
       </div>
     </form>
   );

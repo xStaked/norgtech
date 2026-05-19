@@ -206,7 +206,7 @@ export default async function AgendaPage({
   };
 
   return (
-    <div style={{ display: "grid", gap: 24 }}>
+    <div className="space-y-6">
       <PageHeader
         eyebrow="Operacion diaria"
         title="Agenda operativa"
@@ -223,13 +223,7 @@ export default async function AgendaPage({
         }
       />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: 16,
-        }}
-      >
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Compromisos de hoy"
           value={counts.hoy.toLocaleString("es-CO")}

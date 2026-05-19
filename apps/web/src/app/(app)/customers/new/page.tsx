@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { CustomerForm } from "@/components/customers/customer-form";
 
@@ -12,23 +14,19 @@ export default async function NewCustomerPage() {
   const segments: Segment[] = response.ok ? await response.json() : [];
 
   return (
-    <div>
-      <Link
-        href="/customers"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
-      >
-        ← Volver a clientes
-      </Link>
-
-      <h1 style={{ marginTop: 0 }}>Nuevo cliente</h1>
-
-      <CustomerForm segments={segments} />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Clientes"
+        title="Nuevo cliente"
+        actions={
+          <ButtonLink href="/customers" variant="secondary">
+            Volver a clientes
+          </ButtonLink>
+        }
+      />
+      <SectionCard>
+        <CustomerForm segments={segments} />
+      </SectionCard>
     </div>
   );
 }

@@ -1,4 +1,6 @@
-import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
+import { PageHeader } from "@/components/ui/page-header";
+import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { OpportunityForm } from "@/components/opportunities/opportunity-form";
 
@@ -12,23 +14,19 @@ export default async function NewOpportunityPage() {
   const customers: Customer[] = response.ok ? await response.json() : [];
 
   return (
-    <div>
-      <Link
-        href="/opportunities"
-        style={{
-          fontSize: "0.875rem",
-          color: "#52637a",
-          textDecoration: "none",
-          marginBottom: "1rem",
-          display: "inline-block",
-        }}
-      >
-        ← Volver a oportunidades
-      </Link>
-
-      <h1 style={{ marginTop: 0 }}>Nueva oportunidad</h1>
-
-      <OpportunityForm customers={customers} />
+    <div className="space-y-6">
+      <PageHeader
+        eyebrow="Oportunidades"
+        title="Nueva oportunidad"
+        actions={
+          <ButtonLink href="/opportunities" variant="secondary">
+            Volver a oportunidades
+          </ButtonLink>
+        }
+      />
+      <SectionCard>
+        <OpportunityForm customers={customers} />
+      </SectionCard>
     </div>
   );
 }

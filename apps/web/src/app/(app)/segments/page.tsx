@@ -1,5 +1,10 @@
 import Link from "next/link";
 import { apiFetch } from "@/lib/api.server";
+import { PageHeader } from "@/components/ui/page-header";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 
 interface Segment {
   id: string;
@@ -13,53 +18,32 @@ export default async function SegmentsPage() {
   const segments: Segment[] = response.ok ? await response.json() : [];
 
   return (
-    <div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "1.5rem",
-        }}
-      >
-        <h1 style={{ margin: 0 }}>Segmentos de cliente</h1>
-        <Link
-          href="/segments/new"
-          style={{
-            padding: "0.5rem 1rem",
-            borderRadius: "0.5rem",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            textDecoration: "none",
-            fontWeight: 600,
-            fontSize: "0.875rem",
-          }}
-        >
-          Nuevo segmento
-        </Link>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        title="Segmentos de cliente"
+        actions={
+          <Link
+            href="/segments/new"
+            className={cn(buttonVariants({ size: "sm" }))}
+          >
+            Nuevo segmento
+          </Link>
+        }
+      />
 
       {segments.length === 0 ? (
-        <p style={{ color: "#52637a" }}>No hay segmentos registrados.</p>
+        <EmptyState title="No hay segmentos registrados." />
       ) : (
-        <div style={{ display: "grid", gap: "0.75rem" }}>
+        <div className="grid gap-3">
           {segments.map((segment) => (
-            <div
-              key={segment.id}
-              style={{
-                backgroundColor: "#ffffff",
-                padding: "1rem 1.25rem",
-                borderRadius: "0.75rem",
-                boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-              }}
-            >
-              <div style={{ fontWeight: 600 }}>{segment.name}</div>
-              {segment.description && (
-                <div style={{ fontSize: "0.875rem", color: "#52637a", marginTop: "0.25rem" }}>
-                  {segment.description}
-                </div>
-              )}
-            </div>
+            <Card key={segment.id} size="sm">
+              <CardHeader>
+                <CardTitle>{segment.name}</CardTitle>
+                {segment.description && (
+                  <CardDescription>{segment.description}</CardDescription>
+                )}
+              </CardHeader>
+            </Card>
           ))}
         </div>
       )}

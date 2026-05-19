@@ -3,6 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 
 export function ProductForm() {
   const router = useRouter();
@@ -46,140 +50,59 @@ export function ProductForm() {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "40rem",
-        backgroundColor: "#ffffff",
-        padding: "1.5rem",
-        borderRadius: "0.75rem",
-        boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-      }}
-    >
-      {error && (
-        <p style={{ color: "#c0392b", fontSize: "0.875rem", margin: 0 }}>{error}</p>
-      )}
+    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>SKU *</label>
-        <input
-          name="sku"
-          type="text"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>SKU *</Label>
+        <Input name="sku" type="text" required />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Nombre *</label>
-        <input
-          name="name"
-          type="text"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Nombre *</Label>
+        <Input name="name" type="text" required />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Descripción</label>
-        <textarea
-          name="description"
-          rows={2}
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-            resize: "vertical",
-          }}
-        />
+      <div className="grid gap-1">
+        <Label>Descripción</Label>
+        <Textarea name="description" rows={2} />
       </div>
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr",
-          gap: "1rem",
-        }}
-      >
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Unidad *</label>
-          <input
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <Label>Unidad *</Label>
+          <Input
             name="unit"
             type="text"
             required
             placeholder="ej: kg, dosis, litro"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
           />
         </div>
-        <div style={{ display: "grid", gap: "0.25rem" }}>
-          <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Presentación</label>
-          <input
+        <div className="grid gap-1">
+          <Label>Presentación</Label>
+          <Input
             name="presentation"
             type="text"
             placeholder="ej: Caja x10"
-            style={{
-              padding: "0.5rem 0.75rem",
-              borderRadius: "0.5rem",
-              border: "1px solid #c8d3e0",
-              fontSize: "1rem",
-            }}
           />
         </div>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Precio base *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Precio base *</Label>
+        <Input
           name="basePrice"
           type="number"
           min={0}
           step={0.01}
           required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: "0.625rem 1.25rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            fontSize: "1rem",
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={loading}>
           {loading ? "Guardando..." : "Guardar producto"}
-        </button>
+        </Button>
       </div>
     </form>
   );

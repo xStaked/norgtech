@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface Customer {
   id: string;
@@ -23,6 +26,9 @@ const stages = [
   { value: "venta_cerrada", label: "Venta cerrada" },
   { value: "perdida", label: "Perdida" },
 ];
+
+const selectClasses =
+  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function OpportunityForm({ customers }: OpportunityFormProps) {
   const router = useRouter();
@@ -67,34 +73,12 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
   }
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      style={{
-        display: "grid",
-        gap: "1rem",
-        maxWidth: "40rem",
-        backgroundColor: "#ffffff",
-        padding: "1.5rem",
-        borderRadius: "0.75rem",
-        boxShadow: "0 2px 8px rgba(16, 35, 63, 0.04)",
-      }}
-    >
-      {error && (
-        <p style={{ color: "#c0392b", fontSize: "0.875rem", margin: 0 }}>{error}</p>
-      )}
+    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Cliente *</label>
-        <select
-          name="customerId"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Cliente *</Label>
+        <select name="customerId" required className={selectClasses}>
           <option value="">Seleccionar cliente</option>
           {customers.map((c) => (
             <option key={c.id} value={c.id}>
@@ -104,34 +88,19 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Título *</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Título *</Label>
+        <Input
           name="title"
           type="text"
           required
           aria-label="Titulo"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Etapa *</label>
-        <select
-          name="stage"
-          required
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
-        >
+      <div className="grid gap-1">
+        <Label>Etapa *</Label>
+        <select name="stage" required className={selectClasses}>
           {stages.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
@@ -140,41 +109,21 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
         </select>
       </div>
 
-      <div style={{ display: "grid", gap: "0.25rem" }}>
-        <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>Valor estimado</label>
-        <input
+      <div className="grid gap-1">
+        <Label>Valor estimado</Label>
+        <Input
           name="estimatedValue"
           type="number"
           min={0}
           step={0.01}
           aria-label="Valor estimado"
-          style={{
-            padding: "0.5rem 0.75rem",
-            borderRadius: "0.5rem",
-            border: "1px solid #c8d3e0",
-            fontSize: "1rem",
-          }}
         />
       </div>
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-        <button
-          type="submit"
-          disabled={loading}
-          style={{
-            padding: "0.625rem 1.25rem",
-            borderRadius: "0.5rem",
-            border: "none",
-            backgroundColor: "#10233f",
-            color: "#ffffff",
-            fontSize: "1rem",
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.7 : 1,
-          }}
-        >
+      <div className="flex gap-3 pt-2">
+        <Button type="submit" disabled={loading}>
           {loading ? "Guardando..." : "Guardar oportunidad"}
-        </button>
+        </Button>
       </div>
     </form>
   );
