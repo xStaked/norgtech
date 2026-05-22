@@ -14,8 +14,28 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateInternalNoteDto } from "./dto/create-internal-note.dto";
+import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
+import { KapsoWebhookService } from "./kapso-webhook.service";
 import { WhatsAppService } from "./whatsapp.service";
+
+@Controller("whatsapp/webhooks")
+export class WhatsAppWebhookController {
+  constructor(private readonly kapsoWebhookService: KapsoWebhookService) {}
+
+  @Post("kapso")
+  receiveKapsoWebhook(
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: KapsoWebhookDto,
+  ) {
+    return this.kapsoWebhookService.handle(dto);
+  }
+}
 
 @Controller("whatsapp")
 @UseGuards(JwtAuthGuard, RolesGuard)

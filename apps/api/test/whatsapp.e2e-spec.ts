@@ -112,6 +112,7 @@ describe("WhatsApp inbox", () => {
       updatedAt: new Date("2026-05-22T10:03:00.000Z"),
     },
   ];
+  const accounts: Array<Record<string, unknown>> = [];
 
   const buildConversation = (
     conversation: Record<string, unknown>,
@@ -197,12 +198,82 @@ describe("WhatsApp inbox", () => {
           };
           return buildConversation(conversations[index], include);
         },
+        upsert: async ({
+          where: {
+            accountId_waId: { accountId, waId },
+          },
+          update,
+          create,
+        }: {
+          where: { accountId_waId: { accountId: string; waId: string } };
+          update: Record<string, unknown>;
+          create: Record<string, unknown>;
+        }) => {
+          const index = conversations.findIndex(
+            (item) => item.accountId === accountId && item.waId === waId,
+          );
+
+          if (index !== -1) {
+            conversations[index] = {
+              ...conversations[index],
+              ...update,
+              updatedAt: new Date("2026-05-22T11:10:00.000Z"),
+            };
+            return conversations[index];
+          }
+
+          const conversation = {
+            id: `conversation-${conversations.length + 1}`,
+            createdAt: new Date("2026-05-22T11:10:00.000Z"),
+            updatedAt: new Date("2026-05-22T11:10:00.000Z"),
+            ...create,
+          };
+          conversations.push(conversation as (typeof conversations)[number]);
+          return conversation;
+        },
+      },
+      whatsAppAccount: {
+        upsert: async ({
+          where: { phoneNumberId },
+          update,
+          create,
+        }: {
+          where: { phoneNumberId: string };
+          update: Record<string, unknown>;
+          create: Record<string, unknown>;
+        }) => {
+          const index = accounts.findIndex((account) => account.phoneNumberId === phoneNumberId);
+
+          if (index !== -1) {
+            accounts[index] = { ...accounts[index], ...update };
+            return accounts[index];
+          }
+
+          const account = {
+            id: `kapso-account-${accounts.length + 1}`,
+            createdAt: new Date("2026-05-22T11:10:00.000Z"),
+            updatedAt: new Date("2026-05-22T11:10:00.000Z"),
+            active: true,
+            ...create,
+          };
+          accounts.push(account);
+          return account;
+        },
       },
       whatsAppMessage: {
         findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
           where?.conversationId
             ? messages.filter((message) => message.conversationId === where.conversationId)
             : messages,
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const message = {
+            id: `message-${messages.length + 1}`,
+            createdAt: new Date("2026-05-22T11:10:00.000Z"),
+            ...data,
+          };
+          messages.push(message as (typeof messages)[number]);
+          return message;
+        },
       },
       whatsAppInternalNote: {
         create: async ({
@@ -229,6 +300,7 @@ describe("WhatsApp inbox", () => {
             ? tags.filter((tag) => tag.conversationId === where.conversationId)
             : tags,
       },
+      $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => callback(prismaStub),
     };
 
     moduleRef = await Test.createTestingModule({
@@ -342,5 +414,82 @@ describe("WhatsApp inbox", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ body: "Nota" })
       .expect(404);
+  });
+
+  it("receives a Kapso message webhook and persists inbox records", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-1",
+            from: "573001112233",
+            timestamp: "2026-05-22T20:00:00.000Z",
+            text: { body: "Necesito 10 bultos de producto A" },
+            profile: { name: "Cliente Demo" },
+          },
+        },
+      })
+      .expect(201);
+
+    expect(response.body.ignored).toBe(false);
+    expect(response.body.conversationId).toBe("conversation-2");
+    expect(response.body.messageId).toBe("message-2");
+    expect(accounts).toHaveLength(1);
+    expect(accounts[0]).toMatchObject({
+      phoneNumberId: "phone-number-1",
+      phoneNumber: "phone-number-1",
+      displayName: "WhatsApp",
+    });
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: "conversation-2",
+        accountId: "kapso-account-1",
+        waId: "573001112233",
+        phone: "573001112233",
+        senderName: "Cliente Demo",
+        lastMessageText: "Necesito 10 bultos de producto A",
+      }),
+    );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        id: "message-2",
+        conversationId: "conversation-2",
+        kapsoMessageId: "wamid-1",
+        metaMessageId: "wamid-1",
+        direction: WhatsAppMessageDirection.inbound,
+        role: WhatsAppMessageRole.user,
+        body: "Necesito 10 bultos de producto A",
+      }),
+    );
+  });
+
+  it("ignores non-message Kapso webhook events", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({ type: "whatsapp.message.status", data: { messageId: "wamid-1" } })
+      .expect(201);
+
+    expect(response.body).toEqual({ ignored: true });
+  });
+
+  it("rejects Kapso message webhooks missing required fields", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-missing-from",
+            text: { body: "Hola" },
+          },
+        },
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("Kapso message webhook is missing required fields");
   });
 });
