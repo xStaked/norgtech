@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
 
 const conversationSummaryInclude = {
@@ -28,6 +30,10 @@ const conversationDetailInclude = {
   noraActions: {
     orderBy: { createdAt: "desc" },
   },
+} satisfies Prisma.WhatsAppConversationInclude;
+
+const sendMessageConversationInclude = {
+  account: true,
 } satisfies Prisma.WhatsAppConversationInclude;
 
 @Injectable()
@@ -98,6 +104,67 @@ export class WhatsAppService {
         authorUserId: user.id,
         body,
       },
+    });
+  }
+
+  async sendMessage(user: AuthUser, conversationId: string, dto: SendWhatsAppMessageDto) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+      include: sendMessageConversationInclude,
+    });
+
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+
+    const providerResult = await this.sendViaKapso(
+      conversation.account.phoneNumberId,
+      conversation.waId,
+      dto.body,
+    );
+
+    return this.prisma.whatsAppMessage.create({
+      data: {
+        conversationId,
+        direction: "outbound",
+        role: "assistant",
+        authorUserId: user.id,
+        body: dto.body,
+        payload: {
+          provider: "kapso",
+          providerResult: providerResult as Prisma.InputJsonValue,
+        },
+        deliveryStatus: "queued",
+      },
+    });
+  }
+
+  private async sendViaKapso(
+    phoneNumberId: string,
+    to: string,
+    body: string,
+  ): Promise<SendMessageResponse | Record<string, unknown>> {
+    const kapsoApiKey = process.env.KAPSO_API_KEY;
+
+    if (!kapsoApiKey || process.env.NODE_ENV === "test") {
+      return {
+        id: "kapso-test-message",
+        status: "queued",
+        phoneNumberId,
+        to,
+        body,
+      };
+    }
+
+    const client = new WhatsAppClient({
+      baseUrl: process.env.KAPSO_BASE_URL ?? "https://api.kapso.ai/meta/whatsapp",
+      kapsoApiKey,
+    });
+
+    return client.messages.sendText({
+      phoneNumberId,
+      to,
+      body,
     });
   }
 

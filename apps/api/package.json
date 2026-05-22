@@ -10,6 +10,7 @@
     "db:seed": "ts-node prisma/seed.ts"
   },
   "dependencies": {
+    "@kapso/whatsapp-cloud-api": "^0.2.1",
     "@nestjs/common": "^11.1.6",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.1.6",

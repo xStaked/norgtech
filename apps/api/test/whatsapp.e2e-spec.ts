@@ -130,6 +130,15 @@ describe("WhatsApp inbox", () => {
       result.assignedToUser =
         users.find((user) => user.id === conversation.assignedToUserId) ?? null;
     }
+    if (include?.account) {
+      result.account = accounts.find((account) => account.id === conversation.accountId) ?? {
+        id: conversation.accountId,
+        displayName: "WhatsApp",
+        phoneNumber: "phone-number-1",
+        phoneNumberId: "phone-number-1",
+        active: true,
+      };
+    }
     if (include?.tags) {
       result.tags = tags.filter((tag) => tag.conversationId === conversation.id);
     }
@@ -401,6 +410,34 @@ describe("WhatsApp inbox", () => {
     expect(response.body.conversationId).toBe("conversation-1");
   });
 
+  it("sends an outbound WhatsApp message with the authenticated user", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/conversation-1/messages")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ body: "Recibido. Vamos a revisar tu pedido." })
+      .expect(201);
+
+    expect(response.body.body).toBe("Recibido. Vamos a revisar tu pedido.");
+    expect(response.body.conversationId).toBe("conversation-1");
+    expect(response.body.direction).toBe(WhatsAppMessageDirection.outbound);
+    expect(response.body.role).toBe(WhatsAppMessageRole.assistant);
+    expect(response.body.authorUserId).toBe("admin-user-id");
+    expect(response.body.deliveryStatus).toBe("queued");
+    expect(response.body.payload).toMatchObject({ provider: "kapso" });
+
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        conversationId: "conversation-1",
+        direction: WhatsAppMessageDirection.outbound,
+        role: WhatsAppMessageRole.assistant,
+        authorUserId: "admin-user-id",
+        body: "Recibido. Vamos a revisar tu pedido.",
+        deliveryStatus: "queued",
+        payload: expect.objectContaining({ provider: "kapso" }),
+      }),
+    );
+  });
+
   it("returns 404 when getting a missing conversation", async () => {
     await request(app.getHttpServer())
       .get("/whatsapp/conversations/missing")
@@ -413,6 +450,14 @@ describe("WhatsApp inbox", () => {
       .post("/whatsapp/conversations/missing/notes")
       .set("Authorization", `Bearer ${adminToken}`)
       .send({ body: "Nota" })
+      .expect(404);
+  });
+
+  it("returns 404 when sending a message for a missing conversation", async () => {
+    await request(app.getHttpServer())
+      .post("/whatsapp/conversations/missing/messages")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ body: "Mensaje" })
       .expect(404);
   });
 
@@ -436,7 +481,7 @@ describe("WhatsApp inbox", () => {
 
     expect(response.body.ignored).toBe(false);
     expect(response.body.conversationId).toBe("conversation-2");
-    expect(response.body.messageId).toBe("message-2");
+    expect(response.body.messageId).toMatch(/^message-\d+$/);
     expect(accounts).toHaveLength(1);
     expect(accounts[0]).toMatchObject({
       phoneNumberId: "phone-number-1",
@@ -455,7 +500,7 @@ describe("WhatsApp inbox", () => {
     );
     expect(messages).toContainEqual(
       expect.objectContaining({
-        id: "message-2",
+        id: response.body.messageId,
         conversationId: "conversation-2",
         kapsoMessageId: "wamid-1",
         metaMessageId: "wamid-1",

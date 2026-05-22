@@ -15,6 +15,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateInternalNoteDto } from "./dto/create-internal-note.dto";
 import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
+import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
 import { KapsoWebhookService } from "./kapso-webhook.service";
 import { WhatsAppService } from "./whatsapp.service";
@@ -80,5 +81,20 @@ export class WhatsAppController {
     dto: CreateInternalNoteDto,
   ) {
     return this.whatsAppService.createNote(user, id, dto.body);
+  }
+
+  @Post("conversations/:id/messages")
+  sendMessage(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: SendWhatsAppMessageDto,
+  ) {
+    return this.whatsAppService.sendMessage(user, id, dto);
   }
 }
