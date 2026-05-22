@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -63,7 +63,9 @@ export class WhatsAppService {
       throw new NotFoundException("WhatsApp conversation not found");
     }
 
-    await this.assertReferencesExist(dto);
+    await this.assertReferencesExist(conversation, dto);
+
+    const shouldClearContact = dto.customerId === null && dto.contactId === undefined;
 
     return this.prisma.whatsAppConversation.update({
       where: { id },
@@ -73,7 +75,9 @@ export class WhatsAppService {
           assignedToUserId: dto.assignedToUserId,
         }),
         ...(dto.customerId !== undefined && { customerId: dto.customerId }),
-        ...(dto.contactId !== undefined && { contactId: dto.contactId }),
+        ...((dto.contactId !== undefined || shouldClearContact) && {
+          contactId: dto.contactId ?? null,
+        }),
       },
       include: conversationDetailInclude,
     });
@@ -97,8 +101,11 @@ export class WhatsAppService {
     });
   }
 
-  private async assertReferencesExist(dto: UpdateConversationDto) {
-    if (dto.assignedToUserId !== undefined) {
+  private async assertReferencesExist(
+    conversation: { customerId: string | null; contactId: string | null },
+    dto: UpdateConversationDto,
+  ) {
+    if (dto.assignedToUserId !== undefined && dto.assignedToUserId !== null) {
       const assignedUser = await this.prisma.user.findUnique({
         where: { id: dto.assignedToUserId },
       });
@@ -108,7 +115,7 @@ export class WhatsAppService {
       }
     }
 
-    if (dto.customerId !== undefined) {
+    if (dto.customerId !== undefined && dto.customerId !== null) {
       const customer = await this.prisma.customer.findUnique({
         where: { id: dto.customerId },
       });
@@ -118,13 +125,30 @@ export class WhatsAppService {
       }
     }
 
-    if (dto.contactId !== undefined) {
+    const effectiveCustomerId =
+      dto.customerId !== undefined ? dto.customerId : conversation.customerId;
+    const effectiveContactId =
+      dto.customerId === null && dto.contactId === undefined
+        ? null
+        : dto.contactId !== undefined
+          ? dto.contactId
+          : conversation.contactId;
+
+    if (effectiveContactId !== null && effectiveCustomerId === null) {
+      throw new BadRequestException("Contact requires customer");
+    }
+
+    if (effectiveContactId !== null) {
       const contact = await this.prisma.contact.findUnique({
-        where: { id: dto.contactId },
+        where: { id: effectiveContactId },
       });
 
       if (!contact) {
         throw new NotFoundException("Contact not found");
+      }
+
+      if (contact.customerId !== effectiveCustomerId) {
+        throw new BadRequestException("Contact does not belong to customer");
       }
     }
   }

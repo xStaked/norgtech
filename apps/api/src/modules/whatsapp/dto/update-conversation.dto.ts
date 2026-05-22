@@ -1,5 +1,5 @@
 import { WhatsAppConversationStatus } from "@prisma/client";
-import { IsEnum, IsOptional, IsString } from "class-validator";
+import { IsEnum, IsOptional, IsString, ValidateIf } from "class-validator";
 
 export class UpdateConversationDto {
   @IsOptional()
@@ -7,14 +7,17 @@ export class UpdateConversationDto {
   status?: WhatsAppConversationStatus;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
-  assignedToUserId?: string;
+  assignedToUserId?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
-  customerId?: string;
+  customerId?: string | null;
 
   @IsOptional()
+  @ValidateIf((_, value) => value !== null && value !== undefined)
   @IsString()
-  contactId?: string;
+  contactId?: string | null;
 }

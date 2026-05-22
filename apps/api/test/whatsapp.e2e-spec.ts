@@ -37,8 +37,14 @@ describe("WhatsApp inbox", () => {
     },
   ];
 
-  const customers = [{ id: "customer-1", displayName: "Agro Norte" }];
-  const contacts = [{ id: "contact-1", customerId: "customer-1", fullName: "Laura Cliente" }];
+  const customers = [
+    { id: "customer-1", displayName: "Agro Norte" },
+    { id: "customer-2", displayName: "Agro Sur" },
+  ];
+  const contacts = [
+    { id: "contact-1", customerId: "customer-1", fullName: "Laura Cliente" },
+    { id: "contact-2", customerId: "customer-2", fullName: "Carlos Cliente" },
+  ];
   const conversations = [
     {
       id: "conversation-1",
@@ -107,17 +113,42 @@ describe("WhatsApp inbox", () => {
     },
   ];
 
-  const buildConversation = (conversation: Record<string, unknown>) => ({
-    ...conversation,
-    customer: customers.find((customer) => customer.id === conversation.customerId) ?? null,
-    contact: contacts.find((contact) => contact.id === conversation.contactId) ?? null,
-    assignedToUser: users.find((user) => user.id === conversation.assignedToUserId) ?? null,
-    tags: tags.filter((tag) => tag.conversationId === conversation.id),
-    notes: notes.filter((note) => note.conversationId === conversation.id),
-    messages: messages.filter((message) => message.conversationId === conversation.id),
-    orders: orders.filter((order) => order.sourceConversationId === conversation.id),
-    noraActions: noraActions.filter((action) => action.conversationId === conversation.id),
-  });
+  const buildConversation = (
+    conversation: Record<string, unknown>,
+    include?: Record<string, unknown>,
+  ) => {
+    const result = { ...conversation } as Record<string, unknown>;
+
+    if (include?.customer) {
+      result.customer = customers.find((customer) => customer.id === conversation.customerId) ?? null;
+    }
+    if (include?.contact) {
+      result.contact = contacts.find((contact) => contact.id === conversation.contactId) ?? null;
+    }
+    if (include?.assignedToUser) {
+      result.assignedToUser =
+        users.find((user) => user.id === conversation.assignedToUserId) ?? null;
+    }
+    if (include?.tags) {
+      result.tags = tags.filter((tag) => tag.conversationId === conversation.id);
+    }
+    if (include?.notes) {
+      result.notes = notes.filter((note) => note.conversationId === conversation.id);
+    }
+    if (include?.messages) {
+      result.messages = messages.filter((message) => message.conversationId === conversation.id);
+    }
+    if (include?.orders) {
+      result.orders = orders.filter((order) => order.sourceConversationId === conversation.id);
+    }
+    if (include?.noraActions) {
+      result.noraActions = noraActions.filter(
+        (action) => action.conversationId === conversation.id,
+      );
+    }
+
+    return result;
+  };
 
   beforeAll(async () => {
     const prismaStub = {
@@ -134,17 +165,26 @@ describe("WhatsApp inbox", () => {
           contacts.find((contact) => contact.id === id) ?? null,
       },
       whatsAppConversation: {
-        findMany: async () => conversations.map(buildConversation),
-        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+        findMany: async ({ include }: { include?: Record<string, unknown> } = {}) =>
+          conversations.map((conversation) => buildConversation(conversation, include)),
+        findUnique: async ({
+          where: { id },
+          include,
+        }: {
+          where: { id: string };
+          include?: Record<string, unknown>;
+        }) => {
           const conversation = conversations.find((item) => item.id === id);
-          return conversation ? buildConversation(conversation) : null;
+          return conversation ? buildConversation(conversation, include) : null;
         },
         update: async ({
           where: { id },
           data,
+          include,
         }: {
           where: { id: string };
           data: Record<string, unknown>;
+          include?: Record<string, unknown>;
         }) => {
           const index = conversations.findIndex((item) => item.id === id);
           if (index === -1) {
@@ -155,7 +195,7 @@ describe("WhatsApp inbox", () => {
             ...data,
             updatedAt: new Date("2026-05-22T11:00:00.000Z"),
           };
-          return buildConversation(conversations[index]);
+          return buildConversation(conversations[index], include);
         },
       },
       whatsAppMessage: {
@@ -252,6 +292,29 @@ describe("WhatsApp inbox", () => {
       .expect(200);
 
     expect(response.body.status).toBe("pendiente");
+  });
+
+  it("clears nullable relationship fields", async () => {
+    const response = await request(app.getHttpServer())
+      .patch("/whatsapp/conversations/conversation-1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ assignedToUserId: null, contactId: null })
+      .expect(200);
+
+    expect(response.body.assignedToUserId).toBeNull();
+    expect(response.body.contactId).toBeNull();
+    expect(response.body.assignedToUser).toBeNull();
+    expect(response.body.contact).toBeNull();
+  });
+
+  it("rejects a contact that does not belong to the effective customer", async () => {
+    const response = await request(app.getHttpServer())
+      .patch("/whatsapp/conversations/conversation-1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ customerId: "customer-1", contactId: "contact-2" })
+      .expect(400);
+
+    expect(response.body.message).toBe("Contact does not belong to customer");
   });
 
   it("creates an internal note with the authenticated user", async () => {
