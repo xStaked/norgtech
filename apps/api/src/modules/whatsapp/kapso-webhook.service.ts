@@ -4,7 +4,6 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
 
 const MESSAGE_RECEIVED_EVENT = "whatsapp.message.received";
-const UNSUPPORTED_MESSAGE_BODY = "[mensaje no soportado]";
 
 type NormalizedKapsoMessage = {
   phoneNumberId: string;
@@ -92,18 +91,16 @@ export class KapsoWebhookService {
     }
 
     const text = this.asRecord(message?.text);
+    const body = this.asString(text?.body);
+
+    if (!body) {
+      throw new BadRequestException("Kapso message webhook is missing required fields");
+    }
+
     const profile = this.asRecord(message?.profile);
-    const body = this.asString(text?.body) ?? UNSUPPORTED_MESSAGE_BODY;
     const senderName = this.asString(profile?.name);
 
-    return {
-      phoneNumberId,
-      waId,
-      messageId,
-      senderName,
-      body,
-      payload: data,
-    };
+    return { phoneNumberId, waId, messageId, senderName, body, payload: data };
   }
 
   private asRecord(value: unknown): Record<string, unknown> | undefined {

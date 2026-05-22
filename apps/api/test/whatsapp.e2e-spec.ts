@@ -492,4 +492,22 @@ describe("WhatsApp inbox", () => {
 
     expect(response.body.message).toBe("Kapso message webhook is missing required fields");
   });
+
+  it("rejects Kapso message webhooks missing text body", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-missing-body",
+            from: "573001112233",
+          },
+        },
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("Kapso message webhook is missing required fields");
+  });
 });
