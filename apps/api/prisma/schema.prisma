@@ -89,29 +89,66 @@ enum LauraProposalStatus {
   discarded
 }
 
+enum WhatsAppConversationStatus {
+  nuevo
+  abierto
+  pendiente
+  cerrado
+}
+
+enum WhatsAppSenderType {
+  cliente
+  comercial
+  admin
+  desconocido
+}
+
+enum WhatsAppMessageDirection {
+  inbound
+  outbound
+}
+
+enum WhatsAppMessageRole {
+  user
+  assistant
+  system
+  internal
+}
+
+enum NoraActionStatus {
+  proposed
+  confirmed
+  executed
+  discarded
+  failed
+}
+
 model User {
-  id           String   @id @default(cuid())
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  assignedCustomers Customer[] @relation("CustomerAssignedUser")
-  assignedOrders Order[]
-  createdReports ExecutiveReport[]
-  lauraSessions LauraSession[]
+  id                            String                 @id @default(cuid())
+  name                          String
+  email                         String                 @unique
+  passwordHash                  String
+  role                          UserRole
+  active                        Boolean                @default(true)
+  createdAt                     DateTime               @default(now())
+  updatedAt                     DateTime               @updatedAt
+  assignedCustomers             Customer[]             @relation("CustomerAssignedUser")
+  assignedOrders                Order[]
+  createdReports                ExecutiveReport[]
+  lauraSessions                 LauraSession[]
+  assignedWhatsAppConversations WhatsAppConversation[] @relation("WhatsAppAssignedUser")
+  whatsappMessages              WhatsAppMessage[]      @relation("WhatsAppMessageAuthor")
+  noraActions                   NoraActionLog[]
 }
 
 model LauraSession {
-  id              String         @id @default(cuid())
+  id              String          @id @default(cuid())
   ownerUserId     String
   contextType     String?
   contextEntityId String?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  ownerUser       User           @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  ownerUser       User            @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
   messages        LauraMessage[]
   proposals       LauraProposal[]
 }
@@ -129,15 +166,120 @@ model LauraMessage {
 }
 
 model LauraProposal {
-  id        String               @id @default(cuid())
+  id        String              @id @default(cuid())
   sessionId String
   messageId String
-  status    LauraProposalStatus  @default(draft)
+  status    LauraProposalStatus @default(draft)
   payload   Json
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
-  message   LauraMessage         @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  session   LauraSession         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  message   LauraMessage        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  session   LauraSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppAccount {
+  id                String                 @id @default(cuid())
+  displayName       String
+  phoneNumber       String
+  phoneNumberId     String                 @unique
+  businessAccountId String?
+  active            Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  conversations     WhatsAppConversation[]
+}
+
+model WhatsAppConversation {
+  id               String                     @id @default(cuid())
+  accountId        String
+  waId             String
+  phone            String
+  senderName       String?
+  senderType       WhatsAppSenderType         @default(desconocido)
+  status           WhatsAppConversationStatus @default(nuevo)
+  assignedToUserId String?
+  customerId       String?
+  contactId        String?
+  lastMessageAt    DateTime?
+  lastMessageText  String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  account          WhatsAppAccount            @relation(fields: [accountId], references: [id])
+  assignedToUser   User?                      @relation("WhatsAppAssignedUser", fields: [assignedToUserId], references: [id])
+  customer         Customer?                  @relation(fields: [customerId], references: [id])
+  contact          Contact?                   @relation(fields: [contactId], references: [id])
+  messages         WhatsAppMessage[]
+  notes            WhatsAppInternalNote[]
+  tags             WhatsAppConversationTag[]
+  orders           Order[]
+  noraActions      NoraActionLog[]
+
+  @@unique([accountId, waId])
+  @@index([status, updatedAt])
+  @@index([phone])
+  @@index([customerId])
+  @@index([assignedToUserId])
+}
+
+model WhatsAppMessage {
+  id             String                   @id @default(cuid())
+  conversationId String
+  kapsoMessageId String?
+  metaMessageId  String?
+  direction      WhatsAppMessageDirection
+  role           WhatsAppMessageRole
+  body           String
+  payload        Json?
+  deliveryStatus String?
+  authorUserId   String?
+  createdAt      DateTime                 @default(now())
+  conversation   WhatsAppConversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorUser     User?                    @relation("WhatsAppMessageAuthor", fields: [authorUserId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([kapsoMessageId])
+  @@index([metaMessageId])
+}
+
+model WhatsAppInternalNote {
+  id             String               @id @default(cuid())
+  conversationId String
+  authorUserId   String
+  body           String
+  createdAt      DateTime             @default(now())
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+}
+
+model WhatsAppConversationTag {
+  id             String               @id @default(cuid())
+  conversationId String
+  label          String
+  createdAt      DateTime             @default(now())
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, label])
+}
+
+model NoraActionLog {
+  id             String                @id @default(cuid())
+  conversationId String?
+  actorUserId    String?
+  mode           String
+  action         String
+  status         NoraActionStatus      @default(proposed)
+  input          Json
+  output         Json?
+  error          String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  conversation   WhatsAppConversation? @relation(fields: [conversationId], references: [id])
+  actorUser      User?                 @relation(fields: [actorUserId], references: [id])
+
+  @@index([conversationId, createdAt])
+  @@index([actorUserId])
+  @@index([status])
 }
 
 model AuditLog {
@@ -152,124 +294,126 @@ model AuditLog {
 }
 
 model CustomerSegment {
-  id              String   @id @default(cuid())
-  name            String   @unique
+  id              String     @id @default(cuid())
+  name            String     @unique
   description     String?
-  discountPercent Decimal  @db.Decimal(5, 2) @default(0)
-  minGoalAmount   Decimal  @db.Decimal(14, 2)
-  maxGoalAmount   Decimal? @db.Decimal(14, 2)
-  active          Boolean  @default(true)
+  discountPercent Decimal    @default(0) @db.Decimal(5, 2)
+  minGoalAmount   Decimal    @db.Decimal(14, 2)
+  maxGoalAmount   Decimal?   @db.Decimal(14, 2)
+  active          Boolean    @default(true)
   createdBy       String
   updatedBy       String
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
   customers       Customer[]
 }
 
 model Customer {
-  id               String    @id @default(cuid())
-  legalName        String
-  displayName      String
-  taxId            String?   @unique
-  phone            String?
-  email            String?
-  address          String?
-  city             String?
-  department       String?
-  notes            String?
-  segmentId        String
-  assignedToUserId String?
-  active           Boolean   @default(true)
-  createdBy        String
-  updatedBy        String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  segment          CustomerSegment @relation(fields: [segmentId], references: [id])
-  assignedToUser   User?     @relation("CustomerAssignedUser", fields: [assignedToUserId], references: [id])
-  contacts         Contact[]
-  opportunities    Opportunity[]
-  quotes           Quote[]
-  visits           Visit[]
-  followUpTasks    FollowUpTask[]
-  orders           Order[]
-  billingRequests  BillingRequest[]
-  reports          ExecutiveReport[]
-  goals            CustomerGoal[]
+  id                    String                 @id @default(cuid())
+  legalName             String
+  displayName           String
+  taxId                 String?                @unique
+  phone                 String?
+  email                 String?
+  address               String?
+  city                  String?
+  department            String?
+  notes                 String?
+  segmentId             String
+  assignedToUserId      String?
+  active                Boolean                @default(true)
+  createdBy             String
+  updatedBy             String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  segment               CustomerSegment        @relation(fields: [segmentId], references: [id])
+  assignedToUser        User?                  @relation("CustomerAssignedUser", fields: [assignedToUserId], references: [id])
+  contacts              Contact[]
+  opportunities         Opportunity[]
+  quotes                Quote[]
+  visits                Visit[]
+  followUpTasks         FollowUpTask[]
+  orders                Order[]
+  billingRequests       BillingRequest[]
+  reports               ExecutiveReport[]
+  goals                 CustomerGoal[]
+  whatsappConversations WhatsAppConversation[]
 }
 
 model Contact {
-  id         String   @id @default(cuid())
-  customerId String
-  fullName   String
-  roleTitle  String?
-  phone      String?
-  email      String?
-  isPrimary  Boolean  @default(false)
-  notes      String?
-  createdBy  String
-  updatedBy  String
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  customer   Customer @relation(fields: [customerId], references: [id])
+  id                    String                 @id @default(cuid())
+  customerId            String
+  fullName              String
+  roleTitle             String?
+  phone                 String?
+  email                 String?
+  isPrimary             Boolean                @default(false)
+  notes                 String?
+  createdBy             String
+  updatedBy             String
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  customer              Customer               @relation(fields: [customerId], references: [id])
+  whatsappConversations WhatsAppConversation[]
 }
 
 model Opportunity {
-  id             String           @id @default(cuid())
-  customerId     String
-  title          String
-  description    String?
-  stage          OpportunityStage
-  estimatedValue Decimal?         @db.Decimal(14, 2)
+  id                String           @id @default(cuid())
+  customerId        String
+  title             String
+  description       String?
+  stage             OpportunityStage
+  estimatedValue    Decimal?         @db.Decimal(14, 2)
   expectedCloseDate DateTime?
-  assignedToUserId String?
-  lostReason     String?
-  closedAt       DateTime?
-  createdBy      String
-  updatedBy      String
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  customer       Customer         @relation(fields: [customerId], references: [id])
-  quotes         Quote[]
-  visits         Visit[]
-  followUpTasks  FollowUpTask[]
-  orders         Order[]
-  billingRequests BillingRequest[]
+  assignedToUserId  String?
+  lostReason        String?
+  closedAt          DateTime?
+  createdBy         String
+  updatedBy         String
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  customer          Customer         @relation(fields: [customerId], references: [id])
+  quotes            Quote[]
+  visits            Visit[]
+  followUpTasks     FollowUpTask[]
+  orders            Order[]
+  billingRequests   BillingRequest[]
 }
 
 model Product {
-  id          String   @id @default(cuid())
-  sku         String   @unique
-  name        String
-  description String?
-  unit        String
+  id           String      @id @default(cuid())
+  sku          String      @unique
+  name         String
+  description  String?
+  unit         String
   presentation String?
-  basePrice   Decimal  @db.Decimal(14, 2)
-  active      Boolean  @default(true)
-  createdBy   String
-  updatedBy   String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  quoteItems  QuoteItem[]
-  orderItems  OrderItem[]
+  basePrice    Decimal     @db.Decimal(14, 2)
+  active       Boolean     @default(true)
+  createdBy    String
+  updatedBy    String
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  quoteItems   QuoteItem[]
+  orderItems   OrderItem[]
 }
 
 model Quote {
-  id            String      @id @default(cuid())
-  customerId    String
-  opportunityId String?
-  status        QuoteStatus @default(abierta)
-  validUntil    DateTime?
-  notes         String?
-  subtotal      Decimal     @db.Decimal(14, 2)
-  total         Decimal     @db.Decimal(14, 2)
-  createdBy     String
-  updatedBy     String
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  customer      Customer    @relation(fields: [customerId], references: [id])
-  opportunity   Opportunity? @relation(fields: [opportunityId], references: [id])
-  items         QuoteItem[]
-  sourceOrders  Order[]
+  id              String           @id @default(cuid())
+  customerId      String
+  opportunityId   String?
+  status          QuoteStatus      @default(abierta)
+  validUntil      DateTime?
+  notes           String?
+  subtotal        Decimal          @db.Decimal(14, 2)
+  total           Decimal          @db.Decimal(14, 2)
+  createdBy       String
+  updatedBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  opportunity     Opportunity?     @relation(fields: [opportunityId], references: [id])
+  items           QuoteItem[]
+  sourceOrders    Order[]
   billingRequests BillingRequest[]
 }
 
@@ -291,133 +435,137 @@ model QuoteItem {
 }
 
 model Visit {
-  id              String      @id @default(cuid())
-  customerId      String
-  opportunityId   String?
-  scheduledAt     DateTime
-  completedAt     DateTime?
-  status          VisitStatus @default(programada)
-  summary         String?
-  diagnosis       String?
-  problems        String?
+  id               String            @id @default(cuid())
+  customerId       String
+  opportunityId    String?
+  scheduledAt      DateTime
+  completedAt      DateTime?
+  status           VisitStatus       @default(programada)
+  summary          String?
+  diagnosis        String?
+  problems         String?
   proposedSolution String?
-  notes           String?
-  nextStep        String?
+  notes            String?
+  nextStep         String?
   assignedToUserId String?
-  createdBy       String
-  updatedBy       String
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  customer        Customer    @relation(fields: [customerId], references: [id])
-  opportunity     Opportunity? @relation(fields: [opportunityId], references: [id])
-  reports         ExecutiveReport[]
+  createdBy        String
+  updatedBy        String
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  opportunity      Opportunity?      @relation(fields: [opportunityId], references: [id])
+  reports          ExecutiveReport[]
 }
 
 model FollowUpTask {
-  id             String             @id @default(cuid())
-  customerId     String
-  opportunityId  String?
-  type           FollowUpTaskType
-  title          String
-  dueAt          DateTime
-  status         FollowUpTaskStatus @default(pendiente)
-  notes          String?
+  id               String             @id @default(cuid())
+  customerId       String
+  opportunityId    String?
+  type             FollowUpTaskType
+  title            String
+  dueAt            DateTime
+  status           FollowUpTaskStatus @default(pendiente)
+  notes            String?
   assignedToUserId String?
-  completedAt    DateTime?
-  createdBy      String
-  updatedBy      String
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  customer       Customer           @relation(fields: [customerId], references: [id])
-  opportunity    Opportunity?        @relation(fields: [opportunityId], references: [id])
+  completedAt      DateTime?
+  createdBy        String
+  updatedBy        String
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  customer         Customer           @relation(fields: [customerId], references: [id])
+  opportunity      Opportunity?       @relation(fields: [opportunityId], references: [id])
 }
 
 model Order {
-  id                  String      @id @default(cuid())
-  customerId          String
-  opportunityId       String?
-  sourceQuoteId       String?
-  orderNumber         String?     @unique
-  purchaseOrderNumber String?
-  orderDate           DateTime    @default(now())
-  customerNameSnapshot String?
-  customerNitSnapshot String?
-  dispatchAddressSnapshot String?
-  requesterName       String?
-  requesterEmail      String?
-  requesterRole       String?
-  requesterPhone      String?
+  id                       String                @id @default(cuid())
+  customerId               String
+  opportunityId            String?
+  sourceQuoteId            String?
+  orderNumber              String?               @unique
+  purchaseOrderNumber      String?
+  orderDate                DateTime              @default(now())
+  customerNameSnapshot     String?
+  customerNitSnapshot      String?
+  dispatchAddressSnapshot  String?
+  requesterName            String?
+  requesterEmail           String?
+  requesterRole            String?
+  requesterPhone           String?
   approvedQuoteConsecutive String?
-  deliveryInstructions String?
-  receiverName        String?
-  receiverEmail       String?
-  receiverPhone       String?
-  receiverRole        String?
-  invoiceFilingPlace  String?
-  approvalStatus      String?
-  approvalReason      String?
-  approvalName        String?
-  reviewDate          DateTime?
-  preparedByName      String?
-  zone                String?
-  preparedByRole      String?
-  status              OrderStatus @default(recibido)
-  requestedDeliveryDate DateTime?
-  assignedLogisticsUserId String?
-  committedDeliveryDate DateTime?
-  dispatchDate        DateTime?
-  deliveryDate        DateTime?
-  logisticsNotes      String?
-  notes               String?
-  subtotal            Decimal     @db.Decimal(14, 2)
-  total               Decimal     @db.Decimal(14, 2)
-  createdBy           String
-  updatedBy           String
-  createdAt           DateTime    @default(now())
-  updatedAt           DateTime    @updatedAt
-  customer            Customer    @relation(fields: [customerId], references: [id])
-  opportunity         Opportunity? @relation(fields: [opportunityId], references: [id])
-  sourceQuote         Quote?      @relation(fields: [sourceQuoteId], references: [id])
-  assignedLogisticsUser User?     @relation(fields: [assignedLogisticsUserId], references: [id])
-  items               OrderItem[]
-  billingRequests     BillingRequest[]
+  deliveryInstructions     String?
+  receiverName             String?
+  receiverEmail            String?
+  receiverPhone            String?
+  receiverRole             String?
+  invoiceFilingPlace       String?
+  approvalStatus           String?
+  approvalReason           String?
+  approvalName             String?
+  reviewDate               DateTime?
+  preparedByName           String?
+  zone                     String?
+  preparedByRole           String?
+  status                   OrderStatus           @default(recibido)
+  requestedDeliveryDate    DateTime?
+  assignedLogisticsUserId  String?
+  committedDeliveryDate    DateTime?
+  dispatchDate             DateTime?
+  deliveryDate             DateTime?
+  logisticsNotes           String?
+  notes                    String?
+  sourceConversationId     String?
+  subtotal                 Decimal               @db.Decimal(14, 2)
+  total                    Decimal               @db.Decimal(14, 2)
+  createdBy                String
+  updatedBy                String
+  createdAt                DateTime              @default(now())
+  updatedAt                DateTime              @updatedAt
+  customer                 Customer              @relation(fields: [customerId], references: [id])
+  opportunity              Opportunity?          @relation(fields: [opportunityId], references: [id])
+  sourceQuote              Quote?                @relation(fields: [sourceQuoteId], references: [id])
+  assignedLogisticsUser    User?                 @relation(fields: [assignedLogisticsUserId], references: [id])
+  sourceConversation       WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
+  items                    OrderItem[]
+  billingRequests          BillingRequest[]
+
+  @@index([sourceConversationId])
 }
 
 model OrderItem {
-  id                  String   @id @default(cuid())
-  orderId             String
-  productId           String?
-  productSnapshotName String
-  productSnapshotSku  String
-  unit                String
+  id                   String   @id @default(cuid())
+  orderId              String
+  productId            String?
+  productSnapshotName  String
+  productSnapshotSku   String
+  unit                 String
   presentationSnapshot String?
-  customProductName   String?
-  quantity            Decimal  @db.Decimal(14, 4)
-  originalUnitPrice   Decimal? @db.Decimal(14, 2)
-  discountPercent     Decimal? @db.Decimal(5, 2)
-  unitPrice           Decimal  @db.Decimal(14, 2)
-  taxPercent          Decimal  @default(19) @db.Decimal(5, 2)
-  taxAmount           Decimal  @default(0) @db.Decimal(14, 2)
-  totalWithTax        Decimal  @default(0) @db.Decimal(14, 2)
-  subtotal            Decimal  @db.Decimal(14, 2)
-  notes               String?
-  order               Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  product             Product? @relation(fields: [productId], references: [id])
+  customProductName    String?
+  quantity             Decimal  @db.Decimal(14, 4)
+  originalUnitPrice    Decimal? @db.Decimal(14, 2)
+  discountPercent      Decimal? @db.Decimal(5, 2)
+  unitPrice            Decimal  @db.Decimal(14, 2)
+  taxPercent           Decimal  @default(19) @db.Decimal(5, 2)
+  taxAmount            Decimal  @default(0) @db.Decimal(14, 2)
+  totalWithTax         Decimal  @default(0) @db.Decimal(14, 2)
+  subtotal             Decimal  @db.Decimal(14, 2)
+  notes                String?
+  order                Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product              Product? @relation(fields: [productId], references: [id])
 }
 
 model ExecutiveReport {
-  id        String   @id @default(cuid())
-  title     String
+  id         String   @id @default(cuid())
+  title      String
   customerId String
-  customer  Customer @relation(fields: [customerId], references: [id])
-  visitId   String?
-  visit     Visit?   @relation(fields: [visitId], references: [id])
-  payload   Json
-  fileUrl   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  createdBy String
-  creator   User     @relation(fields: [createdBy], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id])
+  visitId    String?
+  visit      Visit?   @relation(fields: [visitId], references: [id])
+  payload    Json
+  fileUrl    String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  createdBy  String
+  creator    User     @relation(fields: [createdBy], references: [id])
 }
 
 model CustomerGoal {
@@ -437,21 +585,21 @@ model CustomerGoal {
 }
 
 model BillingRequest {
-  id                String                 @id @default(cuid())
+  id                String               @id @default(cuid())
   customerId        String
   opportunityId     String?
   sourceType        String
   sourceQuoteId     String?
   sourceOrderId     String?
-  status            BillingRequestStatus   @default(pendiente)
+  status            BillingRequestStatus @default(pendiente)
   notes             String?
   requestedByUserId String
   createdBy         String
   updatedBy         String
-  createdAt         DateTime               @default(now())
-  updatedAt         DateTime               @updatedAt
-  customer          Customer               @relation(fields: [customerId], references: [id])
-  opportunity       Opportunity?            @relation(fields: [opportunityId], references: [id])
-  sourceQuote       Quote?                  @relation(fields: [sourceQuoteId], references: [id])
-  sourceOrder       Order?                  @relation(fields: [sourceOrderId], references: [id])
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  customer          Customer             @relation(fields: [customerId], references: [id])
+  opportunity       Opportunity?         @relation(fields: [opportunityId], references: [id])
+  sourceQuote       Quote?               @relation(fields: [sourceQuoteId], references: [id])
+  sourceOrder       Order?               @relation(fields: [sourceOrderId], references: [id])
 }
