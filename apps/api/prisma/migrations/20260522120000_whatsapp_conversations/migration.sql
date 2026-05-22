@@ -175,6 +175,9 @@ ALTER TABLE "WhatsAppMessage" ADD CONSTRAINT "WhatsAppMessage_authorUserId_fkey"
 ALTER TABLE "WhatsAppInternalNote" ADD CONSTRAINT "WhatsAppInternalNote_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "WhatsAppConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "WhatsAppInternalNote" ADD CONSTRAINT "WhatsAppInternalNote_authorUserId_fkey" FOREIGN KEY ("authorUserId") REFERENCES "User"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "WhatsAppConversationTag" ADD CONSTRAINT "WhatsAppConversationTag_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "WhatsAppConversation"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey

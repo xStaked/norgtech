@@ -138,6 +138,7 @@ model User {
   lauraSessions                 LauraSession[]
   assignedWhatsAppConversations WhatsAppConversation[] @relation("WhatsAppAssignedUser")
   whatsappMessages              WhatsAppMessage[]      @relation("WhatsAppMessageAuthor")
+  whatsappInternalNotes         WhatsAppInternalNote[]
   noraActions                   NoraActionLog[]
 }
 
@@ -248,6 +249,7 @@ model WhatsAppInternalNote {
   body           String
   createdAt      DateTime             @default(now())
   conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorUser     User                 @relation(fields: [authorUserId], references: [id], onDelete: Restrict)
 
   @@index([conversationId, createdAt])
 }
