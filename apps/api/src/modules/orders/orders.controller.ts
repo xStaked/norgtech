@@ -6,9 +6,11 @@ import {
   Patch,
   Post,
   Query,
+  Res,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import type { Response } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -52,6 +54,19 @@ export class OrdersController {
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.ordersService.findOne(id);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
+  @Get(":id/export")
+  async exportClientFormat(@Param("id") id: string, @Res() response: Response) {
+    const workbook = await this.ordersService.exportClientFormat(id);
+    response.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    );
+    response.setHeader("Content-Disposition", `attachment; filename="pedido-${id}.xlsx"`);
+    response.send(workbook);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -25,12 +25,19 @@ interface Quote {
 
 interface OrderItem {
   id: string;
-  productSnapshotName: string;
-  productSnapshotSku: string;
-  unit: string;
+  productSnapshotName: string | null;
+  productSnapshotSku: string | null;
+  presentationSnapshot: string | null;
+  customProductName: string | null;
+  productName?: string | null;
+  presentation?: string | null;
+  unit: string | null;
   quantity: string;
   unitPrice: string;
   subtotal: string;
+  taxPercent: string;
+  taxAmount: string;
+  totalWithTax: string;
   notes: string | null;
 }
 
@@ -47,10 +54,34 @@ interface LogisticsUser {
 
 interface Order {
   id: string;
+  orderNumber: string | null;
   status: string;
   subtotal: string;
   total: string;
   notes: string | null;
+  purchaseOrderNumber: string | null;
+  orderDate: string | null;
+  customerNameSnapshot: string | null;
+  customerNitSnapshot: string | null;
+  dispatchAddressSnapshot: string | null;
+  requesterName: string | null;
+  requesterEmail: string | null;
+  requesterRole: string | null;
+  requesterPhone: string | null;
+  approvedQuoteConsecutive: string | null;
+  deliveryInstructions: string | null;
+  receiverName: string | null;
+  receiverEmail: string | null;
+  receiverPhone: string | null;
+  receiverRole: string | null;
+  invoiceFilingPlace: string | null;
+  approvalStatus: string | null;
+  approvalReason: string | null;
+  approvalName: string | null;
+  reviewDate: string | null;
+  preparedByName: string | null;
+  zone: string | null;
+  preparedByRole: string | null;
   requestedDeliveryDate: string | null;
   committedDeliveryDate: string | null;
   dispatchDate: string | null;
@@ -108,6 +139,15 @@ export default async function OrderDetailPage({
   const nextAction = nextStatusMap[order.status]
     ? `Siguiente acción válida: Avanzar a ${statusLabels[nextStatusMap[order.status]]}`
     : "Pedido completado";
+  const displayOrderNumber = order.orderNumber || `#${order.id.slice(-6)}`;
+  const itemTaxTotal = order.items.reduce(
+    (sum, item) => sum + Number(item.taxAmount || 0) * Number(item.quantity || 0),
+    0,
+  );
+  const totalWithTax = order.items.reduce(
+    (sum, item) => sum + Number(item.totalWithTax || 0),
+    0,
+  );
 
   return (
     <div className="grid gap-6">
@@ -119,7 +159,7 @@ export default async function OrderDetailPage({
       </Link>
 
       <PageHeader
-        title={`Pedido #${order.id.slice(-6)}`}
+        title={`Pedido ${displayOrderNumber}`}
         eyebrow={statusLabels[order.status] || order.status}
         actions={
           <span
@@ -137,7 +177,13 @@ export default async function OrderDetailPage({
         <OrderStatusTimeline currentStatus={order.status} />
 
         <div className="mt-6 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
-          <Info label="Cliente" value={order.customer?.displayName} />
+          <Info label="Cliente" value={order.customerNameSnapshot || order.customer?.displayName} />
+          <Info label="NIT" value={order.customerNitSnapshot} />
+          <Info label="Orden de compra" value={order.purchaseOrderNumber} />
+          <Info
+            label="Fecha del pedido"
+            value={order.orderDate ? new Date(order.orderDate).toLocaleDateString("es-CO") : null}
+          />
           <Info label="Oportunidad" value={order.opportunity?.title} />
           <Info
             label="Cotización origen"
@@ -169,8 +215,15 @@ export default async function OrderDetailPage({
           </div>
         )}
 
+        <DetailSection title="Solicitante">
+          <Info label="Nombre" value={order.requesterName} />
+          <Info label="E-mail" value={order.requesterEmail} />
+          <Info label="Cargo" value={order.requesterRole} />
+          <Info label="Celular/telefono" value={order.requesterPhone} />
+        </DetailSection>
+
         <div className="mt-6">
-          <h3 className="text-base font-semibold text-foreground">Items</h3>
+          <h3 className="text-base font-semibold text-foreground">Productos</h3>
           <div className="mt-3 grid gap-3">
             {order.items.map((item) => (
               <div
@@ -179,28 +232,64 @@ export default async function OrderDetailPage({
               >
                 <div>
                   <div className="font-semibold text-foreground">
-                    {item.productSnapshotName}
+                    {item.productSnapshotName || item.customProductName || item.productName}
                   </div>
                   <div className="mt-1 text-sm text-muted-foreground">
-                    {item.productSnapshotSku} · {Number(item.quantity).toLocaleString("es-CO")}{" "}
-                    {item.unit} · ${Number(item.unitPrice).toLocaleString("es-CO")}/{item.unit}
+                    {[
+                      item.productSnapshotSku,
+                      item.presentationSnapshot || item.presentation || item.unit,
+                      `${Number(item.quantity).toLocaleString("es-CO")} unidades`,
+                      `${money(Number(item.unitPrice))} unidad`,
+                      `${Number(item.taxPercent || 0).toLocaleString("es-CO")}% IVA`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </div>
                   {item.notes && (
                     <div className="mt-1 text-sm text-muted-foreground">{item.notes}</div>
                   )}
                 </div>
-                <div className="text-sm font-semibold text-emerald-500 sm:text-base">
-                  ${Number(item.subtotal).toLocaleString("es-CO")}
+                <div className="grid gap-1 text-sm sm:text-right">
+                  <div>Subtotal: {money(Number(item.subtotal))}</div>
+                  <div>IVA: {money(Number(item.taxAmount || 0) * Number(item.quantity || 0))}</div>
+                  <div className="font-semibold text-emerald-500 sm:text-base">
+                    Total: {money(Number(item.totalWithTax || item.subtotal))}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="mt-6 flex items-center justify-between rounded-lg bg-muted p-4 text-lg font-semibold text-foreground">
-          <span>Total</span>
-          <span>${Number(order.total).toLocaleString("es-CO")}</span>
+        <div className="mt-6 grid gap-2 rounded-lg bg-muted p-4 text-sm text-foreground md:ml-auto md:w-80">
+          <SummaryLine label="Subtotal" value={money(Number(order.subtotal))} />
+          <SummaryLine label="IVA" value={money(itemTaxTotal)} />
+          <SummaryLine label="Total con IVA" value={money(totalWithTax || Number(order.total))} strong />
         </div>
+
+        <DetailSection title="Entrega y facturacion">
+          <Info label="Direccion despacho" value={order.dispatchAddressSnapshot} />
+          <Info label="Consecutivo cotizacion aprobada" value={order.approvedQuoteConsecutive} />
+          <Info label="Instrucciones" value={order.deliveryInstructions} />
+          <Info label="Persona autorizada para recibir" value={order.receiverName} />
+          <Info label="Correo receptor" value={order.receiverEmail} />
+          <Info label="Telefono receptor" value={order.receiverPhone} />
+          <Info label="Cargo receptor" value={order.receiverRole} />
+          <Info label="Lugar radicacion factura" value={order.invoiceFilingPlace} />
+        </DetailSection>
+
+        <DetailSection title="Aprobacion">
+          <Info label="Estado" value={order.approvalStatus} />
+          <Info label="Motivo" value={order.approvalReason} />
+          <Info label="Nombre" value={order.approvalName} />
+          <Info
+            label="Fecha revision"
+            value={order.reviewDate ? new Date(order.reviewDate).toLocaleDateString("es-CO") : null}
+          />
+          <Info label="Elaboro" value={order.preparedByName} />
+          <Info label="Zona" value={order.zone} />
+          <Info label="Cargo" value={order.preparedByRole} />
+        </DetailSection>
 
         <OrderBillingHistory billingRequests={order.billingRequests} />
 
@@ -234,4 +323,45 @@ function Info({ label, value }: { label: string; value: React.ReactNode }) {
       <div className="mt-1 text-foreground">{value}</div>
     </div>
   );
+}
+
+function DetailSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mt-6">
+      <h3 className="text-base font-semibold text-foreground">{title}</h3>
+      <div className="mt-3 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function SummaryLine({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: string;
+  strong?: boolean;
+}) {
+  return (
+    <div className={strong ? "flex justify-between text-lg font-semibold" : "flex justify-between"}>
+      <span>{label}</span>
+      <span>{value}</span>
+    </div>
+  );
+}
+
+function money(value: number) {
+  return `$${value.toLocaleString("es-CO", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
 }

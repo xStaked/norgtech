@@ -6,6 +6,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
+import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { allowedTransitions } from "./order-status-transition-map";
 
 @Injectable()
@@ -13,6 +14,7 @@ export class OrdersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly orderXlsxExportService: OrderXlsxExportService,
   ) {}
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -24,19 +26,37 @@ export class OrdersService {
       throw new NotFoundException("Customer not found");
     }
     if (dto.opportunityId) {
-      await this.assertOpportunityExists(dto.opportunityId);
+      await this.assertOpportunityBelongsToCustomer(dto.opportunityId, dto.customerId);
     }
     if (dto.sourceQuoteId) {
-      await this.assertQuoteExists(dto.sourceQuoteId);
+      await this.assertQuoteBelongsToCustomer(dto.sourceQuoteId, dto.customerId);
     }
     if (dto.assignedLogisticsUserId) {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
 
     const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
+    const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber();
+    const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
+    const customerNameSnapshot = customer.displayName;
+    const customerNitSnapshot = customer.taxId ?? null;
+    const dispatchAddressSnapshot =
+      dto.dispatchAddressSnapshot?.trim() || customer.address || null;
+    const preparedByName =
+      dto.preparedByName ||
+      (await this.prisma.user.findUnique({ where: { id: user.id } }))?.name ||
+      user.email;
 
     const itemsWithSnapshot = await Promise.all(
       dto.items.map(async (item) => {
+        const unitPriceRounded = new Prisma.Decimal(item.unitPrice).toDecimalPlaces(2);
+        const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
+        const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
+        const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
+        const totalWithTax = new Prisma.Decimal(item.quantity)
+          .times(unitPriceRounded.plus(taxAmount))
+          .toDecimalPlaces(2);
+
         if (item.productId) {
           const product = await this.prisma.product.findUnique({
             where: { id: item.productId },
@@ -44,37 +64,41 @@ export class OrdersService {
           if (!product) {
             throw new NotFoundException(`Product ${item.productId} not found`);
           }
-          const basePrice = product.basePrice;
-          const discountMultiplier = new Prisma.Decimal(1).minus(
-            new Prisma.Decimal(discountPercent).dividedBy(100),
-          );
-          const unitPrice = new Prisma.Decimal(basePrice).times(discountMultiplier);
-          const unitPriceRounded = unitPrice.toDecimalPlaces(2);
-          const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded);
-
           return {
             productId: item.productId,
             productSnapshotName: product.name,
             productSnapshotSku: product.sku,
             unit: product.unit,
+            presentationSnapshot: item.presentation?.trim() || product.presentation || null,
+            customProductName: null,
             quantity: item.quantity,
-            originalUnitPrice: basePrice,
+            originalUnitPrice: product.basePrice,
             discountPercent,
             unitPrice: unitPriceRounded,
+            taxPercent,
+            taxAmount,
+            totalWithTax,
             subtotal,
             notes: item.notes,
           };
         }
+        const customProductName = item.productName?.trim() || null;
+        const presentationSnapshot = item.presentation?.trim() || null;
         return {
           productId: null,
-          productSnapshotName: "Custom item",
+          productSnapshotName: customProductName || "Custom item",
           productSnapshotSku: "CUSTOM",
           unit: "unit",
+          presentationSnapshot,
+          customProductName,
           quantity: item.quantity,
           originalUnitPrice: null,
           discountPercent: null,
-          unitPrice: item.unitPrice,
-          subtotal: new Prisma.Decimal(item.quantity).times(new Prisma.Decimal(item.unitPrice)),
+          unitPrice: unitPriceRounded,
+          taxPercent,
+          taxAmount,
+          totalWithTax,
+          subtotal,
           notes: item.notes,
         };
       }),
@@ -84,7 +108,10 @@ export class OrdersService {
       (sum, item) => sum.plus(new Prisma.Decimal(item.subtotal)),
       new Prisma.Decimal(0),
     );
-    const total = subtotal;
+    const total = itemsWithSnapshot.reduce(
+      (sum, item) => sum.plus(new Prisma.Decimal(item.totalWithTax)),
+      new Prisma.Decimal(0),
+    );
 
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -92,6 +119,30 @@ export class OrdersService {
           customerId: dto.customerId,
           opportunityId: dto.opportunityId || null,
           sourceQuoteId: dto.sourceQuoteId || null,
+          orderNumber,
+          purchaseOrderNumber: dto.purchaseOrderNumber || null,
+          orderDate,
+          customerNameSnapshot,
+          customerNitSnapshot,
+          dispatchAddressSnapshot,
+          requesterName: dto.requesterName || null,
+          requesterEmail: dto.requesterEmail || null,
+          requesterRole: dto.requesterRole || null,
+          requesterPhone: dto.requesterPhone || null,
+          approvedQuoteConsecutive: dto.approvedQuoteConsecutive || null,
+          deliveryInstructions: dto.deliveryInstructions || null,
+          receiverName: dto.receiverName || dto.requesterName || null,
+          receiverEmail: dto.receiverEmail || dto.requesterEmail || null,
+          receiverPhone: dto.receiverPhone || dto.requesterPhone || null,
+          receiverRole: dto.receiverRole || dto.requesterRole || null,
+          invoiceFilingPlace: dto.invoiceFilingPlace || dispatchAddressSnapshot,
+          approvalStatus: dto.approvalStatus || null,
+          approvalReason: dto.approvalReason || null,
+          approvalName: dto.approvalName || null,
+          reviewDate: dto.reviewDate ? new Date(dto.reviewDate) : null,
+          preparedByName,
+          zone: dto.zone || null,
+          preparedByRole: dto.preparedByRole || null,
           requestedDeliveryDate: dto.requestedDeliveryDate
             ? new Date(dto.requestedDeliveryDate)
             : null,
@@ -287,17 +338,36 @@ export class OrdersService {
     });
   }
 
-  private async assertOpportunityExists(opportunityId: string) {
+  async exportClientFormat(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException("Order not found");
+    }
+
+    return this.orderXlsxExportService.generate(order);
+  }
+
+  private async assertOpportunityBelongsToCustomer(opportunityId: string, customerId: string) {
     const opportunity = await this.prisma.opportunity.findUnique({ where: { id: opportunityId } });
     if (!opportunity) {
       throw new NotFoundException("Opportunity not found");
     }
+    if (opportunity.customerId !== customerId) {
+      throw new BadRequestException("Opportunity does not belong to customer");
+    }
   }
 
-  private async assertQuoteExists(quoteId: string) {
+  private async assertQuoteBelongsToCustomer(quoteId: string, customerId: string) {
     const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
     if (!quote) {
       throw new NotFoundException("Quote not found");
+    }
+    if (quote.customerId !== customerId) {
+      throw new BadRequestException("Quote does not belong to customer");
     }
   }
 
@@ -310,5 +380,10 @@ export class OrdersService {
 
   private isTransitionAllowed(currentStatus: OrderStatus, nextStatus: OrderStatus) {
     return allowedTransitions[currentStatus].includes(nextStatus);
+  }
+
+  private async nextOrderNumber() {
+    const count = await this.prisma.order.count();
+    return `PED-${String(count + 1).padStart(6, "0")}`;
   }
 }

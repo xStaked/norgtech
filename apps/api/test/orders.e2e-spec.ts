@@ -24,6 +24,7 @@ describe("Orders", () => {
       name: "Fertilizante",
       sku: "FERT-001",
       unit: "kg",
+      presentation: "Bulto 50kg",
       basePrice: 50000,
       active: true,
       createdBy: "admin-user-id",
@@ -66,6 +67,8 @@ describe("Orders", () => {
           return {
             id: "customer-1",
             displayName: "Agro Norte",
+            taxId: "900111222-1",
+            address: "Calle 10 # 20-30",
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
             segment: { discountPercent: 0 },
@@ -75,6 +78,8 @@ describe("Orders", () => {
           return {
             id: "customer-2",
             displayName: "Agro Sur",
+            taxId: "900333444-1",
+            address: "Carrera 40 # 50-60",
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
             segment: { discountPercent: 10 },
@@ -91,10 +96,33 @@ describe("Orders", () => {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           products.find((p) => p.id === id) ?? null,
       },
+      opportunity: {
+        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+          if (id === "opportunity-customer-1") {
+            return { id, customerId: "customer-1" };
+          }
+          if (id === "opportunity-customer-2") {
+            return { id, customerId: "customer-2" };
+          }
+          return null;
+        },
+      },
+      quote: {
+        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+          if (id === "quote-customer-1") {
+            return { id, customerId: "customer-1" };
+          }
+          if (id === "quote-customer-2") {
+            return { id, customerId: "customer-2" };
+          }
+          return null;
+        },
+      },
       order: {
         create: async () => {
           throw new Error("order.create must run inside a transaction");
         },
+        count: async () => orders.length,
         findUnique: async ({ where: { id } }: { where: { id: string } }) => {
           const found = orders.find((o) => o.id === id);
           return found ? JSON.parse(JSON.stringify(found)) : null;
@@ -236,10 +264,13 @@ describe("Orders", () => {
       .expect(201);
 
     expect(response.body.items).toHaveLength(1);
-    expect(Number(response.body.total)).toBe(100000);
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.items[0].taxAmount)).toBe(9500);
+    expect(Number(response.body.items[0].totalWithTax)).toBe(119000);
+    expect(Number(response.body.total)).toBe(119000);
   });
 
-  it("creates an order with automatic discount applied", async () => {
+  it("creates a product-backed order with submitted unit price as authoritative", async () => {
     const response = await request(globalThis.__APP__)
       .post("/orders")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
@@ -252,10 +283,12 @@ describe("Orders", () => {
       .expect(201);
 
     expect(response.body.items).toHaveLength(1);
-    expect(Number(response.body.total)).toBe(90000);
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.total)).toBe(119000);
     expect(Number(response.body.items[0].originalUnitPrice)).toBe(50000);
     expect(Number(response.body.items[0].discountPercent)).toBe(10);
-    expect(Number(response.body.items[0].unitPrice)).toBe(45000);
+    expect(Number(response.body.items[0].unitPrice)).toBe(50000);
+    expect(response.body.items[0].presentationSnapshot).toBe("Bulto 50kg");
   });
 
   it("creates an order with custom item without discount", async () => {
@@ -271,10 +304,97 @@ describe("Orders", () => {
       .expect(201);
 
     expect(response.body.items).toHaveLength(1);
-    expect(Number(response.body.total)).toBe(75000);
+    expect(Number(response.body.subtotal)).toBe(75000);
+    expect(Number(response.body.total)).toBe(89250);
     expect(response.body.items[0].originalUnitPrice).toBeNull();
     expect(response.body.items[0].discountPercent).toBeNull();
     expect(Number(response.body.items[0].unitPrice)).toBe(25000);
+  });
+
+  it("creates an order with customer format fields and tax totals", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        sourceQuoteId: "quote-customer-1",
+        purchaseOrderNumber: "OC-7788",
+        orderDate: "2026-05-22",
+        dispatchAddressSnapshot: "Bodega cliente",
+        requesterName: "Laura Cliente",
+        requesterEmail: "laura@example.com",
+        requesterRole: "Compras",
+        requesterPhone: "3174407575",
+        approvedQuoteConsecutive: "COT-900",
+        deliveryInstructions: "Entregar en horario de oficina",
+        receiverName: "Carlos Bodega",
+        receiverEmail: "carlos@example.com",
+        receiverPhone: "3150000000",
+        receiverRole: "Almacenista",
+        invoiceFilingPlace: "Oficina principal",
+        approvalStatus: "aprobado",
+        approvalReason: "Compra autorizada",
+        approvalName: "Diana Gerente",
+        reviewDate: "2026-05-23",
+        preparedByName: "Admin",
+        zone: "Norte",
+        preparedByRole: "Comercial",
+        items: [
+          {
+            productName: "Servicio de diagnostico",
+            presentation: "Jornada",
+            quantity: 1,
+            unitPrice: 100000,
+            taxPercent: 19,
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.orderNumber).toMatch(/^PED-\d{6}$/);
+    expect(response.body.purchaseOrderNumber).toBe("OC-7788");
+    expect(response.body.customerNameSnapshot).toBe("Agro Norte");
+    expect(response.body.customerNitSnapshot).toBe("900111222-1");
+    expect(response.body.dispatchAddressSnapshot).toBe("Bodega cliente");
+    expect(response.body.requesterName).toBe("Laura Cliente");
+    expect(response.body.receiverName).toBe("Carlos Bodega");
+    expect(response.body.invoiceFilingPlace).toBe("Oficina principal");
+    expect(response.body.zone).toBe("Norte");
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.items[0].taxAmount)).toBe(19000);
+    expect(Number(response.body.items[0].totalWithTax)).toBe(119000);
+    expect(Number(response.body.total)).toBe(119000);
+    expect(response.body.items[0].productSnapshotName).toBe("Servicio de diagnostico");
+    expect(response.body.items[0].presentationSnapshot).toBe("Jornada");
+    expect(response.body.items[0].customProductName).toBe("Servicio de diagnostico");
+  });
+
+  it("rejects opportunities that do not belong to the order customer", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        opportunityId: "opportunity-customer-2",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("Opportunity does not belong to customer");
+  });
+
+  it("rejects quotes that do not belong to the order customer", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        sourceQuoteId: "quote-customer-2",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("Quote does not belong to customer");
   });
 
   it("transitions order status and sets dispatch/delivery dates", async () => {
@@ -406,5 +526,35 @@ describe("Orders", () => {
 
     expect(response.body.sourceType).toBe("order");
     expect(response.body.sourceOrderId).toBe(orderId);
+  });
+
+  it("exports an order using the customer XLSX format", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        purchaseOrderNumber: "OC-EXPORT",
+        requesterName: "Laura Cliente",
+        requesterEmail: "laura@example.com",
+        receiverName: "Carlos Bodega",
+        invoiceFilingPlace: "Oficina principal",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get(`/orders/${createResponse.body.id}/export`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .buffer()
+      .parse((res, callback) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => callback(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+
+    expect(response.headers["content-type"]).toContain("spreadsheetml.sheet");
+    expect(response.body.length).toBeGreaterThan(1000);
   });
 });

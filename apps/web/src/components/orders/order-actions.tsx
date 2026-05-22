@@ -32,6 +32,7 @@ const billRoles = ["administrador", "director_comercial", "facturacion"];
 export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const token = getSessionTokenClient();
@@ -85,6 +86,33 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
     }
   }
 
+  async function exportExcel() {
+    setError(null);
+    setExporting(true);
+    try {
+      const response = await apiFetchClient(`/orders/${orderId}/export`);
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        setError(data.message || "Error al exportar el formato Excel");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `pedido-${orderId.slice(-6)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError("Error de conexión");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   const canAdvance = !!nextStatusMap[currentStatus] && role && advanceRoles.includes(role);
   const canBill =
     (currentStatus === "entregado" || currentStatus === "facturado") && role && billRoles.includes(role);
@@ -93,6 +121,9 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
     <div>
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap gap-3">
+        <Button onClick={exportExcel} disabled={exporting} variant="outline">
+          {exporting ? "Exportando..." : "Exportar formato Excel"}
+        </Button>
         {canAdvance && (
           <Button onClick={advanceStatus} disabled={loading}>
             {loading ? "Procesando..." : `Avanzar a ${statusLabels[nextStatusMap[currentStatus]]}`}

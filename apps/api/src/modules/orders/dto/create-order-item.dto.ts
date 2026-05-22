@@ -5,6 +5,14 @@ export class CreateOrderItemDto {
   @IsString()
   productId?: string;
 
+  @IsOptional()
+  @IsString()
+  productName?: string;
+
+  @IsOptional()
+  @IsString()
+  presentation?: string;
+
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0.0001)
   quantity!: number;
@@ -12,6 +20,11 @@ export class CreateOrderItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   unitPrice!: number;
+
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  taxPercent?: number;
 
   @IsOptional()
   @IsString()

@@ -75,12 +75,18 @@ test("create order and view logistics section", async ({ page, request }) => {
 
   await page.goto("/orders/new");
   await page.locator('select[name="customerId"]').selectOption(customer.id);
+  await page.getByLabel("Orden de compra").fill("OC-E2E-001");
+  await page.getByLabel("Fecha del pedido").fill("2026-05-22");
+  await page.getByLabel("Direccion para despacho").fill("Calle 123 #45-67");
+  await page.getByLabel("Solicitante", { exact: true }).fill("Juan Perez");
   await page.getByTestId("product-select").selectOption(product.id);
   await page.getByRole("button", { name: "Guardar pedido" }).click();
 
-  await page.waitForURL(/\/orders\/[a-z0-9_-]+$/i, { timeout: 10000 });
+  await page.waitForURL(/\/orders\/(?!new$)[a-z0-9_-]+$/i, { timeout: 10000 });
 
   await expect(page.getByText("Recibido").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Exportar formato Excel" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Solicitante" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Logística" })).toBeVisible();
 
   await page.getByRole("button", { name: "Editar" }).click();
@@ -90,7 +96,7 @@ test("create order and view logistics section", async ({ page, request }) => {
   // Verify we returned to view mode (Editar button visible again)
   await expect(page.getByRole("button", { name: "Editar" })).toBeVisible();
   // Verify the date is displayed (format may vary by timezone)
-  await expect(page.getByText(/\d{1,2}[\/\-]\d{1,2}[\/\-]2026/)).toBeVisible();
+  await expect(page.getByText(/\d{1,2}[\/\-]\d{1,2}[\/\-]2026/).first()).toBeVisible();
 });
 
 test("advance order status and create billing request", async ({ page, request }) => {
@@ -134,9 +140,11 @@ test("advance order status and create billing request", async ({ page, request }
 
   await page.goto("/orders/new");
   await page.locator('select[name="customerId"]').selectOption(customer.id);
+  await page.getByLabel("Fecha del pedido").fill("2026-05-22");
+  await page.getByLabel("Solicitante", { exact: true }).fill("Ana Gomez");
   await page.getByTestId("product-select").selectOption(product.id);
   await page.getByRole("button", { name: "Guardar pedido" }).click();
-  await page.waitForURL(/\/orders\/[a-z0-9_-]+$/i, { timeout: 10000 });
+  await page.waitForURL(/\/orders\/(?!new$)[a-z0-9_-]+$/i, { timeout: 10000 });
 
   await page.getByRole("button", { name: "Avanzar a Orden de facturación" }).click();
   await expect(page.getByText("Orden de facturación").first()).toBeVisible();
