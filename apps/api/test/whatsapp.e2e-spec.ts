@@ -158,6 +158,12 @@ describe("WhatsApp inbox", () => {
           return buildConversation(conversations[index]);
         },
       },
+      whatsAppMessage: {
+        findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
+          where?.conversationId
+            ? messages.filter((message) => message.conversationId === where.conversationId)
+            : messages,
+      },
       whatsAppInternalNote: {
         create: async ({
           data,
@@ -172,6 +178,16 @@ describe("WhatsApp inbox", () => {
           notes.push(note);
           return note;
         },
+        findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
+          where?.conversationId
+            ? notes.filter((note) => note.conversationId === where.conversationId)
+            : notes,
+      },
+      whatsAppConversationTag: {
+        findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
+          where?.conversationId
+            ? tags.filter((tag) => tag.conversationId === where.conversationId)
+            : tags,
       },
     };
 
@@ -216,6 +232,9 @@ describe("WhatsApp inbox", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .expect(200);
 
+    expect(response.body.customer.id).toBe("customer-1");
+    expect(response.body.contact.id).toBe("contact-1");
+    expect(response.body.assignedToUser.id).toBe("sales-user-id");
     expect(response.body.messages).toHaveLength(1);
     expect(response.body.notes).toHaveLength(1);
     expect(response.body.tags).toHaveLength(1);
