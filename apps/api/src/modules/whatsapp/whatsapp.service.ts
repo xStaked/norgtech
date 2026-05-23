@@ -1,4 +1,9 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import {
+  BadGatewayException,
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -117,26 +122,58 @@ export class WhatsAppService {
       throw new NotFoundException("WhatsApp conversation not found");
     }
 
-    const providerResult = await this.sendViaKapso(
-      conversation.account.phoneNumberId,
-      conversation.waId,
-      dto.body,
-    );
-
-    return this.prisma.whatsAppMessage.create({
+    const attemptedAt = new Date();
+    const message = await this.prisma.whatsAppMessage.create({
       data: {
         conversationId,
         direction: "outbound",
         role: "assistant",
         authorUserId: user.id,
         body: dto.body,
-        payload: {
-          provider: "kapso",
-          providerResult: providerResult as Prisma.InputJsonValue,
-        },
+        payload: { provider: "kapso" },
         deliveryStatus: "queued",
       },
     });
+
+    await this.prisma.whatsAppConversation.update({
+      where: { id: conversationId },
+      data: {
+        lastMessageText: dto.body,
+        lastMessageAt: attemptedAt,
+      },
+    });
+
+    try {
+      const providerResult = await this.sendViaKapso(
+        conversation.account.phoneNumberId,
+        conversation.waId,
+        dto.body,
+      );
+
+      return this.prisma.whatsAppMessage.update({
+        where: { id: message.id },
+        data: {
+          deliveryStatus: "sent",
+          payload: {
+            provider: "kapso",
+            providerResult: providerResult as Prisma.InputJsonValue,
+          },
+        },
+      });
+    } catch (error) {
+      await this.prisma.whatsAppMessage.update({
+        where: { id: message.id },
+        data: {
+          deliveryStatus: "failed",
+          payload: {
+            provider: "kapso",
+            error: this.getSafeErrorMessage(error),
+          },
+        },
+      });
+
+      throw new BadGatewayException("Could not send WhatsApp message");
+    }
   }
 
   private async sendViaKapso(
@@ -145,6 +182,10 @@ export class WhatsAppService {
     body: string,
   ): Promise<SendMessageResponse | Record<string, unknown>> {
     const kapsoApiKey = process.env.KAPSO_API_KEY;
+
+    if (process.env.NODE_ENV === "test" && process.env.KAPSO_TEST_SEND_FAILURE === "1") {
+      throw new Error("Forced Kapso send failure");
+    }
 
     if (!kapsoApiKey || process.env.NODE_ENV === "test") {
       return {
@@ -157,7 +198,7 @@ export class WhatsAppService {
     }
 
     const client = new WhatsAppClient({
-      baseUrl: process.env.KAPSO_BASE_URL ?? "https://api.kapso.ai/meta/whatsapp",
+      baseUrl: process.env.KAPSO_API_BASE_URL ?? "https://api.kapso.ai/meta/whatsapp",
       kapsoApiKey,
     });
 
@@ -166,6 +207,12 @@ export class WhatsAppService {
       to,
       body,
     });
+  }
+
+  private getSafeErrorMessage(error: unknown) {
+    return error instanceof Error && error.message
+      ? error.message
+      : "WhatsApp provider send failed";
   }
 
   private async assertReferencesExist(

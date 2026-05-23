@@ -283,6 +283,23 @@ describe("WhatsApp inbox", () => {
           messages.push(message as (typeof messages)[number]);
           return message;
         },
+        update: async ({
+          where: { id },
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const index = messages.findIndex((message) => message.id === id);
+          if (index === -1) {
+            return null;
+          }
+          messages[index] = {
+            ...messages[index],
+            ...data,
+          };
+          return messages[index];
+        },
       },
       whatsAppInternalNote: {
         create: async ({
@@ -422,8 +439,11 @@ describe("WhatsApp inbox", () => {
     expect(response.body.direction).toBe(WhatsAppMessageDirection.outbound);
     expect(response.body.role).toBe(WhatsAppMessageRole.assistant);
     expect(response.body.authorUserId).toBe("admin-user-id");
-    expect(response.body.deliveryStatus).toBe("queued");
-    expect(response.body.payload).toMatchObject({ provider: "kapso" });
+    expect(response.body.deliveryStatus).toBe("sent");
+    expect(response.body.payload).toMatchObject({
+      provider: "kapso",
+      providerResult: expect.any(Object),
+    });
 
     expect(messages).toContainEqual(
       expect.objectContaining({
@@ -432,10 +452,57 @@ describe("WhatsApp inbox", () => {
         role: WhatsAppMessageRole.assistant,
         authorUserId: "admin-user-id",
         body: "Recibido. Vamos a revisar tu pedido.",
-        deliveryStatus: "queued",
-        payload: expect.objectContaining({ provider: "kapso" }),
+        deliveryStatus: "sent",
+        payload: expect.objectContaining({
+          provider: "kapso",
+          providerResult: expect.any(Object),
+        }),
       }),
     );
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: "conversation-1",
+        lastMessageText: "Recibido. Vamos a revisar tu pedido.",
+        lastMessageAt: expect.any(Date),
+      }),
+    );
+  });
+
+  it("keeps a failed outbound WhatsApp send attempt in the inbox", async () => {
+    process.env.KAPSO_TEST_SEND_FAILURE = "1";
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/conversations/conversation-1/messages")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ body: "Intentaremos de nuevo." })
+        .expect(502);
+
+      expect(response.body.message).toBe("Could not send WhatsApp message");
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          conversationId: "conversation-1",
+          direction: WhatsAppMessageDirection.outbound,
+          role: WhatsAppMessageRole.assistant,
+          authorUserId: "admin-user-id",
+          body: "Intentaremos de nuevo.",
+          deliveryStatus: "failed",
+          payload: expect.objectContaining({
+            provider: "kapso",
+            error: "Forced Kapso send failure",
+          }),
+        }),
+      );
+      expect(conversations).toContainEqual(
+        expect.objectContaining({
+          id: "conversation-1",
+          lastMessageText: "Intentaremos de nuevo.",
+          lastMessageAt: expect.any(Date),
+        }),
+      );
+    } finally {
+      delete process.env.KAPSO_TEST_SEND_FAILURE;
+    }
   });
 
   it("returns 404 when getting a missing conversation", async () => {
