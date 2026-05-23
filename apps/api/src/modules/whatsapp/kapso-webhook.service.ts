@@ -2,6 +2,7 @@ import { BadRequestException, Injectable } from "@nestjs/common";
 import { Prisma, WhatsAppMessageDirection, WhatsAppMessageRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
+import { NoraRoutingService } from "./nora-routing.service";
 
 const MESSAGE_RECEIVED_EVENT = "whatsapp.message.received";
 
@@ -16,7 +17,10 @@ type NormalizedKapsoMessage = {
 
 @Injectable()
 export class KapsoWebhookService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly noraRoutingService: NoraRoutingService,
+  ) {}
 
   async handle(dto: KapsoWebhookDto) {
     if (dto.type !== MESSAGE_RECEIVED_EVENT) {
@@ -25,7 +29,7 @@ export class KapsoWebhookService {
 
     const normalized = this.normalizeMessage(dto);
 
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const account = await tx.whatsAppAccount.upsert({
         where: { phoneNumberId: normalized.phoneNumberId },
         update: {},
@@ -73,10 +77,23 @@ export class KapsoWebhookService {
 
       return {
         ignored: false,
+        conversation,
+        message,
         conversationId: conversation.id,
         messageId: message.id,
       };
     });
+
+    await this.noraRoutingService.routeInboundMessage({
+      conversation: result.conversation,
+      message: result.message,
+    });
+
+    return {
+      ignored: result.ignored,
+      conversationId: result.conversationId,
+      messageId: result.messageId,
+    };
   }
 
   private normalizeMessage(dto: KapsoWebhookDto): NormalizedKapsoMessage {

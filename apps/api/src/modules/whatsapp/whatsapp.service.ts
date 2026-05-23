@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
-import { Prisma } from "@prisma/client";
+import { Prisma, UserRole, WhatsAppSenderType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
@@ -40,6 +40,24 @@ const conversationDetailInclude = {
 const sendMessageConversationInclude = {
   account: true,
 } satisfies Prisma.WhatsAppConversationInclude;
+
+export type ResolvedWhatsAppSender =
+  | {
+      senderType: typeof WhatsAppSenderType.cliente;
+      contactId: string;
+      customerId: string;
+    }
+  | {
+      senderType: typeof WhatsAppSenderType.admin;
+      userId: string;
+    }
+  | {
+      senderType: typeof WhatsAppSenderType.comercial;
+      userId: string;
+    }
+  | {
+      senderType: typeof WhatsAppSenderType.desconocido;
+    };
 
 @Injectable()
 export class WhatsAppService {
@@ -176,6 +194,35 @@ export class WhatsAppService {
     }
   }
 
+  async resolveSenderByPhone(phone: string): Promise<ResolvedWhatsAppSender> {
+    const normalizedPhone = this.normalizePhone(phone);
+
+    const exactContact = await this.prisma.contact.findFirst({
+      where: { phone },
+      include: { customer: true },
+    });
+    const contact = exactContact ?? (await this.findContactByNormalizedPhone(normalizedPhone));
+
+    if (contact) {
+      return {
+        senderType: WhatsAppSenderType.cliente,
+        contactId: contact.id,
+        customerId: contact.customerId,
+      };
+    }
+
+    const mappedUser = await this.resolveUserByPhoneInNonProduction(normalizedPhone);
+
+    if (mappedUser) {
+      return {
+        senderType: this.senderTypeForUserRole(mappedUser.role),
+        userId: mappedUser.id,
+      };
+    }
+
+    return { senderType: WhatsAppSenderType.desconocido };
+  }
+
   private async sendViaKapso(
     phoneNumberId: string,
     to: string,
@@ -213,6 +260,56 @@ export class WhatsAppService {
     return error instanceof Error && error.message
       ? error.message
       : "WhatsApp provider send failed";
+  }
+
+  private normalizePhone(phone: string) {
+    return phone.replace(/\D/g, "");
+  }
+
+  private async findContactByNormalizedPhone(normalizedPhone: string) {
+    const contacts = await this.prisma.contact.findMany({
+      where: { phone: { not: null } },
+      include: { customer: true },
+    });
+
+    return (
+      contacts.find((contact) => this.normalizePhone(contact.phone ?? "") === normalizedPhone) ??
+      null
+    );
+  }
+
+  private async resolveUserByPhoneInNonProduction(normalizedPhone: string) {
+    if (process.env.NODE_ENV === "production") {
+      return null;
+    }
+
+    // Production user-phone mapping must be added before commercial WhatsApp rollout.
+    // Until then, avoid overloading email as a silent production identity source.
+    const mappings = (process.env.WHATSAPP_TEST_USER_PHONE_MAP ?? "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    const match = mappings
+      .map((item) => {
+        const [phone, userId] = item.split(":").map((part) => part.trim());
+        return { phone: this.normalizePhone(phone ?? ""), userId };
+      })
+      .find((item) => item.phone === normalizedPhone && item.userId);
+
+    if (!match) {
+      return null;
+    }
+
+    return this.prisma.user.findUnique({
+      where: { id: match.userId },
+    });
+  }
+
+  private senderTypeForUserRole(role: UserRole) {
+    return role === UserRole.comercial || role === UserRole.director_comercial
+      ? WhatsAppSenderType.comercial
+      : WhatsAppSenderType.admin;
   }
 
   private async assertReferencesExist(

@@ -42,8 +42,18 @@ describe("WhatsApp inbox", () => {
     { id: "customer-2", displayName: "Agro Sur" },
   ];
   const contacts = [
-    { id: "contact-1", customerId: "customer-1", fullName: "Laura Cliente" },
-    { id: "contact-2", customerId: "customer-2", fullName: "Carlos Cliente" },
+    {
+      id: "contact-1",
+      customerId: "customer-1",
+      fullName: "Laura Cliente",
+      phone: "+573001112233",
+    },
+    {
+      id: "contact-2",
+      customerId: "customer-2",
+      fullName: "Carlos Cliente",
+      phone: "+573004445566",
+    },
   ];
   const conversations = [
     {
@@ -173,6 +183,45 @@ describe("WhatsApp inbox", () => {
       contact: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           contacts.find((contact) => contact.id === id) ?? null,
+        findFirst: async ({
+          where: { phone },
+          include,
+        }: {
+          where: { phone: string };
+          include?: Record<string, unknown>;
+        }) => {
+          const contact = contacts.find((item) => item.phone === phone);
+
+          if (!contact) {
+            return null;
+          }
+
+          const result = {
+            ...contact,
+          };
+
+          if (include?.customer) {
+            return {
+              ...result,
+              customer: customers.find((customer) => customer.id === contact.customerId) ?? null,
+            };
+          }
+
+          return result;
+        },
+        findMany: async ({ include }: { include?: Record<string, unknown> } = {}) =>
+          contacts.map((contact) => {
+            const result = { ...contact };
+
+            if (include?.customer) {
+              return {
+                ...result,
+                customer: customers.find((customer) => customer.id === contact.customerId) ?? null,
+              };
+            }
+
+            return result;
+          }),
       },
       whatsAppConversation: {
         findMany: async ({ include }: { include?: Record<string, unknown> } = {}) =>
@@ -325,6 +374,22 @@ describe("WhatsApp inbox", () => {
           where?.conversationId
             ? tags.filter((tag) => tag.conversationId === where.conversationId)
             : tags,
+      },
+      noraActionLog: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const action = {
+            id: `nora-action-${noraActions.length + 1}`,
+            createdAt: new Date("2026-05-22T11:15:00.000Z"),
+            updatedAt: new Date("2026-05-22T11:15:00.000Z"),
+            ...data,
+          };
+          noraActions.push(action as (typeof noraActions)[number]);
+          return action;
+        },
+        findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
+          where?.conversationId
+            ? noraActions.filter((action) => action.conversationId === where.conversationId)
+            : noraActions,
       },
       $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => callback(prismaStub),
     };
@@ -562,6 +627,9 @@ describe("WhatsApp inbox", () => {
         waId: "573001112233",
         phone: "573001112233",
         senderName: "Cliente Demo",
+        senderType: WhatsAppSenderType.cliente,
+        customerId: "customer-1",
+        contactId: "contact-1",
         lastMessageText: "Necesito 10 bultos de producto A",
       }),
     );
@@ -574,6 +642,21 @@ describe("WhatsApp inbox", () => {
         direction: WhatsAppMessageDirection.inbound,
         role: WhatsAppMessageRole.user,
         body: "Necesito 10 bultos de producto A",
+      }),
+    );
+    expect(noraActions).toContainEqual(
+      expect.objectContaining({
+        conversationId: "conversation-2",
+        mode: "cliente",
+        action: "classify_inbound_message",
+        status: NoraActionStatus.proposed,
+        input: expect.objectContaining({
+          body: "Necesito 10 bultos de producto A",
+          conversationId: "conversation-2",
+          senderType: WhatsAppSenderType.cliente,
+          customerId: "customer-1",
+          contactId: "contact-1",
+        }),
       }),
     );
   });
