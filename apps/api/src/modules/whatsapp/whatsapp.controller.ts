@@ -13,6 +13,7 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { CreateOrderDto } from "../orders/dto/create-order.dto";
 import { CreateInternalNoteDto } from "./dto/create-internal-note.dto";
 import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
@@ -96,5 +97,20 @@ export class WhatsAppController {
     dto: SendWhatsAppMessageDto,
   ) {
     return this.whatsAppService.sendMessage(user, id, dto);
+  }
+
+  @Post("conversations/:id/order-draft")
+  createOrderDraft(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: CreateOrderDto,
+  ) {
+    return this.whatsAppService.createOrderDraft(user, id, dto);
   }
 }

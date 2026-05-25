@@ -101,7 +101,7 @@ describe("WhatsApp inbox", () => {
       createdAt: new Date("2026-05-22T10:02:00.000Z"),
     },
   ];
-  const orders = [
+  const orders: Array<Record<string, unknown>> = [
     {
       id: "order-1",
       customerId: "customer-1",
@@ -111,6 +111,7 @@ describe("WhatsApp inbox", () => {
       customer: customers[0],
     },
   ];
+  const auditLogs: Array<Record<string, unknown>> = [];
   const noraActions = [
     {
       id: "nora-action-1",
@@ -423,6 +424,63 @@ describe("WhatsApp inbox", () => {
             ? noraActions.filter((action) => action.conversationId === where.conversationId)
             : noraActions,
       },
+      product: {
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          id === "product-1"
+            ? {
+                id,
+                name: "Fertilizante",
+                sku: "FERT-001",
+                unit: "kg",
+                presentation: "Bulto 50kg",
+                basePrice: 50000,
+              }
+            : null,
+      },
+      opportunity: {
+        findUnique: async () => null,
+      },
+      quote: {
+        findUnique: async () => null,
+      },
+      order: {
+        count: async () => orders.length,
+        create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
+          const order = {
+            id: `order-${orders.length + 1}`,
+            status: "recibido",
+            createdAt: new Date("2026-05-22T11:20:00.000Z"),
+            updatedAt: new Date("2026-05-22T11:20:00.000Z"),
+            ...data,
+            items: include?.items ? (data.items as { create: unknown[] }).create : undefined,
+            customer: include?.customer
+              ? customers.find((customer) => customer.id === data.customerId) ?? null
+              : undefined,
+            opportunity: null,
+            sourceQuote: null,
+            sourceConversation: include?.sourceConversation
+              ? conversations.find(
+                  (conversation) => conversation.id === data.sourceConversationId,
+                ) ?? null
+              : undefined,
+          };
+          orders.push(order as (typeof orders)[number]);
+          return order;
+        },
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          orders.find((order) => order.id === id) ?? null,
+      },
+      auditLog: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const auditLog = {
+            id: `audit-${auditLogs.length + 1}`,
+            createdAt: new Date("2026-05-22T11:20:00.000Z"),
+            ...data,
+          };
+          auditLogs.push(auditLog);
+          return auditLog;
+        },
+      },
       $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => callback(prismaStub),
     };
 
@@ -564,6 +622,38 @@ describe("WhatsApp inbox", () => {
         lastMessageAt: expect.any(Date),
       }),
     );
+  });
+
+  it("creates an order draft from a WhatsApp conversation", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/conversation-1/order-draft")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        customerId: "customer-1",
+        sourceConversationId: "conversation-ignored",
+        requesterName: "Laura Cliente",
+        requesterPhone: "+573001112233",
+        items: [{ productName: "Fertilizante especial", quantity: 2, unitPrice: 0 }],
+      })
+      .expect(201);
+
+    expect(response.body.sourceConversationId).toBe("conversation-1");
+    expect(response.body.sourceConversation.id).toBe("conversation-1");
+    expect(response.body.approvalStatus).toBe("en_revision");
+    expect(response.body.requesterName).toBe("Laura Cliente");
+  });
+
+  it("returns 404 when creating an order draft for a missing conversation", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/missing/order-draft")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        customerId: "customer-1",
+        items: [{ productName: "Fertilizante especial", quantity: 2, unitPrice: 0 }],
+      })
+      .expect(404);
+
+    expect(response.body.message).toBe("WhatsApp conversation not found");
   });
 
   it("keeps a failed outbound WhatsApp send attempt in the inbox", async () => {

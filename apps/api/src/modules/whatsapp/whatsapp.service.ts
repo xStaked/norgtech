@@ -8,6 +8,8 @@ import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
 import { Prisma, UserRole, WhatsAppSenderType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { CreateOrderDto } from "../orders/dto/create-order.dto";
+import { OrdersService } from "../orders/orders.service";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
 
@@ -61,7 +63,10 @@ export type ResolvedWhatsAppSender =
 
 @Injectable()
 export class WhatsAppService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly ordersService: OrdersService,
+  ) {}
 
   listConversations() {
     return this.prisma.whatsAppConversation.findMany({
@@ -192,6 +197,22 @@ export class WhatsAppService {
 
       throw new BadGatewayException("Could not send WhatsApp message");
     }
+  }
+
+  async createOrderDraft(user: AuthUser, conversationId: string, dto: CreateOrderDto) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+
+    return this.ordersService.create(user, {
+      ...dto,
+      sourceConversationId: conversationId,
+      approvalStatus: dto.approvalStatus ?? "en_revision",
+    });
   }
 
   async resolveSenderByPhone(phone: string): Promise<ResolvedWhatsAppSender> {

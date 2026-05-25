@@ -76,7 +76,7 @@ export function WhatsAppInbox({
       </div>
       <div className="min-h-0 border-l border-border bg-background">
         <NoraSuggestionPanel conversation={selectedConversation} />
-        <OrderDraftPanel conversation={selectedConversation} />
+        <OrderDraftPanel conversation={selectedConversation} onCreated={refreshSelected} />
       </div>
     </div>
   );
