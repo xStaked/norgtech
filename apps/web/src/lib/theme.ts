@@ -41,6 +41,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"] as const,
   },
   {
+    href: "/whatsapp",
+    label: "WhatsApp",
+    shortLabel: "WA",
+    description: "Inbox de conversaciones y pedidos asistidos",
+    group: "Operacion",
+    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
+  },
+  {
     href: "/visits",
     label: "Visitas",
     shortLabel: "VS",
