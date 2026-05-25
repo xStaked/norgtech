@@ -31,6 +31,9 @@ export class OrdersService {
     if (dto.sourceQuoteId) {
       await this.assertQuoteBelongsToCustomer(dto.sourceQuoteId, dto.customerId);
     }
+    if (dto.sourceConversationId) {
+      await this.assertConversationBelongsToCustomer(dto.sourceConversationId, dto.customerId);
+    }
     if (dto.assignedLogisticsUserId) {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
@@ -119,6 +122,7 @@ export class OrdersService {
           customerId: dto.customerId,
           opportunityId: dto.opportunityId || null,
           sourceQuoteId: dto.sourceQuoteId || null,
+          sourceConversationId: dto.sourceConversationId || null,
           orderNumber,
           purchaseOrderNumber: dto.purchaseOrderNumber || null,
           orderDate,
@@ -160,7 +164,13 @@ export class OrdersService {
             create: itemsWithSnapshot,
           },
         },
-        include: { items: true, customer: true, opportunity: true, sourceQuote: true },
+        include: {
+          items: true,
+          customer: true,
+          opportunity: true,
+          sourceQuote: true,
+          sourceConversation: true,
+        },
       });
 
       await this.auditService.record(
@@ -193,6 +203,7 @@ export class OrdersService {
         customer: true,
         opportunity: true,
         sourceQuote: true,
+        sourceConversation: true,
         items: true,
         billingRequests: true,
         assignedLogisticsUser: true,
@@ -228,7 +239,13 @@ export class OrdersService {
       const updated = await tx.order.update({
         where: { id: orderId },
         data,
-        include: { customer: true, opportunity: true, sourceQuote: true, items: true },
+        include: {
+          customer: true,
+          opportunity: true,
+          sourceQuote: true,
+          sourceConversation: true,
+          items: true,
+        },
       });
 
       await this.auditService.record(
@@ -274,6 +291,7 @@ export class OrdersService {
           customer: true,
           opportunity: true,
           sourceQuote: true,
+          sourceConversation: true,
           items: true,
           assignedLogisticsUser: true,
         },
@@ -368,6 +386,18 @@ export class OrdersService {
     }
     if (quote.customerId !== customerId) {
       throw new BadRequestException("Quote does not belong to customer");
+    }
+  }
+
+  private async assertConversationBelongsToCustomer(conversationId: string, customerId: string) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+    });
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+    if (conversation.customerId && conversation.customerId !== customerId) {
+      throw new BadRequestException("Conversation customer does not match order customer");
     }
   }
 

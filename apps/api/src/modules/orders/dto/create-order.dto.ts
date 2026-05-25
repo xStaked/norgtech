@@ -25,6 +25,10 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsString()
+  sourceConversationId?: string;
+
+  @IsOptional()
+  @IsString()
   orderNumber?: string;
 
   @IsOptional()

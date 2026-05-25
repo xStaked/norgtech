@@ -33,6 +33,26 @@ describe("Orders", () => {
       updatedAt: new Date("2026-04-29T00:00:00.000Z"),
     },
   ];
+  const whatsAppConversations: Array<Record<string, unknown>> = [
+    {
+      id: "conversation-customer-1",
+      customerId: "customer-1",
+      contactId: "contact-1",
+      senderType: "cliente",
+    },
+    {
+      id: "conversation-customer-2",
+      customerId: "customer-2",
+      contactId: "contact-2",
+      senderType: "cliente",
+    },
+    {
+      id: "conversation-unassigned",
+      customerId: null,
+      contactId: null,
+      senderType: "desconocido",
+    },
+  ];
 
   beforeAll(async () => {
     const user = {
@@ -118,6 +138,10 @@ describe("Orders", () => {
           return null;
         },
       },
+      whatsAppConversation: {
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          whatsAppConversations.find((conversation) => conversation.id === id) ?? null,
+      },
       order: {
         create: async () => {
           throw new Error("order.create must run inside a transaction");
@@ -168,6 +192,11 @@ describe("Orders", () => {
                 customer: include?.customer ? { id: "customer-1", displayName: "Agro Norte" } : undefined,
                 opportunity: null,
                 sourceQuote: null,
+                sourceConversation: include?.sourceConversation
+                  ? whatsAppConversations.find(
+                      (conversation) => conversation.id === data.sourceConversationId,
+                    ) ?? null
+                  : undefined,
                 createdAt: new Date("2026-04-29T00:00:00.000Z"),
                 updatedAt: new Date("2026-04-29T00:00:00.000Z"),
               };
@@ -367,6 +396,63 @@ describe("Orders", () => {
     expect(response.body.items[0].productSnapshotName).toBe("Servicio de diagnostico");
     expect(response.body.items[0].presentationSnapshot).toBe("Jornada");
     expect(response.body.items[0].customProductName).toBe("Servicio de diagnostico");
+  });
+
+  it("creates an order linked to a WhatsApp conversation", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        sourceConversationId: "conversation-customer-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    expect(response.body.sourceConversationId).toBe("conversation-customer-1");
+    expect(response.body.sourceConversation.id).toBe("conversation-customer-1");
+  });
+
+  it("allows an unassigned WhatsApp conversation to seed an order", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        sourceConversationId: "conversation-unassigned",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    expect(response.body.sourceConversationId).toBe("conversation-unassigned");
+  });
+
+  it("rejects WhatsApp conversations assigned to another customer", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        sourceConversationId: "conversation-customer-2",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("Conversation customer does not match order customer");
+  });
+
+  it("rejects missing WhatsApp conversations on orders", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        sourceConversationId: "missing-conversation",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(404);
+
+    expect(response.body.message).toBe("WhatsApp conversation not found");
   });
 
   it("rejects opportunities that do not belong to the order customer", async () => {
