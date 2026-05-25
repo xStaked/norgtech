@@ -18,8 +18,10 @@ from .models.api_models import (
     NoraConfirmationResponse,
     ClarificationOption,
 )
+from .models.whatsapp_models import WhatsAppRouteRequest, WhatsAppRouteResponse
 from .agent import nora_graph, NoraState
 from .sessions import session_store
+from .whatsapp_router import route_whatsapp_message
 
 app = FastAPI(title="Nora Agent", version="0.1.0")
 
@@ -184,6 +186,11 @@ def get_auth_header(authorization: str = Header(...)) -> str:
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/whatsapp/route", response_model=WhatsAppRouteResponse)
+async def whatsapp_route(payload: WhatsAppRouteRequest) -> WhatsAppRouteResponse:
+    return WhatsAppRouteResponse.model_validate(route_whatsapp_message(payload))
 
 @app.post("/messages")
 async def send_message(
