@@ -26,21 +26,52 @@ export class NoraRoutingService {
 
     await this.updateConversationIdentity(conversation.id, sender);
 
-    return this.prisma.noraActionLog.create({
+    const input = {
+      body: message.body,
+      conversationId: conversation.id,
+      senderType: sender.senderType,
+      customerId: "customerId" in sender ? sender.customerId : null,
+      contactId: "contactId" in sender ? sender.contactId : null,
+    } satisfies Prisma.InputJsonObject;
+
+    const actionLog = await this.prisma.noraActionLog.create({
       data: {
         conversationId: conversation.id,
         mode: this.modeFor(sender.senderType),
         action: "classify_inbound_message",
         status: NoraActionStatus.proposed,
-        input: {
-          body: message.body,
-          conversationId: conversation.id,
-          senderType: sender.senderType,
-          customerId: "customerId" in sender ? sender.customerId : null,
-          contactId: "contactId" in sender ? sender.contactId : null,
-        } satisfies Prisma.InputJsonObject,
+        input,
       },
     });
+
+    try {
+      const noraResponse = await this.requestNoraRoute({
+        sender_type: sender.senderType,
+        message: message.body,
+        conversation_id: conversation.id,
+        customer:
+          "customerId" in sender
+            ? {
+                id: sender.customerId,
+              }
+            : undefined,
+      });
+
+      return this.prisma.noraActionLog.update({
+        where: { id: actionLog.id },
+        data: {
+          output: noraResponse as Prisma.InputJsonValue,
+        },
+      });
+    } catch (error) {
+      return this.prisma.noraActionLog.update({
+        where: { id: actionLog.id },
+        data: {
+          status: NoraActionStatus.failed,
+          error: this.safeErrorMessage(error),
+        },
+      });
+    }
   }
 
   private modeFor(senderType: WhatsAppSenderType) {
@@ -83,5 +114,26 @@ export class NoraRoutingService {
     }
 
     return Promise.resolve(null);
+  }
+
+  private async requestNoraRoute(payload: Prisma.InputJsonObject) {
+    const noraApiUrl = process.env.NORA_API_URL ?? "http://localhost:8000";
+    const response = await fetch(`${noraApiUrl}/whatsapp/route`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Nora route request failed with status ${response.status}`);
+    }
+
+    return response.json() as Promise<Record<string, unknown>>;
+  }
+
+  private safeErrorMessage(error: unknown) {
+    return error instanceof Error && error.message
+      ? error.message
+      : "Nora route request failed";
   }
 }

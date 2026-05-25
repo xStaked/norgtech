@@ -17,6 +17,7 @@ describe("WhatsApp inbox", () => {
   let moduleRef: TestingModule;
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   let adminToken: string;
+  let originalFetch: typeof globalThis.fetch;
 
   const users = [
     {
@@ -171,6 +172,19 @@ describe("WhatsApp inbox", () => {
   };
 
   beforeAll(async () => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Cliente solicita 10 bultos de producto A para la costa.",
+        suggested_reply: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        requires_human_review: true,
+        proposed_order: { items: [{ name: "producto A", quantity: 10 }] },
+      }),
+    })) as unknown as typeof globalThis.fetch;
+
     const prismaStub = {
       user: {
         findUnique: async ({ where }: { where: { email?: string; id?: string } }) =>
@@ -386,6 +400,24 @@ describe("WhatsApp inbox", () => {
           noraActions.push(action as (typeof noraActions)[number]);
           return action;
         },
+        update: async ({
+          where: { id },
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const index = noraActions.findIndex((action) => action.id === id);
+          if (index === -1) {
+            return null;
+          }
+          noraActions[index] = {
+            ...noraActions[index],
+            ...data,
+            updatedAt: new Date("2026-05-22T11:16:00.000Z"),
+          };
+          return noraActions[index];
+        },
         findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
           where?.conversationId
             ? noraActions.filter((action) => action.conversationId === where.conversationId)
@@ -413,6 +445,7 @@ describe("WhatsApp inbox", () => {
   });
 
   afterAll(async () => {
+    globalThis.fetch = originalFetch;
     if (app) {
       await app.close();
     }
@@ -657,6 +690,55 @@ describe("WhatsApp inbox", () => {
           customerId: "customer-1",
           contactId: "contact-1",
         }),
+        output: expect.objectContaining({
+          mode: "cliente",
+          intent: "pedido",
+          proposed_order: expect.objectContaining({
+            items: [expect.objectContaining({ name: "producto A", quantity: 10 })],
+          }),
+        }),
+      }),
+    );
+    expect(globalThis.fetch).toHaveBeenCalledWith(
+      "http://localhost:8000/whatsapp/route",
+      expect.objectContaining({
+        method: "POST",
+        body: expect.stringContaining("Necesito 10 bultos de producto A"),
+      }),
+    );
+  });
+
+  it("marks Nora route failures on the action log without rejecting the webhook", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      json: async () => ({ error: "Nora unavailable" }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-nora-fail",
+            from: "573009999999",
+            timestamp: "2026-05-22T20:05:00.000Z",
+            text: { body: "Hola, quiero informacion" },
+          },
+        },
+      })
+      .expect(201);
+
+    expect(response.body.ignored).toBe(false);
+    expect(noraActions).toContainEqual(
+      expect.objectContaining({
+        conversationId: response.body.conversationId,
+        mode: "cliente",
+        action: "classify_inbound_message",
+        status: NoraActionStatus.failed,
+        error: "Nora route request failed with status 503",
       }),
     );
   });
