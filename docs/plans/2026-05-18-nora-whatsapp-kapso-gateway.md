@@ -1,5 +1,7 @@
 # Nora WhatsApp Gateway — Implementation Plan
 
+> **Estado:** Superseded por `docs/superpowers/plans/2026-05-22-nora-whatsapp-pedidos-phase1.md` y `docs/plans/2026-05-22-kapso-setup-runbook.md`. La Fase 1 implementada usa la API CRM como gateway WhatsApp/Kapso, no un microservicio `apps/whatsapp-gateway/` separado.
+
 > **Goal:** Habilitar a Nora como agente de WhatsApp usando Kapso AI para la conexión con Meta API. Arquitectura basada en microservicio dedicado (WhatsApp Gateway) desplegada en VPS Hostinger KVM 2 (2vCPU, 8GB RAM, 100GB NVMe) con Dokploy.
 
 **Architecture:** Un nuevo microservicio `apps/whatsapp-gateway/` (NestJS ligero) actúa como gateway dedicado entre Kapso/WhatsApp y el ecosistema interno. Recibe webhooks de Kapso, identifica al usuario por teléfono, enruta a Nora para procesamiento de IA, adapta la respuesta JSON de Nora a payloads de WhatsApp, y envía vía Kapso SDK. Nora permanece como servicio de IA puro sin conocer WhatsApp. La API NestJS (CRM) sigue siendo la fuente de verdad para identidad y operaciones de negocio.
