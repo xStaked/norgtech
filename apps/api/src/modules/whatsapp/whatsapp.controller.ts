@@ -29,8 +29,8 @@ export class WhatsAppWebhookController {
   receiveKapsoWebhook(
     @Body(
       new ValidationPipe({
-        whitelist: true,
-        forbidNonWhitelisted: true,
+        whitelist: false,
+        forbidNonWhitelisted: false,
       }),
     )
     dto: KapsoWebhookDto,

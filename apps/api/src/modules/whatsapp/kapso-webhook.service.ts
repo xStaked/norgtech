@@ -23,7 +23,7 @@ export class KapsoWebhookService {
   ) {}
 
   async handle(dto: KapsoWebhookDto) {
-    if (dto.type !== MESSAGE_RECEIVED_EVENT) {
+    if (!this.isInboundMessageEvent(dto)) {
       return { ignored: true };
     }
 
@@ -97,27 +97,64 @@ export class KapsoWebhookService {
   }
 
   private normalizeMessage(dto: KapsoWebhookDto): NormalizedKapsoMessage {
-    const data = dto.data;
+    const data = this.getPayloadData(dto);
     const message = this.asRecord(data.message);
-    const phoneNumberId = this.asString(data.phone_number_id) ?? this.asString(data.phoneNumberId);
+    const conversation = this.asRecord(data.conversation);
+    const conversationKapso = this.asRecord(conversation?.kapso);
+    const messageKapso = this.asRecord(message?.kapso);
+    const phoneNumberId =
+      this.asString(data.phone_number_id) ??
+      this.asString(data.phoneNumberId) ??
+      this.asString(conversation?.phone_number_id) ??
+      this.asString(conversation?.phoneNumberId);
     const messageId = this.asString(message?.id);
-    const waId = this.asString(message?.from);
+    const waId =
+      this.asString(message?.from) ??
+      this.asString(conversation?.phone_number) ??
+      this.asString(conversation?.phoneNumber);
 
     if (!phoneNumberId || !messageId || !waId) {
       throw new BadRequestException("Kapso message webhook is missing required fields");
     }
 
     const text = this.asRecord(message?.text);
-    const body = this.asString(text?.body);
+    const body =
+      this.asString(text?.body) ??
+      this.asString(messageKapso?.content) ??
+      this.asString(conversationKapso?.last_message_text);
 
     if (!body) {
       throw new BadRequestException("Kapso message webhook is missing required fields");
     }
 
     const profile = this.asRecord(message?.profile);
-    const senderName = this.asString(profile?.name);
+    const senderName =
+      this.asString(profile?.name) ??
+      this.asString(conversationKapso?.contact_name) ??
+      this.asString(conversationKapso?.contactName);
 
     return { phoneNumberId, waId, messageId, senderName, body, payload: data };
+  }
+
+  private isInboundMessageEvent(dto: KapsoWebhookDto) {
+    if (dto.type !== undefined) {
+      return dto.type === MESSAGE_RECEIVED_EVENT;
+    }
+
+    const data = this.getPayloadData(dto);
+    const message = this.asRecord(data.message);
+    const messageKapso = this.asRecord(message?.kapso);
+    const direction = this.asString(messageKapso?.direction);
+
+    return Boolean(
+      data.phone_number_id &&
+        message?.id &&
+        (direction === undefined || direction === "inbound"),
+    );
+  }
+
+  private getPayloadData(dto: KapsoWebhookDto) {
+    return dto.data ?? (dto as unknown as Record<string, unknown>);
   }
 
   private asRecord(value: unknown): Record<string, unknown> | undefined {

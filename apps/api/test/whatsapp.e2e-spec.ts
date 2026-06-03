@@ -798,6 +798,61 @@ describe("WhatsApp inbox", () => {
     );
   });
 
+  it("receives a top-level Kapso v2 message webhook", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        phone_number_id: "phone-number-v2",
+        message: {
+          id: "wamid-v2",
+          timestamp: "1730092800",
+          type: "text",
+          kapso: {
+            direction: "inbound",
+            status: "received",
+            processing_status: "pending",
+            origin: "cloud_api",
+            has_media: false,
+            content: "Hola Nora, necesito alimento para postura",
+          },
+        },
+        conversation: {
+          id: "conv-v2",
+          phone_number: "+573009998877",
+          status: "active",
+          phone_number_id: "phone-number-v2",
+          kapso: {
+            contact_name: "Cliente V2",
+            last_message_id: "wamid-v2",
+            last_message_text: "Hola Nora, necesito alimento para postura",
+          },
+        },
+        is_new_conversation: true,
+      })
+      .expect(201);
+
+    expect(response.body.ignored).toBe(false);
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        accountId: "kapso-account-2",
+        waId: "+573009998877",
+        phone: "+573009998877",
+        senderName: "Cliente V2",
+        lastMessageText: "Hola Nora, necesito alimento para postura",
+      }),
+    );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        id: response.body.messageId,
+        kapsoMessageId: "wamid-v2",
+        metaMessageId: "wamid-v2",
+        direction: WhatsAppMessageDirection.inbound,
+        role: WhatsAppMessageRole.user,
+        body: "Hola Nora, necesito alimento para postura",
+      }),
+    );
+  });
+
   it("marks Nora route failures on the action log without rejecting the webhook", async () => {
     (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,

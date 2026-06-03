@@ -1,9 +1,11 @@
-import { IsObject, IsString } from "class-validator";
+import { IsObject, IsOptional, IsString } from "class-validator";
 
 export class KapsoWebhookDto {
+  @IsOptional()
   @IsString()
-  type!: string;
+  type?: string;
 
+  @IsOptional()
   @IsObject()
-  data!: Record<string, unknown>;
+  data?: Record<string, unknown>;
 }
