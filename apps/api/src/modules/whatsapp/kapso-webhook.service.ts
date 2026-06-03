@@ -154,7 +154,10 @@ export class KapsoWebhookService {
   }
 
   private getPayloadData(dto: KapsoWebhookDto) {
-    return dto.data ?? (dto as unknown as Record<string, unknown>);
+    if (Array.isArray(dto.data) && dto.data.length > 0) {
+      return dto.data[0] as Record<string, unknown>;
+    }
+    return (dto.data as Record<string, unknown> | undefined) ?? (dto as unknown as Record<string, unknown>);
   }
 
   private asRecord(value: unknown): Record<string, unknown> | undefined {
