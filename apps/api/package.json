@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "scripts": {
+    "prebuild": "prisma generate --schema prisma/schema.prisma",
     "build": "nest build -p tsconfig.build.json",
     "dev": "nest start --watch",
     "start": "node dist/main.js",
