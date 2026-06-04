@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, OpportunityStage, QuoteStatus, OrderStatus, BillingRequestStatus, VisitStatus, FollowUpTaskStatus, FollowUpTaskType } from "@prisma/client";
+import { PrismaClient, UserRole, OpportunityStage, QuoteStatus, OrderStatus, BillingRequestStatus, VisitStatus, FollowUpTaskStatus, FollowUpTaskType, CommercialExpenseCategory, CommercialExpenseStatus } from "@prisma/client";
 
 type BcryptModule = {
   hash(value: string, rounds: number): Promise<string>;
@@ -70,6 +70,9 @@ const task_5 = "f627299a-87ad-43c6-9a3b-40ac6f7ac07a";
 
 const bill_1 = "508480f4-f129-4013-87a3-4eebdef6bee2";
 const bill_2 = "46c253c2-b3f1-481c-987f-66a561d67971";
+
+const expense_1 = "0b96a4f3-f1a9-4e1e-9f75-dc6587f7072e";
+const expense_2 = "cf1e1345-822f-42d7-bf72-6108c4927d7d";
 
 async function main() {
   // ── Users ────────────────────────────────────────────
@@ -300,6 +303,80 @@ async function main() {
     });
   }
 
+  // ── Commercial Expenses ─────────────────────────────
+  const commercialExpenses = [
+    {
+      id: expense_1,
+      expenseDate: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1),
+      category: CommercialExpenseCategory.alimentacion,
+      amount: 38000,
+      description: "Almuerzo con cliente en visita comercial",
+      status: CommercialExpenseStatus.pendiente,
+      submittedByUserId: user_comercial,
+      customerId: cust_1,
+      visitId: visit_1,
+      support: {
+        bucket: "seed-r2-bucket",
+        objectKey: "seed/commercial-expenses/factura-alimentacion.png",
+        fileName: "factura-alimentacion.png",
+        contentType: "image/png",
+        sizeBytes: 120000,
+      },
+    },
+    {
+      id: expense_2,
+      expenseDate: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3),
+      category: CommercialExpenseCategory.peajes,
+      amount: 18000,
+      description: "Peaje durante visita tecnica a cliente",
+      status: CommercialExpenseStatus.aprobado,
+      submittedByUserId: user_comercial,
+      customerId: cust_6,
+      visitId: visit_3,
+      reviewedByUserId: user_facturacion,
+      reviewedAt: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2),
+      support: {
+        bucket: "seed-r2-bucket",
+        objectKey: "seed/commercial-expenses/recibo-peaje.pdf",
+        fileName: "recibo-peaje.pdf",
+        contentType: "application/pdf",
+        sizeBytes: 84000,
+      },
+    },
+  ];
+
+  for (const expense of commercialExpenses) {
+    await prisma.commercialExpense.upsert({
+      where: { id: expense.id },
+      update: {},
+      create: {
+        id: expense.id,
+        expenseDate: expense.expenseDate,
+        category: expense.category,
+        amount: expense.amount,
+        description: expense.description,
+        status: expense.status,
+        submittedByUserId: expense.submittedByUserId,
+        customerId: expense.customerId,
+        visitId: expense.visitId,
+        reviewedByUserId: expense.reviewedByUserId,
+        reviewedAt: expense.reviewedAt,
+        createdBy: expense.submittedByUserId,
+        updatedBy: expense.reviewedByUserId ?? expense.submittedByUserId,
+        supports: {
+          create: {
+            bucket: expense.support.bucket,
+            objectKey: expense.support.objectKey,
+            fileName: expense.support.fileName,
+            contentType: expense.support.contentType,
+            sizeBytes: expense.support.sizeBytes,
+            uploadedByUserId: expense.submittedByUserId,
+          },
+        },
+      },
+    });
+  }
+
   console.log("✅ Seed completado con exito.");
   console.log("   - 6 usuarios");
   console.log("   - 6 segmentos");
@@ -312,6 +389,7 @@ async function main() {
   console.log("   - 4 visitas");
   console.log("   - 5 tareas de seguimiento");
   console.log("   - 2 solicitudes de facturacion");
+  console.log("   - 2 gastos comerciales");
 }
 
 void main()
