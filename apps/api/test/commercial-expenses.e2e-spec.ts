@@ -18,6 +18,12 @@ declare global {
 }
 
 type StoredExpense = Record<string, any>;
+type UploadExpenseSupportCall = {
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  body: Buffer | Uint8Array | Readable;
+};
 
 describe("CommercialExpenses", () => {
   let app: INestApplication;
@@ -30,6 +36,7 @@ describe("CommercialExpenses", () => {
     "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const expenses: StoredExpense[] = [];
   const auditLogs: Array<Record<string, unknown>> = [];
+  const uploadExpenseSupportCalls: UploadExpenseSupportCall[] = [];
 
   const users = [
     {
@@ -89,20 +96,43 @@ describe("CommercialExpenses", () => {
 
   const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 
-  const hydrateExpense = (expense: StoredExpense) => ({
-    ...clone(expense),
+  const shouldInclude = (
+    include: Record<string, unknown> | undefined,
+    relation: string,
+  ) => Boolean(include?.[relation]);
+
+  const hydrateExpense = (
+    expense: StoredExpense,
+    include?: Record<string, unknown>,
+  ) => ({
+    ...clone({
+      ...expense,
+      supports: undefined,
+    }),
     amount: new Prisma.Decimal(expense.amount),
     expenseDate: new Date(expense.expenseDate),
     reviewedAt: expense.reviewedAt ? new Date(expense.reviewedAt) : null,
     createdAt: new Date(expense.createdAt),
     updatedAt: new Date(expense.updatedAt),
-    submittedBy: users.find((item) => item.id === expense.submittedByUserId),
-    reviewedBy: expense.reviewedByUserId
-      ? users.find((item) => item.id === expense.reviewedByUserId)
-      : null,
-    customer: null,
-    visit: null,
-    supports: clone(expense.supports),
+    ...(shouldInclude(include, "submittedBy")
+      ? {
+          submittedBy: users.find(
+            (item) => item.id === expense.submittedByUserId,
+          ),
+        }
+      : {}),
+    ...(shouldInclude(include, "reviewedBy")
+      ? {
+          reviewedBy: expense.reviewedByUserId
+            ? users.find((item) => item.id === expense.reviewedByUserId)
+            : null,
+        }
+      : {}),
+    ...(shouldInclude(include, "customer") ? { customer: null } : {}),
+    ...(shouldInclude(include, "visit") ? { visit: null } : {}),
+    ...(shouldInclude(include, "supports")
+      ? { supports: clone(expense.supports) }
+      : {}),
   });
 
   const matchesWhere = (
@@ -148,6 +178,7 @@ describe("CommercialExpenses", () => {
   const commercialExpense = {
     create: async ({
       data,
+      include,
     }: {
       data: Record<string, any>;
       include?: Record<string, unknown>;
@@ -186,14 +217,28 @@ describe("CommercialExpenses", () => {
         ],
       };
       expenses.push(expense);
-      return hydrateExpense(expense);
+      return hydrateExpense(expense, include);
     },
-    findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+    findUnique: async ({
+      where: { id },
+      include,
+    }: {
+      where: { id: string };
+      include?: Record<string, unknown>;
+    }) => {
       const found = expenses.find((expense) => expense.id === id);
-      return found ? hydrateExpense(found) : null;
+      return found ? hydrateExpense(found, include) : null;
     },
-    findMany: async ({ where }: { where?: Record<string, any> } = {}) =>
-      expenses.filter((expense) => matchesWhere(expense, where)).map(hydrateExpense),
+    findMany: async ({
+      where,
+      include,
+    }: {
+      where?: Record<string, any>;
+      include?: Record<string, unknown>;
+    } = {}) =>
+      expenses
+        .filter((expense) => matchesWhere(expense, where))
+        .map((expense) => hydrateExpense(expense, include)),
     updateMany: async ({
       where,
       data,
@@ -252,9 +297,11 @@ describe("CommercialExpenses", () => {
       .useValue(prismaStub)
       .overrideProvider(R2StorageService)
       .useValue({
-        uploadExpenseSupport: async () => ({
+        uploadExpenseSupport: async (input: UploadExpenseSupportCall) => ({
           bucket: "test-bucket",
-          objectKey: "commercial-expenses/support.png",
+          objectKey: `commercial-expenses/support-${uploadExpenseSupportCalls.push(
+            input,
+          )}.png`,
         }),
         getObjectStream: async () => Readable.from(Buffer.from("support")),
         deleteObject: async () => undefined,
@@ -298,6 +345,12 @@ describe("CommercialExpenses", () => {
     }
   });
 
+  beforeEach(() => {
+    expenses.splice(0);
+    auditLogs.splice(0);
+    uploadExpenseSupportCalls.splice(0);
+  });
+
   const createExpense = () =>
     request(globalThis.__APP__)
       .post("/commercial-expenses")
@@ -310,6 +363,10 @@ describe("CommercialExpenses", () => {
         filename: "support.png",
         contentType: "image/png",
       });
+
+  it("GET /commercial-expenses rejects unauthenticated requests", async () => {
+    await request(globalThis.__APP__).get("/commercial-expenses").expect(401);
+  });
 
   it("POST /commercial-expenses rejects missing support", async () => {
     await request(globalThis.__APP__)
@@ -334,9 +391,18 @@ describe("CommercialExpenses", () => {
     expect(response.body.supports).toHaveLength(1);
     expect(response.body.supports[0]).toMatchObject({
       bucket: "test-bucket",
-      objectKey: "commercial-expenses/support.png",
+      objectKey: "commercial-expenses/support-1.png",
       contentType: "image/png",
+      fileName: "support.png",
+      sizeBytes: 5,
     });
+    expect(uploadExpenseSupportCalls).toHaveLength(1);
+    expect(uploadExpenseSupportCalls[0]).toMatchObject({
+      fileName: "support.png",
+      contentType: "image/png",
+      sizeBytes: 5,
+    });
+    expect(uploadExpenseSupportCalls[0].body).toEqual(Buffer.from("image"));
   });
 
   it("does not allow another comercial to get the expense", async () => {
@@ -362,6 +428,16 @@ describe("CommercialExpenses", () => {
       .set("Authorization", `Bearer ${facturacionToken}`)
       .send({ status: CommercialExpenseStatus.rechazado })
       .expect(400);
+  });
+
+  it("does not allow comercial to update expense status", async () => {
+    const created = await createExpense().expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/commercial-expenses/${created.body.id}/status`)
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .send({ status: CommercialExpenseStatus.aprobado })
+      .expect(403);
   });
 
   it("allows facturacion to request correction and comercial edit returns to pendiente", async () => {
