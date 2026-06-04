@@ -753,7 +753,7 @@ describe("WhatsApp inbox", () => {
         senderType: WhatsAppSenderType.cliente,
         customerId: "customer-1",
         contactId: "contact-1",
-        lastMessageText: "Necesito 10 bultos de producto A",
+        lastMessageText: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
       }),
     );
     expect(messages).toContainEqual(
@@ -765,6 +765,15 @@ describe("WhatsApp inbox", () => {
         direction: WhatsAppMessageDirection.inbound,
         role: WhatsAppMessageRole.user,
         body: "Necesito 10 bultos de producto A",
+      }),
+    );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        conversationId: "conversation-2",
+        direction: WhatsAppMessageDirection.outbound,
+        role: WhatsAppMessageRole.assistant,
+        body: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        deliveryStatus: "sent",
       }),
     );
     expect(noraActions).toContainEqual(
@@ -838,7 +847,7 @@ describe("WhatsApp inbox", () => {
         waId: "+573009998877",
         phone: "+573009998877",
         senderName: "Cliente V2",
-        lastMessageText: "Hola Nora, necesito alimento para postura",
+        lastMessageText: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
       }),
     );
     expect(messages).toContainEqual(
@@ -849,6 +858,15 @@ describe("WhatsApp inbox", () => {
         direction: WhatsAppMessageDirection.inbound,
         role: WhatsAppMessageRole.user,
         body: "Hola Nora, necesito alimento para postura",
+      }),
+    );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        conversationId: response.body.conversationId,
+        direction: WhatsAppMessageDirection.outbound,
+        role: WhatsAppMessageRole.assistant,
+        body: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        deliveryStatus: "sent",
       }),
     );
   });

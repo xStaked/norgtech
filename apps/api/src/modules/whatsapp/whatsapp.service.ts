@@ -136,6 +136,18 @@ export class WhatsAppService {
   }
 
   async sendMessage(user: AuthUser, conversationId: string, dto: SendWhatsAppMessageDto) {
+    return this.createAndSendOutboundMessage(conversationId, dto.body, user.id);
+  }
+
+  async sendAgentReply(conversationId: string, body: string) {
+    return this.createAndSendOutboundMessage(conversationId, body, null);
+  }
+
+  private async createAndSendOutboundMessage(
+    conversationId: string,
+    body: string,
+    authorUserId: string | null,
+  ) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
       include: sendMessageConversationInclude,
@@ -151,8 +163,8 @@ export class WhatsAppService {
         conversationId,
         direction: "outbound",
         role: "assistant",
-        authorUserId: user.id,
-        body: dto.body,
+        ...(authorUserId && { authorUserId }),
+        body,
         payload: { provider: "kapso" },
         deliveryStatus: "queued",
       },
@@ -161,7 +173,7 @@ export class WhatsAppService {
     await this.prisma.whatsAppConversation.update({
       where: { id: conversationId },
       data: {
-        lastMessageText: dto.body,
+        lastMessageText: body,
         lastMessageAt: attemptedAt,
       },
     });
@@ -170,7 +182,7 @@ export class WhatsAppService {
       const providerResult = await this.sendViaKapso(
         conversation.account.phoneNumberId,
         conversation.waId,
-        dto.body,
+        body,
       );
 
       return this.prisma.whatsAppMessage.update({

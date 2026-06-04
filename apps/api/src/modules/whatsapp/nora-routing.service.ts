@@ -57,12 +57,28 @@ export class NoraRoutingService {
             : undefined,
       });
 
-      return this.prisma.noraActionLog.update({
+      const updatedLog = await this.prisma.noraActionLog.update({
         where: { id: actionLog.id },
         data: {
           output: noraResponse as Prisma.InputJsonValue,
         },
       });
+
+      const suggestedReply = this.extractSuggestedReply(noraResponse);
+      if (suggestedReply) {
+        try {
+          await this.whatsAppService.sendAgentReply(conversation.id, suggestedReply);
+        } catch (sendError) {
+          await this.prisma.noraActionLog.update({
+            where: { id: actionLog.id },
+            data: {
+              error: this.safeErrorMessage(sendError),
+            },
+          });
+        }
+      }
+
+      return updatedLog;
     } catch (error) {
       return this.prisma.noraActionLog.update({
         where: { id: actionLog.id },
@@ -129,6 +145,11 @@ export class NoraRoutingService {
     }
 
     return response.json() as Promise<Record<string, unknown>>;
+  }
+
+  private extractSuggestedReply(noraResponse: Record<string, unknown>): string | undefined {
+    const reply = noraResponse.suggested_reply;
+    return typeof reply === "string" && reply.trim().length > 0 ? reply.trim() : undefined;
   }
 
   private safeErrorMessage(error: unknown) {
