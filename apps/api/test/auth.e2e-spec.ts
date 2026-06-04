@@ -38,6 +38,9 @@ describe("Auth", () => {
         billingRequest: {
           findMany: async () => [],
         },
+        commercialExpense: {
+          findMany: async () => [],
+        },
         user: {
           findUnique: async ({ where: { email } }: { where: { email: string } }) => {
             const user = mockUsers.find((u) => u.email === email);
@@ -140,6 +143,34 @@ describe("Auth", () => {
       .get("/billing-requests")
       .set("Authorization", `Bearer ${token}`)
       .expect(200);
+  });
+
+  it("GET /commercial-expenses returns 200 for comercial", async () => {
+    const loginResponse = await request(globalThis.__APP__)
+      .post("/auth/login")
+      .send({ email: "comercial@norgtech.com", password: "Admin123*" })
+      .expect(200);
+
+    const token = loginResponse.body.accessToken as string;
+
+    await request(globalThis.__APP__)
+      .get("/commercial-expenses")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+  });
+
+  it("GET /commercial-expenses returns 403 for logistica", async () => {
+    const loginResponse = await request(globalThis.__APP__)
+      .post("/auth/login")
+      .send({ email: "logistica@norgtech.com", password: "Admin123*" })
+      .expect(200);
+
+    const token = loginResponse.body.accessToken as string;
+
+    await request(globalThis.__APP__)
+      .get("/commercial-expenses")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(403);
   });
 
   it("JwtStrategy rejects bearer tokens with invalid payload shape", () => {
