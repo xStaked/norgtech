@@ -1,0 +1,448 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
+import {
+  CommercialExpense,
+  CommercialExpenseStatus,
+  Prisma,
+  UserRole,
+} from "@prisma/client";
+import { Readable } from "node:stream";
+import { PrismaService } from "../../prisma/prisma.service";
+import { AuditService } from "../audit/audit.service";
+import { AuthUser } from "../auth/types/authenticated-request";
+import {
+  EXPENSE_SUPPORT_ALLOWED_MIME_TYPES,
+  EXPENSE_SUPPORT_MAX_BYTES,
+  expenseStatusTransitions,
+} from "./commercial-expense-constants";
+import { CommercialExpensesExportService, ExpenseExportRow } from "./commercial-expenses-export.service";
+import { CreateCommercialExpenseDto } from "./dto/create-commercial-expense.dto";
+import { ListCommercialExpensesDto } from "./dto/list-commercial-expenses.dto";
+import { UpdateCommercialExpenseStatusDto } from "./dto/update-commercial-expense-status.dto";
+import { UpdateCommercialExpenseDto } from "./dto/update-commercial-expense.dto";
+import { R2StorageService, UploadedExpenseSupport } from "./r2-storage.service";
+
+type ExpenseSupportFile = Express.Multer.File;
+
+type ExpenseWithRelations = Prisma.CommercialExpenseGetPayload<{
+  include: typeof commercialExpenseInclude;
+}>;
+
+const controlRoles: UserRole[] = [
+  UserRole.administrador,
+  UserRole.director_comercial,
+  UserRole.facturacion,
+];
+
+const commercialExpenseInclude = {
+  submittedBy: true,
+  reviewedBy: true,
+  customer: true,
+  visit: true,
+  supports: true,
+} satisfies Prisma.CommercialExpenseInclude;
+
+@Injectable()
+export class CommercialExpensesService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+    private readonly storageService: R2StorageService,
+    private readonly exportService: CommercialExpensesExportService,
+  ) {}
+
+  async create(
+    user: AuthUser,
+    dto: CreateCommercialExpenseDto,
+    file?: ExpenseSupportFile,
+  ): Promise<ExpenseWithRelations> {
+    const supportFile = this.assertSupportFile(file);
+    await this.validateOptionalRelations(dto.customerId, dto.visitId);
+
+    const uploaded = await this.storageService.uploadExpenseSupport({
+      fileName: supportFile.originalname,
+      contentType: supportFile.mimetype,
+      body: supportFile.buffer,
+      sizeBytes: supportFile.size,
+    });
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const expense = await tx.commercialExpense.create({
+          data: {
+            expenseDate: new Date(dto.expenseDate),
+            category: dto.category,
+            amount: new Prisma.Decimal(dto.amount).toDecimalPlaces(2),
+            description: dto.description,
+            submittedByUserId: user.id,
+            customerId: dto.customerId ?? null,
+            visitId: dto.visitId ?? null,
+            createdBy: user.id,
+            updatedBy: user.id,
+            supports: {
+              create: this.supportCreateData(user, supportFile, uploaded),
+            },
+          },
+          include: commercialExpenseInclude,
+        });
+
+        await this.auditService.record(
+          {
+            entityType: "CommercialExpense",
+            entityId: expense.id,
+            action: "commercial_expense.created",
+            actorUserId: user.id,
+            nextState: JSON.parse(JSON.stringify(expense)),
+          },
+          tx,
+        );
+
+        return expense;
+      });
+    } catch (error) {
+      await this.storageService.deleteObject(uploaded.objectKey);
+      throw error;
+    }
+  }
+
+  findAll(
+    user: AuthUser,
+    filters: ListCommercialExpensesDto,
+  ): Promise<ExpenseWithRelations[]> {
+    return this.prisma.commercialExpense.findMany({
+      where: this.buildWhere(user, filters),
+      include: commercialExpenseInclude,
+      orderBy: { expenseDate: "desc" },
+    });
+  }
+
+  async findOne(user: AuthUser, id: string): Promise<ExpenseWithRelations> {
+    const expense = await this.prisma.commercialExpense.findUnique({
+      where: { id },
+      include: commercialExpenseInclude,
+    });
+
+    if (!expense) {
+      throw new NotFoundException("Commercial expense not found");
+    }
+
+    this.assertCanRead(user, expense);
+    return expense;
+  }
+
+  async update(
+    user: AuthUser,
+    id: string,
+    dto: UpdateCommercialExpenseDto,
+  ): Promise<ExpenseWithRelations> {
+    const expense = await this.findOne(user, id);
+
+    if (
+      expense.status !== CommercialExpenseStatus.pendiente &&
+      expense.status !== CommercialExpenseStatus.requiere_correccion
+    ) {
+      throw new BadRequestException("Commercial expense cannot be edited");
+    }
+
+    if (!this.isControlRole(user) && expense.submittedByUserId !== user.id) {
+      throw new ForbiddenException("Commercial expense cannot be edited");
+    }
+
+    const customerId = dto.customerId === undefined ? expense.customerId : dto.customerId;
+    const visitId = dto.visitId === undefined ? expense.visitId : dto.visitId;
+    await this.validateOptionalRelations(customerId, visitId);
+
+    const previousState = JSON.parse(JSON.stringify(expense));
+    const data: Prisma.CommercialExpenseUpdateInput = {
+      updatedBy: user.id,
+    };
+
+    if (dto.expenseDate !== undefined) {
+      data.expenseDate = new Date(dto.expenseDate);
+    }
+    if (dto.category !== undefined) {
+      data.category = dto.category;
+    }
+    if (dto.amount !== undefined) {
+      data.amount = new Prisma.Decimal(dto.amount).toDecimalPlaces(2);
+    }
+    if (dto.description !== undefined) {
+      data.description = dto.description;
+    }
+    if (dto.customerId !== undefined) {
+      data.customer = dto.customerId
+        ? { connect: { id: dto.customerId } }
+        : { disconnect: true };
+    }
+    if (dto.visitId !== undefined) {
+      data.visit = dto.visitId
+        ? { connect: { id: dto.visitId } }
+        : { disconnect: true };
+    }
+    if (expense.status === CommercialExpenseStatus.requiere_correccion) {
+      data.status = CommercialExpenseStatus.pendiente;
+      data.reviewNote = null;
+      data.reviewedAt = null;
+      data.reviewedBy = { disconnect: true };
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.commercialExpense.update({
+        where: { id },
+        data,
+        include: commercialExpenseInclude,
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "CommercialExpense",
+          entityId: updated.id,
+          action: "commercial_expense.updated",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  async updateStatus(
+    user: AuthUser,
+    id: string,
+    dto: UpdateCommercialExpenseStatusDto,
+  ): Promise<ExpenseWithRelations> {
+    if (!this.isControlRole(user)) {
+      throw new ForbiddenException("Commercial expense status cannot be updated");
+    }
+
+    const expense = await this.findOne(user, id);
+    const allowedStatuses = expenseStatusTransitions[expense.status];
+
+    if (!allowedStatuses.includes(dto.status)) {
+      throw new BadRequestException("Invalid commercial expense status transition");
+    }
+
+    const reviewNote = dto.reviewNote?.trim();
+    if (
+      (dto.status === CommercialExpenseStatus.requiere_correccion ||
+        dto.status === CommercialExpenseStatus.rechazado) &&
+      !reviewNote
+    ) {
+      throw new BadRequestException("Review note is required for this status");
+    }
+
+    const previousState = JSON.parse(JSON.stringify(expense));
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.commercialExpense.update({
+        where: { id },
+        data: {
+          status: dto.status,
+          reviewNote: reviewNote ?? dto.reviewNote ?? null,
+          reviewedAt: new Date(),
+          reviewedByUserId: user.id,
+          updatedBy: user.id,
+        },
+        include: commercialExpenseInclude,
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "CommercialExpense",
+          entityId: updated.id,
+          action: "commercial_expense.status_changed",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  async getSupport(
+    user: AuthUser,
+    expenseId: string,
+    supportId: string,
+  ): Promise<{ stream: Readable; fileName: string; contentType: string }> {
+    const expense = await this.findOne(user, expenseId);
+    const support = expense.supports.find((item) => item.id === supportId);
+
+    if (!support) {
+      throw new NotFoundException("Commercial expense support not found");
+    }
+
+    const stream = await this.storageService.getObjectStream(support.objectKey);
+    return {
+      stream,
+      fileName: support.fileName,
+      contentType: support.contentType,
+    };
+  }
+
+  async summary(user: AuthUser, filters: ListCommercialExpensesDto) {
+    const expenses = await this.findAll(user, filters);
+    const totalAmount = expenses.reduce(
+      (sum, expense) => sum + Number(expense.amount),
+      0,
+    );
+
+    return {
+      totalAmount,
+      byStatus: this.sumBy(expenses, "status"),
+      byCategory: this.sumBy(expenses, "category"),
+      byUser: this.sumBy(expenses, "submittedByUserId"),
+    };
+  }
+
+  async exportRows(
+    user: AuthUser,
+    filters: ListCommercialExpensesDto,
+  ): Promise<ExpenseExportRow[]> {
+    const expenses = await this.findAll(user, filters);
+    return expenses.map((expense) => ({
+      expenseDate: expense.expenseDate,
+      submittedByName: expense.submittedBy.name,
+      category: expense.category,
+      amount: expense.amount.toString(),
+      currency: expense.currency,
+      customerName: expense.customer?.displayName ?? null,
+      visitId: expense.visitId,
+      status: expense.status,
+      description: expense.description,
+      reviewNote: expense.reviewNote,
+      reviewedAt: expense.reviewedAt,
+      reviewedByName: expense.reviewedBy?.name ?? null,
+      createdAt: expense.createdAt,
+    }));
+  }
+
+  getExportService(): CommercialExpensesExportService {
+    return this.exportService;
+  }
+
+  private buildWhere(
+    user: AuthUser,
+    filters: ListCommercialExpensesDto,
+  ): Prisma.CommercialExpenseWhereInput {
+    const where: Prisma.CommercialExpenseWhereInput = {
+      status: filters.status,
+      category: filters.category,
+      customerId: filters.customerId,
+      visitId: filters.visitId,
+    };
+
+    if (this.isControlRole(user)) {
+      where.submittedByUserId = filters.submittedByUserId;
+    } else {
+      where.submittedByUserId = user.id;
+    }
+
+    if (filters.from || filters.to) {
+      where.expenseDate = {
+        gte: filters.from ? new Date(filters.from) : undefined,
+        lte: filters.to ? new Date(filters.to) : undefined,
+      };
+    }
+
+    return where;
+  }
+
+  private assertSupportFile(file?: ExpenseSupportFile): ExpenseSupportFile {
+    if (!file) {
+      throw new BadRequestException("Expense support file is required");
+    }
+
+    if (
+      !EXPENSE_SUPPORT_ALLOWED_MIME_TYPES.includes(
+        file.mimetype as (typeof EXPENSE_SUPPORT_ALLOWED_MIME_TYPES)[number],
+      )
+    ) {
+      throw new BadRequestException("Unsupported expense support content type");
+    }
+
+    if (file.size > EXPENSE_SUPPORT_MAX_BYTES) {
+      throw new BadRequestException("Expense support exceeds maximum size");
+    }
+
+    return file;
+  }
+
+  private async validateOptionalRelations(
+    customerId?: string | null,
+    visitId?: string | null,
+  ): Promise<void> {
+    if (customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { id: true },
+      });
+
+      if (!customer) {
+        throw new NotFoundException("Customer not found");
+      }
+    }
+
+    if (visitId) {
+      const visit = await this.prisma.visit.findUnique({
+        where: { id: visitId },
+        select: { id: true, customerId: true },
+      });
+
+      if (!visit) {
+        throw new NotFoundException("Visit not found");
+      }
+
+      if (customerId && visit.customerId !== customerId) {
+        throw new BadRequestException("Visit does not belong to customer");
+      }
+    }
+  }
+
+  private assertCanRead(user: AuthUser, expense: CommercialExpense): void {
+    if (this.isControlRole(user)) return;
+
+    if (expense.submittedByUserId !== user.id) {
+      throw new ForbiddenException("Commercial expense is not accessible");
+    }
+  }
+
+  private isControlRole(user: AuthUser): boolean {
+    return controlRoles.includes(user.role);
+  }
+
+  private supportCreateData(
+    user: AuthUser,
+    file: ExpenseSupportFile,
+    uploaded: UploadedExpenseSupport,
+  ): Prisma.CommercialExpenseSupportCreateWithoutExpenseInput {
+    return {
+      bucket: uploaded.bucket,
+      objectKey: uploaded.objectKey,
+      fileName: file.originalname,
+      contentType: file.mimetype,
+      sizeBytes: file.size,
+      uploadedBy: { connect: { id: user.id } },
+    };
+  }
+
+  private sumBy(
+    expenses: ExpenseWithRelations[],
+    field: "status" | "category" | "submittedByUserId",
+  ): Record<string, number> {
+    return expenses.reduce<Record<string, number>>((totals, expense) => {
+      const key = expense[field];
+      totals[key] = (totals[key] ?? 0) + Number(expense.amount);
+      return totals;
+    }, {});
+  }
+}

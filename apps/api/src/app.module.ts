@@ -6,6 +6,7 @@ import { HealthController } from "./health.controller";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CalculatorsModule } from "./modules/calculators/calculators.module";
+import { CommercialExpensesModule } from "./modules/commercial-expenses/commercial-expenses.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
 import { CustomerSegmentsModule } from "./modules/customer-segments/customer-segments.module";
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
@@ -42,6 +43,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     FollowUpTasksModule,
     ReportsModule,
     CalculatorsModule,
+    CommercialExpensesModule,
     CustomerGoalsModule,
     WhatsAppModule,
   ],
