@@ -38,6 +38,6 @@ export const expenseCategoryLabels: Record<CommercialExpenseCategory, string> = 
   [CommercialExpenseCategory.combustible]: "Combustible",
   [CommercialExpenseCategory.peajes]: "Peajes",
   [CommercialExpenseCategory.parqueadero]: "Parqueadero",
-  [CommercialExpenseCategory.atencion_comercial]: "Atencion comercial",
+  [CommercialExpenseCategory.atencion_comercial]: "Cliente / atencion comercial",
   [CommercialExpenseCategory.otros]: "Otros",
 };

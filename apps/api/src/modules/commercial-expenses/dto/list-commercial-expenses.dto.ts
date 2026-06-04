@@ -5,6 +5,7 @@ import {
 import {
   IsDateString,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
 } from "class-validator";
@@ -40,5 +41,6 @@ export class ListCommercialExpensesDto {
 
   @IsOptional()
   @IsString()
+  @IsIn(["csv", "xlsx"])
   format?: "csv" | "xlsx";
 }
