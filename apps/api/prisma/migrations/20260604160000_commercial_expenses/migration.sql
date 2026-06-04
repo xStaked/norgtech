@@ -59,7 +59,7 @@ CREATE INDEX "CommercialExpense_customerId_idx" ON "CommercialExpense"("customer
 CREATE INDEX "CommercialExpense_visitId_idx" ON "CommercialExpense"("visitId");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "CommercialExpenseSupport_objectKey_key" ON "CommercialExpenseSupport"("objectKey");
+CREATE UNIQUE INDEX "CommercialExpenseSupport_bucket_objectKey_key" ON "CommercialExpenseSupport"("bucket", "objectKey");
 
 -- CreateIndex
 CREATE INDEX "CommercialExpenseSupport_expenseId_idx" ON "CommercialExpenseSupport"("expenseId");

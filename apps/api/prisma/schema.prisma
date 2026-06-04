@@ -643,6 +643,7 @@ model CommercialExpense {
   reviewedByUserId  String?
   submittedByUserId String
   customerId        String?
+  /// Service must validate that the selected visit belongs to the selected customer when both are provided.
   visitId           String?
   createdBy         String
   updatedBy         String
@@ -665,7 +666,7 @@ model CommercialExpenseSupport {
   id               String            @id @default(cuid())
   expenseId        String
   bucket           String
-  objectKey        String            @unique
+  objectKey        String
   fileName         String
   contentType      String
   sizeBytes        Int
@@ -675,6 +676,7 @@ model CommercialExpenseSupport {
   expense          CommercialExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   uploadedBy       User              @relation("CommercialExpenseSupportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
 
+  @@unique([bucket, objectKey])
   @@index([expenseId])
   @@index([uploadedByUserId])
 }
