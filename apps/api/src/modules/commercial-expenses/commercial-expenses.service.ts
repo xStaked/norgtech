@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -19,7 +20,10 @@ import {
   EXPENSE_SUPPORT_MAX_BYTES,
   expenseStatusTransitions,
 } from "./commercial-expense-constants";
-import { CommercialExpensesExportService, ExpenseExportRow } from "./commercial-expenses-export.service";
+import {
+  CommercialExpensesExportService,
+  ExpenseExportRow,
+} from "./commercial-expenses-export.service";
 import { CreateCommercialExpenseDto } from "./dto/create-commercial-expense.dto";
 import { ListCommercialExpensesDto } from "./dto/list-commercial-expenses.dto";
 import { UpdateCommercialExpenseStatusDto } from "./dto/update-commercial-expense-status.dto";
@@ -27,10 +31,16 @@ import { UpdateCommercialExpenseDto } from "./dto/update-commercial-expense.dto"
 import { R2StorageService, UploadedExpenseSupport } from "./r2-storage.service";
 
 type ExpenseSupportFile = Express.Multer.File;
+type RelationValidationClient = Pick<
+  PrismaService | Prisma.TransactionClient,
+  "customer" | "visit"
+>;
 
 type ExpenseWithRelations = Prisma.CommercialExpenseGetPayload<{
   include: typeof commercialExpenseInclude;
 }>;
+
+const DEFAULT_EXPENSE_LIST_LIMIT = 500;
 
 const controlRoles: UserRole[] = [
   UserRole.administrador,
@@ -104,7 +114,9 @@ export class CommercialExpensesService {
         return expense;
       });
     } catch (error) {
-      await this.storageService.deleteObject(uploaded.objectKey);
+      await this.storageService
+        .deleteObject(uploaded.objectKey)
+        .catch(() => undefined);
       throw error;
     }
   }
@@ -117,6 +129,7 @@ export class CommercialExpensesService {
       where: this.buildWhere(user, filters),
       include: commercialExpenseInclude,
       orderBy: { expenseDate: "desc" },
+      take: DEFAULT_EXPENSE_LIST_LIMIT,
     });
   }
 
@@ -139,63 +152,86 @@ export class CommercialExpensesService {
     id: string,
     dto: UpdateCommercialExpenseDto,
   ): Promise<ExpenseWithRelations> {
-    const expense = await this.findOne(user, id);
-
-    if (
-      expense.status !== CommercialExpenseStatus.pendiente &&
-      expense.status !== CommercialExpenseStatus.requiere_correccion
-    ) {
-      throw new BadRequestException("Commercial expense cannot be edited");
-    }
-
-    if (!this.isControlRole(user) && expense.submittedByUserId !== user.id) {
-      throw new ForbiddenException("Commercial expense cannot be edited");
-    }
-
-    const customerId = dto.customerId === undefined ? expense.customerId : dto.customerId;
-    const visitId = dto.visitId === undefined ? expense.visitId : dto.visitId;
-    await this.validateOptionalRelations(customerId, visitId);
-
-    const previousState = JSON.parse(JSON.stringify(expense));
-    const data: Prisma.CommercialExpenseUpdateInput = {
-      updatedBy: user.id,
-    };
-
-    if (dto.expenseDate !== undefined) {
-      data.expenseDate = new Date(dto.expenseDate);
-    }
-    if (dto.category !== undefined) {
-      data.category = dto.category;
-    }
-    if (dto.amount !== undefined) {
-      data.amount = new Prisma.Decimal(dto.amount).toDecimalPlaces(2);
-    }
-    if (dto.description !== undefined) {
-      data.description = dto.description;
-    }
-    if (dto.customerId !== undefined) {
-      data.customer = dto.customerId
-        ? { connect: { id: dto.customerId } }
-        : { disconnect: true };
-    }
-    if (dto.visitId !== undefined) {
-      data.visit = dto.visitId
-        ? { connect: { id: dto.visitId } }
-        : { disconnect: true };
-    }
-    if (expense.status === CommercialExpenseStatus.requiere_correccion) {
-      data.status = CommercialExpenseStatus.pendiente;
-      data.reviewNote = null;
-      data.reviewedAt = null;
-      data.reviewedBy = { disconnect: true };
-    }
-
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.commercialExpense.update({
+      const expense = await tx.commercialExpense.findUnique({
         where: { id },
-        data,
         include: commercialExpenseInclude,
       });
+
+      if (!expense) {
+        throw new NotFoundException("Commercial expense not found");
+      }
+
+      this.assertCanRead(user, expense);
+
+      if (
+        expense.status !== CommercialExpenseStatus.pendiente &&
+        expense.status !== CommercialExpenseStatus.requiere_correccion
+      ) {
+        throw new BadRequestException("Commercial expense cannot be edited");
+      }
+
+      if (!this.isControlRole(user) && expense.submittedByUserId !== user.id) {
+        throw new ForbiddenException("Commercial expense cannot be edited");
+      }
+
+      const customerId =
+        dto.customerId === undefined ? expense.customerId : dto.customerId;
+      const visitId = dto.visitId === undefined ? expense.visitId : dto.visitId;
+      await this.validateOptionalRelations(customerId, visitId, tx);
+
+      const previousState = JSON.parse(JSON.stringify(expense));
+      const data: Prisma.CommercialExpenseUncheckedUpdateManyInput = {
+        updatedBy: user.id,
+      };
+
+      if (dto.expenseDate !== undefined) {
+        data.expenseDate = new Date(dto.expenseDate);
+      }
+      if (dto.category !== undefined) {
+        data.category = dto.category;
+      }
+      if (dto.amount !== undefined) {
+        data.amount = new Prisma.Decimal(dto.amount).toDecimalPlaces(2);
+      }
+      if (dto.description !== undefined) {
+        data.description = dto.description;
+      }
+      if (dto.customerId !== undefined) {
+        data.customerId = dto.customerId ?? null;
+      }
+      if (dto.visitId !== undefined) {
+        data.visitId = dto.visitId ?? null;
+      }
+      if (expense.status === CommercialExpenseStatus.requiere_correccion) {
+        data.status = CommercialExpenseStatus.pendiente;
+        data.reviewNote = null;
+        data.reviewedAt = null;
+        data.reviewedByUserId = null;
+      }
+
+      const updatedCount = await tx.commercialExpense.updateMany({
+        where: {
+          id,
+          status: expense.status,
+        },
+        data,
+      });
+
+      if (updatedCount.count !== 1) {
+        throw new ConflictException(
+          "Commercial expense status changed before update",
+        );
+      }
+
+      const updated = await tx.commercialExpense.findUnique({
+        where: { id },
+        include: commercialExpenseInclude,
+      });
+
+      if (!updated) {
+        throw new NotFoundException("Commercial expense not found");
+      }
 
       await this.auditService.record(
         {
@@ -222,27 +258,42 @@ export class CommercialExpensesService {
       throw new ForbiddenException("Commercial expense status cannot be updated");
     }
 
-    const expense = await this.findOne(user, id);
-    const allowedStatuses = expenseStatusTransitions[expense.status];
-
-    if (!allowedStatuses.includes(dto.status)) {
-      throw new BadRequestException("Invalid commercial expense status transition");
-    }
-
-    const reviewNote = dto.reviewNote?.trim();
-    if (
-      (dto.status === CommercialExpenseStatus.requiere_correccion ||
-        dto.status === CommercialExpenseStatus.rechazado) &&
-      !reviewNote
-    ) {
-      throw new BadRequestException("Review note is required for this status");
-    }
-
-    const previousState = JSON.parse(JSON.stringify(expense));
-
     return this.prisma.$transaction(async (tx) => {
-      const updated = await tx.commercialExpense.update({
+      const expense = await tx.commercialExpense.findUnique({
         where: { id },
+        include: commercialExpenseInclude,
+      });
+
+      if (!expense) {
+        throw new NotFoundException("Commercial expense not found");
+      }
+
+      this.assertCanRead(user, expense);
+
+      const allowedStatuses = expenseStatusTransitions[expense.status];
+
+      if (!allowedStatuses.includes(dto.status)) {
+        throw new BadRequestException(
+          "Invalid commercial expense status transition",
+        );
+      }
+
+      const reviewNote = dto.reviewNote?.trim();
+      if (
+        (dto.status === CommercialExpenseStatus.requiere_correccion ||
+          dto.status === CommercialExpenseStatus.rechazado) &&
+        !reviewNote
+      ) {
+        throw new BadRequestException("Review note is required for this status");
+      }
+
+      const previousState = JSON.parse(JSON.stringify(expense));
+
+      const updatedCount = await tx.commercialExpense.updateMany({
+        where: {
+          id,
+          status: expense.status,
+        },
         data: {
           status: dto.status,
           reviewNote: reviewNote ?? dto.reviewNote ?? null,
@@ -250,8 +301,22 @@ export class CommercialExpensesService {
           reviewedByUserId: user.id,
           updatedBy: user.id,
         },
+      });
+
+      if (updatedCount.count !== 1) {
+        throw new ConflictException(
+          "Commercial expense status changed before update",
+        );
+      }
+
+      const updated = await tx.commercialExpense.findUnique({
+        where: { id },
         include: commercialExpenseInclude,
       });
+
+      if (!updated) {
+        throw new NotFoundException("Commercial expense not found");
+      }
 
       await this.auditService.record(
         {
@@ -350,7 +415,7 @@ export class CommercialExpensesService {
     if (filters.from || filters.to) {
       where.expenseDate = {
         gte: filters.from ? new Date(filters.from) : undefined,
-        lte: filters.to ? new Date(filters.to) : undefined,
+        lte: filters.to ? this.parseToFilterDate(filters.to) : undefined,
       };
     }
 
@@ -380,9 +445,10 @@ export class CommercialExpensesService {
   private async validateOptionalRelations(
     customerId?: string | null,
     visitId?: string | null,
+    client: RelationValidationClient = this.prisma,
   ): Promise<void> {
     if (customerId) {
-      const customer = await this.prisma.customer.findUnique({
+      const customer = await client.customer.findUnique({
         where: { id: customerId },
         select: { id: true },
       });
@@ -393,7 +459,7 @@ export class CommercialExpensesService {
     }
 
     if (visitId) {
-      const visit = await this.prisma.visit.findUnique({
+      const visit = await client.visit.findUnique({
         where: { id: visitId },
         select: { id: true, customerId: true },
       });
@@ -414,6 +480,14 @@ export class CommercialExpensesService {
     if (expense.submittedByUserId !== user.id) {
       throw new ForbiddenException("Commercial expense is not accessible");
     }
+  }
+
+  private parseToFilterDate(value: string): Date {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return new Date(`${value}T23:59:59.999Z`);
+    }
+
+    return new Date(value);
   }
 
   private isControlRole(user: AuthUser): boolean {

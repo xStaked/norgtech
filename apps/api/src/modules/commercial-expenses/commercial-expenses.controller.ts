@@ -40,6 +40,11 @@ const validationPipe = new ValidationPipe({
   forbidNonWhitelisted: true,
 });
 
+function sanitizeDownloadFileName(fileName: string): string {
+  const sanitized = fileName.replace(/[\x00-\x1F\x7F"\\]/g, "").trim();
+  return sanitized || "soporte";
+}
+
 @Controller("commercial-expenses")
 @UseGuards(JwtAuthGuard, RolesGuard)
 export class CommercialExpensesController {
@@ -104,7 +109,10 @@ export class CommercialExpensesController {
 
     const csv = exportService.generateCsv(rows);
     response.setHeader("Content-Type", exportService.csvContentType);
-    response.setHeader("Content-Disposition", `attachment; filename="gastos.csv"`);
+    response.setHeader(
+      "Content-Disposition",
+      `attachment; filename="gastos.csv"`,
+    );
     response.send(csv);
   }
 
@@ -151,7 +159,7 @@ export class CommercialExpensesController {
     response.setHeader("Content-Type", support.contentType);
     response.setHeader(
       "Content-Disposition",
-      `inline; filename="${support.fileName.replace(/"/g, '\\"')}"`,
+      `inline; filename="${sanitizeDownloadFileName(support.fileName)}"`,
     );
     support.stream.pipe(response);
   }

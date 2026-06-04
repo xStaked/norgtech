@@ -80,11 +80,19 @@ export class CommercialExpensesExportService {
       this.formatDate(row.reviewedAt),
       row.reviewedByName ?? "",
       this.formatDate(row.createdAt),
-    ];
+    ].map((value) => this.neutralizeFormulaValue(value));
   }
 
   private escapeCsv(value: string): string {
     return `"${value.replace(/"/g, '""')}"`;
+  }
+
+  private neutralizeFormulaValue(value: string): string {
+    if (/^[=+\-@\t\r\n]/.test(value)) {
+      return `'${value}`;
+    }
+
+    return value;
   }
 
   private formatDate(value: Date | null): string {
