@@ -48,6 +48,25 @@ enum BillingRequestStatus {
   rechazada
 }
 
+enum CommercialExpenseStatus {
+  pendiente
+  requiere_correccion
+  aprobado
+  rechazado
+  contabilizado
+}
+
+enum CommercialExpenseCategory {
+  alimentacion
+  transporte
+  hospedaje
+  combustible
+  peajes
+  parqueadero
+  atencion_comercial
+  otros
+}
+
 enum VisitStatus {
   programada
   completada
@@ -124,22 +143,25 @@ enum NoraActionStatus {
 }
 
 model User {
-  id                            String                 @id @default(cuid())
+  id                            String                     @id @default(cuid())
   name                          String
-  email                         String                 @unique
+  email                         String                     @unique
   passwordHash                  String
   role                          UserRole
-  active                        Boolean                @default(true)
-  createdAt                     DateTime               @default(now())
-  updatedAt                     DateTime               @updatedAt
-  assignedCustomers             Customer[]             @relation("CustomerAssignedUser")
+  active                        Boolean                    @default(true)
+  createdAt                     DateTime                   @default(now())
+  updatedAt                     DateTime                   @updatedAt
+  assignedCustomers             Customer[]                 @relation("CustomerAssignedUser")
   assignedOrders                Order[]
   createdReports                ExecutiveReport[]
   lauraSessions                 LauraSession[]
-  assignedWhatsAppConversations WhatsAppConversation[] @relation("WhatsAppAssignedUser")
-  whatsappMessages              WhatsAppMessage[]      @relation("WhatsAppMessageAuthor")
+  assignedWhatsAppConversations WhatsAppConversation[]     @relation("WhatsAppAssignedUser")
+  whatsappMessages              WhatsAppMessage[]          @relation("WhatsAppMessageAuthor")
   whatsappInternalNotes         WhatsAppInternalNote[]
   noraActions                   NoraActionLog[]
+  submittedCommercialExpenses   CommercialExpense[]        @relation("CommercialExpenseSubmitter")
+  reviewedCommercialExpenses    CommercialExpense[]        @relation("CommercialExpenseReviewer")
+  uploadedExpenseSupports       CommercialExpenseSupport[] @relation("CommercialExpenseSupportUploader")
 }
 
 model LauraSession {
@@ -340,6 +362,7 @@ model Customer {
   reports               ExecutiveReport[]
   goals                 CustomerGoal[]
   whatsappConversations WhatsAppConversation[]
+  commercialExpenses    CommercialExpense[]
 }
 
 model Contact {
@@ -437,26 +460,27 @@ model QuoteItem {
 }
 
 model Visit {
-  id               String            @id @default(cuid())
-  customerId       String
-  opportunityId    String?
-  scheduledAt      DateTime
-  completedAt      DateTime?
-  status           VisitStatus       @default(programada)
-  summary          String?
-  diagnosis        String?
-  problems         String?
-  proposedSolution String?
-  notes            String?
-  nextStep         String?
-  assignedToUserId String?
-  createdBy        String
-  updatedBy        String
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  customer         Customer          @relation(fields: [customerId], references: [id])
-  opportunity      Opportunity?      @relation(fields: [opportunityId], references: [id])
-  reports          ExecutiveReport[]
+  id                 String              @id @default(cuid())
+  customerId         String
+  opportunityId      String?
+  scheduledAt        DateTime
+  completedAt        DateTime?
+  status             VisitStatus         @default(programada)
+  summary            String?
+  diagnosis          String?
+  problems           String?
+  proposedSolution   String?
+  notes              String?
+  nextStep           String?
+  assignedToUserId   String?
+  createdBy          String
+  updatedBy          String
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  customer           Customer            @relation(fields: [customerId], references: [id])
+  opportunity        Opportunity?        @relation(fields: [opportunityId], references: [id])
+  reports            ExecutiveReport[]
+  commercialExpenses CommercialExpense[]
 }
 
 model FollowUpTask {
@@ -604,4 +628,53 @@ model BillingRequest {
   opportunity       Opportunity?         @relation(fields: [opportunityId], references: [id])
   sourceQuote       Quote?               @relation(fields: [sourceQuoteId], references: [id])
   sourceOrder       Order?               @relation(fields: [sourceOrderId], references: [id])
+}
+
+model CommercialExpense {
+  id                String                     @id @default(cuid())
+  expenseDate       DateTime
+  category          CommercialExpenseCategory
+  amount            Decimal                    @db.Decimal(14, 2)
+  currency          String                     @default("COP")
+  description       String
+  status            CommercialExpenseStatus    @default(pendiente)
+  reviewNote        String?
+  reviewedAt        DateTime?
+  reviewedByUserId  String?
+  submittedByUserId String
+  customerId        String?
+  visitId           String?
+  createdBy         String
+  updatedBy         String
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  submittedBy       User                       @relation("CommercialExpenseSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy        User?                      @relation("CommercialExpenseReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  customer          Customer?                  @relation(fields: [customerId], references: [id])
+  visit             Visit?                     @relation(fields: [visitId], references: [id])
+  supports          CommercialExpenseSupport[]
+
+  @@index([submittedByUserId, expenseDate])
+  @@index([status, expenseDate])
+  @@index([category, expenseDate])
+  @@index([customerId])
+  @@index([visitId])
+}
+
+model CommercialExpenseSupport {
+  id               String            @id @default(cuid())
+  expenseId        String
+  bucket           String
+  objectKey        String            @unique
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  checksum         String?
+  uploadedByUserId String
+  createdAt        DateTime          @default(now())
+  expense          CommercialExpense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  uploadedBy       User              @relation("CommercialExpenseSupportUploader", fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([expenseId])
+  @@index([uploadedByUserId])
 }
