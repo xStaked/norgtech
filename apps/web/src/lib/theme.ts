@@ -57,6 +57,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"] as const,
   },
   {
+    href: "/expenses",
+    label: "Gastos",
+    shortLabel: "GS",
+    description: "Gastos de campo y soportes",
+    group: "Operacion",
+    requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion"] as const,
+  },
+  {
     href: "/reports",
     label: "Reportes",
     shortLabel: "RP",
@@ -153,6 +161,7 @@ const singularLabels: Record<string, string> = {
   Productos: "Producto",
   Segmentos: "Segmento",
   Visitas: "Visita",
+  Gastos: "Gasto",
   Reportes: "Reporte",
   Seguimientos: "Seguimiento",
 };
