@@ -67,6 +67,41 @@ enum CommercialExpenseCategory {
   otros
 }
 
+enum CustomerType {
+  distribuidor
+  cliente_directo
+  planta_balanceados
+  maquila
+  otro
+}
+
+enum PaymentCondition {
+  contado
+  credito_15
+  credito_30
+  credito_60
+  credito_90
+}
+
+enum InvoiceStatus {
+  emitida
+  enviada
+  parcialmente_pagada
+  pagada
+  vencida
+  anulada
+}
+
+enum PaymentMethod {
+  efectivo
+  transferencia
+  consignacion
+  cheque
+  deposito
+  tarjeta
+  otro
+}
+
 enum VisitStatus {
   programada
   completada
@@ -162,6 +197,7 @@ model User {
   submittedCommercialExpenses   CommercialExpense[]        @relation("CommercialExpenseSubmitter")
   reviewedCommercialExpenses    CommercialExpense[]        @relation("CommercialExpenseReviewer")
   uploadedExpenseSupports       CommercialExpenseSupport[] @relation("CommercialExpenseSupportUploader")
+  uploadedPaymentSupports       PaymentSupport[]
 }
 
 model LauraSession {
@@ -363,6 +399,11 @@ model Customer {
   goals                 CustomerGoal[]
   whatsappConversations WhatsAppConversation[]
   commercialExpenses    CommercialExpense[]
+  invoices              Invoice[]
+  customerType          CustomerType?      @default(cliente_directo)
+  creditLimit           Decimal?           @db.Decimal(14, 2)
+  paymentCondition      PaymentCondition?  @default(contado)
+  paymentDays           Int?               @default(0)
 }
 
 model Contact {
@@ -553,6 +594,7 @@ model Order {
   sourceConversation       WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
   items                    OrderItem[]
   billingRequests          BillingRequest[]
+  invoices                 Invoice[]
 
   @@index([sourceConversationId])
 }
@@ -679,4 +721,63 @@ model CommercialExpenseSupport {
   @@unique([bucket, objectKey])
   @@index([expenseId])
   @@index([uploadedByUserId])
+}
+
+model Invoice {
+  id            String          @id @default(cuid())
+  invoiceNumber String          @unique
+  customerId    String
+  orderId       String?
+  issueDate     DateTime        @default(now())
+  dueDate       DateTime
+  subtotal      Decimal         @db.Decimal(14, 2)
+  taxAmount     Decimal         @db.Decimal(14, 2)
+  totalAmount   Decimal         @db.Decimal(14, 2)
+  totalPaid     Decimal         @default(0) @db.Decimal(14, 2)
+  status        InvoiceStatus   @default(emitida)
+  notes         String?
+  createdBy     String
+  updatedBy     String
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  customer      Customer        @relation(fields: [customerId], references: [id])
+  order         Order?          @relation(fields: [orderId], references: [id])
+  payments      InvoicePayment[]
+
+  @@index([customerId, status])
+  @@index([dueDate, status])
+  @@index([orderId])
+}
+
+model InvoicePayment {
+  id          String           @id @default(cuid())
+  invoiceId   String
+  paymentDate DateTime         @default(now())
+  amount      Decimal          @db.Decimal(14, 2)
+  method      PaymentMethod
+  reference   String?
+  notes       String?
+  createdBy   String
+  createdAt   DateTime         @default(now())
+  invoice     Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  supports    PaymentSupport[]
+
+  @@index([invoiceId, paymentDate])
+}
+
+model PaymentSupport {
+  id               String         @id @default(cuid())
+  paymentId        String
+  bucket           String
+  objectKey        String
+  fileName         String
+  contentType      String
+  sizeBytes        Int
+  uploadedByUserId String
+  createdAt        DateTime       @default(now())
+  payment          InvoicePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  uploadedBy       User           @relation(fields: [uploadedByUserId], references: [id], onDelete: Restrict)
+
+  @@unique([bucket, objectKey])
+  @@index([paymentId])
 }
