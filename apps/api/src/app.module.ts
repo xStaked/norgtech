@@ -21,6 +21,7 @@ import { VisitsModule } from "./modules/visits/visits.module";
 import { BillingRequestsModule } from "./modules/billing-requests/billing-requests.module";
 import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.module";
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
+import { InvoicesModule } from "./modules/invoices/invoices.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -46,6 +47,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     CommercialExpensesModule,
     CustomerGoalsModule,
     WhatsAppModule,
+    InvoicesModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
