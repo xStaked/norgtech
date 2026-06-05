@@ -71,7 +71,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
   return allowedRoles.includes(role);
 }
 
-export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "report"): boolean {
+export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "invoice" | "report"): boolean {
   if (!role) return false;
 
   const createAccess: Record<typeof entity, readonly UserRole[]> = {

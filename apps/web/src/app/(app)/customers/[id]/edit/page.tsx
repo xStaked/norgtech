@@ -21,6 +21,10 @@ interface Customer {
   notes: string | null;
   segmentId: string | null;
   assignedToUserId: string | null;
+  customerType: string | null;
+  creditLimit: string | null;
+  paymentCondition: string | null;
+  paymentDays: number | null;
 }
 
 export default async function CustomerEditPage({
