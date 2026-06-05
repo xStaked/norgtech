@@ -85,7 +85,12 @@ interface Order {
   requestedDeliveryDate: string | null;
   committedDeliveryDate: string | null;
   dispatchDate: string | null;
+  carrierName: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
   deliveryDate: string | null;
+  deliveredToName: string | null;
+  deliveryConfirmationNotes: string | null;
   logisticsNotes: string | null;
   customer: Customer | null;
   opportunity: Opportunity | null;
@@ -101,6 +106,7 @@ const statusLabels: Record<string, string> = {
   orden_facturacion: "Orden de facturación",
   facturado: "Facturado",
   despachado: "Despachado",
+  en_transito: "En tránsito",
   entregado: "Entregado",
 };
 
@@ -109,6 +115,7 @@ const statusColors: Record<string, string> = {
   orden_facturacion: "#f39c12",
   facturado: "#9b59b6",
   despachado: "#1abc9c",
+  en_transito: "#f59e0b",
   entregado: "#27ae60",
 };
 
@@ -116,7 +123,8 @@ const nextStatusMap: Record<string, string> = {
   recibido: "orden_facturacion",
   orden_facturacion: "facturado",
   facturado: "despachado",
-  despachado: "entregado",
+  despachado: "en_transito",
+  en_transito: "entregado",
 };
 
 export default async function OrderDetailPage({
@@ -298,7 +306,12 @@ export default async function OrderDetailPage({
           assignedLogisticsUser={order.assignedLogisticsUser}
           committedDeliveryDate={order.committedDeliveryDate}
           dispatchDate={order.dispatchDate}
+          carrierName={order.carrierName}
+          trackingNumber={order.trackingNumber}
+          trackingUrl={order.trackingUrl}
           deliveryDate={order.deliveryDate}
+          deliveredToName={order.deliveredToName}
+          deliveryConfirmationNotes={order.deliveryConfirmationNotes}
           logisticsNotes={order.logisticsNotes}
           canEdit={canEditLogistics}
         />

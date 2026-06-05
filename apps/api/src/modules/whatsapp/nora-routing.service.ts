@@ -65,7 +65,7 @@ export class NoraRoutingService {
       });
 
       const suggestedReply = this.extractSuggestedReply(noraResponse);
-      if (suggestedReply) {
+      if (suggestedReply && !this.requiresHumanReview(noraResponse)) {
         try {
           await this.whatsAppService.sendAgentReply(conversation.id, suggestedReply);
         } catch (sendError) {
@@ -150,6 +150,10 @@ export class NoraRoutingService {
   private extractSuggestedReply(noraResponse: Record<string, unknown>): string | undefined {
     const reply = noraResponse.suggested_reply;
     return typeof reply === "string" && reply.trim().length > 0 ? reply.trim() : undefined;
+  }
+
+  private requiresHumanReview(noraResponse: Record<string, unknown>): boolean {
+    return noraResponse.requires_human_review === true;
   }
 
   private safeErrorMessage(error: unknown) {

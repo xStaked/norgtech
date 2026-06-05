@@ -52,13 +52,7 @@ export class OrdersService {
 
     const itemsWithSnapshot = await Promise.all(
       dto.items.map(async (item) => {
-        const unitPriceRounded = new Prisma.Decimal(item.unitPrice).toDecimalPlaces(2);
         const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
-        const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-        const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
-        const totalWithTax = new Prisma.Decimal(item.quantity)
-          .times(unitPriceRounded.plus(taxAmount))
-          .toDecimalPlaces(2);
 
         if (item.productId) {
           const product = await this.prisma.product.findUnique({
@@ -67,6 +61,18 @@ export class OrdersService {
           if (!product) {
             throw new NotFoundException(`Product ${item.productId} not found`);
           }
+          const discountMultiplier = new Prisma.Decimal(1).minus(
+            new Prisma.Decimal(discountPercent).dividedBy(100),
+          );
+          const unitPriceRounded = new Prisma.Decimal(product.basePrice)
+            .times(discountMultiplier)
+            .toDecimalPlaces(2);
+          const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
+          const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
+          const totalWithTax = new Prisma.Decimal(item.quantity)
+            .times(unitPriceRounded.plus(taxAmount))
+            .toDecimalPlaces(2);
+
           return {
             productId: item.productId,
             productSnapshotName: product.name,
@@ -87,6 +93,13 @@ export class OrdersService {
         }
         const customProductName = item.productName?.trim() || null;
         const presentationSnapshot = item.presentation?.trim() || null;
+        const unitPriceRounded = new Prisma.Decimal(item.unitPrice).toDecimalPlaces(2);
+        const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
+        const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
+        const totalWithTax = new Prisma.Decimal(item.quantity)
+          .times(unitPriceRounded.plus(taxAmount))
+          .toDecimalPlaces(2);
+
         return {
           productId: null,
           productSnapshotName: customProductName || "Custom item",
@@ -284,6 +297,11 @@ export class OrdersService {
           committedDeliveryDate: dto.committedDeliveryDate
             ? new Date(dto.committedDeliveryDate)
             : null,
+          carrierName: dto.carrierName || null,
+          trackingNumber: dto.trackingNumber || null,
+          trackingUrl: dto.trackingUrl || null,
+          deliveredToName: dto.deliveredToName || null,
+          deliveryConfirmationNotes: dto.deliveryConfirmationNotes || null,
           logisticsNotes: dto.logisticsNotes,
           updatedBy: user.id,
         },

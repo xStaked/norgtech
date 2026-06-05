@@ -43,6 +43,7 @@ const statusLabels: Record<string, string> = {
   orden_facturacion: "Orden de facturación",
   facturado: "Facturado",
   despachado: "Despachado",
+  en_transito: "En tránsito",
   entregado: "Entregado",
 };
 
@@ -51,6 +52,7 @@ const statusTones: Record<string, CrmStatusTone> = {
   orden_facturacion: "warning",
   facturado: "neutral",
   despachado: "info",
+  en_transito: "warning",
   entregado: "success",
 };
 
@@ -195,6 +197,7 @@ export default async function OrdersPage({
         <StatCard label="Orden facturación" value={countByStatus(rows, "orden_facturacion")} tone="warning" />
         <StatCard label="Facturados" value={countByStatus(rows, "facturado")} tone="neutral" />
         <StatCard label="Despachados" value={countByStatus(rows, "despachado")} tone="info" />
+        <StatCard label="En tránsito" value={countByStatus(rows, "en_transito")} tone="warning" />
         <StatCard label="Entregados" value={countByStatus(rows, "entregado")} tone="success" />
       </div>
 
@@ -205,6 +208,7 @@ export default async function OrdersPage({
           <FilterLink label="Orden facturación" active={status === "orden_facturacion"} href="/orders?status=orden_facturacion" />
           <FilterLink label="Facturado" active={status === "facturado"} href="/orders?status=facturado" />
           <FilterLink label="Despachado" active={status === "despachado"} href="/orders?status=despachado" />
+          <FilterLink label="En tránsito" active={status === "en_transito"} href="/orders?status=en_transito" />
           <FilterLink label="Entregado" active={status === "entregado"} href="/orders?status=entregado" />
         </div>
       </FilterBar>

@@ -39,6 +39,7 @@ enum OrderStatus {
   orden_facturacion
   facturado
   despachado
+  en_transito
   entregado
 }
 
@@ -400,10 +401,10 @@ model Customer {
   whatsappConversations WhatsAppConversation[]
   commercialExpenses    CommercialExpense[]
   invoices              Invoice[]
-  customerType          CustomerType?      @default(cliente_directo)
-  creditLimit           Decimal?           @db.Decimal(14, 2)
-  paymentCondition      PaymentCondition?  @default(contado)
-  paymentDays           Int?               @default(0)
+  customerType          CustomerType?          @default(cliente_directo)
+  creditLimit           Decimal?               @db.Decimal(14, 2)
+  paymentCondition      PaymentCondition?      @default(contado)
+  paymentDays           Int?                   @default(0)
 }
 
 model Contact {
@@ -544,57 +545,62 @@ model FollowUpTask {
 }
 
 model Order {
-  id                       String                @id @default(cuid())
-  customerId               String
-  opportunityId            String?
-  sourceQuoteId            String?
-  orderNumber              String?               @unique
-  purchaseOrderNumber      String?
-  orderDate                DateTime              @default(now())
-  customerNameSnapshot     String?
-  customerNitSnapshot      String?
-  dispatchAddressSnapshot  String?
-  requesterName            String?
-  requesterEmail           String?
-  requesterRole            String?
-  requesterPhone           String?
-  approvedQuoteConsecutive String?
-  deliveryInstructions     String?
-  receiverName             String?
-  receiverEmail            String?
-  receiverPhone            String?
-  receiverRole             String?
-  invoiceFilingPlace       String?
-  approvalStatus           String?
-  approvalReason           String?
-  approvalName             String?
-  reviewDate               DateTime?
-  preparedByName           String?
-  zone                     String?
-  preparedByRole           String?
-  status                   OrderStatus           @default(recibido)
-  requestedDeliveryDate    DateTime?
-  assignedLogisticsUserId  String?
-  committedDeliveryDate    DateTime?
-  dispatchDate             DateTime?
-  deliveryDate             DateTime?
-  logisticsNotes           String?
-  notes                    String?
-  sourceConversationId     String?
-  subtotal                 Decimal               @db.Decimal(14, 2)
-  total                    Decimal               @db.Decimal(14, 2)
-  createdBy                String
-  updatedBy                String
-  createdAt                DateTime              @default(now())
-  updatedAt                DateTime              @updatedAt
-  customer                 Customer              @relation(fields: [customerId], references: [id])
-  opportunity              Opportunity?          @relation(fields: [opportunityId], references: [id])
-  sourceQuote              Quote?                @relation(fields: [sourceQuoteId], references: [id])
-  assignedLogisticsUser    User?                 @relation(fields: [assignedLogisticsUserId], references: [id])
-  sourceConversation       WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
-  items                    OrderItem[]
-  billingRequests          BillingRequest[]
-  invoices                 Invoice[]
+  id                        String                @id @default(cuid())
+  customerId                String
+  opportunityId             String?
+  sourceQuoteId             String?
+  orderNumber               String?               @unique
+  purchaseOrderNumber       String?
+  orderDate                 DateTime              @default(now())
+  customerNameSnapshot      String?
+  customerNitSnapshot       String?
+  dispatchAddressSnapshot   String?
+  requesterName             String?
+  requesterEmail            String?
+  requesterRole             String?
+  requesterPhone            String?
+  approvedQuoteConsecutive  String?
+  deliveryInstructions      String?
+  receiverName              String?
+  receiverEmail             String?
+  receiverPhone             String?
+  receiverRole              String?
+  invoiceFilingPlace        String?
+  approvalStatus            String?
+  approvalReason            String?
+  approvalName              String?
+  reviewDate                DateTime?
+  preparedByName            String?
+  zone                      String?
+  preparedByRole            String?
+  status                    OrderStatus           @default(recibido)
+  requestedDeliveryDate     DateTime?
+  assignedLogisticsUserId   String?
+  committedDeliveryDate     DateTime?
+  dispatchDate              DateTime?
+  carrierName               String?
+  trackingNumber            String?
+  trackingUrl               String?
+  deliveryDate              DateTime?
+  deliveredToName           String?
+  deliveryConfirmationNotes String?
+  logisticsNotes            String?
+  notes                     String?
+  sourceConversationId      String?
+  subtotal                  Decimal               @db.Decimal(14, 2)
+  total                     Decimal               @db.Decimal(14, 2)
+  createdBy                 String
+  updatedBy                 String
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  customer                  Customer              @relation(fields: [customerId], references: [id])
+  opportunity               Opportunity?          @relation(fields: [opportunityId], references: [id])
+  sourceQuote               Quote?                @relation(fields: [sourceQuoteId], references: [id])
+  assignedLogisticsUser     User?                 @relation(fields: [assignedLogisticsUserId], references: [id])
+  sourceConversation        WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
+  items                     OrderItem[]
+  billingRequests           BillingRequest[]
+  invoices                  Invoice[]
 
   @@index([sourceConversationId])
 }
@@ -724,24 +730,24 @@ model CommercialExpenseSupport {
 }
 
 model Invoice {
-  id            String          @id @default(cuid())
-  invoiceNumber String          @unique
+  id            String           @id @default(cuid())
+  invoiceNumber String           @unique
   customerId    String
   orderId       String?
-  issueDate     DateTime        @default(now())
+  issueDate     DateTime         @default(now())
   dueDate       DateTime
-  subtotal      Decimal         @db.Decimal(14, 2)
-  taxAmount     Decimal         @db.Decimal(14, 2)
-  totalAmount   Decimal         @db.Decimal(14, 2)
-  totalPaid     Decimal         @default(0) @db.Decimal(14, 2)
-  status        InvoiceStatus   @default(emitida)
+  subtotal      Decimal          @db.Decimal(14, 2)
+  taxAmount     Decimal          @db.Decimal(14, 2)
+  totalAmount   Decimal          @db.Decimal(14, 2)
+  totalPaid     Decimal          @default(0) @db.Decimal(14, 2)
+  status        InvoiceStatus    @default(emitida)
   notes         String?
   createdBy     String
   updatedBy     String
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  customer      Customer        @relation(fields: [customerId], references: [id])
-  order         Order?          @relation(fields: [orderId], references: [id])
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+  customer      Customer         @relation(fields: [customerId], references: [id])
+  order         Order?           @relation(fields: [orderId], references: [id])
   payments      InvoicePayment[]
 
   @@index([customerId, status])

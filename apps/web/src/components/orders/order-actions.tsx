@@ -16,6 +16,7 @@ const statusLabels: Record<string, string> = {
   orden_facturacion: "Orden de facturación",
   facturado: "Facturado",
   despachado: "Despachado",
+  en_transito: "En tránsito",
   entregado: "Entregado",
 };
 
@@ -23,7 +24,8 @@ const nextStatusMap: Record<string, string> = {
   recibido: "orden_facturacion",
   orden_facturacion: "facturado",
   facturado: "despachado",
-  despachado: "entregado",
+  despachado: "en_transito",
+  en_transito: "entregado",
 };
 
 const advanceRoles = ["administrador", "director_comercial", "comercial", "logistica"];

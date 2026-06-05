@@ -299,24 +299,26 @@ describe("Orders", () => {
     expect(Number(response.body.total)).toBe(119000);
   });
 
-  it("creates a product-backed order with submitted unit price as authoritative", async () => {
+  it("creates a product-backed order with automatic segment discount pricing", async () => {
     const response = await request(globalThis.__APP__)
       .post("/orders")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-2",
         items: [
-          { productId: "product-1", quantity: 2, unitPrice: 50000 },
+          { productId: "product-1", quantity: 2, unitPrice: 99999 },
         ],
       })
       .expect(201);
 
     expect(response.body.items).toHaveLength(1);
-    expect(Number(response.body.subtotal)).toBe(100000);
-    expect(Number(response.body.total)).toBe(119000);
+    expect(Number(response.body.subtotal)).toBe(90000);
+    expect(Number(response.body.items[0].taxAmount)).toBe(8550);
+    expect(Number(response.body.items[0].totalWithTax)).toBe(107100);
+    expect(Number(response.body.total)).toBe(107100);
     expect(Number(response.body.items[0].originalUnitPrice)).toBe(50000);
     expect(Number(response.body.items[0].discountPercent)).toBe(10);
-    expect(Number(response.body.items[0].unitPrice)).toBe(50000);
+    expect(Number(response.body.items[0].unitPrice)).toBe(45000);
     expect(response.body.items[0].presentationSnapshot).toBe("Bulto 50kg");
   });
 
@@ -520,10 +522,17 @@ describe("Orders", () => {
     const step4 = await request(globalThis.__APP__)
       .patch(`/orders/${orderId}/status`)
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "en_transito" })
+      .expect(200);
+    expect(step4.body.status).toBe("en_transito");
+
+    const step5 = await request(globalThis.__APP__)
+      .patch(`/orders/${orderId}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({ status: "entregado" })
       .expect(200);
-    expect(step4.body.status).toBe("entregado");
-    expect(step4.body.deliveryDate).toBeTruthy();
+    expect(step5.body.status).toBe("entregado");
+    expect(step5.body.deliveryDate).toBeTruthy();
   });
 
   it("rejects invalid status transitions", async () => {
@@ -561,11 +570,21 @@ describe("Orders", () => {
       .send({
         assignedLogisticsUserId: "logistics-user-id",
         committedDeliveryDate: "2026-05-01",
+        carrierName: "Transportes Norte",
+        trackingNumber: "GUIA-123",
+        trackingUrl: "https://tracking.example.com/GUIA-123",
+        deliveredToName: "Carlos Bodega",
+        deliveryConfirmationNotes: "Recibido sin novedad",
         logisticsNotes: "Entrega prioritaria",
       })
       .expect(200);
 
     expect(response.body.assignedLogisticsUserId).toBe("logistics-user-id");
+    expect(response.body.carrierName).toBe("Transportes Norte");
+    expect(response.body.trackingNumber).toBe("GUIA-123");
+    expect(response.body.trackingUrl).toBe("https://tracking.example.com/GUIA-123");
+    expect(response.body.deliveredToName).toBe("Carlos Bodega");
+    expect(response.body.deliveryConfirmationNotes).toBe("Recibido sin novedad");
     expect(response.body.logisticsNotes).toBe("Entrega prioritaria");
   });
 
@@ -597,6 +616,12 @@ describe("Orders", () => {
       .patch(`/orders/${orderId}/status`)
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({ status: "despachado" })
+      .expect(200);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${orderId}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "en_transito" })
       .expect(200);
 
     await request(globalThis.__APP__)

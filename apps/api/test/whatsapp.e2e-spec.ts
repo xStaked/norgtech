@@ -753,7 +753,7 @@ describe("WhatsApp inbox", () => {
         senderType: WhatsAppSenderType.cliente,
         customerId: "customer-1",
         contactId: "contact-1",
-        lastMessageText: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        lastMessageText: "Necesito 10 bultos de producto A",
       }),
     );
     expect(messages).toContainEqual(
@@ -767,15 +767,13 @@ describe("WhatsApp inbox", () => {
         body: "Necesito 10 bultos de producto A",
       }),
     );
-    expect(messages).toContainEqual(
-      expect.objectContaining({
-        conversationId: "conversation-2",
-        direction: WhatsAppMessageDirection.outbound,
-        role: WhatsAppMessageRole.assistant,
-        body: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
-        deliveryStatus: "sent",
-      }),
-    );
+    expect(
+      messages.some(
+        (message) =>
+          message.conversationId === "conversation-2" &&
+          String(message.direction) === WhatsAppMessageDirection.outbound,
+      ),
+    ).toBe(false);
     expect(noraActions).toContainEqual(
       expect.objectContaining({
         conversationId: "conversation-2",
@@ -803,6 +801,47 @@ describe("WhatsApp inbox", () => {
       expect.objectContaining({
         method: "POST",
         body: expect.stringContaining("Necesito 10 bultos de producto A"),
+      }),
+    );
+  });
+
+  it("auto-sends low-risk Nora replies that do not require human review", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "saludo",
+        summary: "Cliente saluda.",
+        suggested_reply: "Hola, recibimos tu mensaje. ¿En qué podemos ayudarte?",
+        requires_human_review: false,
+        proposed_order: null,
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-low-risk",
+            from: "573009998881",
+            timestamp: "2026-05-22T20:01:00.000Z",
+            text: { body: "Hola" },
+            profile: { name: "Cliente Bajo Riesgo" },
+          },
+        },
+      })
+      .expect(201);
+
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        conversationId: response.body.conversationId,
+        direction: WhatsAppMessageDirection.outbound,
+        role: WhatsAppMessageRole.assistant,
+        body: "Hola, recibimos tu mensaje. ¿En qué podemos ayudarte?",
+        deliveryStatus: "sent",
       }),
     );
   });
@@ -847,7 +886,7 @@ describe("WhatsApp inbox", () => {
         waId: "+573009998877",
         phone: "+573009998877",
         senderName: "Cliente V2",
-        lastMessageText: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        lastMessageText: "Hola Nora, necesito alimento para postura",
       }),
     );
     expect(messages).toContainEqual(
@@ -860,15 +899,13 @@ describe("WhatsApp inbox", () => {
         body: "Hola Nora, necesito alimento para postura",
       }),
     );
-    expect(messages).toContainEqual(
-      expect.objectContaining({
-        conversationId: response.body.conversationId,
-        direction: WhatsAppMessageDirection.outbound,
-        role: WhatsAppMessageRole.assistant,
-        body: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
-        deliveryStatus: "sent",
-      }),
-    );
+    expect(
+      messages.some(
+        (message) =>
+          message.conversationId === response.body.conversationId &&
+          String(message.direction) === WhatsAppMessageDirection.outbound,
+      ),
+    ).toBe(false);
   });
 
   it("marks Nora route failures on the action log without rejecting the webhook", async () => {

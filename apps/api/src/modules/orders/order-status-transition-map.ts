@@ -4,6 +4,7 @@ export const allowedTransitions: Record<OrderStatus, OrderStatus[]> = {
   recibido: ["orden_facturacion"],
   orden_facturacion: ["facturado"],
   facturado: ["despachado"],
-  despachado: ["entregado"],
+  despachado: ["en_transito"],
+  en_transito: ["entregado"],
   entregado: [],
 };

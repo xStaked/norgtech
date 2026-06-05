@@ -7,6 +7,7 @@ const statuses = [
   { key: "orden_facturacion", label: "Orden de facturación" },
   { key: "facturado", label: "Facturado" },
   { key: "despachado", label: "Despachado" },
+  { key: "en_transito", label: "En tránsito" },
   { key: "entregado", label: "Entregado" },
 ];
 

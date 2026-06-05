@@ -18,7 +18,12 @@ interface OrderLogisticsSectionProps {
   assignedLogisticsUser: User | null;
   committedDeliveryDate: string | null;
   dispatchDate: string | null;
+  carrierName: string | null;
+  trackingNumber: string | null;
+  trackingUrl: string | null;
   deliveryDate: string | null;
+  deliveredToName: string | null;
+  deliveryConfirmationNotes: string | null;
   logisticsNotes: string | null;
   canEdit: boolean;
 }
@@ -28,7 +33,12 @@ export function OrderLogisticsSection({
   assignedLogisticsUser,
   committedDeliveryDate,
   dispatchDate,
+  carrierName,
+  trackingNumber,
+  trackingUrl,
   deliveryDate,
+  deliveredToName,
+  deliveryConfirmationNotes,
   logisticsNotes,
   canEdit,
 }: OrderLogisticsSectionProps) {
@@ -39,6 +49,11 @@ export function OrderLogisticsSection({
   const [form, setForm] = useState({
     assignedLogisticsUserId: assignedLogisticsUser?.id ?? "",
     committedDeliveryDate: committedDeliveryDate ? committedDeliveryDate.slice(0, 10) : "",
+    carrierName: carrierName ?? "",
+    trackingNumber: trackingNumber ?? "",
+    trackingUrl: trackingUrl ?? "",
+    deliveredToName: deliveredToName ?? "",
+    deliveryConfirmationNotes: deliveryConfirmationNotes ?? "",
     logisticsNotes: logisticsNotes ?? "",
   });
 
@@ -51,6 +66,11 @@ export function OrderLogisticsSection({
         body: JSON.stringify({
           assignedLogisticsUserId: form.assignedLogisticsUserId || undefined,
           committedDeliveryDate: form.committedDeliveryDate || undefined,
+          carrierName: form.carrierName || undefined,
+          trackingNumber: form.trackingNumber || undefined,
+          trackingUrl: form.trackingUrl || undefined,
+          deliveredToName: form.deliveredToName || undefined,
+          deliveryConfirmationNotes: form.deliveryConfirmationNotes || undefined,
           logisticsNotes: form.logisticsNotes || undefined,
         }),
       });
@@ -109,6 +129,58 @@ export function OrderLogisticsSection({
                 }
               />
             </div>
+            <div className="grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Transportadora
+              </Label>
+              <Input
+                value={form.carrierName}
+                onChange={(e) => setForm({ ...form, carrierName: e.target.value })}
+                placeholder="Transportadora"
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Número de guía
+              </Label>
+              <Input
+                value={form.trackingNumber}
+                onChange={(e) => setForm({ ...form, trackingNumber: e.target.value })}
+                placeholder="Guía"
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Link de tracking
+              </Label>
+              <Input
+                value={form.trackingUrl}
+                onChange={(e) => setForm({ ...form, trackingUrl: e.target.value })}
+                placeholder="https://..."
+              />
+            </div>
+            <div className="grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Recibido por
+              </Label>
+              <Input
+                value={form.deliveredToName}
+                onChange={(e) => setForm({ ...form, deliveredToName: e.target.value })}
+                placeholder="Nombre de quien recibe"
+              />
+            </div>
+            <div className="col-span-full grid gap-1">
+              <Label className="text-sm font-semibold text-muted-foreground">
+                Confirmación de entrega
+              </Label>
+              <Textarea
+                value={form.deliveryConfirmationNotes}
+                onChange={(e) =>
+                  setForm({ ...form, deliveryConfirmationNotes: e.target.value })
+                }
+                rows={2}
+              />
+            </div>
             <div className="col-span-full grid gap-1">
               <Label className="text-sm font-semibold text-muted-foreground">Notas</Label>
               <Textarea
@@ -147,10 +219,22 @@ export function OrderLogisticsSection({
               label="Fecha de despacho"
               value={dispatchDate ? new Date(dispatchDate).toLocaleDateString("es-CO") : null}
             />
+            <Info label="Transportadora" value={carrierName} />
+            <Info label="Número de guía" value={trackingNumber} />
+            <TrackingInfo trackingUrl={trackingUrl} />
             <Info
               label="Fecha de entrega"
               value={deliveryDate ? new Date(deliveryDate).toLocaleDateString("es-CO") : null}
             />
+            <Info label="Recibido por" value={deliveredToName} />
+            {deliveryConfirmationNotes && (
+              <div className="col-span-full">
+                <div className="text-sm font-semibold text-muted-foreground">
+                  Confirmación de entrega
+                </div>
+                <div className="mt-1 text-foreground">{deliveryConfirmationNotes}</div>
+              </div>
+            )}
             {logisticsNotes && (
               <div className="col-span-full">
                 <div className="text-sm font-semibold text-muted-foreground">
@@ -162,6 +246,23 @@ export function OrderLogisticsSection({
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function TrackingInfo({ trackingUrl }: { trackingUrl: string | null | undefined }) {
+  if (!trackingUrl) return null;
+  return (
+    <div>
+      <div className="text-sm font-semibold text-muted-foreground">Tracking</div>
+      <a
+        href={trackingUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-1 inline-block max-w-full truncate text-primary underline-offset-4 hover:underline"
+      >
+        {trackingUrl}
+      </a>
     </div>
   );
 }
