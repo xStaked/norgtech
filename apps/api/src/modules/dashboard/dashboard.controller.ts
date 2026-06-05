@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from "@nestjs/common";
+import { Controller, Get, Query, UseGuards } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -15,5 +15,12 @@ export class DashboardController {
   @Get("summary")
   getSummary(@CurrentUser() user: AuthUser) {
     return this.dashboardService.getSummary(user);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "director_comercial", "comercial")
+  @Get("commercial-advanced")
+  getCommercialAdvanced(@CurrentUser() user: AuthUser, @Query("days") days?: string) {
+    return this.dashboardService.getCommercialAdvancedSummary(user, days);
   }
 }

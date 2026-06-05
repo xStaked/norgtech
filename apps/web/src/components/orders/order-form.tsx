@@ -156,6 +156,8 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       requestedDeliveryDate: optionalString(formData.get("requestedDeliveryDate")),
       purchaseOrderNumber: optionalString(formData.get("purchaseOrderNumber")),
       orderDate: optionalString(formData.get("orderDate")),
+      billingCompanyNameSnapshot: optionalString(formData.get("billingCompanyNameSnapshot")),
+      branchNameSnapshot: optionalString(formData.get("branchNameSnapshot")),
       dispatchAddressSnapshot: optionalString(formData.get("dispatchAddressSnapshot")),
       requesterName: optionalString(formData.get("requesterName")),
       requesterEmail: optionalString(formData.get("requesterEmail")),
@@ -236,6 +238,12 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
           </Field>
           <Field label="Fecha de entrega solicitada" htmlFor="requestedDeliveryDate">
             <Input id="requestedDeliveryDate" name="requestedDeliveryDate" type="date" />
+          </Field>
+          <Field label="Empresa facturadora" htmlFor="billingCompanyNameSnapshot">
+            <Input id="billingCompanyNameSnapshot" name="billingCompanyNameSnapshot" />
+          </Field>
+          <Field label="Sede" htmlFor="branchNameSnapshot">
+            <Input id="branchNameSnapshot" name="branchNameSnapshot" />
           </Field>
           <Field label="Oportunidad" htmlFor="opportunityId">
             <select id="opportunityId" name="opportunityId" className={selectClasses}>

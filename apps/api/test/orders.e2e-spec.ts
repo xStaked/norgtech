@@ -351,6 +351,8 @@ describe("Orders", () => {
         sourceQuoteId: "quote-customer-1",
         purchaseOrderNumber: "OC-7788",
         orderDate: "2026-05-22",
+        billingCompanyNameSnapshot: "Norgtech Facturacion SAS",
+        branchNameSnapshot: "Sede Norte",
         dispatchAddressSnapshot: "Bodega cliente",
         requesterName: "Laura Cliente",
         requesterEmail: "laura@example.com",
@@ -386,6 +388,8 @@ describe("Orders", () => {
     expect(response.body.purchaseOrderNumber).toBe("OC-7788");
     expect(response.body.customerNameSnapshot).toBe("Agro Norte");
     expect(response.body.customerNitSnapshot).toBe("900111222-1");
+    expect(response.body.billingCompanyNameSnapshot).toBe("Norgtech Facturacion SAS");
+    expect(response.body.branchNameSnapshot).toBe("Sede Norte");
     expect(response.body.dispatchAddressSnapshot).toBe("Bodega cliente");
     expect(response.body.requesterName).toBe("Laura Cliente");
     expect(response.body.receiverName).toBe("Carlos Bodega");

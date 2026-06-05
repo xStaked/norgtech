@@ -41,6 +41,14 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsString()
+  billingCompanyNameSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
+  branchNameSnapshot?: string;
+
+  @IsOptional()
+  @IsString()
   dispatchAddressSnapshot?: string;
 
   @IsOptional()

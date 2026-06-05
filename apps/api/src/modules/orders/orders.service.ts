@@ -43,6 +43,9 @@ export class OrdersService {
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
     const customerNameSnapshot = customer.displayName;
     const customerNitSnapshot = customer.taxId ?? null;
+    const billingCompanyNameSnapshot =
+      dto.billingCompanyNameSnapshot?.trim() || customerNameSnapshot || null;
+    const branchNameSnapshot = dto.branchNameSnapshot?.trim() || null;
     const dispatchAddressSnapshot =
       dto.dispatchAddressSnapshot?.trim() || customer.address || null;
     const preparedByName =
@@ -141,6 +144,8 @@ export class OrdersService {
           orderDate,
           customerNameSnapshot,
           customerNitSnapshot,
+          billingCompanyNameSnapshot,
+          branchNameSnapshot,
           dispatchAddressSnapshot,
           requesterName: dto.requesterName || null,
           requesterEmail: dto.requesterEmail || null,

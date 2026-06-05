@@ -63,6 +63,8 @@ interface Order {
   orderDate: string | null;
   customerNameSnapshot: string | null;
   customerNitSnapshot: string | null;
+  billingCompanyNameSnapshot: string | null;
+  branchNameSnapshot: string | null;
   dispatchAddressSnapshot: string | null;
   requesterName: string | null;
   requesterEmail: string | null;
@@ -187,6 +189,8 @@ export default async function OrderDetailPage({
         <div className="mt-6 grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
           <Info label="Cliente" value={order.customerNameSnapshot || order.customer?.displayName} />
           <Info label="NIT" value={order.customerNitSnapshot} />
+          <Info label="Empresa facturadora" value={order.billingCompanyNameSnapshot} />
+          <Info label="Sede" value={order.branchNameSnapshot} />
           <Info label="Orden de compra" value={order.purchaseOrderNumber} />
           <Info
             label="Fecha del pedido"

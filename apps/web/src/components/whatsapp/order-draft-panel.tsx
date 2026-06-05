@@ -97,6 +97,8 @@ function buildOrderPayload(
     orderNumber: getString(proposal.orderNumber),
     purchaseOrderNumber: getString(proposal.purchaseOrderNumber),
     orderDate: getString(proposal.orderDate),
+    billingCompanyNameSnapshot: getString(proposal.billingCompanyNameSnapshot),
+    branchNameSnapshot: getString(proposal.branchNameSnapshot),
     dispatchAddressSnapshot: getString(proposal.dispatchAddressSnapshot),
     requesterName:
       getString(proposal.requesterName) ??

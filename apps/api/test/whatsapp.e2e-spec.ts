@@ -631,6 +631,8 @@ describe("WhatsApp inbox", () => {
       .send({
         customerId: "customer-1",
         sourceConversationId: "conversation-ignored",
+        billingCompanyNameSnapshot: "Facturadora WhatsApp SAS",
+        branchNameSnapshot: "Sucursal WhatsApp",
         requesterName: "Laura Cliente",
         requesterPhone: "+573001112233",
         items: [{ productName: "Fertilizante especial", quantity: 2, unitPrice: 0 }],
@@ -640,6 +642,8 @@ describe("WhatsApp inbox", () => {
     expect(response.body.sourceConversationId).toBe("conversation-1");
     expect(response.body.sourceConversation.id).toBe("conversation-1");
     expect(response.body.approvalStatus).toBe("en_revision");
+    expect(response.body.billingCompanyNameSnapshot).toBe("Facturadora WhatsApp SAS");
+    expect(response.body.branchNameSnapshot).toBe("Sucursal WhatsApp");
     expect(response.body.requesterName).toBe("Laura Cliente");
   });
 

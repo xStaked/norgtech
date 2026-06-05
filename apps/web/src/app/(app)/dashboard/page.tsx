@@ -7,6 +7,10 @@ import { ActivityList } from "@/components/dashboard/activity-list";
 import { QueueList } from "@/components/dashboard/queue-list";
 import { FeedbackWidget } from "@/components/dashboard/feedback-widget";
 import { CustomerGoalsDashboard } from "@/components/dashboard/customer-goals-dashboard";
+import {
+  CommercialAdvancedDashboard,
+  type CommercialAdvancedSummary,
+} from "@/components/dashboard/commercial-advanced-dashboard";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -77,6 +81,8 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
+const commercialAdvancedRoles = new Set(["administrador", "director_comercial", "comercial"]);
+
 function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig)[number]["key"]) {
   const value = summary?.[key] ?? 0;
   if (key === "pipelineValue") return currencyFormatter.format(Math.round(value));
@@ -86,9 +92,17 @@ function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig
 export default async function DashboardPage() {
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
+  const canViewCommercialAdvanced = userRole ? commercialAdvancedRoles.has(userRole) : false;
 
-  const response = await apiFetch("/dashboard/summary");
+  const [response, commercialAdvancedResponse] = await Promise.all([
+    apiFetch("/dashboard/summary"),
+    canViewCommercialAdvanced
+      ? apiFetch("/dashboard/commercial-advanced?days=90")
+      : Promise.resolve(null),
+  ]);
   const summary: DashboardSummary | null = response.ok ? await response.json() : null;
+  const commercialAdvancedSummary: CommercialAdvancedSummary | null =
+    commercialAdvancedResponse?.ok ? await commercialAdvancedResponse.json() : null;
 
   return (
     <div className="space-y-6">
@@ -135,6 +149,8 @@ export default async function DashboardPage() {
 
       {/* Goals Progress Section */}
       <CustomerGoalsDashboard />
+
+      <CommercialAdvancedDashboard summary={commercialAdvancedSummary} />
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-[1.5fr_380px]">
