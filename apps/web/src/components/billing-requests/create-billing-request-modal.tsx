@@ -3,6 +3,23 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface CreateBillingRequestModalProps {
   customers: Array<{ id: string; displayName: string }>;
@@ -21,6 +38,12 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+
+    if (!customerId) {
+      setError("Debes seleccionar un cliente.");
+      return;
+    }
+
     setLoading(true);
     try {
       const body: Record<string, string> = { customerId };
@@ -53,160 +76,79 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
 
   return (
     <>
-      <button
-        onClick={() => setOpen(true)}
-        style={{
-          padding: "0.625rem 1.25rem",
-          borderRadius: "0.5rem",
-          border: "none",
-          backgroundColor: "#10233f",
-          color: "#ffffff",
-          fontSize: "1rem",
-          fontWeight: 600,
-          cursor: "pointer",
-        }}
-      >
-        Crear solicitud
-      </button>
+      <Button onClick={() => setOpen(true)}>Crear solicitud</Button>
 
-      {open && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            backgroundColor: "rgba(16, 35, 63, 0.4)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1000,
-          }}
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setOpen(false);
-          }}
-        >
-          <div
-            style={{
-              backgroundColor: "#fff",
-              padding: "1.5rem",
-              borderRadius: "0.75rem",
-              width: "100%",
-              maxWidth: 480,
-              boxShadow: "0 18px 48px rgba(16, 35, 63, 0.12)",
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: "1.25rem" }}>Nueva solicitud de facturación</h2>
-            {error && <p style={{ color: "#c0392b", fontSize: 14, marginTop: 12 }}>{error}</p>}
-            <form onSubmit={handleSubmit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
-              <div>
-                <label style={{ fontSize: 14, fontWeight: 600 }}>Cliente *</label>
-                <select
-                  value={customerId}
-                  onChange={(e) => setCustomerId(e.target.value)}
-                  required
-                  style={{
-                    marginTop: 4,
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #c8d3e0",
-                    fontSize: 14,
-                  }}
-                >
-                  <option value="">Seleccionar cliente</option>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nueva solicitud de facturación</DialogTitle>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmit} className="grid gap-4 py-2">
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <div className="grid gap-2">
+              <Label htmlFor="customerId">Cliente *</Label>
+              <Select value={customerId} onValueChange={(v) => setCustomerId(v ?? "")}>
+                <SelectTrigger id="customerId">
+                  <SelectValue placeholder="Seleccionar cliente" />
+                </SelectTrigger>
+                <SelectContent>
                   {customers.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <SelectItem key={c.id} value={c.id}>
                       {c.displayName}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 14, fontWeight: 600 }}>Pedido origen (opcional)</label>
-                <input
-                  value={sourceOrderId}
-                  onChange={(e) => setSourceOrderId(e.target.value)}
-                  placeholder="ID del pedido"
-                  style={{
-                    marginTop: 4,
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #c8d3e0",
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 14, fontWeight: 600 }}>Cotización origen (opcional)</label>
-                <input
-                  value={sourceQuoteId}
-                  onChange={(e) => setSourceQuoteId(e.target.value)}
-                  placeholder="ID de la cotización"
-                  style={{
-                    marginTop: 4,
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #c8d3e0",
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: 14, fontWeight: 600 }}>Notas</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  rows={2}
-                  style={{
-                    marginTop: 4,
-                    width: "100%",
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #c8d3e0",
-                    fontSize: 14,
-                    resize: "vertical",
-                  }}
-                />
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    border: "none",
-                    backgroundColor: "#10233f",
-                    color: "#fff",
-                    fontSize: 14,
-                    fontWeight: 600,
-                    cursor: loading ? "not-allowed" : "pointer",
-                    opacity: loading ? 0.7 : 1,
-                  }}
-                >
-                  {loading ? "Guardando..." : "Guardar"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOpen(false)}
-                  disabled={loading}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: 8,
-                    border: "1px solid #c8d3e0",
-                    backgroundColor: "#fff",
-                    fontSize: 14,
-                    cursor: "pointer",
-                  }}
-                >
-                  Cancelar
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="sourceOrderId">Pedido origen (opcional)</Label>
+              <Input
+                id="sourceOrderId"
+                value={sourceOrderId}
+                onChange={(e) => setSourceOrderId(e.target.value)}
+                placeholder="ID del pedido"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="sourceQuoteId">Cotización origen (opcional)</Label>
+              <Input
+                id="sourceQuoteId"
+                value={sourceQuoteId}
+                onChange={(e) => setSourceQuoteId(e.target.value)}
+                placeholder="ID de la cotización"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="notes">Notas</Label>
+              <Textarea
+                id="notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={2}
+              />
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setOpen(false)}
+                disabled={loading}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? "Guardando..." : "Guardar"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
