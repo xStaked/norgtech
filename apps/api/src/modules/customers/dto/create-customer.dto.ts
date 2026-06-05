@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsEmail,
+  IsEnum,
   IsIn,
   IsNotEmpty,
   IsNumber,
@@ -12,6 +13,7 @@ import {
   Min,
   ValidateNested,
 } from "class-validator";
+import { CustomerType, PaymentCondition } from "@prisma/client";
 import { CreateContactDto } from "../../contacts/dto/create-contact.dto";
 
 class CreateInitialGoalDto {
@@ -84,6 +86,26 @@ export class CreateCustomerDto {
   @ValidateNested({ each: true })
   @Type(() => CreateContactDto)
   contacts!: CreateContactDto[];
+
+  @IsOptional()
+  @IsEnum(CustomerType)
+  customerType?: CustomerType;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  creditLimit?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentCondition)
+  paymentCondition?: PaymentCondition;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  paymentDays?: number;
 
   @IsOptional()
   @ValidateNested()

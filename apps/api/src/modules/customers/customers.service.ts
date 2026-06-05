@@ -35,6 +35,10 @@ export class CustomersService {
           notes: dto.notes,
           segmentId: dto.segmentId,
           assignedToUserId: dto.assignedToUserId,
+          customerType: dto.customerType || undefined,
+          creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
+          paymentCondition: dto.paymentCondition || undefined,
+          paymentDays: dto.paymentDays !== undefined ? dto.paymentDays : undefined,
           createdBy: user.id,
           updatedBy: user.id,
           contacts: {
@@ -148,6 +152,10 @@ export class CustomersService {
           ...(dto.assignedToUserId !== undefined && {
             assignedToUserId: dto.assignedToUserId,
           }),
+          ...(dto.customerType !== undefined && { customerType: dto.customerType }),
+          ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
+          ...(dto.paymentCondition !== undefined && { paymentCondition: dto.paymentCondition }),
+          ...(dto.paymentDays !== undefined && { paymentDays: dto.paymentDays }),
           updatedBy: user.id,
         },
         include: { contacts: true },

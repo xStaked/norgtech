@@ -1,8 +1,13 @@
+import { Type } from "class-transformer";
 import {
   IsEmail,
+  IsEnum,
+  IsNumber,
   IsOptional,
   IsString,
+  Min,
 } from "class-validator";
+import { CustomerType, PaymentCondition } from "@prisma/client";
 
 export class UpdateCustomerDto {
   @IsOptional()
@@ -48,4 +53,24 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   assignedToUserId?: string;
+
+  @IsOptional()
+  @IsEnum(CustomerType)
+  customerType?: CustomerType;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  creditLimit?: number;
+
+  @IsOptional()
+  @IsEnum(PaymentCondition)
+  paymentCondition?: PaymentCondition;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  paymentDays?: number;
 }

@@ -27,6 +27,10 @@ interface Customer {
   notes: string | null;
   segmentId: string | null;
   assignedToUserId: string | null;
+  customerType: string | null;
+  creditLimit: string | null;
+  paymentCondition: string | null;
+  paymentDays: number | null;
 }
 
 interface CustomerFormProps {
@@ -84,6 +88,14 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
       notes: optionalString("notes"),
       segmentId: String(formData.get("segmentId")),
       assignedToUserId: optionalString("assignedToUserId") || undefined,
+      customerType: optionalString("customerType") || undefined,
+      creditLimit: formData.get("creditLimit")
+        ? Number(formData.get("creditLimit"))
+        : undefined,
+      paymentCondition: optionalString("paymentCondition") || undefined,
+      paymentDays: formData.get("paymentDays")
+        ? Number(formData.get("paymentDays"))
+        : undefined,
     };
 
     if (!isEditing) {
@@ -221,6 +233,60 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
           type="text"
           defaultValue={customer?.assignedToUserId ?? ""}
         />
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <Label>Tipo de cliente</Label>
+          <select
+            name="customerType"
+            className={selectClasses}
+            defaultValue={customer?.customerType ?? "cliente_directo"}
+          >
+            <option value="distribuidor">Distribuidor</option>
+            <option value="cliente_directo">Cliente directo</option>
+            <option value="planta_balanceados">Planta de balanceados</option>
+            <option value="maquila">Maquila</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div className="grid gap-1">
+          <Label>Condicion de pago</Label>
+          <select
+            name="paymentCondition"
+            className={selectClasses}
+            defaultValue={customer?.paymentCondition ?? "contado"}
+          >
+            <option value="contado">Contado</option>
+            <option value="credito_15">Credito 15 dias</option>
+            <option value="credito_30">Credito 30 dias</option>
+            <option value="credito_60">Credito 60 dias</option>
+            <option value="credito_90">Credito 90 dias</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <Label>Cupo de credito ($)</Label>
+          <Input
+            name="creditLimit"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={customer?.creditLimit ?? ""}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Dias de pago</Label>
+          <Input
+            name="paymentDays"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={customer?.paymentDays ?? ""}
+          />
+        </div>
       </div>
 
       {!isEditing && (
