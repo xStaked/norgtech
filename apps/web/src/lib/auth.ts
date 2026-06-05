@@ -60,6 +60,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/quotes": ["administrador", "director_comercial", "comercial", "facturacion"],
     "/orders": ["administrador", "director_comercial", "comercial", "facturacion", "logistica"],
     "/billing-requests": ["administrador", "director_comercial", "facturacion"],
+    "/invoices": ["administrador", "director_comercial", "facturacion", "comercial"],
     "/products": ["administrador", "director_comercial", "comercial"],
     "/segments": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
@@ -82,6 +83,7 @@ export function canCreate(role: UserRole | null, entity: "customer" | "opportuni
     followUp: ["administrador", "director_comercial", "comercial", "tecnico"],
     order: ["administrador", "director_comercial", "comercial", "logistica"],
     billingRequest: ["administrador", "director_comercial", "facturacion"],
+    invoice: ["administrador", "director_comercial", "facturacion"],
     report: ["administrador", "director_comercial", "tecnico"],
   };
 

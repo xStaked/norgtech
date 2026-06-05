@@ -121,6 +121,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "facturacion"] as const,
   },
   {
+    href: "/invoices",
+    label: "Cartera",
+    shortLabel: "CT",
+    description: "Facturas, pagos y control de cartera",
+    group: "Comercial",
+    requiredRoles: ["administrador", "director_comercial", "facturacion", "comercial"] as const,
+  },
+  {
     href: "/products",
     label: "Productos",
     shortLabel: "PR",
@@ -164,6 +172,7 @@ const singularLabels: Record<string, string> = {
   Gastos: "Gasto",
   Reportes: "Reporte",
   Seguimientos: "Seguimiento",
+  Cartera: "Cartera",
 };
 
 function segmentToLabel(segment: string) {
