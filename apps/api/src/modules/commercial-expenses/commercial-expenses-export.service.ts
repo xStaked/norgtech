@@ -7,6 +7,10 @@ export interface ExpenseExportRow {
   category: string;
   amount: number | string;
   currency: string;
+  supplierName: string | null;
+  supplierNit: string | null;
+  invoiceNumber: string | null;
+  paymentMethod: string | null;
   customerName: string | null;
   visitId: string | null;
   status: string;
@@ -14,6 +18,8 @@ export interface ExpenseExportRow {
   reviewNote: string | null;
   reviewedAt: Date | null;
   reviewedByName: string | null;
+  extractionConfidence: string | null;
+  extractionModel: string | null;
   createdAt: Date;
 }
 
@@ -23,6 +29,10 @@ const EXPORT_COLUMNS = [
   "categoria",
   "monto",
   "moneda",
+  "proveedor",
+  "nit",
+  "numero_factura",
+  "medio_pago",
   "cliente",
   "visita",
   "estado",
@@ -30,6 +40,8 @@ const EXPORT_COLUMNS = [
   "nota_revision",
   "fecha_revision",
   "revisor",
+  "confianza_extraccion",
+  "modelo_extraccion",
   "fecha_creacion",
 ] as const;
 
@@ -72,6 +84,10 @@ export class CommercialExpensesExportService {
       row.category,
       String(row.amount),
       row.currency,
+      row.supplierName ?? "",
+      row.supplierNit ?? "",
+      row.invoiceNumber ?? "",
+      row.paymentMethod ?? "",
       row.customerName ?? "",
       row.visitId ?? "",
       row.status,
@@ -79,6 +95,8 @@ export class CommercialExpensesExportService {
       row.reviewNote ?? "",
       this.formatDate(row.reviewedAt),
       row.reviewedByName ?? "",
+      row.extractionConfidence ?? "",
+      row.extractionModel ?? "",
       this.formatDate(row.createdAt),
     ].map((value) => this.neutralizeFormulaValue(value));
   }

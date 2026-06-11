@@ -641,8 +641,9 @@ describe("CommercialExpenses", () => {
       .expect(200);
 
     expect(csv.headers["content-type"]).toContain("text/csv");
-    expect(csv.text).toContain("fecha,comercial,categoria");
-    expect(csv.text).toContain("alimentacion");
+    expect(csv.text).toContain("proveedor,nit,numero_factura,medio_pago");
+    expect(csv.text).toContain("Restaurante La 80");
+    expect(csv.text).toContain("FE-1001");
 
     const xlsx = await request(globalThis.__APP__)
       .get("/commercial-expenses/export?format=xlsx")

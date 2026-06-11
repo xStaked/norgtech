@@ -432,6 +432,10 @@ export class CommercialExpensesService {
       category: expense.category,
       amount: expense.amount.toString(),
       currency: expense.currency,
+      supplierName: expense.supplierName,
+      supplierNit: expense.supplierNit,
+      invoiceNumber: expense.invoiceNumber,
+      paymentMethod: expense.paymentMethod,
       customerName: expense.customer?.displayName ?? null,
       visitId: expense.visitId,
       status: expense.status,
@@ -439,6 +443,8 @@ export class CommercialExpensesService {
       reviewNote: expense.reviewNote,
       reviewedAt: expense.reviewedAt,
       reviewedByName: expense.reviewedBy?.name ?? null,
+      extractionConfidence: expense.extractionConfidence?.toString() ?? null,
+      extractionModel: expense.extractionModel,
       createdAt: expense.createdAt,
     }));
   }
