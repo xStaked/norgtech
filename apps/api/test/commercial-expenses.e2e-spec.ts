@@ -6,6 +6,7 @@ import {
   Prisma,
   UserRole,
 } from "@prisma/client";
+import ExcelJS from "exceljs";
 import { Readable } from "node:stream";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
@@ -634,6 +635,40 @@ describe("CommercialExpenses", () => {
 
   it("exports CSV and XLSX with expected content types", async () => {
     await createExpense().expect(201);
+    const expectedExportHeaders = [
+      "fecha",
+      "comercial",
+      "categoria",
+      "monto",
+      "moneda",
+      "proveedor",
+      "nit",
+      "numero_factura",
+      "medio_pago",
+      "cliente",
+      "visita",
+      "estado",
+      "descripcion",
+      "nota_revision",
+      "fecha_revision",
+      "revisor",
+      "confianza_extraccion",
+      "modelo_extraccion",
+      "fecha_creacion",
+    ] as const;
+    const parseCsvRow = (row: string) => row.slice(1, -1).split('","');
+    const binaryParser = (
+      res: NodeJS.ReadableStream,
+      callback: (err: Error | null, body?: Buffer) => void,
+    ) => {
+      const chunks: Buffer[] = [];
+
+      res.on("data", (chunk) => {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      });
+      res.on("end", () => callback(null, Buffer.concat(chunks)));
+      res.on("error", callback);
+    };
 
     const csv = await request(globalThis.__APP__)
       .get("/commercial-expenses/export?format=csv")
@@ -641,18 +676,54 @@ describe("CommercialExpenses", () => {
       .expect(200);
 
     expect(csv.headers["content-type"]).toContain("text/csv");
-    expect(csv.text).toContain("proveedor,nit,numero_factura,medio_pago");
-    expect(csv.text).toContain("Restaurante La 80");
-    expect(csv.text).toContain("FE-1001");
+    const csvLines = csv.text.trim().split("\n");
+    expect(csvLines[0]).toBe(expectedExportHeaders.join(","));
+    const csvDataRow = parseCsvRow(csvLines[1]);
+    expect(csvDataRow).toHaveLength(expectedExportHeaders.length);
+    expect(csvDataRow).toEqual(
+      expect.arrayContaining([
+        "Restaurante La 80",
+        "900123456-7",
+        "FE-1001",
+        "tarjeta",
+      ]),
+    );
+    expect(csvDataRow.slice(5, 9)).toEqual([
+      "Restaurante La 80",
+      "900123456-7",
+      "FE-1001",
+      "tarjeta",
+    ]);
+    expect(csvDataRow[11]).toBe("pendiente");
+    expect(csvDataRow[12]).toBe("Almuerzo con cliente");
+    expect(csvDataRow[16]).toBe("0.91");
+    expect(csvDataRow[17]).toBe("gpt-4.1-mini");
 
     const xlsx = await request(globalThis.__APP__)
       .get("/commercial-expenses/export?format=xlsx")
       .set("Authorization", `Bearer ${adminToken}`)
+      .buffer(true)
+      .parse(binaryParser as any)
       .expect(200);
 
     expect(xlsx.headers["content-type"]).toBe(
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
     expect(xlsx.headers["content-disposition"]).toContain("gastos.xlsx");
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(xlsx.body);
+
+    const worksheet = workbook.getWorksheet("Gastos");
+    expect(worksheet).toBeTruthy();
+
+    const headerRow = worksheet!.getRow(1).values as Array<string | null>;
+    expect(headerRow.slice(1)).toEqual([...expectedExportHeaders]);
+
+    const dataRow = worksheet!.getRow(2);
+    expect(dataRow.getCell(6).value).toBe("Restaurante La 80");
+    expect(dataRow.getCell(7).value).toBe("900123456-7");
+    expect(dataRow.getCell(8).value).toBe("FE-1001");
+    expect(dataRow.getCell(9).value).toBe("tarjeta");
   });
 });
