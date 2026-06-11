@@ -225,10 +225,16 @@ export class CommercialExpensesService {
         data.paymentMethod = dto.paymentMethod?.trim() || null;
       }
       if (dto.extractionConfidence !== undefined) {
-        data.extractionConfidence = new Prisma.Decimal(
+        const extractionConfidence = new Prisma.Decimal(
           dto.extractionConfidence,
         ).toDecimalPlaces(4);
-        data.extractionReviewedAt = new Date();
+        data.extractionConfidence = extractionConfidence;
+        const previousExtractionConfidence = expense.extractionConfidence
+          ? new Prisma.Decimal(expense.extractionConfidence).toDecimalPlaces(4)
+          : null;
+        if (!previousExtractionConfidence?.equals(extractionConfidence)) {
+          data.extractionReviewedAt = new Date();
+        }
       }
       if (dto.extractionModel !== undefined) {
         data.extractionModel = dto.extractionModel?.trim() || null;

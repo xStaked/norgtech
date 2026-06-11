@@ -499,6 +499,31 @@ describe("CommercialExpenses", () => {
     });
   });
 
+  it("refreshes extraction review timestamp only when confidence changes", async () => {
+    const created = await createExpense().expect(201);
+    const originalReviewedAt = "2026-05-01T09:00:00.000Z";
+    expenses[0].extractionReviewedAt = new Date(originalReviewedAt);
+
+    const unchanged = await request(globalThis.__APP__)
+      .patch(`/commercial-expenses/${created.body.id}`)
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .send({ extractionConfidence: 0.91 })
+      .expect(200);
+
+    expect(Number(unchanged.body.extractionConfidence)).toBeCloseTo(0.91);
+    expect(unchanged.body.extractionReviewedAt).toBe(originalReviewedAt);
+
+    const changed = await request(globalThis.__APP__)
+      .patch(`/commercial-expenses/${created.body.id}`)
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .send({ extractionConfidence: 0.92 })
+      .expect(200);
+
+    expect(Number(changed.body.extractionConfidence)).toBeCloseTo(0.92);
+    expect(changed.body.extractionReviewedAt).toBeTruthy();
+    expect(changed.body.extractionReviewedAt).not.toBe(originalReviewedAt);
+  });
+
   it("returns summary totals for control role", async () => {
     await createExpense().expect(201);
 
