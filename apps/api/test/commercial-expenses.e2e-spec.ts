@@ -110,7 +110,7 @@ describe("CommercialExpenses", () => {
       supports: undefined,
     }),
     amount: new Prisma.Decimal(expense.amount),
-    extractionConfidence: expense.extractionConfidence
+    extractionConfidence: expense.extractionConfidence !== null
       ? new Prisma.Decimal(expense.extractionConfidence)
       : null,
     expenseDate: new Date(expense.expenseDate),
@@ -431,6 +431,28 @@ describe("CommercialExpenses", () => {
     expect(uploadExpenseSupportCalls[0].body).toEqual(Buffer.from("image"));
   });
 
+  it("does not review extraction on create when only model whitespace is provided", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/commercial-expenses")
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .field("expenseDate", "2026-05-01")
+      .field("category", CommercialExpenseCategory.alimentacion)
+      .field("amount", "25000")
+      .field("description", "Almuerzo con cliente")
+      .field("extractionModel", "   ")
+      .attach("support", Buffer.from("image"), {
+        filename: "support.png",
+        contentType: "image/png",
+      })
+      .expect(201);
+
+    expect(response.body).toMatchObject({
+      extractionConfidence: null,
+      extractionModel: null,
+      extractionReviewedAt: null,
+    });
+  });
+
   it("does not allow another comercial to get the expense", async () => {
     const created = await createExpense().expect(201);
 
@@ -522,6 +544,18 @@ describe("CommercialExpenses", () => {
     expect(Number(changed.body.extractionConfidence)).toBeCloseTo(0.92);
     expect(changed.body.extractionReviewedAt).toBeTruthy();
     expect(changed.body.extractionReviewedAt).not.toBe(originalReviewedAt);
+
+    expenses[0].extractionReviewedAt = new Date(originalReviewedAt);
+
+    const cleared = await request(globalThis.__APP__)
+      .patch(`/commercial-expenses/${created.body.id}`)
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .send({ extractionConfidence: null })
+      .expect(200);
+
+    expect(cleared.body.extractionConfidence).toBeNull();
+    expect(cleared.body.extractionReviewedAt).toBeTruthy();
+    expect(cleared.body.extractionReviewedAt).not.toBe(originalReviewedAt);
   });
 
   it("returns summary totals for control role", async () => {

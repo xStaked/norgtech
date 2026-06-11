@@ -82,6 +82,12 @@ export class CommercialExpensesService {
 
     try {
       return await this.prisma.$transaction(async (tx) => {
+        const extractionModel = dto.extractionModel?.trim() || null;
+        const extractionConfidence =
+          dto.extractionConfidence === undefined ||
+          dto.extractionConfidence === null
+            ? null
+            : new Prisma.Decimal(dto.extractionConfidence).toDecimalPlaces(4);
         const expense = await tx.commercialExpense.create({
           data: {
             expenseDate: new Date(dto.expenseDate),
@@ -92,15 +98,10 @@ export class CommercialExpensesService {
             supplierNit: dto.supplierNit?.trim() || null,
             invoiceNumber: dto.invoiceNumber?.trim() || null,
             paymentMethod: dto.paymentMethod?.trim() || null,
-            extractionConfidence:
-              dto.extractionConfidence === undefined
-                ? null
-                : new Prisma.Decimal(dto.extractionConfidence).toDecimalPlaces(
-                    4,
-                  ),
-            extractionModel: dto.extractionModel?.trim() || null,
+            extractionConfidence,
+            extractionModel,
             extractionReviewedAt:
-              dto.extractionConfidence === undefined && !dto.extractionModel
+              extractionConfidence === null && extractionModel === null
                 ? null
                 : new Date(),
             submittedByUserId: user.id,
@@ -225,14 +226,23 @@ export class CommercialExpensesService {
         data.paymentMethod = dto.paymentMethod?.trim() || null;
       }
       if (dto.extractionConfidence !== undefined) {
-        const extractionConfidence = new Prisma.Decimal(
-          dto.extractionConfidence,
-        ).toDecimalPlaces(4);
+        const extractionConfidence =
+          dto.extractionConfidence === null
+            ? null
+            : new Prisma.Decimal(dto.extractionConfidence).toDecimalPlaces(4);
         data.extractionConfidence = extractionConfidence;
-        const previousExtractionConfidence = expense.extractionConfidence
-          ? new Prisma.Decimal(expense.extractionConfidence).toDecimalPlaces(4)
-          : null;
-        if (!previousExtractionConfidence?.equals(extractionConfidence)) {
+        const previousExtractionConfidence =
+          expense.extractionConfidence !== null
+            ? new Prisma.Decimal(expense.extractionConfidence).toDecimalPlaces(
+                4,
+              )
+            : null;
+        const extractionConfidenceChanged =
+          previousExtractionConfidence === null
+            ? extractionConfidence !== null
+            : extractionConfidence === null ||
+              !previousExtractionConfidence.equals(extractionConfidence);
+        if (extractionConfidenceChanged) {
           data.extractionReviewedAt = new Date();
         }
       }

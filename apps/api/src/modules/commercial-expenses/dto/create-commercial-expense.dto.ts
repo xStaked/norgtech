@@ -49,14 +49,16 @@ export class CreateCommercialExpenseDto {
 
   @IsOptional()
   @Transform(({ value }) =>
-    value === undefined || value === null || value === ""
+    value === undefined || value === ""
       ? undefined
-      : Number(value),
+      : value === null
+        ? null
+        : Number(value),
   )
   @IsNumber()
   @Min(0)
   @Max(1)
-  extractionConfidence?: number;
+  extractionConfidence?: number | null;
 
   @IsOptional()
   @IsString()
