@@ -49,6 +49,13 @@ interface CommercialExpense {
   status: string;
   reviewNote: string | null;
   reviewedAt: string | null;
+  supplierName: string | null;
+  supplierNit: string | null;
+  invoiceNumber: string | null;
+  paymentMethod: string | null;
+  extractionConfidence: string | null;
+  extractionModel: string | null;
+  extractionReviewedAt: string | null;
   customer: Customer | null;
   visit: Visit | null;
   supports: ExpenseSupport[];
@@ -195,6 +202,16 @@ export default async function ExpenseDetailPage({
             ),
           },
           { label: "Descripcion", value: expense.description },
+          { label: "Proveedor", value: expense.supplierName ?? "Sin proveedor" },
+          { label: "NIT", value: expense.supplierNit ?? "Sin NIT" },
+          { label: "Numero factura", value: expense.invoiceNumber ?? "Sin numero" },
+          { label: "Medio de pago", value: expense.paymentMethod ?? "Sin medio de pago" },
+          {
+            label: "IA",
+            value: expense.extractionConfidence
+              ? `${Math.round(Number(expense.extractionConfidence) * 100)}% (${expense.extractionModel ?? "modelo no registrado"})`
+              : "Sin lectura IA",
+          },
           {
             label: "Creado",
             value: dateTimeFormatter.format(new Date(expense.createdAt)),
@@ -256,6 +273,12 @@ export default async function ExpenseDetailPage({
               description: expense.description,
               customerId: expense.customer?.id ?? null,
               visitId: expense.visit?.id ?? null,
+              supplierName: expense.supplierName,
+              supplierNit: expense.supplierNit,
+              invoiceNumber: expense.invoiceNumber,
+              paymentMethod: expense.paymentMethod,
+              extractionConfidence: expense.extractionConfidence,
+              extractionModel: expense.extractionModel,
             }}
           />
         </SectionCard>

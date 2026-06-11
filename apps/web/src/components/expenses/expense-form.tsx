@@ -20,6 +20,29 @@ interface Visit {
   customerId: string | null;
 }
 
+interface ExtractedField<T> {
+  value: T;
+  confidence: number;
+}
+
+interface ExpenseExtractionResult {
+  status: "completed" | "low_confidence";
+  model: string;
+  confidence: number;
+  fields: {
+    expenseDate?: ExtractedField<string>;
+    amount?: ExtractedField<number>;
+    currency?: ExtractedField<string>;
+    category?: ExtractedField<string>;
+    description?: ExtractedField<string>;
+    supplierName?: ExtractedField<string>;
+    supplierNit?: ExtractedField<string>;
+    invoiceNumber?: ExtractedField<string>;
+    paymentMethod?: ExtractedField<string>;
+  };
+  warnings: string[];
+}
+
 interface ExpenseFormInitialValues {
   id: string;
   expenseDate: string;
@@ -28,6 +51,12 @@ interface ExpenseFormInitialValues {
   description: string;
   customerId: string | null;
   visitId: string | null;
+  supplierName?: string | null;
+  supplierNit?: string | null;
+  invoiceNumber?: string | null;
+  paymentMethod?: string | null;
+  extractionConfidence?: string | number | null;
+  extractionModel?: string | null;
 }
 
 interface ExpenseFormProps {
@@ -84,6 +113,20 @@ function getErrorMessage(data: unknown, fallback: string) {
 export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormProps) {
   const router = useRouter();
   const [customerId, setCustomerId] = useState(initialValues?.customerId ?? "");
+  const [expenseDate, setExpenseDate] = useState(dateInputValue(initialValues?.expenseDate));
+  const [category, setCategory] = useState(initialValues?.category ?? "");
+  const [amountValue, setAmountValue] = useState(initialValues?.amount ? String(initialValues.amount) : "");
+  const [description, setDescription] = useState(initialValues?.description ?? "");
+  const [supplierName, setSupplierName] = useState(initialValues?.supplierName ?? "");
+  const [supplierNit, setSupplierNit] = useState(initialValues?.supplierNit ?? "");
+  const [invoiceNumber, setInvoiceNumber] = useState(initialValues?.invoiceNumber ?? "");
+  const [paymentMethod, setPaymentMethod] = useState(initialValues?.paymentMethod ?? "");
+  const [extractionConfidence, setExtractionConfidence] = useState<string>(
+    initialValues?.extractionConfidence ? String(initialValues.extractionConfidence) : "",
+  );
+  const [extractionModel, setExtractionModel] = useState(initialValues?.extractionModel ?? "");
+  const [extracting, setExtracting] = useState(false);
+  const [extractionMessage, setExtractionMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const isEditing = Boolean(initialValues);
@@ -120,6 +163,14 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
               description: String(formData.get("description")).trim(),
               customerId: optionalStringOrNull(formData.get("customerId")),
               visitId: optionalStringOrNull(formData.get("visitId")),
+              supplierName: optionalStringOrNull(formData.get("supplierName")),
+              supplierNit: optionalStringOrNull(formData.get("supplierNit")),
+              invoiceNumber: optionalStringOrNull(formData.get("invoiceNumber")),
+              paymentMethod: optionalStringOrNull(formData.get("paymentMethod")),
+              extractionConfidence: optionalString(formData.get("extractionConfidence"))
+                ? Number(formData.get("extractionConfidence"))
+                : undefined,
+              extractionModel: optionalStringOrNull(formData.get("extractionModel")),
             }),
           })
         : await apiFetchClient("/commercial-expenses", {
@@ -143,18 +194,103 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
     }
   }
 
+  async function handleExtractSupport() {
+    const fileInput = document.querySelector<HTMLInputElement>('input[name="support"]');
+    const file = fileInput?.files?.[0];
+
+    if (!file) {
+      setExtractionMessage("Selecciona una factura para leerla con IA.");
+      return;
+    }
+
+    setExtracting(true);
+    setExtractionMessage(null);
+
+    const formData = new FormData();
+    formData.set("support", file);
+
+    try {
+      const response = await apiFetchClient("/commercial-expenses/extract-support", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        setExtractionMessage("No se pudo leer la factura. Puedes llenar el gasto manualmente.");
+        return;
+      }
+
+      const result = (await response.json()) as ExpenseExtractionResult;
+      const fields = result.fields;
+
+      if (fields.expenseDate?.value) setExpenseDate(fields.expenseDate.value.slice(0, 10));
+      if (fields.category?.value) setCategory(fields.category.value);
+      if (fields.amount?.value) setAmountValue(String(Math.round(Number(fields.amount.value))));
+      if (fields.description?.value) setDescription(fields.description.value);
+      if (fields.supplierName?.value) setSupplierName(fields.supplierName.value);
+      if (fields.supplierNit?.value) setSupplierNit(fields.supplierNit.value);
+      if (fields.invoiceNumber?.value) setInvoiceNumber(fields.invoiceNumber.value);
+      if (fields.paymentMethod?.value) setPaymentMethod(fields.paymentMethod.value);
+
+      setExtractionConfidence(String(result.confidence));
+      setExtractionModel(result.model);
+      setExtractionMessage(
+        result.status === "completed"
+          ? "Factura leida. Revisa los campos antes de guardar."
+          : "La factura se leyo con baja confianza. Completa o corrige los campos.",
+      );
+    } catch {
+      setExtractionMessage("No se pudo leer la factura. Puedes llenar el gasto manualmente.");
+    } finally {
+      setExtracting(false);
+    }
+  }
+
   return (
     <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
+      {!isEditing ? (
+        <div className="grid gap-2 rounded-lg border border-border p-3">
+          <div className="text-sm font-semibold text-foreground">Leer factura con IA</div>
+          <p className="text-xs text-muted-foreground">
+            Sube una factura para prellenar el gasto. Revisa los datos antes de guardar.
+          </p>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void handleExtractSupport()}
+            disabled={extracting}
+          >
+            {extracting ? "Leyendo..." : "Leer factura"}
+          </Button>
+          {extractionMessage ? <p className="text-sm text-muted-foreground">{extractionMessage}</p> : null}
+        </div>
+      ) : null}
+
+      <input type="hidden" name="extractionConfidence" value={extractionConfidence} />
+      <input type="hidden" name="extractionModel" value={extractionModel} />
+
       <div className="grid gap-1">
         <Label>Fecha *</Label>
-        <Input name="expenseDate" type="date" required defaultValue={dateInputValue(initialValues?.expenseDate)} />
+        <Input
+          name="expenseDate"
+          type="date"
+          required
+          value={expenseDate}
+          onChange={(event) => setExpenseDate(event.target.value)}
+        />
       </div>
 
       <div className="grid gap-1">
         <Label>Categoria *</Label>
-        <select name="category" required className={selectClasses} defaultValue={initialValues?.category ?? ""}>
+        <select
+          name="category"
+          required
+          className={selectClasses}
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+        >
           <option value="">Seleccionar categoria</option>
           {categories.map((category) => (
             <option key={category.value} value={category.value}>
@@ -172,7 +308,36 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
           min="1"
           step="1"
           required
-          defaultValue={initialValues?.amount ? String(initialValues.amount) : ""}
+          value={amountValue}
+          onChange={(event) => setAmountValue(event.target.value)}
+        />
+      </div>
+
+      <div className="grid gap-1">
+        <Label>Proveedor</Label>
+        <Input name="supplierName" value={supplierName} onChange={(event) => setSupplierName(event.target.value)} />
+      </div>
+
+      <div className="grid gap-1">
+        <Label>NIT</Label>
+        <Input name="supplierNit" value={supplierNit} onChange={(event) => setSupplierNit(event.target.value)} />
+      </div>
+
+      <div className="grid gap-1">
+        <Label>Numero de factura</Label>
+        <Input
+          name="invoiceNumber"
+          value={invoiceNumber}
+          onChange={(event) => setInvoiceNumber(event.target.value)}
+        />
+      </div>
+
+      <div className="grid gap-1">
+        <Label>Medio de pago</Label>
+        <Input
+          name="paymentMethod"
+          value={paymentMethod}
+          onChange={(event) => setPaymentMethod(event.target.value)}
         />
       </div>
 
@@ -208,7 +373,7 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
 
       <div className="grid gap-1">
         <Label>Descripcion *</Label>
-        <Textarea name="description" rows={4} required defaultValue={initialValues?.description ?? ""} />
+        <Textarea name="description" rows={4} required value={description} onChange={(event) => setDescription(event.target.value)} />
       </div>
 
       {!isEditing ? (
