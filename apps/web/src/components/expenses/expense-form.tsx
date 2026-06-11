@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,6 +112,7 @@ function getErrorMessage(data: unknown, fallback: string) {
 
 export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormProps) {
   const router = useRouter();
+  const supportInputRef = useRef<HTMLInputElement>(null);
   const [customerId, setCustomerId] = useState(initialValues?.customerId ?? "");
   const [expenseDate, setExpenseDate] = useState(dateInputValue(initialValues?.expenseDate));
   const [category, setCategory] = useState(initialValues?.category ?? "");
@@ -195,8 +196,7 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
   }
 
   async function handleExtractSupport() {
-    const fileInput = document.querySelector<HTMLInputElement>('input[name="support"]');
-    const file = fileInput?.files?.[0];
+    const file = supportInputRef.current?.files?.[0];
 
     if (!file) {
       setExtractionMessage("Selecciona una factura para leerla con IA.");
@@ -205,6 +205,16 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
 
     setExtracting(true);
     setExtractionMessage(null);
+    setExpenseDate(dateInputValue());
+    setCategory("");
+    setAmountValue("");
+    setDescription("");
+    setSupplierName("");
+    setSupplierNit("");
+    setInvoiceNumber("");
+    setPaymentMethod("");
+    setExtractionConfidence("");
+    setExtractionModel("");
 
     const formData = new FormData();
     formData.set("support", file);
@@ -379,7 +389,13 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
       {!isEditing ? (
         <div className="grid gap-1">
           <Label>Soporte *</Label>
-          <Input name="support" type="file" accept="image/jpeg,image/png,image/webp,application/pdf" required />
+          <Input
+            ref={supportInputRef}
+            name="support"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,application/pdf"
+            required
+          />
         </div>
       ) : null}
 
