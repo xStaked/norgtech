@@ -21,6 +21,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { EXPENSE_SUPPORT_MAX_BYTES } from "./commercial-expense-constants";
+import { CommercialExpenseExtractionService } from "./commercial-expense-extraction.service";
 import { CommercialExpensesService } from "./commercial-expenses.service";
 import { CreateCommercialExpenseDto } from "./dto/create-commercial-expense.dto";
 import { ListCommercialExpensesDto } from "./dto/list-commercial-expenses.dto";
@@ -50,6 +51,7 @@ function sanitizeDownloadFileName(fileName: string): string {
 export class CommercialExpensesController {
   constructor(
     private readonly commercialExpensesService: CommercialExpensesService,
+    private readonly expenseExtractionService: CommercialExpenseExtractionService,
   ) {}
 
   @Roles(...expenseRoles)
@@ -114,6 +116,18 @@ export class CommercialExpensesController {
       `attachment; filename="gastos.csv"`,
     );
     response.send(csv);
+  }
+
+  @Roles(...expenseRoles)
+  @Post("extract-support")
+  @UseInterceptors(
+    FileInterceptor("support", {
+      storage: memoryStorage(),
+      limits: { fileSize: EXPENSE_SUPPORT_MAX_BYTES },
+    }),
+  )
+  extractSupport(@UploadedFile() file?: Express.Multer.File) {
+    return this.expenseExtractionService.extract(file);
   }
 
   @Roles(...expenseRoles)

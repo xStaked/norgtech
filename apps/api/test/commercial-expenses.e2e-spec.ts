@@ -1,4 +1,4 @@
-import { INestApplication } from "@nestjs/common";
+import { BadRequestException, INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import {
   CommercialExpenseCategory,
@@ -9,6 +9,7 @@ import {
 import { Readable } from "node:stream";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import { CommercialExpenseExtractionService } from "../src/modules/commercial-expenses/commercial-expense-extraction.service";
 import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 
@@ -319,6 +320,38 @@ describe("CommercialExpenses", () => {
         getObjectStream: async () => Readable.from(Buffer.from("support")),
         deleteObject: async () => undefined,
       })
+      .overrideProvider(CommercialExpenseExtractionService)
+      .useValue({
+        extract: async (file?: Express.Multer.File) => {
+          if (!file) {
+            throw new BadRequestException("Expense support file is required");
+          }
+
+          return {
+            status: "completed",
+            model: "gpt-4.1-mini",
+            confidence: 0.91,
+            fields: {
+              expenseDate: { value: "2026-05-01", confidence: 0.93 },
+              amount: { value: 25000, confidence: 0.94 },
+              currency: { value: "COP", confidence: 0.98 },
+              category: {
+                value: CommercialExpenseCategory.alimentacion,
+                confidence: 0.87,
+              },
+              description: {
+                value: "Almuerzo proveedor Restaurante La 80",
+                confidence: 0.76,
+              },
+              supplierName: { value: "Restaurante La 80", confidence: 0.9 },
+              supplierNit: { value: "900123456-7", confidence: 0.82 },
+              invoiceNumber: { value: "FE-1001", confidence: 0.8 },
+              paymentMethod: { value: "tarjeta", confidence: 0.64 },
+            },
+            warnings: [],
+          };
+        },
+      })
       .compile();
 
     app = moduleRef.createNestApplication();
@@ -429,6 +462,35 @@ describe("CommercialExpenses", () => {
       sizeBytes: 5,
     });
     expect(uploadExpenseSupportCalls[0].body).toEqual(Buffer.from("image"));
+  });
+
+  it("POST /commercial-expenses/extract-support returns extracted invoice fields", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/commercial-expenses/extract-support")
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .attach("support", Buffer.from("image"), {
+        filename: "factura.png",
+        contentType: "image/png",
+      })
+      .expect(201);
+
+    expect(response.body).toMatchObject({
+      status: "completed",
+      model: "gpt-4.1-mini",
+      confidence: 0.91,
+      fields: {
+        amount: { value: 25000, confidence: 0.94 },
+        supplierName: { value: "Restaurante La 80", confidence: 0.9 },
+      },
+      warnings: [],
+    });
+  });
+
+  it("POST /commercial-expenses/extract-support rejects missing support", async () => {
+    await request(globalThis.__APP__)
+      .post("/commercial-expenses/extract-support")
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .expect(400);
   });
 
   it("does not review extraction on create when only model whitespace is provided", async () => {
