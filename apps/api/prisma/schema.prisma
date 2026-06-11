@@ -688,6 +688,13 @@ model CommercialExpense {
   amount            Decimal                    @db.Decimal(14, 2)
   currency          String                     @default("COP")
   description       String
+  supplierName         String?
+  supplierNit          String?
+  invoiceNumber        String?
+  paymentMethod        String?
+  extractionConfidence Decimal?                 @db.Decimal(5, 4)
+  extractionModel      String?
+  extractionReviewedAt DateTime?
   status            CommercialExpenseStatus    @default(pendiente)
   reviewNote        String?
   reviewedAt        DateTime?

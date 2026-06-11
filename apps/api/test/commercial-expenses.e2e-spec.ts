@@ -110,8 +110,14 @@ describe("CommercialExpenses", () => {
       supports: undefined,
     }),
     amount: new Prisma.Decimal(expense.amount),
+    extractionConfidence: expense.extractionConfidence
+      ? new Prisma.Decimal(expense.extractionConfidence)
+      : null,
     expenseDate: new Date(expense.expenseDate),
     reviewedAt: expense.reviewedAt ? new Date(expense.reviewedAt) : null,
+    extractionReviewedAt: expense.extractionReviewedAt
+      ? new Date(expense.extractionReviewedAt)
+      : null,
     createdAt: new Date(expense.createdAt),
     updatedAt: new Date(expense.updatedAt),
     ...(shouldInclude(include, "submittedBy")
@@ -191,6 +197,13 @@ describe("CommercialExpenses", () => {
         amount: data.amount,
         currency: "COP",
         description: data.description,
+        supplierName: data.supplierName ?? null,
+        supplierNit: data.supplierNit ?? null,
+        invoiceNumber: data.invoiceNumber ?? null,
+        paymentMethod: data.paymentMethod ?? null,
+        extractionConfidence: data.extractionConfidence ?? null,
+        extractionModel: data.extractionModel ?? null,
+        extractionReviewedAt: data.extractionReviewedAt ?? null,
         status: CommercialExpenseStatus.pendiente,
         reviewNote: null,
         reviewedAt: null,
@@ -359,6 +372,12 @@ describe("CommercialExpenses", () => {
       .field("category", CommercialExpenseCategory.alimentacion)
       .field("amount", "25000")
       .field("description", "Almuerzo con cliente")
+      .field("supplierName", "Restaurante La 80")
+      .field("supplierNit", "900123456-7")
+      .field("invoiceNumber", "FE-1001")
+      .field("paymentMethod", "tarjeta")
+      .field("extractionConfidence", "0.91")
+      .field("extractionModel", "gpt-4.1-mini")
       .attach("support", Buffer.from("image"), {
         filename: "support.png",
         contentType: "image/png",
@@ -387,7 +406,14 @@ describe("CommercialExpenses", () => {
       submittedByUserId: "comercial-user-id",
       category: CommercialExpenseCategory.alimentacion,
       description: "Almuerzo con cliente",
+      supplierName: "Restaurante La 80",
+      supplierNit: "900123456-7",
+      invoiceNumber: "FE-1001",
+      paymentMethod: "tarjeta",
+      extractionModel: "gpt-4.1-mini",
     });
+    expect(Number(response.body.extractionConfidence)).toBeCloseTo(0.91);
+    expect(response.body.extractionReviewedAt).toBeTruthy();
     expect(response.body.supports).toHaveLength(1);
     expect(response.body.supports[0]).toMatchObject({
       bucket: "test-bucket",

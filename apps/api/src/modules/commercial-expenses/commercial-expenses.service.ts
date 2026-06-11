@@ -88,6 +88,21 @@ export class CommercialExpensesService {
             category: dto.category,
             amount: new Prisma.Decimal(dto.amount).toDecimalPlaces(2),
             description: dto.description,
+            supplierName: dto.supplierName?.trim() || null,
+            supplierNit: dto.supplierNit?.trim() || null,
+            invoiceNumber: dto.invoiceNumber?.trim() || null,
+            paymentMethod: dto.paymentMethod?.trim() || null,
+            extractionConfidence:
+              dto.extractionConfidence === undefined
+                ? null
+                : new Prisma.Decimal(dto.extractionConfidence).toDecimalPlaces(
+                    4,
+                  ),
+            extractionModel: dto.extractionModel?.trim() || null,
+            extractionReviewedAt:
+              dto.extractionConfidence === undefined && !dto.extractionModel
+                ? null
+                : new Date(),
             submittedByUserId: user.id,
             customerId: dto.customerId ?? null,
             visitId: dto.visitId ?? null,
@@ -196,6 +211,27 @@ export class CommercialExpensesService {
       }
       if (dto.description !== undefined) {
         data.description = dto.description;
+      }
+      if (dto.supplierName !== undefined) {
+        data.supplierName = dto.supplierName?.trim() || null;
+      }
+      if (dto.supplierNit !== undefined) {
+        data.supplierNit = dto.supplierNit?.trim() || null;
+      }
+      if (dto.invoiceNumber !== undefined) {
+        data.invoiceNumber = dto.invoiceNumber?.trim() || null;
+      }
+      if (dto.paymentMethod !== undefined) {
+        data.paymentMethod = dto.paymentMethod?.trim() || null;
+      }
+      if (dto.extractionConfidence !== undefined) {
+        data.extractionConfidence = new Prisma.Decimal(
+          dto.extractionConfidence,
+        ).toDecimalPlaces(4);
+        data.extractionReviewedAt = new Date();
+      }
+      if (dto.extractionModel !== undefined) {
+        data.extractionModel = dto.extractionModel?.trim() || null;
       }
       if (dto.customerId !== undefined) {
         data.customerId = dto.customerId ?? null;
