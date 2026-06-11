@@ -46,3 +46,20 @@ test("facturacion can see export actions", async ({ page, request }) => {
   await expect(page.getByRole("button", { name: "XLSX" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Nuevo gasto" })).toHaveCount(0);
 });
+
+test("new expense form exposes invoice OCR controls and manual fields", async ({
+  page,
+  request,
+}) => {
+  await waitForBackend(request);
+  await login(page, "comercial@norgtech.com", "Comercial123!");
+
+  await page.goto("/expenses/new");
+
+  await expect(page.getByText("Leer factura con IA")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Leer factura" })).toBeVisible();
+  await expect(page.getByLabel("Proveedor")).toBeVisible();
+  await expect(page.getByLabel("NIT")).toBeVisible();
+  await expect(page.getByLabel("Numero de factura")).toBeVisible();
+  await expect(page.getByLabel("Medio de pago")).toBeVisible();
+});
