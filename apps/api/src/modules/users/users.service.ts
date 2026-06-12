@@ -16,6 +16,7 @@ const publicUserSelect = {
   id: true,
   name: true,
   email: true,
+  phone: true,
   role: true,
   active: true,
   createdAt: true,
@@ -45,6 +46,7 @@ export class UsersService {
         data: {
           name: dto.name.trim(),
           email,
+          phone: dto.phone.trim(),
           passwordHash,
           role: dto.role,
           active: true,
@@ -90,6 +92,7 @@ export class UsersService {
       where: { id },
       data: {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone.trim() } : {}),
         ...(dto.role !== undefined ? { role: dto.role } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
       },

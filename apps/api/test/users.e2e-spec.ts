@@ -9,6 +9,7 @@ type MockUser = {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   passwordHash: string;
   role: UserRole;
   active: boolean;
@@ -21,6 +22,7 @@ const publicUserSelect = {
   id: true,
   name: true,
   email: true,
+  phone: true,
   role: true,
   active: true,
   createdAt: true,
@@ -56,7 +58,7 @@ describe("Users", () => {
   let lastFindManyArgs: { orderBy?: { name?: "asc" | "desc" }; select?: MockUserSelect } | undefined;
   let lastCreateArgs:
     | {
-        data: { name: string; email: string; passwordHash: string; role: UserRole; active: boolean };
+        data: { name: string; email: string; phone: string; passwordHash: string; role: UserRole; active: boolean };
         select?: MockUserSelect;
       }
     | undefined;
@@ -111,7 +113,7 @@ describe("Users", () => {
         data,
         select,
       }: {
-        data: { name: string; email: string; passwordHash: string; role: UserRole; active: boolean };
+        data: { name: string; email: string; phone: string; passwordHash: string; role: UserRole; active: boolean };
         select?: MockUserSelect;
       }) => {
         lastCreateArgs = { data, select };
@@ -127,6 +129,7 @@ describe("Users", () => {
           id: `user-${users.size + 1}`,
           name: data.name,
           email: data.email,
+          phone: data.phone,
           passwordHash: data.passwordHash,
           role: data.role,
           active: data.active,
@@ -166,6 +169,7 @@ describe("Users", () => {
       id: "commercial-id",
       name: "Comercial",
       email: "comercial@norgtech.com",
+      phone: "+573001000003",
       passwordHash,
       role: UserRole.comercial,
       active: true,
@@ -176,6 +180,7 @@ describe("Users", () => {
       id: "admin-id",
       name: "Administrador",
       email: "admin@norgtech.com",
+      phone: "+573001000001",
       passwordHash,
       role: UserRole.administrador,
       active: true,
@@ -218,12 +223,17 @@ describe("Users", () => {
       .expect(200);
 
     expect(response.body).toHaveLength(2);
-    expect(response.body[0]).toMatchObject({ email: "admin@norgtech.com", role: "administrador" });
+    expect(response.body[0]).toMatchObject({
+      email: "admin@norgtech.com",
+      phone: "+573001000001",
+      role: "administrador",
+    });
     expect(response.body.map((user: { name: string }) => user.name)).toEqual(["Administrador", "Comercial"]);
     expect(lastFindManyArgs?.orderBy).toEqual({ name: "asc" });
     expect(lastFindManyArgs?.select).toEqual(publicUserSelect);
     for (const user of response.body) {
       expect(user).not.toHaveProperty("passwordHash");
+      expect(typeof user.phone).toBe("string");
     }
     expect(JSON.stringify(response.body)).not.toContain("passwordHash");
   });
@@ -243,12 +253,18 @@ describe("Users", () => {
     const createResponse = await request(app.getHttpServer())
       .post("/users")
       .set("Authorization", `Bearer ${token}`)
-      .send({ name: "Diana Facturacion", email: "DIANA@NORGTECH.COM ", role: "facturacion" })
+      .send({
+        name: "Diana Facturacion",
+        email: "DIANA@NORGTECH.COM ",
+        phone: " +573001000007 ",
+        role: "facturacion",
+      })
       .expect(201);
 
     expect(createResponse.body.user).toMatchObject({
       name: "Diana Facturacion",
       email: "diana@norgtech.com",
+      phone: "+573001000007",
       role: "facturacion",
       active: true,
     });
@@ -256,11 +272,27 @@ describe("Users", () => {
     expect(createResponse.body.temporaryPassword).toEqual(expect.any(String));
     expect(createResponse.body.temporaryPassword.length).toBeGreaterThanOrEqual(12);
     expect(lastCreateArgs?.select).toEqual(publicUserSelect);
+    expect(lastCreateArgs?.data.phone).toBe("+573001000007");
 
     await request(app.getHttpServer())
       .post("/auth/login")
       .send({ email: "diana@norgtech.com", password: createResponse.body.temporaryPassword })
       .expect(200);
+  });
+
+  it("rejects invalid phone when creating a user", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .post("/users")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        name: "Diana Facturacion",
+        email: "diana@norgtech.com",
+        phone: "3001000007",
+        role: "facturacion",
+      })
+      .expect(400);
   });
 
   it("rejects duplicate emails", async () => {
@@ -269,7 +301,7 @@ describe("Users", () => {
     await request(app.getHttpServer())
       .post("/users")
       .set("Authorization", `Bearer ${token}`)
-      .send({ name: "Admin Copy", email: "ADMIN@NORGTECH.COM", role: "administrador" })
+      .send({ name: "Admin Copy", email: "ADMIN@NORGTECH.COM", phone: "+573001000009", role: "administrador" })
       .expect(409);
   });
 
@@ -279,12 +311,13 @@ describe("Users", () => {
     const response = await request(app.getHttpServer())
       .patch("/users/commercial-id")
       .set("Authorization", `Bearer ${token}`)
-      .send({ name: "Comercial Senior", role: "director_comercial", active: false })
+      .send({ name: "Comercial Senior", phone: "+573001000008", role: "director_comercial", active: false })
       .expect(200);
 
     expect(response.body).toMatchObject({
       id: "commercial-id",
       name: "Comercial Senior",
+      phone: "+573001000008",
       role: "director_comercial",
       active: false,
     });
@@ -294,6 +327,17 @@ describe("Users", () => {
       select: { id: true, role: true },
     });
     expect(lastUpdateArgs?.select).toEqual(publicUserSelect);
+    expect(lastUpdateArgs?.data.phone).toBe("+573001000008");
+  });
+
+  it("rejects invalid phone when updating a user", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ phone: "3001000008" })
+      .expect(400);
   });
 
   it("returns 404 when updating a nonexistent user", async () => {
