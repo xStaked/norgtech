@@ -1,6 +1,6 @@
-import { ConflictException, INestApplication, NotFoundException } from "@nestjs/common";
+import { INestApplication, NotFoundException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -34,7 +34,11 @@ describe("Users", () => {
         Array.from(users.values()).sort((a, b) => a.name.localeCompare(b.name)),
       create: async ({ data }: { data: { name: string; email: string; passwordHash: string; role: UserRole; active: boolean } }) => {
         if (Array.from(users.values()).some((u) => u.email === data.email)) {
-          throw new ConflictException("Email already exists");
+          throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed on the fields: (`email`)", {
+            code: "P2002",
+            clientVersion: "test",
+            meta: { target: ["email"] },
+          });
         }
         const now = new Date("2026-06-11T12:00:00.000Z");
         const created: MockUser = {
@@ -123,6 +127,7 @@ describe("Users", () => {
     for (const user of response.body) {
       expect(user).not.toHaveProperty("passwordHash");
     }
+    expect(JSON.stringify(response.body)).not.toContain("passwordHash");
   });
 
   it("rejects non-admin access", async () => {
@@ -195,6 +200,8 @@ describe("Users", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ role: "comercial" })
       .expect(400);
+
+    expect(users.get("admin-id")?.role).toBe(UserRole.administrador);
   });
 
   it("does not allow an admin to deactivate themself", async () => {
@@ -205,5 +212,7 @@ describe("Users", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({ active: false })
       .expect(400);
+
+    expect(users.get("admin-id")?.active).toBe(true);
   });
 });
