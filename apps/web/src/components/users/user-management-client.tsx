@@ -17,16 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-export interface ManagedUser {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  active: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
+import { type ManagedUser } from "@/components/users/types";
 
 interface UserManagementClientProps {
   users: ManagedUser[];
@@ -70,7 +61,7 @@ export function UserManagementClient({
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [pendingUserIds, setPendingUserIds] = useState<string[]>([]);
+  const [pendingUserIds, setPendingUserIds] = useState<Record<string, true>>({});
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
 
   useEffect(() => {
@@ -94,15 +85,28 @@ export function UserManagementClient({
   function markPending(userId: string, pending: boolean) {
     setPendingUserIds((current) => {
       if (pending) {
-        return current.includes(userId) ? current : [...current, userId];
+        if (current[userId]) {
+          return current;
+        }
+
+        return {
+          ...current,
+          [userId]: true,
+        };
       }
 
-      return current.filter((id) => id !== userId);
+      if (!current[userId]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[userId];
+      return next;
     });
   }
 
   function isPending(userId: string) {
-    return pendingUserIds.includes(userId);
+    return !!pendingUserIds[userId];
   }
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
@@ -152,6 +156,10 @@ export function UserManagementClient({
   }
 
   async function patchUser(userId: string, body: Partial<Pick<ManagedUser, "name" | "role" | "active">>) {
+    if (isPending(userId)) {
+      return null;
+    }
+
     setError(null);
     markPending(userId, true);
 
@@ -172,6 +180,7 @@ export function UserManagementClient({
         ...current,
         [userId]: updatedUser.name,
       }));
+      router.refresh();
       return updatedUser;
     } catch {
       setError("Error de conexion");
@@ -182,6 +191,10 @@ export function UserManagementClient({
   }
 
   async function handleNameBlur(user: ManagedUser) {
+    if (isPending(user.id)) {
+      return;
+    }
+
     const draftValue = draftNames[user.id] ?? user.name;
     const trimmedName = draftValue.trim();
 
@@ -213,37 +226,19 @@ export function UserManagementClient({
   }
 
   async function handleRoleChange(user: ManagedUser, nextRole: UserRole) {
-    if (nextRole === user.role) {
+    if (isPending(user.id) || nextRole === user.role) {
       return;
     }
 
-    const previousRole = user.role;
-    setUsers((current) => current.map((item) => (item.id === user.id ? { ...item, role: nextRole } : item)));
-    const updatedUser = await patchUser(user.id, { role: nextRole });
-
-    if (!updatedUser) {
-      setUsers((current) =>
-        current.map((item) => (item.id === user.id ? { ...item, role: previousRole } : item)),
-      );
-    }
+    await patchUser(user.id, { role: nextRole });
   }
 
   async function handleActiveToggle(user: ManagedUser, nextActive: boolean) {
-    if (nextActive === user.active) {
+    if (isPending(user.id) || nextActive === user.active) {
       return;
     }
 
-    const previousActive = user.active;
-    setUsers((current) =>
-      current.map((item) => (item.id === user.id ? { ...item, active: nextActive } : item)),
-    );
-    const updatedUser = await patchUser(user.id, { active: nextActive });
-
-    if (!updatedUser) {
-      setUsers((current) =>
-        current.map((item) => (item.id === user.id ? { ...item, active: previousActive } : item)),
-      );
-    }
+    await patchUser(user.id, { active: nextActive });
   }
 
   return (
@@ -260,8 +255,20 @@ export function UserManagementClient({
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
             {temporaryPassword ? (
               <div className="rounded-lg border border-border bg-muted/40 p-3">
-                <p className="text-sm font-medium text-foreground">Contrasena temporal</p>
-                <p className="mt-1 font-mono text-sm text-foreground">{temporaryPassword}</p>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Contrasena temporal</p>
+                    <p className="mt-1 font-mono text-sm text-foreground">{temporaryPassword}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTemporaryPassword(null)}
+                  >
+                    Listo
+                  </Button>
+                </div>
               </div>
             ) : null}
 
@@ -342,6 +349,7 @@ export function UserManagementClient({
                 {sortedUsers.map((user) => {
                   const lockedCurrentUser = user.id === currentUserId;
                   const pending = isPending(user.id);
+                  const disableRowControls = lockedCurrentUser || pending;
 
                   return (
                     <TableRow key={user.id}>
@@ -359,9 +367,9 @@ export function UserManagementClient({
                             disabled={pending}
                             aria-label={`Nombre de ${user.email}`}
                           />
-                          {lockedCurrentUser ? (
+                          {pending ? (
                             <p className="text-xs text-muted-foreground">
-                              No puedes quitar tu propio acceso de administrador desde aqui.
+                              Guardando cambios...
                             </p>
                           ) : null}
                         </div>
@@ -379,7 +387,7 @@ export function UserManagementClient({
                           className={selectClasses}
                           value={user.role}
                           onChange={(event) => void handleRoleChange(user, event.target.value as UserRole)}
-                          disabled={lockedCurrentUser || pending}
+                          disabled={disableRowControls}
                           aria-label={`Rol de ${user.email}`}
                         >
                           {USER_ROLES.map((roleOption) => (
@@ -388,6 +396,11 @@ export function UserManagementClient({
                             </option>
                           ))}
                         </select>
+                        {lockedCurrentUser ? (
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            No puedes quitar tu propio acceso de administrador desde aqui.
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell className="align-top">
                         <div className="grid gap-2">
@@ -396,11 +409,16 @@ export function UserManagementClient({
                               type="checkbox"
                               checked={user.active}
                               onChange={(event) => void handleActiveToggle(user, event.target.checked)}
-                              disabled={lockedCurrentUser || pending}
+                              disabled={disableRowControls}
                               className="h-4 w-4 rounded border-input"
                             />
                             <span>{user.active ? "Activo" : "Inactivo"}</span>
                           </label>
+                          {lockedCurrentUser ? (
+                            <p className="text-xs text-muted-foreground">
+                              No puedes quitar tu propio acceso de administrador desde aqui.
+                            </p>
+                          ) : null}
                           <Badge variant={user.active ? "secondary" : "outline"}>
                             {user.active ? "Activo" : "Inactivo"}
                           </Badge>
