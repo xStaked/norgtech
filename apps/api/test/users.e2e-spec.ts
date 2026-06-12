@@ -340,6 +340,19 @@ describe("Users", () => {
       .expect(400);
   });
 
+  it("rejects null phone when updating a user", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ phone: null })
+      .expect(400);
+
+    expect(lastUpdateArgs).toBeUndefined();
+    expect(users.get("commercial-id")?.phone).toBe("+573001000003");
+  });
+
   it("returns 404 when updating a nonexistent user", async () => {
     const token = await login("admin@norgtech.com");
 

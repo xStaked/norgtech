@@ -1,6 +1,6 @@
 import { UserRole } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsEnum, IsOptional, IsString, Matches } from "class-validator";
+import { IsBoolean, IsEnum, IsOptional, IsString, Matches, ValidateIf } from "class-validator";
 
 const internationalPhonePattern = /^\+[1-9]\d{9,14}$/;
 
@@ -11,7 +11,7 @@ export class UpdateUserDto {
   name?: string;
 
   @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
-  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined)
   @IsString()
   @Matches(internationalPhonePattern)
   phone?: string;
