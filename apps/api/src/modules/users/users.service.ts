@@ -62,7 +62,7 @@ export class UsersService {
       throw new NotFoundException("User not found");
     }
 
-    if (currentUser.id === id && dto.role && dto.role !== existing.role) {
+    if (currentUser.id === id && dto.role !== undefined) {
       throw new BadRequestException("You cannot change your own role");
     }
 

@@ -204,6 +204,18 @@ describe("Users", () => {
     expect(users.get("admin-id")?.role).toBe(UserRole.administrador);
   });
 
+  it("does not allow an admin to patch their own role even if unchanged", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/admin-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ role: "administrador" })
+      .expect(400);
+
+    expect(users.get("admin-id")?.role).toBe(UserRole.administrador);
+  });
+
   it("does not allow an admin to deactivate themself", async () => {
     const token = await login("admin@norgtech.com");
 
