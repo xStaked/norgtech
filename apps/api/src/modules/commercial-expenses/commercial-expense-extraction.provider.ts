@@ -85,11 +85,21 @@ export class OpenAIExpenseExtractionProvider
                 "No inventes datos. Si no puedes leer un campo, devuelve null para ese campo.",
             },
             {
-              type: "input_file",
-              filename: input.fileName,
-              file_data: `data:${input.contentType};base64,${input.buffer.toString(
-                "base64",
-              )}`,
+              ...(this.isImageMimeType(input.contentType)
+                ? {
+                    type: "input_image",
+                    image_url: `data:${input.contentType};base64,${input.buffer.toString(
+                      "base64",
+                    )}`,
+                    detail: "high",
+                  }
+                : {
+                    type: "input_file",
+                    filename: input.fileName,
+                    file_data: `data:${input.contentType};base64,${input.buffer.toString(
+                      "base64",
+                    )}`,
+                  }),
             },
           ],
         },
@@ -185,6 +195,14 @@ export class OpenAIExpenseExtractionProvider
   private clampConfidence(value: number | null | undefined): number {
     if (typeof value !== "number" || !Number.isFinite(value)) return 0;
     return Math.min(1, Math.max(0, value));
+  }
+
+  private isImageMimeType(mimeType: string): boolean {
+    return (
+      mimeType === "image/jpeg" ||
+      mimeType === "image/png" ||
+      mimeType === "image/webp"
+    );
   }
 
   private responseSchema(): Record<string, unknown> {
