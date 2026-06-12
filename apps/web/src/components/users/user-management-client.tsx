@@ -32,6 +32,8 @@ interface CreateUserResponse {
 const selectClasses =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
 const e164PhonePattern = /^\+[1-9]\d{9,14}$/;
+const phoneValidationMessage =
+  "El telefono debe tener formato internacional, por ejemplo +573001234567";
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -62,6 +64,7 @@ export function UserManagementClient({
   const [role, setRole] = useState<UserRole>("comercial");
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
   const [draftPhones, setDraftPhones] = useState<Record<string, string>>({});
+  const [phoneErrors, setPhoneErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(true);
@@ -134,6 +137,18 @@ export function UserManagementClient({
 
   function isPending(userId: string) {
     return !!pendingUserIds[userId];
+  }
+
+  function clearPhoneError(userId: string) {
+    setPhoneErrors((current) => {
+      if (!current[userId]) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[userId];
+      return next;
+    });
   }
 
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
@@ -275,7 +290,10 @@ export function UserManagementClient({
     const trimmedPhone = draftValue.trim();
 
     if (!trimmedPhone) {
-      setError("El telefono debe tener formato internacional, por ejemplo +573001234567");
+      setPhoneErrors((current) => ({
+        ...current,
+        [user.id]: phoneValidationMessage,
+      }));
       setDraftPhones((current) => ({
         ...current,
         [user.id]: user.phone ?? "",
@@ -284,6 +302,7 @@ export function UserManagementClient({
     }
 
     if (trimmedPhone === (user.phone ?? "")) {
+      clearPhoneError(user.id);
       if (draftValue !== (user.phone ?? "")) {
         setDraftPhones((current) => ({
           ...current,
@@ -294,7 +313,10 @@ export function UserManagementClient({
     }
 
     if (!e164PhonePattern.test(trimmedPhone)) {
-      setError("El telefono debe tener formato internacional, por ejemplo +573001234567");
+      setPhoneErrors((current) => ({
+        ...current,
+        [user.id]: phoneValidationMessage,
+      }));
       setDraftPhones((current) => ({
         ...current,
         [user.id]: user.phone ?? "",
@@ -303,6 +325,9 @@ export function UserManagementClient({
     }
 
     const updatedUser = await patchUser(user.id, { phone: trimmedPhone });
+    if (updatedUser) {
+      clearPhoneError(user.id);
+    }
     if (!updatedUser) {
       setDraftPhones((current) => ({
         ...current,
@@ -502,22 +527,28 @@ export function UserManagementClient({
                         </div>
                       </TableCell>
                       <TableCell className="align-top">
-                        <Input
-                          type="tel"
-                          value={draftPhones[user.id] ?? user.phone ?? ""}
-                          onChange={(event) =>
-                            setDraftPhones((current) => ({
-                              ...current,
-                              [user.id]: event.target.value,
-                            }))
-                          }
-                          onBlur={() => void handlePhoneBlur(user)}
-                          disabled={pending}
-                          placeholder="+573001234567"
-                          pattern="^\\+[1-9]\\d{9,14}$"
-                          title="Usa formato internacional, por ejemplo +573001234567"
-                          aria-label={`Telefono de ${user.email}`}
-                        />
+                        <div className="grid gap-1">
+                          <Input
+                            type="tel"
+                            value={draftPhones[user.id] ?? user.phone ?? ""}
+                            onChange={(event) => {
+                              clearPhoneError(user.id);
+                              setDraftPhones((current) => ({
+                                ...current,
+                                [user.id]: event.target.value,
+                              }));
+                            }}
+                            onBlur={() => void handlePhoneBlur(user)}
+                            disabled={pending}
+                            placeholder="+573001234567"
+                            pattern="^\\+[1-9]\\d{9,14}$"
+                            title="Usa formato internacional, por ejemplo +573001234567"
+                            aria-label={`Telefono de ${user.email}`}
+                          />
+                          {phoneErrors[user.id] ? (
+                            <p className="text-xs text-destructive">{phoneErrors[user.id]}</p>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="align-top">
                         <select
