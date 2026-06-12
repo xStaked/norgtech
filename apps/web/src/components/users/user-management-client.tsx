@@ -77,6 +77,20 @@ export function UserManagementClient({
     );
   }, [initialUsers]);
 
+  useEffect(() => {
+    if (!temporaryPassword) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setTemporaryPassword(null);
+    }, 60_000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [temporaryPassword]);
+
   const sortedUsers = useMemo(
     () => [...users].sort((left, right) => left.name.localeCompare(right.name, "es")),
     [users],
