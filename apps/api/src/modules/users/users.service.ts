@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma, User } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { randomBytes } from "crypto";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -12,18 +12,27 @@ type BcryptModule = {
 
 const bcrypt = require("bcryptjs") as BcryptModule;
 
-type PublicUser = Omit<User, "passwordHash">;
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  active: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies Prisma.UserSelect;
+
+type PublicUser = Prisma.UserGetPayload<{ select: typeof publicUserSelect }>;
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async findAll(): Promise<PublicUser[]> {
-    const users = await this.prisma.user.findMany({
+    return this.prisma.user.findMany({
       orderBy: { name: "asc" },
+      select: publicUserSelect,
     });
-
-    return users.map((user) => this.toPublicUser(user));
   }
 
   async create(dto: CreateUserDto) {
@@ -40,10 +49,11 @@ export class UsersService {
           role: dto.role,
           active: true,
         },
+        select: publicUserSelect,
       });
 
       return {
-        user: this.toPublicUser(user),
+        user,
         temporaryPassword,
       };
     } catch (error) {
@@ -56,7 +66,13 @@ export class UsersService {
   }
 
   async update(currentUser: AuthUser, id: string, dto: UpdateUserDto): Promise<PublicUser> {
-    const existing = await this.prisma.user.findUnique({ where: { id } });
+    const existing = await this.prisma.user.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        role: true,
+      },
+    });
 
     if (!existing) {
       throw new NotFoundException("User not found");
@@ -77,9 +93,10 @@ export class UsersService {
         ...(dto.role !== undefined ? { role: dto.role } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
       },
+      select: publicUserSelect,
     });
 
-    return this.toPublicUser(user);
+    return user;
   }
 
   private normalizeEmail(email: string) {
@@ -89,12 +106,6 @@ export class UsersService {
   private generateTemporaryPassword() {
     return `Nt-${randomBytes(9).toString("base64url")}`;
   }
-
-  private toPublicUser(user: User): PublicUser {
-    const { passwordHash: _passwordHash, ...publicUser } = user;
-    return publicUser;
-  }
-
   private isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
     return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
   }

@@ -16,23 +16,105 @@ type MockUser = {
   updatedAt: Date;
 };
 
+type MockUserSelect = Partial<Record<keyof MockUser, boolean>>;
+const publicUserSelect = {
+  id: true,
+  name: true,
+  email: true,
+  role: true,
+  active: true,
+  createdAt: true,
+  updatedAt: true,
+} satisfies MockUserSelect;
+
+function applySelect<T extends MockUserSelect | undefined>(
+  user: MockUser | null,
+  select?: T,
+) {
+  if (!user) {
+    return null;
+  }
+
+  if (!select) {
+    return user;
+  }
+
+  const selectedEntries = Object.entries(select)
+    .filter(([, enabled]) => enabled)
+    .map(([key]) => [key, user[key as keyof MockUser]]);
+
+  return Object.fromEntries(selectedEntries) as Partial<MockUser>;
+}
+
 describe("Users", () => {
   let app: INestApplication;
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const users = new Map<string, MockUser>();
+  let lastFindUniqueArgs:
+    | { where: { id?: string; email?: string }; select?: MockUserSelect }
+    | undefined;
+  let lastFindManyArgs: { orderBy?: { name?: "asc" | "desc" }; select?: MockUserSelect } | undefined;
+  let lastCreateArgs:
+    | {
+        data: { name: string; email: string; passwordHash: string; role: UserRole; active: boolean };
+        select?: MockUserSelect;
+      }
+    | undefined;
+  let lastUpdateArgs:
+    | {
+        where: { id: string };
+        data: Partial<MockUser>;
+        select?: MockUserSelect;
+      }
+    | undefined;
 
   const prismaMock = {
     billingRequest: { findMany: async () => [] },
     commercialExpense: { findMany: async () => [] },
     user: {
-      findUnique: async ({ where }: { where: { id?: string; email?: string } }) => {
-        if (where.id) return users.get(where.id) ?? null;
-        if (where.email) return Array.from(users.values()).find((u) => u.email === where.email) ?? null;
-        return null;
+      findUnique: async ({
+        where,
+        select,
+      }: {
+        where: { id?: string; email?: string };
+        select?: MockUserSelect;
+      }) => {
+        lastFindUniqueArgs = { where, select };
+        const user = where.id
+          ? users.get(where.id) ?? null
+          : where.email
+            ? Array.from(users.values()).find((u) => u.email === where.email) ?? null
+            : null;
+
+        return applySelect(user, select);
       },
-      findMany: async () =>
-        Array.from(users.values()).sort((a, b) => a.name.localeCompare(b.name)),
-      create: async ({ data }: { data: { name: string; email: string; passwordHash: string; role: UserRole; active: boolean } }) => {
+      findMany: async ({
+        orderBy,
+        select,
+      }: {
+        orderBy?: { name?: "asc" | "desc" };
+        select?: MockUserSelect;
+      }) => {
+        lastFindManyArgs = { orderBy, select };
+
+        const result = Array.from(users.values());
+        if (orderBy?.name === "asc") {
+          result.sort((a, b) => a.name.localeCompare(b.name));
+        }
+        if (orderBy?.name === "desc") {
+          result.sort((a, b) => b.name.localeCompare(a.name));
+        }
+
+        return result.map((user) => applySelect(user, select));
+      },
+      create: async ({
+        data,
+        select,
+      }: {
+        data: { name: string; email: string; passwordHash: string; role: UserRole; active: boolean };
+        select?: MockUserSelect;
+      }) => {
+        lastCreateArgs = { data, select };
         if (Array.from(users.values()).some((u) => u.email === data.email)) {
           throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed on the fields: (`email`)", {
             code: "P2002",
@@ -52,37 +134,50 @@ describe("Users", () => {
           updatedAt: now,
         };
         users.set(created.id, created);
-        return created;
+        return applySelect(created, select);
       },
-      update: async ({ where, data }: { where: { id: string }; data: Partial<MockUser> }) => {
+      update: async ({
+        where,
+        data,
+        select,
+      }: {
+        where: { id: string };
+        data: Partial<MockUser>;
+        select?: MockUserSelect;
+      }) => {
+        lastUpdateArgs = { where, data, select };
         const existing = users.get(where.id);
         if (!existing) throw new NotFoundException("User not found");
         const updated = { ...existing, ...data, updatedAt: new Date("2026-06-11T13:00:00.000Z") };
         users.set(where.id, updated);
-        return updated;
+        return applySelect(updated, select);
       },
     },
   };
 
   beforeEach(() => {
     users.clear();
+    lastFindUniqueArgs = undefined;
+    lastFindManyArgs = undefined;
+    lastCreateArgs = undefined;
+    lastUpdateArgs = undefined;
     const now = new Date("2026-06-11T10:00:00.000Z");
-    users.set("admin-id", {
-      id: "admin-id",
-      name: "Administrador",
-      email: "admin@norgtech.com",
-      passwordHash,
-      role: UserRole.administrador,
-      active: true,
-      createdAt: now,
-      updatedAt: now,
-    });
     users.set("commercial-id", {
       id: "commercial-id",
       name: "Comercial",
       email: "comercial@norgtech.com",
       passwordHash,
       role: UserRole.comercial,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    users.set("admin-id", {
+      id: "admin-id",
+      name: "Administrador",
+      email: "admin@norgtech.com",
+      passwordHash,
+      role: UserRole.administrador,
       active: true,
       createdAt: now,
       updatedAt: now,
@@ -124,6 +219,9 @@ describe("Users", () => {
 
     expect(response.body).toHaveLength(2);
     expect(response.body[0]).toMatchObject({ email: "admin@norgtech.com", role: "administrador" });
+    expect(response.body.map((user: { name: string }) => user.name)).toEqual(["Administrador", "Comercial"]);
+    expect(lastFindManyArgs?.orderBy).toEqual({ name: "asc" });
+    expect(lastFindManyArgs?.select).toEqual(publicUserSelect);
     for (const user of response.body) {
       expect(user).not.toHaveProperty("passwordHash");
     }
@@ -157,6 +255,7 @@ describe("Users", () => {
     expect(createResponse.body.user).not.toHaveProperty("passwordHash");
     expect(createResponse.body.temporaryPassword).toEqual(expect.any(String));
     expect(createResponse.body.temporaryPassword.length).toBeGreaterThanOrEqual(12);
+    expect(lastCreateArgs?.select).toEqual(publicUserSelect);
 
     await request(app.getHttpServer())
       .post("/auth/login")
@@ -190,6 +289,50 @@ describe("Users", () => {
       active: false,
     });
     expect(response.body).not.toHaveProperty("passwordHash");
+    expect(lastFindUniqueArgs).toEqual({
+      where: { id: "commercial-id" },
+      select: { id: true, role: true },
+    });
+    expect(lastUpdateArgs?.select).toEqual(publicUserSelect);
+  });
+
+  it("returns 404 when updating a nonexistent user", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/missing-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ active: false })
+      .expect(404);
+
+    expect(lastFindUniqueArgs).toEqual({
+      where: { id: "missing-id" },
+      select: { id: true, role: true },
+    });
+  });
+
+  it("rejects patch payloads with email", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "new@norgtech.com" })
+      .expect(400);
+
+    expect(users.get("commercial-id")?.email).toBe("comercial@norgtech.com");
+  });
+
+  it("rejects patch payloads with passwordHash", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ passwordHash: "tampered" })
+      .expect(400);
+
+    expect(users.get("commercial-id")?.passwordHash).toBe(passwordHash);
   });
 
   it("does not allow an admin to change their own role", async () => {
