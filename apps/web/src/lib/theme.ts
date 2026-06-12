@@ -14,7 +14,7 @@ export interface NavItem {
   label: string;
   shortLabel: string;
   description: string;
-  group: "Operacion" | "Comercial" | "Catalogo";
+  group: "Operacion" | "Comercial" | "Catalogo" | "Admin";
   requiredRoles: readonly UserRole[];
 }
 
@@ -144,6 +144,14 @@ export const primaryNavItems = [
     group: "Catalogo",
     requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
   },
+  {
+    href: "/users",
+    label: "Usuarios",
+    shortLabel: "US",
+    description: "Altas, roles y estado de acceso",
+    group: "Admin",
+    requiredRoles: ["administrador"] as const,
+  },
 ] as const satisfies readonly NavItem[];
 
 export const navGroups: readonly NavGroup[] = [
@@ -159,6 +167,10 @@ export const navGroups: readonly NavGroup[] = [
     label: "Catalogo",
     items: primaryNavItems.filter((item) => item.group === "Catalogo"),
   },
+  {
+    label: "Admin",
+    items: primaryNavItems.filter((item) => item.group === "Admin"),
+  },
 ];
 
 const singularLabels: Record<string, string> = {
@@ -173,6 +185,7 @@ const singularLabels: Record<string, string> = {
   Reportes: "Reporte",
   Seguimientos: "Seguimiento",
   Cartera: "Cartera",
+  Usuarios: "Usuario",
 };
 
 function segmentToLabel(segment: string) {
