@@ -77,20 +77,20 @@ const expense_2 = "cf1e1345-822f-42d7-bf72-6108c4927d7d";
 async function main() {
   // ── Users ────────────────────────────────────────────
   const users = [
-    { id: user_admin, name: "Administrador", email: "admin@norgtech.com", password: "Admin123!", role: UserRole.administrador },
-    { id: user_director, name: "Carlos Mendoza", email: "director@norgtech.com", password: "Director123!", role: UserRole.director_comercial },
-    { id: user_comercial, name: "Laura Torres", email: "comercial@norgtech.com", password: "Comercial123!", role: UserRole.comercial },
-    { id: user_tecnico, name: "Andres Rojas", email: "tecnico@norgtech.com", password: "Tecnico123!", role: UserRole.tecnico },
-    { id: user_facturacion, name: "Diana Vargas", email: "facturacion@norgtech.com", password: "Facturacion123!", role: UserRole.facturacion },
-    { id: user_logistica, name: "Pedro Gomez", email: "logistica@norgtech.com", password: "Logistica123!", role: UserRole.logistica },
+    { id: user_admin, name: "Administrador", email: "admin@norgtech.com", phone: "+573001000001", password: "Admin123!", role: UserRole.administrador },
+    { id: user_director, name: "Carlos Mendoza", email: "director@norgtech.com", phone: "+573001000002", password: "Director123!", role: UserRole.director_comercial },
+    { id: user_comercial, name: "Laura Torres", email: "comercial@norgtech.com", phone: "+573001000003", password: "Comercial123!", role: UserRole.comercial },
+    { id: user_tecnico, name: "Andres Rojas", email: "tecnico@norgtech.com", phone: "+573001000004", password: "Tecnico123!", role: UserRole.tecnico },
+    { id: user_facturacion, name: "Diana Vargas", email: "facturacion@norgtech.com", phone: "+573001000005", password: "Facturacion123!", role: UserRole.facturacion },
+    { id: user_logistica, name: "Pedro Gomez", email: "logistica@norgtech.com", phone: "+573001000006", password: "Logistica123!", role: UserRole.logistica },
   ];
 
   for (const user of users) {
     const passwordHash = await bcrypt.hash(user.password, 10);
     await prisma.user.upsert({
       where: { email: user.email },
-      update: { name: user.name, passwordHash, role: user.role, active: true },
-      create: { id: user.id, name: user.name, email: user.email, passwordHash, role: user.role, active: true },
+      update: { name: user.name, phone: user.phone, passwordHash, role: user.role, active: true },
+      create: { id: user.id, name: user.name, email: user.email, phone: user.phone, passwordHash, role: user.role, active: true },
     });
   }
 
