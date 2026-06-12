@@ -31,6 +31,7 @@ interface CreateUserResponse {
 
 const selectClasses =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
+const e164PhonePattern = /^\+[1-9]\d{9,14}$/;
 
 function formatDate(value: string) {
   const date = new Date(value);
@@ -274,6 +275,7 @@ export function UserManagementClient({
     const trimmedPhone = draftValue.trim();
 
     if (!trimmedPhone) {
+      setError("El telefono debe tener formato internacional, por ejemplo +573001234567");
       setDraftPhones((current) => ({
         ...current,
         [user.id]: user.phone ?? "",
@@ -288,6 +290,15 @@ export function UserManagementClient({
           [user.id]: user.phone ?? "",
         }));
       }
+      return;
+    }
+
+    if (!e164PhonePattern.test(trimmedPhone)) {
+      setError("El telefono debe tener formato internacional, por ejemplo +573001234567");
+      setDraftPhones((current) => ({
+        ...current,
+        [user.id]: user.phone ?? "",
+      }));
       return;
     }
 
@@ -492,6 +503,7 @@ export function UserManagementClient({
                       </TableCell>
                       <TableCell className="align-top">
                         <Input
+                          type="tel"
                           value={draftPhones[user.id] ?? user.phone ?? ""}
                           onChange={(event) =>
                             setDraftPhones((current) => ({
@@ -502,6 +514,8 @@ export function UserManagementClient({
                           onBlur={() => void handlePhoneBlur(user)}
                           disabled={pending}
                           placeholder="+573001234567"
+                          pattern="^\\+[1-9]\\d{9,14}$"
+                          title="Usa formato internacional, por ejemplo +573001234567"
                           aria-label={`Telefono de ${user.email}`}
                         />
                       </TableCell>
