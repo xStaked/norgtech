@@ -57,8 +57,10 @@ export function UserManagementClient({
   const [users, setUsers] = useState<ManagedUser[]>(initialUsers);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [role, setRole] = useState<UserRole>("comercial");
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
+  const [draftPhones, setDraftPhones] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(true);
@@ -73,6 +75,15 @@ export function UserManagementClient({
     setDraftNames(
       initialUsers.reduce<Record<string, string>>((acc, user) => {
         acc[user.id] = user.name;
+        return acc;
+      }, {}),
+    );
+  }, [initialUsers]);
+
+  useEffect(() => {
+    setDraftPhones(
+      initialUsers.reduce<Record<string, string>>((acc, user) => {
+        acc[user.id] = user.phone ?? "";
         return acc;
       }, {}),
     );
@@ -136,6 +147,7 @@ export function UserManagementClient({
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
+          phone: phone.trim(),
           role,
         }),
       });
@@ -156,11 +168,16 @@ export function UserManagementClient({
           ...current,
           [createdUser.id]: createdUser.name,
         }));
+        setDraftPhones((current) => ({
+          ...current,
+          [createdUser.id]: createdUser.phone ?? "",
+        }));
       }
 
       setTemporaryPassword(data.temporaryPassword ?? null);
       setName("");
       setEmail("");
+      setPhone("");
       setRole("comercial");
       setShowCreateForm(true);
       router.refresh();
@@ -171,7 +188,10 @@ export function UserManagementClient({
     }
   }
 
-  async function patchUser(userId: string, body: Partial<Pick<ManagedUser, "name" | "role" | "active">>) {
+  async function patchUser(
+    userId: string,
+    body: Partial<Pick<ManagedUser, "name" | "phone" | "role" | "active">>,
+  ) {
     if (isPending(userId)) {
       return null;
     }
@@ -195,6 +215,10 @@ export function UserManagementClient({
       setDraftNames((current) => ({
         ...current,
         [userId]: updatedUser.name,
+      }));
+      setDraftPhones((current) => ({
+        ...current,
+        [userId]: updatedUser.phone ?? "",
       }));
       router.refresh();
       return updatedUser;
@@ -237,6 +261,41 @@ export function UserManagementClient({
       setDraftNames((current) => ({
         ...current,
         [user.id]: user.name,
+      }));
+    }
+  }
+
+  async function handlePhoneBlur(user: ManagedUser) {
+    if (isPending(user.id)) {
+      return;
+    }
+
+    const draftValue = draftPhones[user.id] ?? user.phone ?? "";
+    const trimmedPhone = draftValue.trim();
+
+    if (!trimmedPhone) {
+      setDraftPhones((current) => ({
+        ...current,
+        [user.id]: user.phone ?? "",
+      }));
+      return;
+    }
+
+    if (trimmedPhone === (user.phone ?? "")) {
+      if (draftValue !== (user.phone ?? "")) {
+        setDraftPhones((current) => ({
+          ...current,
+          [user.id]: user.phone ?? "",
+        }));
+      }
+      return;
+    }
+
+    const updatedUser = await patchUser(user.id, { phone: trimmedPhone });
+    if (!updatedUser) {
+      setDraftPhones((current) => ({
+        ...current,
+        [user.id]: user.phone ?? "",
       }));
     }
   }
@@ -301,7 +360,7 @@ export function UserManagementClient({
                 </div>
               ) : null}
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <div className="grid gap-1">
                   <Label htmlFor="user-name">Nombre</Label>
                   <Input
@@ -321,6 +380,20 @@ export function UserManagementClient({
                     type="email"
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-1">
+                  <Label htmlFor="user-phone">Telefono</Label>
+                  <Input
+                    id="user-phone"
+                    name="phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => setPhone(event.target.value)}
+                    placeholder="+573001234567"
+                    pattern="^\\+[1-9]\\d{9,14}$"
                     required
                   />
                 </div>
@@ -374,6 +447,7 @@ export function UserManagementClient({
                 <TableRow>
                   <TableHead>Nombre</TableHead>
                   <TableHead>Email</TableHead>
+                  <TableHead>Telefono</TableHead>
                   <TableHead>Rol</TableHead>
                   <TableHead>Estado</TableHead>
                   <TableHead>Actualizado</TableHead>
@@ -415,6 +489,21 @@ export function UserManagementClient({
                             <Badge variant="secondary">Tu usuario</Badge>
                           ) : null}
                         </div>
+                      </TableCell>
+                      <TableCell className="align-top">
+                        <Input
+                          value={draftPhones[user.id] ?? user.phone ?? ""}
+                          onChange={(event) =>
+                            setDraftPhones((current) => ({
+                              ...current,
+                              [user.id]: event.target.value,
+                            }))
+                          }
+                          onBlur={() => void handlePhoneBlur(user)}
+                          disabled={pending}
+                          placeholder="+573001234567"
+                          aria-label={`Telefono de ${user.email}`}
+                        />
                       </TableCell>
                       <TableCell className="align-top">
                         <select
