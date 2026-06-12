@@ -22,6 +22,7 @@ import { BillingRequestsModule } from "./modules/billing-requests/billing-reques
 import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.module";
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
 import { InvoicesModule } from "./modules/invoices/invoices.module";
+import { UsersModule } from "./modules/users/users.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -30,6 +31,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
     PrismaModule,
     AuthModule,
+    UsersModule,
     CustomerSegmentsModule,
     ContactsModule,
     DashboardModule,
