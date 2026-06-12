@@ -28,32 +28,34 @@ export default async function UsersPage() {
     redirect("/dashboard");
   }
 
+  let response: Response;
+
   try {
-    const response = await apiFetch("/users");
-
-    if (response.status === 401 || response.status === 403) {
-      redirect("/dashboard");
-    }
-
-    if (!response.ok) {
-      return <UsersPageErrorState />;
-    }
-
-    const users: ManagedUser[] = await response.json();
-
-    return (
-      <div className="grid gap-6">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-normal">Usuarios</h1>
-          <p className="text-sm text-muted-foreground">
-            Administra altas, roles y estado de acceso del CRM.
-          </p>
-        </div>
-
-        <UserManagementClient users={users} currentUserId={currentUser.id} />
-      </div>
-    );
+    response = await apiFetch("/users");
   } catch {
     return <UsersPageErrorState />;
   }
+
+  if (response.status === 401 || response.status === 403) {
+    redirect("/dashboard");
+  }
+
+  if (!response.ok) {
+    return <UsersPageErrorState />;
+  }
+
+  const users: ManagedUser[] = await response.json();
+
+  return (
+    <div className="grid gap-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-normal">Usuarios</h1>
+        <p className="text-sm text-muted-foreground">
+          Administra altas, roles y estado de acceso del CRM.
+        </p>
+      </div>
+
+      <UserManagementClient users={users} currentUserId={currentUser.id} />
+    </div>
+  );
 }

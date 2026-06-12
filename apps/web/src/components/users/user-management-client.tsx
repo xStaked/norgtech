@@ -61,6 +61,7 @@ export function UserManagementClient({
   const [draftNames, setDraftNames] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showCreateForm, setShowCreateForm] = useState(true);
   const [pendingUserIds, setPendingUserIds] = useState<Record<string, true>>({});
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
 
@@ -161,6 +162,7 @@ export function UserManagementClient({
       setName("");
       setEmail("");
       setRole("comercial");
+      setShowCreateForm(true);
       router.refresh();
     } catch {
       setError("Error de conexion");
@@ -259,82 +261,100 @@ export function UserManagementClient({
     <div className="grid gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Nuevo usuario</CardTitle>
-          <CardDescription>
-            Crea accesos internos y comparte la contrasena temporal una sola vez.
-          </CardDescription>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <CardTitle>Nuevo usuario</CardTitle>
+              <CardDescription>
+                Crea accesos internos y comparte la contrasena temporal una sola vez.
+              </CardDescription>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCreateForm((current) => !current)}
+            >
+              Nuevo usuario
+            </Button>
+          </div>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCreateUser} className="grid gap-4">
-            {error ? <p className="text-sm text-destructive">{error}</p> : null}
-            {temporaryPassword ? (
-              <div className="rounded-lg border border-border bg-muted/40 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">Contrasena temporal</p>
-                    <p className="mt-1 font-mono text-sm text-foreground">{temporaryPassword}</p>
+          {showCreateForm ? (
+            <form onSubmit={handleCreateUser} className="grid gap-4">
+              {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {temporaryPassword ? (
+                <div className="rounded-lg border border-border bg-muted/40 p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Contrasena temporal</p>
+                      <p className="mt-1 font-mono text-sm text-foreground">{temporaryPassword}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTemporaryPassword(null)}
+                    >
+                      Listo
+                    </Button>
                   </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setTemporaryPassword(null)}
+                </div>
+              ) : null}
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-1">
+                  <Label htmlFor="user-name">Nombre</Label>
+                  <Input
+                    id="user-name"
+                    name="name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-1">
+                  <Label htmlFor="user-email">Email</Label>
+                  <Input
+                    id="user-email"
+                    name="email"
+                    type="email"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-1">
+                  <Label htmlFor="user-role">Rol</Label>
+                  <select
+                    id="user-role"
+                    name="role"
+                    className={selectClasses}
+                    value={role}
+                    onChange={(event) => setRole(event.target.value as UserRole)}
+                    required
                   >
-                    Listo
-                  </Button>
+                    {USER_ROLES.map((roleOption) => (
+                      <option key={roleOption} value={roleOption}>
+                        {roleOption}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
-            ) : null}
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="grid gap-1">
-                <Label htmlFor="user-name">Nombre</Label>
-                <Input
-                  id="user-name"
-                  name="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  required
-                />
+              <div>
+                <Button type="submit" disabled={loading}>
+                  {loading ? "Guardando..." : "Crear usuario"}
+                </Button>
               </div>
-
-              <div className="grid gap-1">
-                <Label htmlFor="user-email">Email</Label>
-                <Input
-                  id="user-email"
-                  name="email"
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  required
-                />
-              </div>
-
-              <div className="grid gap-1">
-                <Label htmlFor="user-role">Rol</Label>
-                <select
-                  id="user-role"
-                  name="role"
-                  className={selectClasses}
-                  value={role}
-                  onChange={(event) => setRole(event.target.value as UserRole)}
-                  required
-                >
-                  {USER_ROLES.map((roleOption) => (
-                    <option key={roleOption} value={roleOption}>
-                      {roleOption}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <Button type="submit" disabled={loading}>
-                {loading ? "Guardando..." : "Crear usuario"}
-              </Button>
-            </div>
-          </form>
+            </form>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Usa el boton Nuevo usuario para abrir el formulario de alta.
+            </p>
+          )}
         </CardContent>
       </Card>
 
