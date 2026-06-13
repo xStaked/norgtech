@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button-link";
+import { DataTable } from "@/components/ui/data-table";
 import { DetailSection } from "@/components/ui/detail-section";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -159,6 +160,14 @@ export default async function CustomerDetailPage({
   const goalProgress: GoalProgress | null = goalsResponse.ok
     ? await goalsResponse.json()
     : null;
+
+  const zonesRes = await apiFetch(`/customers/${id}/zones`);
+  const customerZones: Array<{
+    id: string;
+    zone: { id: string; name: string };
+    address: string | null;
+    assignedTo: { id: string; name: string } | null;
+  }> = zonesRes.ok ? await zonesRes.json() : [];
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -388,6 +397,20 @@ export default async function CustomerDetailPage({
           billingRequests: customer.billingRequests,
         }}
       />
+
+      {customerZones.length > 0 && (
+        <SectionCard title="Zonas de despacho" description="Zonas asignadas a este cliente con vendedor por zona.">
+          <DataTable
+            columns={[
+              { key: "zone", header: "Zona", render: (r: typeof customerZones[number]) => r.zone.name },
+              { key: "address", header: "Direccion", render: (r: typeof customerZones[number]) => r.address || "—" },
+              { key: "seller", header: "Vendedor", render: (r: typeof customerZones[number]) => r.assignedTo?.name || "—" },
+            ]}
+            rows={customerZones}
+            getRowKey={(r) => r.id}
+          />
+        </SectionCard>
+      )}
     </div>
   );
 }
