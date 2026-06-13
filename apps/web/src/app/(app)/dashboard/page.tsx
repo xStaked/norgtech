@@ -89,23 +89,75 @@ function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig
   return value.toLocaleString("es-CO");
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ companyId?: string }>;
+}) {
+  const { companyId } = await searchParams;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
   const canViewCommercialAdvanced = userRole ? commercialAdvancedRoles.has(userRole) : false;
 
-  const [response, commercialAdvancedResponse] = await Promise.all([
-    apiFetch("/dashboard/summary"),
+  const summaryQuery = companyId ? `/dashboard/summary?companyId=${companyId}` : "/dashboard/summary";
+  const commercialQuery = companyId
+    ? `/dashboard/commercial-advanced?days=90&companyId=${companyId}`
+    : "/dashboard/commercial-advanced?days=90";
+
+  const [response, commercialAdvancedResponse, companiesRes] = await Promise.all([
+    apiFetch(summaryQuery),
     canViewCommercialAdvanced
-      ? apiFetch("/dashboard/commercial-advanced?days=90")
+      ? apiFetch(commercialQuery)
       : Promise.resolve(null),
+    apiFetch("/companies"),
   ]);
+
+  const companies: Array<{ id: string; name: string; prefix: string }> =
+    companiesRes.ok ? await companiesRes.json() : [];
+
   const summary: DashboardSummary | null = response.ok ? await response.json() : null;
   const commercialAdvancedSummary: CommercialAdvancedSummary | null =
     commercialAdvancedResponse?.ok ? await commercialAdvancedResponse.json() : null;
 
   return (
     <div className="space-y-6">
+      {/* Company Filter */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <Link
+          href="/dashboard"
+          style={{
+            padding: "6px 12px",
+            borderRadius: 8,
+            fontSize: 13,
+            fontWeight: 600,
+            textDecoration: "none",
+            backgroundColor: !companyId ? "#10233f" : "#eef3f8",
+            color: !companyId ? "#ffffff" : "#52637a",
+            border: `1px solid ${!companyId ? "#10233f" : "#dbe4ef"}`,
+          }}
+        >
+          Todas las empresas
+        </Link>
+        {companies.map((c) => (
+          <Link
+            key={c.id}
+            href={`/dashboard?companyId=${c.id}`}
+            style={{
+              padding: "6px 12px",
+              borderRadius: 8,
+              fontSize: 13,
+              fontWeight: 600,
+              textDecoration: "none",
+              backgroundColor: companyId === c.id ? "#10233f" : "#eef3f8",
+              color: companyId === c.id ? "#ffffff" : "#52637a",
+              border: `1px solid ${companyId === c.id ? "#10233f" : "#dbe4ef"}`,
+            }}
+          >
+            {c.name} ({c.prefix})
+          </Link>
+        ))}
+      </div>
+
       {/* Featured KPIs with ShiftCard (Cult UI) */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <ShiftKpiCard
