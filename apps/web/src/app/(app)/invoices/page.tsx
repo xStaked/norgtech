@@ -32,6 +32,7 @@ interface Invoice {
   totalAmount: string;
   totalPaid: string;
   status: string;
+  company: { id: string; name: string; prefix: string } | null;
 }
 
 interface InvoiceRow {
@@ -45,6 +46,8 @@ interface InvoiceRow {
   totalPaid: number;
   balance: number;
   status: string;
+  companyName: string | null;
+  companyPrefix: string | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -110,6 +113,16 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
         {row.invoiceNumber}
       </Link>
     ),
+  },
+  {
+    key: "company",
+    header: "Empresa",
+    render: (row) =>
+      row.companyPrefix ? (
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{row.companyPrefix}</span>
+      ) : (
+        <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
+      ),
   },
   {
     key: "customer",
@@ -194,6 +207,8 @@ export default async function InvoicesPage({
     totalPaid: Number(invoice.totalPaid),
     balance: Number(invoice.totalAmount) - Number(invoice.totalPaid),
     status: invoice.status,
+    companyName: invoice.company?.name ?? null,
+    companyPrefix: invoice.company?.prefix ?? null,
   }));
 
   const totalBalance = rows.reduce((sum, row) => sum + row.balance, 0);

@@ -39,6 +39,7 @@ interface BillingRequest {
   opportunity: Opportunity | null;
   sourceQuote: Quote | null;
   sourceOrder: Order | null;
+  company: { id: string; name: string; prefix: string } | null;
 }
 
 interface BillingRequestRow {
@@ -53,6 +54,8 @@ interface BillingRequestRow {
   opportunityTitle: string | null;
   quoteId: string | null;
   orderId: string | null;
+  companyName: string | null;
+  companyPrefix: string | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -108,6 +111,8 @@ export default async function BillingRequestsPage() {
     opportunityTitle: billingRequest.opportunity?.title ?? null,
     quoteId: billingRequest.sourceQuote?.id ?? null,
     orderId: billingRequest.sourceOrder?.id ?? null,
+    companyName: billingRequest.company?.name ?? null,
+    companyPrefix: billingRequest.company?.prefix ?? null,
   }));
 
   const columns: readonly DataTableColumn<BillingRequestRow>[] = [
@@ -131,6 +136,16 @@ export default async function BillingRequestsPage() {
           </Link>
         ) : (
           <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+        ),
+    },
+    {
+      key: "company",
+      header: "Empresa",
+      render: (row) =>
+        row.companyPrefix ? (
+          <span style={{ fontSize: 13, fontWeight: 600 }}>{row.companyPrefix}</span>
+        ) : (
+          <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
         ),
     },
     {
