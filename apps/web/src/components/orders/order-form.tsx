@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -98,6 +98,21 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
   const [loading, setLoading] = useState(false);
   const [items, setItems] = useState<OrderItem[]>([emptyItem()]);
 
+  const [customerZones, setCustomerZones] = useState<Array<{ id: string; zone: { name: string }; assignedTo: { name: string } | null }>>([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
+
+  function fetchCustomerZones(customerId: string) {
+    if (!customerId) { setCustomerZones([]); return; }
+    apiFetchClient(`/customers/${customerId}/zones`)
+      .then(r => r.json())
+      .then(setCustomerZones)
+      .catch(() => setCustomerZones([]));
+  }
+
+  useEffect(() => {
+    fetchCustomerZones(selectedCustomerId);
+  }, [selectedCustomerId]);
+
   function addItem() {
     setItems([...items, emptyItem()]);
   }
@@ -152,6 +167,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
     const body = {
       companyId: String(formData.get("companyId")),
+      customerZoneId: optionalString(formData.get("customerZoneId")),
       customerId: String(formData.get("customerId")),
       opportunityId: optionalString(formData.get("opportunityId")),
       sourceQuoteId: optionalString(formData.get("sourceQuoteId")),
@@ -177,7 +193,6 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       approvalName: optionalString(formData.get("approvalName")),
       reviewDate: optionalString(formData.get("reviewDate")),
       preparedByName: optionalString(formData.get("preparedByName")),
-      zone: optionalString(formData.get("zone")),
       preparedByRole: optionalString(formData.get("preparedByRole")),
       notes: optionalString(formData.get("notes")),
       items: payloadItems,
@@ -231,8 +246,20 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
           <Field label="Empresa facturadora *" htmlFor="companyId">
             <CompanySelect name="companyId" required />
           </Field>
+          {customerZones.length > 0 && (
+            <Field label="Zona de despacho" htmlFor="customerZoneId">
+              <select id="customerZoneId" name="customerZoneId" className={selectClasses}>
+                <option value="">Sin zona especifica</option>
+                {customerZones.map((cz) => (
+                  <option key={cz.id} value={cz.id}>
+                    {cz.zone.name}{cz.assignedTo ? ` — ${cz.assignedTo.name}` : ""}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Cliente *" htmlFor="customerId">
-            <select id="customerId" name="customerId" required className={selectClasses}>
+            <select id="customerId" name="customerId" required className={selectClasses} onChange={(e) => setSelectedCustomerId(e.target.value)}>
               <option value="">Seleccionar cliente</option>
               {customers.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -453,9 +480,6 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
           </Field>
           <Field label="Elaboro" htmlFor="preparedByName">
             <Input id="preparedByName" name="preparedByName" />
-          </Field>
-          <Field label="Zona" htmlFor="zone">
-            <Input id="zone" name="zone" />
           </Field>
           <Field label="Cargo elaborador" htmlFor="preparedByRole">
             <Input id="preparedByRole" name="preparedByRole" />
