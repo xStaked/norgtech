@@ -6,6 +6,7 @@ import { DetailSection } from "@/components/ui/detail-section";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { crmTheme } from "@/components/ui/theme";
+import { CreditInfoCard } from "@/components/customers/credit-info-card";
 import { CustomerGoalsSection } from "@/components/customers/customer-goals-section";
 import { CustomerHistorySection } from "@/components/customers/customer-history-section";
 import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
@@ -384,6 +385,8 @@ export default async function CustomerDetailPage({
           </div>
         </SectionCard>
       )}
+
+      <CreditInfoCard customerId={customer.id} />
 
       <CustomerGoalsSection customerId={customer.id} />
 
