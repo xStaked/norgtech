@@ -1,12 +1,31 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreditSummaryDto, PurchaseProgressDto } from "./dto/credit-summary.dto";
 import { CreditAlertDto } from "./dto/credit-alert.dto";
 
+const ALERT_THRESHOLD_PERCENT = 80;
+
 @Injectable()
 export class CreditService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async getOpenInvoiceTotal(
+    customerId: string,
+    tx?: Prisma.TransactionClient,
+    companyId?: string,
+  ): Promise<Prisma.Decimal> {
+    const client = tx ?? this.prisma;
+    const agg = await client.invoice.aggregate({
+      where: {
+        customerId,
+        status: { notIn: ["pagada", "anulada"] },
+        ...(companyId ? { companyId } : {}),
+      },
+      _sum: { totalAmount: true },
+    });
+    return new Prisma.Decimal(agg._sum.totalAmount ?? 0);
+  }
 
   async assertCreditLimit(
     customerId: string,
@@ -19,17 +38,11 @@ export class CreditService {
       select: { creditLimit: true },
     });
 
-    if (!customer?.creditLimit || customer.creditLimit.lte(0)) return;
+    if (!customer) throw new NotFoundException("Cliente no encontrado");
+    if (!customer.creditLimit || customer.creditLimit.lte(0)) return;
 
-    const agg = await client.invoice.aggregate({
-      where: {
-        customerId,
-        status: { notIn: ["pagada", "anulada"] },
-      },
-      _sum: { totalAmount: true },
-    });
+    const currentTotal = await this.getOpenInvoiceTotal(customerId, tx);
 
-    const currentTotal = new Prisma.Decimal(agg._sum.totalAmount ?? 0);
     if (currentTotal.plus(amount).gt(customer.creditLimit)) {
       const available = customer.creditLimit.minus(currentTotal);
       throw new BadRequestException(
@@ -44,17 +57,9 @@ export class CreditService {
       select: { creditLimit: true, purchaseBudget: true },
     });
 
-    if (!customer) throw new BadRequestException("Customer not found");
+    if (!customer) throw new NotFoundException("Cliente no encontrado");
 
-    const invoiceAgg = await this.prisma.invoice.aggregate({
-      where: {
-        customerId,
-        status: { notIn: ["pagada", "anulada"] },
-      },
-      _sum: { totalAmount: true },
-    });
-
-    const currentBalance = new Prisma.Decimal(invoiceAgg._sum.totalAmount ?? 0).toNumber();
+    const currentBalance = (await this.getOpenInvoiceTotal(customerId)).toNumber();
     const creditLimit = customer.creditLimit ? customer.creditLimit.toNumber() : null;
 
     const availableCredit = creditLimit != null && creditLimit > 0
@@ -65,7 +70,7 @@ export class CreditService {
       ? (currentBalance / creditLimit) * 100
       : null;
 
-    const isNearLimit = utilizationPercent != null && utilizationPercent >= 80;
+    const isNearLimit = utilizationPercent != null && utilizationPercent >= ALERT_THRESHOLD_PERCENT;
 
     let purchaseProgress: PurchaseProgressDto = {
       currentMonthSales: 0,
@@ -116,22 +121,36 @@ export class CreditService {
       },
     });
 
+    if (customers.length === 0) return [];
+
+    const customerIds = customers.map((c) => c.id);
+
+    const groupByResult = await this.prisma.invoice.groupBy({
+      by: ["customerId"],
+      where: {
+        customerId: { in: customerIds },
+        status: { notIn: ["pagada", "anulada"] },
+        ...(companyId ? { companyId } : {}),
+      },
+      _sum: { totalAmount: true },
+    });
+
+    const balanceMap = new Map<string, number>();
+    for (const row of groupByResult) {
+      balanceMap.set(
+        row.customerId,
+        new Prisma.Decimal(row._sum.totalAmount ?? 0).toNumber(),
+      );
+    }
+
     const alerts: CreditAlertDto[] = [];
 
     for (const customer of customers) {
-      const agg = await this.prisma.invoice.aggregate({
-        where: {
-          customerId: customer.id,
-          status: { notIn: ["pagada", "anulada"] },
-        },
-        _sum: { totalAmount: true },
-      });
-
       const creditLimit = customer.creditLimit!.toNumber();
-      const currentBalance = new Prisma.Decimal(agg._sum.totalAmount ?? 0).toNumber();
+      const currentBalance = balanceMap.get(customer.id) ?? 0;
       const utilizationPercent = (currentBalance / creditLimit) * 100;
 
-      if (utilizationPercent >= 80) {
+      if (utilizationPercent >= ALERT_THRESHOLD_PERCENT) {
         alerts.push({
           customerId: customer.id,
           displayName: customer.displayName,
