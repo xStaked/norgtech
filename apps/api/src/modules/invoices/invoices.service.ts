@@ -14,6 +14,7 @@ import { CreateInvoiceDto } from "./dto/create-invoice.dto";
 import { ListInvoicesDto } from "./dto/list-invoices.dto";
 import { UpdateInvoiceStatusDto } from "./dto/update-invoice-status.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
+import { CreditService } from "../credit/credit.service";
 
 const includeInvoiceRelations = {
   company: true,
@@ -37,6 +38,7 @@ export class InvoicesService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly storage: R2StorageService,
+    private readonly credit: CreditService,
   ) {}
 
   async create(user: AuthUser, dto: CreateInvoiceDto) {
@@ -69,14 +71,9 @@ export class InvoicesService {
       : this.calculateDueDate(issueDate, customer.paymentDays);
 
     const totalAmount = new Prisma.Decimal(dto.totalAmount);
-    const customerCreditLimit = customer.creditLimit
-      ? new Prisma.Decimal(customer.creditLimit)
-      : null;
 
     return this.prisma.$transaction(async (tx) => {
-      if (customerCreditLimit && customerCreditLimit.gt(0)) {
-        await this.assertCreditLimit(tx, dto.customerId, totalAmount, customerCreditLimit);
-      }
+      await this.credit.assertCreditLimit(dto.customerId, totalAmount, tx);
 
       const invoice = await tx.invoice.create({
         data: {
@@ -404,28 +401,6 @@ export class InvoicesService {
     }
 
     return where;
-  }
-
-  private async assertCreditLimit(
-    tx: Prisma.TransactionClient,
-    customerId: string,
-    newAmount: Prisma.Decimal,
-    creditLimit: Prisma.Decimal,
-  ) {
-    const agg = await tx.invoice.aggregate({
-      where: {
-        customerId,
-        status: { notIn: ["pagada", "anulada"] },
-      },
-      _sum: { totalAmount: true },
-    });
-
-    const currentTotal = new Prisma.Decimal(agg._sum.totalAmount ?? 0);
-    if (currentTotal.plus(newAmount).gt(creditLimit)) {
-      throw new BadRequestException(
-        `Credit limit exceeded`,
-      );
-    }
   }
 
   private assertCanRead(user: AuthUser, customerId: string) {
