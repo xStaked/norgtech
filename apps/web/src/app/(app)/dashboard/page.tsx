@@ -11,6 +11,7 @@ import {
   CommercialAdvancedDashboard,
   type CommercialAdvancedSummary,
 } from "@/components/dashboard/commercial-advanced-dashboard";
+import { CreditAlertsWidget } from "@/components/dashboard/credit-alerts-widget";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -203,6 +204,8 @@ export default async function DashboardPage({
       <CustomerGoalsDashboard />
 
       <CommercialAdvancedDashboard summary={commercialAdvancedSummary} />
+
+      <CreditAlertsWidget companyId={companyId} />
 
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-[1.5fr_380px]">
