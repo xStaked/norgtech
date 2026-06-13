@@ -24,6 +24,7 @@ import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.mod
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
 import { InvoicesModule } from "./modules/invoices/invoices.module";
 import { UsersModule } from "./modules/users/users.module";
+import { ZonesModule } from "./modules/zones/zones.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -52,6 +53,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     CustomerGoalsModule,
     WhatsAppModule,
     InvoicesModule,
+    ZonesModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
