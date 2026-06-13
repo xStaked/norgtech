@@ -13,6 +13,10 @@ export class ListInvoicesDto {
 
   @IsOptional()
   @IsString()
+  companyId?: string;
+
+  @IsOptional()
+  @IsString()
   customerId?: string;
 
   @IsOptional()

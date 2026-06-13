@@ -16,6 +16,7 @@ import { UpdateInvoiceStatusDto } from "./dto/update-invoice-status.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 
 const includeInvoiceRelations = {
+  company: true,
   customer: { select: { id: true, displayName: true, taxId: true, creditLimit: true, paymentDays: true } },
   order: { select: { id: true, orderNumber: true, status: true } },
   payments: {
@@ -44,6 +45,13 @@ export class InvoicesService {
     });
     if (!customer) throw new NotFoundException("Customer not found");
 
+    const company = await this.prisma.company.findUnique({
+      where: { id: dto.companyId },
+    });
+    if (!company || !company.isActive) {
+      throw new NotFoundException("Company not found or inactive");
+    }
+
     if (dto.orderId) {
       const order = await this.prisma.order.findUnique({
         where: { id: dto.orderId },
@@ -54,7 +62,7 @@ export class InvoicesService {
       }
     }
 
-    const invoiceNumber = dto.invoiceNumber?.trim() || (await this.nextInvoiceNumber());
+    const invoiceNumber = dto.invoiceNumber?.trim() || (await this.nextInvoiceNumber(company.prefix));
     const issueDate = dto.issueDate ? new Date(dto.issueDate) : new Date();
     const dueDate = dto.dueDate
       ? new Date(dto.dueDate)
@@ -73,6 +81,7 @@ export class InvoicesService {
       const invoice = await tx.invoice.create({
         data: {
           invoiceNumber,
+          companyId: dto.companyId,
           customerId: dto.customerId,
           orderId: dto.orderId || null,
           issueDate,
@@ -378,6 +387,7 @@ export class InvoicesService {
     }
 
     if (filters.status) where.status = filters.status;
+    if (filters.companyId) where.companyId = filters.companyId;
     if (filters.customerId) where.customerId = filters.customerId;
     if (filters.orderId) where.orderId = filters.orderId;
 
@@ -435,8 +445,19 @@ export class InvoicesService {
     return due;
   }
 
-  private async nextInvoiceNumber(): Promise<string> {
-    const count = await this.prisma.invoice.count();
-    return `FAC-${String(count + 1).padStart(6, "0")}`;
+  private async nextInvoiceNumber(companyPrefix: string): Promise<string> {
+    const last = await this.prisma.invoice.findFirst({
+      where: { invoiceNumber: { startsWith: `${companyPrefix}-` } },
+      orderBy: { invoiceNumber: "desc" },
+      select: { invoiceNumber: true },
+    });
+
+    if (!last?.invoiceNumber) {
+      return `${companyPrefix}-001`;
+    }
+
+    const parts = last.invoiceNumber.split("-");
+    const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
+    return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
   }
 }

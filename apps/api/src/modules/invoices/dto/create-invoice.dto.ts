@@ -16,6 +16,10 @@ export class CreateInvoiceDto {
 
   @IsString()
   @IsNotEmpty()
+  companyId!: string;
+
+  @IsString()
+  @IsNotEmpty()
   customerId!: string;
 
   @IsOptional()
