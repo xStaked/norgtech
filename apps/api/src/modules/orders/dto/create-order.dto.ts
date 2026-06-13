@@ -121,7 +121,7 @@ export class CreateOrderDto {
 
   @IsOptional()
   @IsString()
-  zone?: string;
+  customerZoneId?: string;
 
   @IsOptional()
   @IsString()

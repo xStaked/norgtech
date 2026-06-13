@@ -31,6 +31,17 @@ export class OrdersService {
     if (!company || !company.isActive) {
       throw new NotFoundException("Company not found or inactive");
     }
+    if (dto.customerZoneId) {
+      const customerZone = await this.prisma.customerZone.findUnique({
+        where: { id: dto.customerZoneId },
+      });
+      if (!customerZone || !customerZone.isActive) {
+        throw new NotFoundException("Customer zone assignment not found or inactive");
+      }
+      if (customerZone.customerId !== dto.customerId) {
+        throw new BadRequestException("Zone does not belong to selected customer");
+      }
+    }
     if (dto.opportunityId) {
       await this.assertOpportunityBelongsToCustomer(dto.opportunityId, dto.customerId);
     }
@@ -170,7 +181,7 @@ export class OrdersService {
           approvalName: dto.approvalName || null,
           reviewDate: dto.reviewDate ? new Date(dto.reviewDate) : null,
           preparedByName,
-          zone: dto.zone || null,
+          customerZoneId: dto.customerZoneId || null,
           preparedByRole: dto.preparedByRole || null,
           requestedDeliveryDate: dto.requestedDeliveryDate
             ? new Date(dto.requestedDeliveryDate)
@@ -219,7 +230,7 @@ export class OrdersService {
     if (companyId) where.companyId = companyId;
     return this.prisma.order.findMany({
       where,
-      include: { customer: true, opportunity: true, items: true, company: true },
+      include: { customer: true, opportunity: true, items: true, company: true, customerZone: { include: { zone: true } } },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -235,6 +246,7 @@ export class OrdersService {
         items: true,
         billingRequests: true,
         assignedLogisticsUser: true,
+        customerZone: { include: { zone: true, assignedTo: { select: { id: true, name: true } } } },
       },
     });
   }
