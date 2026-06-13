@@ -111,6 +111,24 @@ async function main() {
     });
   }
 
+  // ── Zones ----------------------------------------------------
+  const zones = [
+    { name: "Costa", department: "Atlantico" },
+    { name: "Centro", department: "Cundinamarca" },
+    { name: "Santander", department: "Santander" },
+    { name: "Valle", department: "Valle del Cauca" },
+    { name: "Antioquia", department: "Antioquia" },
+    { name: "Bogota", department: "Cundinamarca" },
+  ];
+
+  for (const z of zones) {
+    await prisma.zone.upsert({
+      where: { name: z.name },
+      update: {},
+      create: z,
+    });
+  }
+
   // ── Customer Segments ────────────────────────────────
   const segments = [
     { id: segment_bronce, name: "Bronce", description: "Clientes nuevos o de bajo volumen", discountPercent: 3, minGoalAmount: 0, maxGoalAmount: 50000000 },
@@ -397,6 +415,7 @@ async function main() {
   console.log("✅ Seed completado con exito.");
   console.log("   - 6 usuarios");
   console.log("   - 2 empresas");
+  console.log("   - 6 zonas");
   console.log("   - 6 segmentos");
   console.log("   - 8 clientes");
   console.log("   - 9 contactos");
