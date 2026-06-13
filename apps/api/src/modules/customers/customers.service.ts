@@ -41,6 +41,7 @@ export class CustomersService {
           creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
           paymentCondition: dto.paymentCondition || undefined,
           paymentDays: dto.paymentDays !== undefined ? dto.paymentDays : undefined,
+          purchaseBudget: dto.purchaseBudget !== undefined ? dto.purchaseBudget : undefined,
           createdBy: user.id,
           updatedBy: user.id,
           contacts: {
@@ -158,6 +159,7 @@ export class CustomersService {
           ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
           ...(dto.paymentCondition !== undefined && { paymentCondition: dto.paymentCondition }),
           ...(dto.paymentDays !== undefined && { paymentDays: dto.paymentDays }),
+          ...(dto.purchaseBudget !== undefined && { purchaseBudget: dto.purchaseBudget }),
           updatedBy: user.id,
         },
         include: { contacts: true },
