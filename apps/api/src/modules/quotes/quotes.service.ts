@@ -167,6 +167,14 @@ export class QuotesService {
       throw new BadRequestException("Billing request can only be created from closed quotes");
     }
 
+    const defaultCompany = await this.prisma.company.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: "asc" },
+    });
+    if (!defaultCompany) {
+      throw new BadRequestException("No active company found. Please create a company first.");
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const billingRequest = await tx.billingRequest.create({
         data: {
@@ -174,6 +182,7 @@ export class QuotesService {
           opportunityId: quote.opportunityId,
           sourceType: "quote",
           sourceQuoteId: quote.id,
+          companyId: defaultCompany.id,
           status: "pendiente",
           requestedByUserId: user.id,
           createdBy: user.id,
