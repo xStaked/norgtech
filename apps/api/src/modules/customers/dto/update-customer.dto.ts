@@ -73,4 +73,10 @@ export class UpdateCustomerDto {
   @IsNumber()
   @Min(0)
   paymentDays?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  purchaseBudget?: number;
 }

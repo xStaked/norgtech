@@ -108,6 +108,12 @@ export class CreateCustomerDto {
   paymentDays?: number;
 
   @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  purchaseBudget?: number;
+
+  @IsOptional()
   @ValidateNested()
   @Type(() => CreateInitialGoalDto)
   initialGoal?: CreateInitialGoalDto;
