@@ -178,6 +178,35 @@ enum NoraActionStatus {
   failed
 }
 
+model Zone {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  department String?
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customerZones CustomerZone[]
+}
+
+model CustomerZone {
+  id               String   @id @default(cuid())
+  customerId       String
+  zoneId           String
+  address          String?
+  assignedToUserId String?
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  customer   Customer @relation(fields: [customerId], references: [id])
+  zone       Zone     @relation(fields: [zoneId], references: [id])
+  assignedTo User?    @relation("CustomerZoneAssignedUser", fields: [assignedToUserId], references: [id])
+  orders     Order[]
+
+  @@unique([customerId, zoneId])
+}
+
 model Company {
   id         String   @id @default(cuid())
   name       String
@@ -215,6 +244,7 @@ model User {
   reviewedCommercialExpenses    CommercialExpense[]        @relation("CommercialExpenseReviewer")
   uploadedExpenseSupports       CommercialExpenseSupport[] @relation("CommercialExpenseSupportUploader")
   uploadedPaymentSupports       PaymentSupport[]
+  assignedCustomerZones         CustomerZone[]           @relation("CustomerZoneAssignedUser")
 }
 
 model LauraSession {
@@ -416,6 +446,7 @@ model Customer {
   goals                 CustomerGoal[]
   whatsappConversations WhatsAppConversation[]
   commercialExpenses    CommercialExpense[]
+  customerZones         CustomerZone[]
   invoices              Invoice[]
   customerType          CustomerType?          @default(cliente_directo)
   creditLimit           Decimal?               @db.Decimal(14, 2)
@@ -617,7 +648,9 @@ model Order {
   opportunity                Opportunity?          @relation(fields: [opportunityId], references: [id])
   sourceQuote                Quote?                @relation(fields: [sourceQuoteId], references: [id])
   assignedLogisticsUser      User?                 @relation(fields: [assignedLogisticsUserId], references: [id])
-  sourceConversation         WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
+  sourceConversation   WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
+  customerZoneId       String?
+  customerZone         CustomerZone?         @relation(fields: [customerZoneId], references: [id])
   items                      OrderItem[]
   billingRequests            BillingRequest[]
   invoices                   Invoice[]
