@@ -7,6 +7,7 @@ import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CalculatorsModule } from "./modules/calculators/calculators.module";
 import { CommercialExpensesModule } from "./modules/commercial-expenses/commercial-expenses.module";
+import { CreditModule } from "./modules/credit/credit.module";
 import { CompaniesModule } from "./modules/companies/companies.module";
 import { ContactsModule } from "./modules/contacts/contacts.module";
 import { CustomerSegmentsModule } from "./modules/customer-segments/customer-segments.module";
@@ -50,6 +51,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     ReportsModule,
     CalculatorsModule,
     CommercialExpensesModule,
+    CreditModule,
     CustomerGoalsModule,
     WhatsAppModule,
     InvoicesModule,
