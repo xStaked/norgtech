@@ -45,8 +45,8 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
   @Get()
-  findAll(@Query("status") status?: OrderStatus) {
-    return this.ordersService.findAll(status);
+  findAll(@Query("status") status?: OrderStatus, @Query("companyId") companyId?: string) {
+    return this.ordersService.findAll(status, companyId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

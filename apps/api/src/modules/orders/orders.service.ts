@@ -25,6 +25,12 @@ export class OrdersService {
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
+    const company = await this.prisma.company.findUnique({
+      where: { id: dto.companyId },
+    });
+    if (!company || !company.isActive) {
+      throw new NotFoundException("Company not found or inactive");
+    }
     if (dto.opportunityId) {
       await this.assertOpportunityBelongsToCustomer(dto.opportunityId, dto.customerId);
     }
@@ -39,7 +45,7 @@ export class OrdersService {
     }
 
     const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
-    const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber();
+    const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
     const customerNameSnapshot = customer.displayName;
     const customerNitSnapshot = customer.taxId ?? null;
@@ -136,6 +142,7 @@ export class OrdersService {
       const order = await tx.order.create({
         data: {
           customerId: dto.customerId,
+          companyId: dto.companyId,
           opportunityId: dto.opportunityId || null,
           sourceQuoteId: dto.sourceQuoteId || null,
           sourceConversationId: dto.sourceConversationId || null,
@@ -206,10 +213,13 @@ export class OrdersService {
     });
   }
 
-  findAll(status?: OrderStatus) {
+  findAll(status?: OrderStatus, companyId?: string) {
+    const where: Prisma.OrderWhereInput = {};
+    if (status) where.status = status;
+    if (companyId) where.companyId = companyId;
     return this.prisma.order.findMany({
-      where: status ? { status } : undefined,
-      include: { customer: true, opportunity: true, items: true },
+      where,
+      include: { customer: true, opportunity: true, items: true, company: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -316,7 +326,8 @@ export class OrdersService {
           sourceQuote: true,
           sourceConversation: true,
           items: true,
-          assignedLogisticsUser: true,
+        assignedLogisticsUser: true,
+        company: true,
         },
       });
 
@@ -357,6 +368,7 @@ export class OrdersService {
           opportunityId: order.opportunityId,
           sourceType: "order",
           sourceOrderId: order.id,
+          companyId: order.companyId,
           requestedByUserId: user.id,
           createdBy: user.id,
           updatedBy: user.id,
@@ -435,8 +447,19 @@ export class OrdersService {
     return allowedTransitions[currentStatus].includes(nextStatus);
   }
 
-  private async nextOrderNumber() {
-    const count = await this.prisma.order.count();
-    return `PED-${String(count + 1).padStart(6, "0")}`;
+  private async nextOrderNumber(companyPrefix: string) {
+    const last = await this.prisma.order.findFirst({
+      where: { orderNumber: { startsWith: `${companyPrefix}-` } },
+      orderBy: { orderNumber: "desc" },
+      select: { orderNumber: true },
+    });
+
+    if (!last?.orderNumber) {
+      return `${companyPrefix}-001`;
+    }
+
+    const parts = last.orderNumber.split("-");
+    const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
+    return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
   }
 }

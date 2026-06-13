@@ -15,6 +15,10 @@ export class CreateOrderDto {
   @IsNotEmpty()
   customerId!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  companyId!: string;
+
   @IsOptional()
   @IsString()
   opportunityId?: string;
