@@ -152,6 +152,14 @@ export const primaryNavItems = [
     group: "Admin",
     requiredRoles: ["administrador"] as const,
   },
+  {
+    href: "/companies",
+    label: "Empresas",
+    shortLabel: "EM",
+    description: "Empresas facturadoras del sistema",
+    group: "Admin",
+    requiredRoles: ["administrador"] as const,
+  },
 ] as const satisfies readonly NavItem[];
 
 export const navGroups: readonly NavGroup[] = [
