@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { CompanySelect } from "@/components/companies/company-select";
 
 interface Product {
   id: string;
@@ -150,6 +151,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       }));
 
     const body = {
+      companyId: String(formData.get("companyId")),
       customerId: String(formData.get("customerId")),
       opportunityId: optionalString(formData.get("opportunityId")),
       sourceQuoteId: optionalString(formData.get("sourceQuoteId")),
@@ -180,6 +182,12 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       notes: optionalString(formData.get("notes")),
       items: payloadItems,
     };
+
+    if (!body.companyId) {
+      setError("Debe seleccionar una empresa facturadora");
+      setLoading(false);
+      return;
+    }
 
     if (!body.customerId) {
       setError("Debe seleccionar un cliente");
@@ -220,6 +228,9 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
       <FormSection title="Encabezado del pedido">
         <div className="grid gap-3 md:grid-cols-2">
+          <Field label="Empresa facturadora *" htmlFor="companyId">
+            <CompanySelect name="companyId" required />
+          </Field>
           <Field label="Cliente *" htmlFor="customerId">
             <select id="customerId" name="customerId" required className={selectClasses}>
               <option value="">Seleccionar cliente</option>

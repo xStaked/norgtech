@@ -24,6 +24,7 @@ interface Order {
   total: string;
   committedDeliveryDate: string | null;
   customer: Customer | null;
+  company: { id: string; name: string; prefix: string } | null;
   createdAt: string;
 }
 
@@ -34,6 +35,8 @@ interface OrderRow {
   total: number;
   customerName: string | null;
   customerId: string | null;
+  companyName: string | null;
+  companyPrefix: string | null;
   committedDeliveryDate: string | null;
   createdAt: string;
 }
@@ -127,6 +130,16 @@ const columns: readonly DataTableColumn<OrderRow>[] = [
     render: (row) => <strong>{currencyFormatter.format(row.total)}</strong>,
   },
   {
+    key: "company",
+    header: "Empresa",
+    render: (row) =>
+      row.companyPrefix ? (
+        <span style={{ fontSize: 13, fontWeight: 600 }}>{row.companyPrefix}</span>
+      ) : (
+        <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
+      ),
+  },
+  {
     key: "detail",
     header: "Detalle",
     align: "right",
@@ -145,10 +158,13 @@ function countByStatus(rows: OrderRow[], status: string) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; companyId?: string }>;
 }) {
-  const { status } = await searchParams;
-  const apiPath = status ? `/orders?status=${encodeURIComponent(status)}` : "/orders";
+  const { status, companyId } = await searchParams;
+  const params = new URLSearchParams();
+  if (status) params.set("status", status as string);
+  if (companyId) params.set("companyId", companyId as string);
+  const apiPath = params.toString() ? `/orders?${params.toString()}` : "/orders";
   const response = await apiFetch(apiPath);
   const orders: Order[] = response.ok ? await response.json() : [];
 
@@ -159,6 +175,8 @@ export default async function OrdersPage({
     total: Number(order.total),
     customerName: order.customer?.displayName ?? null,
     customerId: order.customer?.id ?? null,
+    companyName: order.company?.name ?? null,
+    companyPrefix: order.company?.prefix ?? null,
     committedDeliveryDate: order.committedDeliveryDate ?? null,
     createdAt: order.createdAt,
   }));
