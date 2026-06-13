@@ -74,6 +74,9 @@ const bill_2 = "46c253c2-b3f1-481c-987f-66a561d67971";
 const expense_1 = "0b96a4f3-f1a9-4e1e-9f75-dc6587f7072e";
 const expense_2 = "cf1e1345-822f-42d7-bf72-6108c4927d7d";
 
+const company_nortech = "c_nortech_nt";
+const company_nanonutricion = "c_nanonutricion_nn";
+
 async function main() {
   // ── Users ────────────────────────────────────────────
   const users = [
@@ -91,6 +94,20 @@ async function main() {
       where: { email: user.email },
       update: { name: user.name, phone: user.phone, passwordHash, role: user.role, active: true },
       create: { id: user.id, name: user.name, email: user.email, phone: user.phone, passwordHash, role: user.role, active: true },
+    });
+  }
+
+  // ── Companies ─────────────────────────────────────────
+  const companies = [
+    { id: company_nortech, name: "Norgtech", legalName: "Tecnologia de Nutricion Organica S.A.S.", nit: "900.123.456-7", prefix: "NT" },
+    { id: company_nanonutricion, name: "Nanonutricion", legalName: "Tecnologias en Nanonutricion Organica S.A.S.", nit: "901.987.654-3", prefix: "NN" },
+  ];
+
+  for (const company of companies) {
+    await prisma.company.upsert({
+      where: { prefix: company.prefix },
+      update: {},
+      create: company,
     });
   }
 
@@ -231,8 +248,8 @@ async function main() {
 
   // ── Orders ───────────────────────────────────────────
   const orders = [
-    { id: order_1, customerId: cust_1, opportunityId: opp_1, sourceQuoteId: quote_1, status: OrderStatus.orden_facturacion, requestedDeliveryDate: new Date(now.getFullYear(), now.getMonth() + 1, 30), committedDeliveryDate: new Date(now.getFullYear(), now.getMonth() + 1, 25), notes: "Prioridad alta. Coordinar entrega fin de semana.", subtotal: 135000000, total: 145000000, assignedLogisticsUserId: user_logistica },
-    { id: order_2, customerId: cust_6, opportunityId: opp_6, sourceQuoteId: quote_2, status: OrderStatus.recibido, requestedDeliveryDate: new Date(now.getFullYear(), now.getMonth() + 2, 15), notes: "Pendiente confirmacion de pago anticipado del 30%.", subtotal: 68000000, total: 72000000 },
+    { id: order_1, companyId: company_nortech, orderNumber: "NT-001", customerId: cust_1, opportunityId: opp_1, sourceQuoteId: quote_1, status: OrderStatus.orden_facturacion, requestedDeliveryDate: new Date(now.getFullYear(), now.getMonth() + 1, 30), committedDeliveryDate: new Date(now.getFullYear(), now.getMonth() + 1, 25), notes: "Prioridad alta. Coordinar entrega fin de semana.", subtotal: 135000000, total: 145000000, assignedLogisticsUserId: user_logistica },
+    { id: order_2, companyId: company_nortech, orderNumber: "NT-002", customerId: cust_6, opportunityId: opp_6, sourceQuoteId: quote_2, status: OrderStatus.recibido, requestedDeliveryDate: new Date(now.getFullYear(), now.getMonth() + 2, 15), notes: "Pendiente confirmacion de pago anticipado del 30%.", subtotal: 68000000, total: 72000000 },
   ];
 
   for (const o of orders) {
@@ -291,8 +308,8 @@ async function main() {
 
   // ── Billing Requests ─────────────────────────────────
   const billingRequests = [
-    { id: bill_1, customerId: cust_1, opportunityId: opp_1, sourceType: "quote", sourceQuoteId: quote_1, status: BillingRequestStatus.procesada, notes: "Facturacion 50% anticipo. Resto contra entrega.", requestedByUserId: user_facturacion },
-    { id: bill_2, customerId: cust_6, opportunityId: opp_6, sourceType: "quote", sourceQuoteId: quote_2, status: BillingRequestStatus.pendiente, notes: "Pendiente confirmacion de pago anticipado del 30%.", requestedByUserId: user_facturacion },
+    { id: bill_1, companyId: company_nortech, customerId: cust_1, opportunityId: opp_1, sourceType: "quote", sourceQuoteId: quote_1, status: BillingRequestStatus.procesada, notes: "Facturacion 50% anticipo. Resto contra entrega.", requestedByUserId: user_facturacion },
+    { id: bill_2, companyId: company_nortech, customerId: cust_6, opportunityId: opp_6, sourceType: "quote", sourceQuoteId: quote_2, status: BillingRequestStatus.pendiente, notes: "Pendiente confirmacion de pago anticipado del 30%.", requestedByUserId: user_facturacion },
   ];
 
   for (const b of billingRequests) {
@@ -379,6 +396,7 @@ async function main() {
 
   console.log("✅ Seed completado con exito.");
   console.log("   - 6 usuarios");
+  console.log("   - 2 empresas");
   console.log("   - 6 segmentos");
   console.log("   - 8 clientes");
   console.log("   - 9 contactos");
