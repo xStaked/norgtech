@@ -185,7 +185,27 @@ export class CustomersService {
 
   findAll() {
     return this.prisma.customer.findMany({
-      include: { contacts: true, segment: true },
+      select: {
+        id: true,
+        legalName: true,
+        displayName: true,
+        taxId: true,
+        phone: true,
+        email: true,
+        city: true,
+        department: true,
+        creditLimit: true,
+        segment: { select: { id: true, name: true } },
+        contacts: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            phone: true,
+            isPrimary: true,
+          },
+        },
+      },
       orderBy: { displayName: "asc" },
     });
   }
