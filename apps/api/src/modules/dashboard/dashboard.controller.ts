@@ -13,14 +13,21 @@ export class DashboardController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica")
   @Get("summary")
-  getSummary(@CurrentUser() user: AuthUser) {
-    return this.dashboardService.getSummary(user);
+  getSummary(
+    @CurrentUser() user: AuthUser,
+    @Query("companyId") companyId?: string,
+  ) {
+    return this.dashboardService.getSummary(user, companyId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "comercial")
   @Get("commercial-advanced")
-  getCommercialAdvanced(@CurrentUser() user: AuthUser, @Query("days") days?: string) {
-    return this.dashboardService.getCommercialAdvancedSummary(user, days);
+  getCommercialAdvanced(
+    @CurrentUser() user: AuthUser,
+    @Query("days") days?: string,
+    @Query("companyId") companyId?: string,
+  ) {
+    return this.dashboardService.getCommercialAdvancedSummary(user, days, companyId);
   }
 }

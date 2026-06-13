@@ -57,7 +57,7 @@ type ProductAccumulator = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async getSummary(user: AuthUser) {
+  async getSummary(user: AuthUser, companyId?: string) {
     const now = new Date();
 
     const thirtyDaysAgo = new Date(now);
@@ -109,6 +109,7 @@ export class DashboardService {
       this.prisma.order.count({
         where: {
           status: { not: "entregado" },
+          ...(companyId ? { companyId } : {}),
         },
       }),
       this.prisma.visit.count({
@@ -213,7 +214,7 @@ export class DashboardService {
     };
   }
 
-  async getCommercialAdvancedSummary(user: AuthUser, daysQuery?: string) {
+  async getCommercialAdvancedSummary(user: AuthUser, daysQuery?: string, companyId?: string) {
     const days = this.normalizeDays(daysQuery);
     const to = new Date();
     const from = new Date(to);
@@ -221,12 +222,14 @@ export class DashboardService {
     const isSellerScoped = user.role === UserRole.comercial;
     const customerScope = isSellerScoped ? { assignedToUserId: user.id } : {};
     const orderCustomerScope = isSellerScoped ? { customer: { assignedToUserId: user.id } } : {};
+    const orderWhereExtra = companyId ? { companyId } : {};
 
     const [orders, orderItems, customers, activeProducts] = await Promise.all([
       this.prisma.order.findMany({
         where: {
           orderDate: { gte: from, lte: to },
           ...orderCustomerScope,
+          ...orderWhereExtra,
         },
         include: {
           customer: {
@@ -243,6 +246,7 @@ export class DashboardService {
           order: {
             orderDate: { lte: to },
             ...orderCustomerScope,
+            ...orderWhereExtra,
           },
         },
         include: {
