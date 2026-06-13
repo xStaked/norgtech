@@ -5,6 +5,10 @@ export class CreateBillingRequestDto {
   @IsNotEmpty()
   customerId!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  companyId!: string;
+
   @IsOptional()
   @IsString()
   opportunityId?: string;

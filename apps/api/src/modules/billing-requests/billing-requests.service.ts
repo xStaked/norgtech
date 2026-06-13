@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { BillingRequestStatus } from "@prisma/client";
+import { BillingRequestStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -19,10 +19,13 @@ export class BillingRequestsService {
     private readonly auditService: AuditService,
   ) {}
 
-  findAll(status?: BillingRequestStatus) {
+  findAll(status?: BillingRequestStatus, companyId?: string) {
+    const where: Prisma.BillingRequestWhereInput = {};
+    if (status) where.status = status;
+    if (companyId) where.companyId = companyId;
     return this.prisma.billingRequest.findMany({
-      where: status ? { status } : undefined,
-      include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true },
+      where,
+      include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true, company: true },
       orderBy: { createdAt: "desc" },
     });
   }
@@ -30,7 +33,7 @@ export class BillingRequestsService {
   findOne(id: string) {
     return this.prisma.billingRequest.findUnique({
       where: { id },
-      include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true },
+      include: { customer: true, opportunity: true, sourceQuote: true, sourceOrder: true, company: true },
     });
   }
 
@@ -54,10 +57,18 @@ export class BillingRequestsService {
       }
     }
 
+    const company = await this.prisma.company.findUnique({
+      where: { id: dto.companyId },
+    });
+    if (!company || !company.isActive) {
+      throw new NotFoundException("Company not found or inactive");
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const billingRequest = await tx.billingRequest.create({
         data: {
           customerId: dto.customerId,
+          companyId: dto.companyId,
           opportunityId: dto.opportunityId || null,
           sourceType: dto.sourceOrderId ? "order" : dto.sourceQuoteId ? "quote" : "direct",
           sourceQuoteId: dto.sourceQuoteId || null,

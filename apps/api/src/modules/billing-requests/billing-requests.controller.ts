@@ -26,8 +26,8 @@ export class BillingRequestsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "facturacion")
   @Get()
-  findAll(@Query("status") status?: BillingRequestStatus) {
-    return this.billingRequestsService.findAll(status);
+  findAll(@Query("status") status?: BillingRequestStatus, @Query("companyId") companyId?: string) {
+    return this.billingRequestsService.findAll(status, companyId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
