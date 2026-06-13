@@ -178,6 +178,21 @@ enum NoraActionStatus {
   failed
 }
 
+model Company {
+  id         String   @id @default(cuid())
+  name       String
+  legalName  String
+  nit        String
+  prefix     String   @unique
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  orders          Order[]
+  billingRequests BillingRequest[]
+  invoices        Invoice[]
+}
+
 model User {
   id                            String                     @id @default(cuid())
   name                          String
@@ -594,6 +609,8 @@ model Order {
   total                      Decimal               @db.Decimal(14, 2)
   createdBy                  String
   updatedBy                  String
+  companyId                  String
+  company                    Company                @relation(fields: [companyId], references: [id])
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
   customer                   Customer              @relation(fields: [customerId], references: [id])
@@ -674,6 +691,8 @@ model BillingRequest {
   requestedByUserId String
   createdBy         String
   updatedBy         String
+  companyId         String
+  company           Company               @relation(fields: [companyId], references: [id])
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   customer          Customer             @relation(fields: [customerId], references: [id])
@@ -755,6 +774,8 @@ model Invoice {
   notes         String?
   createdBy     String
   updatedBy     String
+  companyId     String
+  company       Company           @relation(fields: [companyId], references: [id])
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
   customer      Customer         @relation(fields: [customerId], references: [id])
