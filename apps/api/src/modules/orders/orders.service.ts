@@ -7,6 +7,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { OrderXlsxExportService } from "./order-xlsx-export.service";
+import { CreditService } from "../credit/credit.service";
 import { allowedTransitions } from "./order-status-transition-map";
 
 @Injectable()
@@ -15,6 +16,7 @@ export class OrdersService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly orderXlsxExportService: OrderXlsxExportService,
+    private readonly credit: CreditService,
   ) {}
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -54,6 +56,16 @@ export class OrdersService {
     if (dto.assignedLogisticsUserId) {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
+
+    const orderSubtotal = dto.items.reduce(
+      (sum, item) =>
+        sum.plus(
+          new Prisma.Decimal(item.quantity).times(new Prisma.Decimal(item.unitPrice)),
+        ),
+      new Prisma.Decimal(0),
+    );
+
+    await this.credit.assertCreditLimit(dto.customerId, orderSubtotal);
 
     const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
     const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
