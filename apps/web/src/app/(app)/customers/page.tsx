@@ -31,6 +31,7 @@ interface Customer {
   email: string | null;
   city: string | null;
   department: string | null;
+  creditLimit: string | number | null;
   segment: Segment | null;
   contacts: Contact[];
 }
@@ -43,6 +44,7 @@ interface CustomerRow {
   location: string;
   primaryContact: string | null;
   primaryContactMeta: string | null;
+  creditLimit: string | null;
 }
 
 function buildLocation(customer: Customer) {
@@ -93,6 +95,16 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     render: (row) => row.location,
   },
   {
+    key: "credit",
+    header: "Crédito",
+    render: (row) =>
+      row.creditLimit ? (
+        <span style={{ fontWeight: 600 }}>{row.creditLimit}</span>
+      ) : (
+        <span style={{ color: "#6b7c93" }}>—</span>
+      ),
+  },
+  {
     key: "contact",
     header: "Contacto principal",
     render: (row) =>
@@ -137,6 +149,9 @@ export default async function CustomersPage() {
       location: buildLocation(customer),
       primaryContact: primary.name,
       primaryContactMeta: primary.meta,
+      creditLimit: customer.creditLimit != null
+        ? `$${Number(customer.creditLimit).toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
+        : null,
     };
   });
 
