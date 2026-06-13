@@ -452,6 +452,7 @@ model Customer {
   creditLimit           Decimal?               @db.Decimal(14, 2)
   paymentCondition      PaymentCondition?      @default(contado)
   paymentDays           Int?                   @default(0)
+  purchaseBudget        Decimal?               @db.Decimal(14, 2)
 }
 
 model Contact {
