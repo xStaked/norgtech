@@ -18,6 +18,7 @@ type CommercialOrder = {
   zone?: string | null;
   total: unknown;
   customer?: CommercialCustomer | null;
+  customerZone?: { zone: { name: string }; assignedTo?: { name: string } | null } | null;
 };
 
 type CommercialOrderItem = {
@@ -239,6 +240,11 @@ export class DashboardService {
               assignedToUserId: true,
             },
           },
+          customerZone: {
+            include: {
+              zone: { select: { name: true } },
+            },
+          },
         },
       }) as Promise<CommercialOrder[]>,
       this.prisma.orderItem.findMany({
@@ -354,9 +360,9 @@ export class DashboardService {
       customerBucket.revenue += revenue;
       customerBucket.lastOrderDate = this.maxDate(customerBucket.lastOrderDate, order.orderDate);
 
-      const zone = order.zone?.trim() || "Sin zona";
-      const zoneBucket = this.getOrSet(byZoneMap, zone, {
-        zone,
+      const zoneName = order.customerZone?.zone?.name?.trim() || "Sin zona";
+      const zoneBucket = this.getOrSet(byZoneMap, zoneName, {
+        zone: zoneName,
         orders: 0,
         revenue: 0,
         customerIds: new Set<string>(),
