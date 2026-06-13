@@ -145,6 +145,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
   },
   {
+    href: "/zones",
+    label: "Zonas",
+    shortLabel: "ZN",
+    description: "Catalogo de zonas de despacho",
+    group: "Catalogo",
+    requiredRoles: ["administrador", "director_comercial"] as const,
+  },
+  {
     href: "/users",
     label: "Usuarios",
     shortLabel: "US",
@@ -194,6 +202,7 @@ const singularLabels: Record<string, string> = {
   Seguimientos: "Seguimiento",
   Cartera: "Cartera",
   Usuarios: "Usuario",
+  Zonas: "Zona",
 };
 
 function segmentToLabel(segment: string) {
