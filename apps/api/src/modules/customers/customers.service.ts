@@ -7,8 +7,10 @@ import { Prisma } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AssignZoneDto } from "./dto/assign-zone.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
+import { UpdateCustomerZoneDto } from "./dto/update-customer-zone.dto";
 
 @Injectable()
 export class CustomersService {
@@ -308,6 +310,64 @@ export class CustomersService {
       updated: updatedCount,
       details,
     };
+  }
+
+  async getCustomerZones(customerId: string) {
+    return this.prisma.customerZone.findMany({
+      where: { customerId, isActive: true },
+      include: { zone: true, assignedTo: { select: { id: true, name: true } } },
+      orderBy: { zone: { name: "asc" } },
+    });
+  }
+
+  async assignZoneToCustomer(customerId: string, dto: AssignZoneDto) {
+    await this.prisma.customer.findUniqueOrThrow({ where: { id: customerId } });
+    await this.prisma.zone.findUniqueOrThrow({ where: { id: dto.zoneId } });
+
+    const existing = await this.prisma.customerZone.findUnique({
+      where: { customerId_zoneId: { customerId, zoneId: dto.zoneId } },
+    });
+    if (existing) {
+      if (existing.isActive) throw new BadRequestException("Zone already assigned to customer");
+      return this.prisma.customerZone.update({
+        where: { id: existing.id },
+        data: { isActive: true, address: dto.address, assignedToUserId: dto.assignedToUserId },
+        include: { zone: true, assignedTo: { select: { id: true, name: true } } },
+      });
+    }
+
+    return this.prisma.customerZone.create({
+      data: {
+        customerId,
+        zoneId: dto.zoneId,
+        address: dto.address,
+        assignedToUserId: dto.assignedToUserId,
+      },
+      include: { zone: true, assignedTo: { select: { id: true, name: true } } },
+    });
+  }
+
+  async updateCustomerZone(customerId: string, customerZoneId: string, dto: UpdateCustomerZoneDto) {
+    const cz = await this.prisma.customerZone.findUnique({ where: { id: customerZoneId } });
+    if (!cz || cz.customerId !== customerId) {
+      throw new NotFoundException("Customer zone assignment not found");
+    }
+    return this.prisma.customerZone.update({
+      where: { id: customerZoneId },
+      data: dto,
+      include: { zone: true, assignedTo: { select: { id: true, name: true } } },
+    });
+  }
+
+  async removeCustomerZone(customerId: string, customerZoneId: string) {
+    const cz = await this.prisma.customerZone.findUnique({ where: { id: customerZoneId } });
+    if (!cz || cz.customerId !== customerId) {
+      throw new NotFoundException("Customer zone assignment not found");
+    }
+    return this.prisma.customerZone.update({
+      where: { id: customerZoneId },
+      data: { isActive: false },
+    });
   }
 
   private assertExactlyOnePrimaryContact(dto: CreateCustomerDto) {
