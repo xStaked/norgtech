@@ -100,17 +100,27 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   const [customerZones, setCustomerZones] = useState<Array<{ id: string; zone: { name: string }; assignedTo: { name: string } | null }>>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
-
-  function fetchCustomerZones(customerId: string) {
-    if (!customerId) { setCustomerZones([]); return; }
-    apiFetchClient(`/customers/${customerId}/zones`)
-      .then(r => r.json())
-      .then(setCustomerZones)
-      .catch(() => setCustomerZones([]));
-  }
+  const [creditSummary, setCreditSummary] = useState<{
+    availableCredit: number | null;
+    utilizationPercent: number | null;
+  } | null>(null);
 
   useEffect(() => {
-    fetchCustomerZones(selectedCustomerId);
+    if (!selectedCustomerId) {
+      setCustomerZones([]);
+      setCreditSummary(null);
+      return;
+    }
+
+    apiFetchClient(`/customers/${selectedCustomerId}/zones`)
+      .then((r) => r.json())
+      .then(setCustomerZones)
+      .catch(() => setCustomerZones([]));
+
+    apiFetchClient(`/credit/customers/${selectedCustomerId}/summary`)
+      .then((r) => r.json())
+      .then(setCreditSummary)
+      .catch(() => setCreditSummary(null));
   }, [selectedCustomerId]);
 
   function addItem() {
@@ -216,6 +226,14 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       return;
     }
 
+    if (creditSummary?.availableCredit != null && subtotal > creditSummary.availableCredit) {
+      setError(
+        `Credito excedido. Disponible: $${creditSummary.availableCredit.toLocaleString("es-CO", { maximumFractionDigits: 0 })}, Pedido: $${subtotal.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`,
+      );
+      setLoading(false);
+      return;
+    }
+
     try {
       const response = await apiFetchClient("/orders", {
         method: "POST",
@@ -267,6 +285,22 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                 </option>
               ))}
             </select>
+            {creditSummary && creditSummary.availableCredit != null && (
+              <div
+                style={{
+                  marginTop: 6,
+                  padding: "6px 10px",
+                  borderRadius: 6,
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  background: creditSummary.availableCredit <= 0 ? "#fef3c7" : "#ecfdf3",
+                  color: creditSummary.availableCredit <= 0 ? "#92400e" : "#027a48",
+                }}
+              >
+                Credito disponible: ${creditSummary.availableCredit.toLocaleString("es-CO", { maximumFractionDigits: 0 })}
+                {creditSummary.availableCredit <= 0 && " - Sin credito disponible"}
+              </div>
+            )}
           </Field>
           <Field label="Orden de compra" htmlFor="purchaseOrderNumber">
             <Input id="purchaseOrderNumber" name="purchaseOrderNumber" />
