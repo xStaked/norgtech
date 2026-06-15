@@ -386,9 +386,9 @@ export default async function CustomerDetailPage({
         </SectionCard>
       )}
 
-      <CreditInfoCard customerId={customer.id} />
-
       <CustomerGoalsSection customerId={customer.id} />
+
+      <CreditInfoCard customerId={customer.id} />
 
       <CustomerHistorySection
         history={{
