@@ -6,7 +6,8 @@ def test_cliente_mode_extracts_order_intent():
         {
             "sender_type": "cliente",
             "message": "Necesito 10 bultos de producto A para la costa",
-            "customer": {"displayName": "Agro Norte"},
+            "customer": {"id": "customer-1", "displayName": "Agro Norte"},
+            "companies": [{"id": "company-nt", "name": "Nortech", "prefix": "NT"}],
         }
     )
 
@@ -70,3 +71,45 @@ def test_cliente_order_missing_company_asks_one_clarification():
     assert result["missing_fields"] == ["company_id"]
     assert "empresa" in result["suggested_reply"].lower()
     assert result["proposals"] == []
+
+
+def test_credit_query_without_customer_context_requests_clarification():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Necesito revisar el cupo y la cartera",
+        }
+    )
+
+    assert result["intent"] == "clarification"
+    assert result["missing_fields"] == ["customer_id"]
+
+
+def test_payment_support_without_customer_context_requests_clarification():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "cliente",
+            "message": "Adjunto soporte de pago por transferencia",
+        }
+    )
+
+    assert result["intent"] == "clarification"
+    assert result["missing_fields"] == ["customer_id"]
+
+
+def test_comercial_expense_message_builds_expense_draft_proposal():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Gasto de almuerzo por 45000 con cliente",
+        }
+    )
+
+    assert result["intent"] == "gasto"
+    assert result["proposals"][0]["type"] == "expense_draft"
+    assert result["proposals"][0]["payload"]["amount"] == 45000
+    assert result["proposals"][0]["payload"]["category"] == "alimentacion"
+    assert (
+        result["proposals"][0]["payload"]["description"]
+        == "Gasto de almuerzo por 45000 con cliente"
+    )

@@ -100,7 +100,12 @@ def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
         return NoraProposal(
             type="expense_draft",
             title="Gasto comercial para completar",
-            payload={"description": action.fields.get("description")},
+            payload={
+                "expenseDate": action.fields.get("expense_date"),
+                "category": action.fields.get("category"),
+                "amount": action.fields.get("amount"),
+                "description": action.fields.get("description"),
+            },
             requires_human_review=True,
         )
 
@@ -151,6 +156,8 @@ def _suggested_reply_for(mode: str, intent: str) -> str:
         return "Recibido. Dejamos la informacion logistica para revision."
     if intent == "agenda":
         return "Voy a revisar tu agenda y pendientes."
+    if intent == "gasto":
+        return "Recibido. Voy a dejar el gasto listo para revision."
     if intent == "resumen_conversacion":
         return "Prepare un resumen operativo de esta conversacion."
     return "Recibido. Dejamos el mensaje pendiente de revision."

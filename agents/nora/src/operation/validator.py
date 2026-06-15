@@ -57,10 +57,6 @@ def _missing_required_fields(
     missing: list[str] = []
     for field_name in required_fields:
         value = action.fields.get(field_name)
-        if field_name == "customer_id" and value is None:
-            continue
-        if field_name == "company_id" and value is None:
-            continue
         if value is None or value == "" or value == []:
             missing.append(field_name)
     return missing

@@ -1,4 +1,6 @@
+from datetime import date
 from dataclasses import dataclass, field
+import re
 from typing import Any, Literal
 
 from ..models.whatsapp_models import WhatsAppRouteRequest
@@ -89,13 +91,19 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
         )
 
     if any(word in normalized for word in EXPENSE_WORDS):
+        amount = _expense_amount(message)
         return NoraPlan(
             intent="gasto",
             actions=[
                 PlannedAction(
                     domain="expenses",
                     action="create_expense_draft",
-                    fields={"description": message},
+                    fields={
+                        "expense_date": date.today().isoformat(),
+                        "category": _expense_category(normalized),
+                        "amount": amount,
+                        "description": message,
+                    },
                     confidence=0.72,
                 )
             ],
@@ -200,3 +208,23 @@ def _conversation_summary(request: WhatsAppRouteRequest) -> str:
         return "No hay mensajes recientes suficientes para resumir la conversacion."
     text = " ".join(message.body for message in request.recent_messages[-4:])
     return f"Resumen operativo de la conversacion: {text[:400]}"
+
+
+def _expense_category(normalized_message: str) -> str:
+    if "almuerzo" in normalized_message:
+        return "alimentacion"
+    if "hotel" in normalized_message:
+        return "hospedaje"
+    if "gasolina" in normalized_message:
+        return "combustible"
+    if "peaje" in normalized_message:
+        return "peajes"
+    return "otros"
+
+
+def _expense_amount(message: str) -> int | None:
+    match = re.search(r"(?:\$?\s*)(\d{1,3}(?:\.\d{3})+|\d{4,})", message)
+    if not match:
+        return None
+    digits = match.group(1).replace(".", "")
+    return int(digits)
