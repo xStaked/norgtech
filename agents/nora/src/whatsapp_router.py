@@ -1,10 +1,9 @@
 from typing import Any
 
-from .models.whatsapp_models import WhatsAppRouteRequest, WhatsAppRouteResponse
-
-
-ORDER_WORDS = ("pedido", "necesito", "cotizar", "bulto", "bultos", "tonelada", "kg")
-STATUS_WORDS = ("estado", "pendiente", "despachado", "facturado", "factura")
+from .models.whatsapp_models import NoraProposal, WhatsAppRouteRequest, WhatsAppRouteResponse
+from .operation.capabilities import get_capability
+from .operation.planner import PlannedAction, plan_message
+from .operation.validator import mode_for_sender, validate_plan
 
 
 def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> dict[str, Any]:
@@ -13,48 +12,128 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
         if isinstance(payload, WhatsAppRouteRequest)
         else WhatsAppRouteRequest.model_validate(payload)
     )
-    message = request.message.strip()
-    normalized_message = message.lower()
-    mode = _mode_for_sender(request.sender_type)
-    intent = _detect_intent(normalized_message)
+    mode = mode_for_sender(request.sender_type)
+    plan = plan_message(request)
+    validation = validate_plan(request, plan)
+
+    if not validation.ok and validation.missing_fields:
+        response = WhatsAppRouteResponse(
+            mode=mode,
+            intent="clarification",
+            summary=plan.summary,
+            suggested_reply=_clarification_for(validation.missing_fields),
+            requires_human_review=True,
+            risk_level=_risk_for(plan.actions),
+            missing_fields=validation.missing_fields,
+            proposals=[],
+        )
+        return response.model_dump()
+
+    if not validation.ok:
+        response = WhatsAppRouteResponse(
+            mode=mode,
+            intent="unsupported",
+            summary=plan.summary,
+            suggested_reply=validation.blocked_reason or "No puedo hacer esa accion desde Nora.",
+            requires_human_review=True,
+            risk_level="medium",
+            missing_fields=[],
+            blocked_reason=validation.blocked_reason,
+            proposals=[],
+        )
+        return response.model_dump()
+
+    proposals = [_proposal_for_action(action) for action in plan.actions]
+    proposals = [proposal for proposal in proposals if proposal is not None]
+
     response = WhatsAppRouteResponse(
         mode=mode,
-        intent=intent,
-        summary=_summary_for(request, intent),
-        suggested_reply=_suggested_reply_for(mode, intent),
-        requires_human_review=True,
-        proposed_order=_proposed_order_for(message, intent),
+        intent=plan.intent,
+        summary=plan.summary,
+        suggested_reply=_suggested_reply_for(mode, plan.intent),
+        requires_human_review=_requires_review(plan.actions),
+        risk_level=_risk_for(plan.actions),
+        missing_fields=[],
+        proposals=proposals,
+        proposed_order=_legacy_order_payload(proposals),
     )
     return response.model_dump()
 
 
-def _mode_for_sender(sender_type: str) -> str:
-    if sender_type in ("cliente", "desconocido"):
-        return "cliente"
-    if sender_type == "admin":
-        return "admin"
-    return "comercial"
+def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
+    if action.domain == "orders" and action.action == "create_draft":
+        return NoraProposal(
+            type="order_draft",
+            title="Borrador de pedido",
+            payload={
+                "customerId": action.fields.get("customer_id"),
+                "companyId": action.fields.get("company_id"),
+                "customerZoneId": action.fields.get("customer_zone_id"),
+                "items": action.fields.get("items", []),
+                "notes": action.fields.get("notes"),
+                "sourceConversationId": action.fields.get("source_conversation_id"),
+                "approvalStatus": "en_revision",
+            },
+            requires_human_review=True,
+        )
+
+    if action.domain == "payments" and action.action == "register_support_event":
+        return NoraProposal(
+            type="payment_support",
+            title="Soporte de pago para revision",
+            payload={
+                "customerId": action.fields.get("customer_id"),
+                "notes": action.fields.get("notes"),
+            },
+            requires_human_review=True,
+        )
+
+    if action.domain == "logistics" and action.action == "register_tracking_event":
+        return NoraProposal(
+            type="logistics_event",
+            title="Evento logistico para revision",
+            payload={"notes": action.fields.get("notes")},
+            requires_human_review=True,
+        )
+
+    if action.domain == "expenses" and action.action == "create_expense_draft":
+        return NoraProposal(
+            type="expense_draft",
+            title="Gasto comercial para completar",
+            payload={"description": action.fields.get("description")},
+            requires_human_review=True,
+        )
+
+    return None
 
 
-def _detect_intent(normalized_message: str) -> str:
-    if any(word in normalized_message for word in STATUS_WORDS):
-        return "consulta_pedidos"
-    if any(word in normalized_message for word in ORDER_WORDS):
-        return "pedido"
-    return "clasificar"
+def _requires_review(actions: list[PlannedAction]) -> bool:
+    if not actions:
+        return True
+    for action in actions:
+        capability = get_capability(action.domain, action.action)
+        if capability is None or capability.requires_human_review:
+            return True
+    return False
 
 
-def _summary_for(request: WhatsAppRouteRequest, intent: str) -> str:
-    customer_name = None
-    if request.customer:
-        customer_name = request.customer.get("displayName") or request.customer.get("legalName")
+def _risk_for(actions: list[PlannedAction]) -> str:
+    ranking = {"low": 0, "medium": 1, "high": 2}
+    risk = "low"
+    for action in actions:
+        capability = get_capability(action.domain, action.action)
+        if capability and ranking[capability.risk_level] > ranking[risk]:
+            risk = capability.risk_level
+    return risk if actions else "medium"
 
-    if intent == "pedido":
-        prefix = f"{customer_name} solicita un pedido" if customer_name else "Solicitud de pedido"
-        return f"{prefix}: {request.message.strip()}"
-    if intent == "consulta_pedidos":
-        return f"Consulta relacionada con pedidos: {request.message.strip()}"
-    return f"Mensaje pendiente de clasificacion: {request.message.strip()}"
+
+def _legacy_order_payload(proposals: list[NoraProposal]) -> dict[str, Any] | None:
+    for proposal in proposals:
+        if proposal.type == "order_draft":
+            payload = dict(proposal.payload)
+            payload["source"] = "whatsapp"
+            return payload
+    return None
 
 
 def _suggested_reply_for(mode: str, intent: str) -> str:
@@ -64,14 +143,26 @@ def _suggested_reply_for(mode: str, intent: str) -> str:
         if mode == "cliente":
             return "Recibido. Voy a revisar el estado del pedido y te respondemos en breve."
         return "Voy a revisar tus pedidos pendientes y te comparto el resumen."
-    return "Recibido. Voy a revisar tu mensaje y te confirmamos el siguiente paso."
+    if intent == "consulta_cartera":
+        return "Voy a revisar la informacion de cupo y cartera disponible."
+    if intent == "soporte_pago":
+        return "Recibido el soporte. Lo dejamos para revision administrativa."
+    if intent == "guia_logistica":
+        return "Recibido. Dejamos la informacion logistica para revision."
+    if intent == "agenda":
+        return "Voy a revisar tu agenda y pendientes."
+    if intent == "resumen_conversacion":
+        return "Prepare un resumen operativo de esta conversacion."
+    return "Recibido. Dejamos el mensaje pendiente de revision."
 
 
-def _proposed_order_for(message: str, intent: str) -> dict[str, Any] | None:
-    if intent != "pedido":
-        return None
-    return {
-        "source": "whatsapp",
-        "rawMessage": message,
-        "items": [],
-    }
+def _clarification_for(missing_fields: list[str]) -> str:
+    if "company_id" in missing_fields:
+        return "Para preparar el pedido, dime por cual empresa debe salir."
+    if "customer_zone_id" in missing_fields:
+        return "Para preparar el pedido, dime la zona o sede de despacho."
+    if "customer_id" in missing_fields:
+        return "Necesito identificar el cliente antes de continuar."
+    if "items" in missing_fields:
+        return "Dime que productos y cantidades necesita el pedido."
+    return "Me falta un dato para continuar. Puedes confirmarme la informacion faltante?"
