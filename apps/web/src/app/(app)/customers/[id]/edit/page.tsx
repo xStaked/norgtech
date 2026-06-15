@@ -25,6 +25,7 @@ interface Customer {
   creditLimit: string | null;
   paymentCondition: string | null;
   paymentDays: number | null;
+  purchaseBudget: string | number | null;
 }
 
 export default async function CustomerEditPage({

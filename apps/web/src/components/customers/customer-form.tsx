@@ -31,6 +31,7 @@ interface Customer {
   creditLimit: string | null;
   paymentCondition: string | null;
   paymentDays: number | null;
+  purchaseBudget?: string | number | null;
 }
 
 interface CustomerFormProps {
@@ -95,6 +96,9 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
       paymentCondition: optionalString("paymentCondition") || undefined,
       paymentDays: formData.get("paymentDays")
         ? Number(formData.get("paymentDays"))
+        : undefined,
+      purchaseBudget: formData.get("purchaseBudget")
+        ? Number(formData.get("purchaseBudget"))
         : undefined,
     };
 
@@ -285,6 +289,16 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
             min={0}
             step={1}
             defaultValue={customer?.paymentDays ?? ""}
+          />
+        </div>
+        <div className="grid gap-1">
+          <Label>Presupuesto de compra mensual ($)</Label>
+          <Input
+            name="purchaseBudget"
+            type="number"
+            min={0}
+            step={1}
+            defaultValue={customer?.purchaseBudget ?? ""}
           />
         </div>
       </div>
