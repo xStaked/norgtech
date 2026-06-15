@@ -1,6 +1,7 @@
 from datetime import date
 from dataclasses import dataclass, field
 import re
+import unicodedata
 from typing import Any, Literal
 
 from ..models.whatsapp_models import WhatsAppRouteRequest
@@ -176,23 +177,27 @@ def _company_id(request: WhatsAppRouteRequest, normalized_message: str) -> str |
     if len(request.companies) == 1:
         return request.companies[0].id
 
+    matches: list[str] = []
     for company in request.companies:
         candidates = [company.id, company.name or "", company.prefix or ""]
-        if any(candidate and candidate.lower() in normalized_message for candidate in candidates):
-            return company.id
+        if any(candidate and _phrase_matches(normalized_message, candidate) for candidate in candidates):
+            matches.append(company.id)
 
-    return None
+    unique_matches = list(dict.fromkeys(matches))
+    return unique_matches[0] if len(unique_matches) == 1 else None
 
 
 def _customer_zone_id(request: WhatsAppRouteRequest, normalized_message: str) -> str | None:
     if len(request.customer_zones) == 1:
         return request.customer_zones[0].id
 
+    matches: list[str] = []
     for zone in request.customer_zones:
-        if zone.name.lower() in normalized_message:
-            return zone.id
+        if _phrase_matches(normalized_message, zone.name):
+            matches.append(zone.id)
 
-    return None
+    unique_matches = list(dict.fromkeys(matches))
+    return unique_matches[0] if len(unique_matches) == 1 else None
 
 
 def _order_summary(request: WhatsAppRouteRequest, message: str) -> str:
@@ -223,8 +228,25 @@ def _expense_category(normalized_message: str) -> str:
 
 
 def _expense_amount(message: str) -> int | None:
-    match = re.search(r"(?:\$?\s*)(\d{1,3}(?:\.\d{3})+|\d{4,})", message)
+    match = re.search(r"(?:\$?\s*)(\d{1,3}(?:\.\d{3})+|\d+)", message)
     if not match:
         return None
     digits = match.group(1).replace(".", "")
     return int(digits)
+
+
+def _phrase_matches(message: str, candidate: str) -> bool:
+    normalized_message = _normalize_phrase(message)
+    normalized_candidate = _normalize_phrase(candidate)
+    if not normalized_candidate:
+        return False
+    pattern = rf"(?<!\w){re.escape(normalized_candidate)}(?!\w)"
+    return re.search(pattern, normalized_message) is not None
+
+
+def _normalize_phrase(value: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", value)
+    ascii_value = "".join(char for char in decomposed if not unicodedata.combining(char))
+    lowered = ascii_value.lower()
+    cleaned = re.sub(r"[^a-z0-9]+", " ", lowered)
+    return re.sub(r"\s+", " ", cleaned).strip()

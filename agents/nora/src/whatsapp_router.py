@@ -168,6 +168,8 @@ def _clarification_for(missing_fields: list[str]) -> str:
         return "Para preparar el pedido, dime por cual empresa debe salir."
     if "customer_zone_id" in missing_fields:
         return "Para preparar el pedido, dime la zona o sede de despacho."
+    if "amount" in missing_fields:
+        return "Necesito el valor del gasto para dejarlo registrado."
     if "customer_id" in missing_fields:
         return "Necesito identificar el cliente antes de continuar."
     if "items" in missing_fields:
