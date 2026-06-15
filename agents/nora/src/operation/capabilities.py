@@ -14,7 +14,7 @@ class NoraCapability:
     modes: tuple[Mode, ...]
     kind: CapabilityKind
     requires_human_review: bool
-    required_fields: list[str]
+    required_fields: tuple[str, ...]
     risk_level: RiskLevel
     summary: str
 
@@ -26,7 +26,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("comercial", "admin"),
         kind="read",
         requires_human_review=False,
-        required_fields=[],
+        required_fields=(),
         risk_level="low",
         summary="Buscar clientes",
     ),
@@ -36,7 +36,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("cliente", "comercial", "admin"),
         kind="read",
         requires_human_review=False,
-        required_fields=[],
+        required_fields=(),
         risk_level="low",
         summary="Consultar estado de pedidos",
     ),
@@ -46,7 +46,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("cliente", "comercial", "admin"),
         kind="write",
         requires_human_review=True,
-        required_fields=["customer_id", "company_id", "items"],
+        required_fields=("customer_id", "company_id", "items"),
         risk_level="high",
         summary="Preparar borrador de pedido",
     ),
@@ -56,7 +56,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("comercial", "admin"),
         kind="read",
         requires_human_review=False,
-        required_fields=["customer_id"],
+        required_fields=("customer_id",),
         risk_level="medium",
         summary="Consultar cupo y cartera",
     ),
@@ -66,7 +66,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("cliente", "admin"),
         kind="write",
         requires_human_review=True,
-        required_fields=["customer_id"],
+        required_fields=("customer_id",),
         risk_level="high",
         summary="Registrar soporte de pago para revision",
     ),
@@ -76,7 +76,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("admin",),
         kind="write",
         requires_human_review=True,
-        required_fields=[],
+        required_fields=(),
         risk_level="high",
         summary="Registrar guia o evento logistico para revision",
     ),
@@ -86,7 +86,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("comercial",),
         kind="read",
         requires_human_review=False,
-        required_fields=[],
+        required_fields=(),
         risk_level="low",
         summary="Consultar agenda comercial",
     ),
@@ -96,7 +96,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("comercial",),
         kind="write",
         requires_human_review=True,
-        required_fields=["expense_date", "category", "amount", "description"],
+        required_fields=("expense_date", "category", "amount", "description"),
         risk_level="medium",
         summary="Preparar gasto comercial para revision",
     ),
@@ -106,7 +106,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("comercial", "admin"),
         kind="read",
         requires_human_review=False,
-        required_fields=[],
+        required_fields=(),
         risk_level="low",
         summary="Consultar resumen de ventas",
     ),
@@ -116,7 +116,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         modes=("admin",),
         kind="read",
         requires_human_review=False,
-        required_fields=[],
+        required_fields=(),
         risk_level="low",
         summary="Resumir conversacion de WhatsApp",
     ),
