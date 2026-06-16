@@ -39,7 +39,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             intent="clarification",
             summary=plan.summary,
             suggested_reply=_clarification_for(validation.missing_fields),
-            requires_human_review=True,
+            requires_human_review=False,
             risk_level=_risk_for(plan.actions),
             missing_fields=validation.missing_fields,
             proposals=[],
