@@ -67,7 +67,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
         mode=mode,
         intent=plan.intent,
         summary=plan.summary,
-        suggested_reply=_suggested_reply_for(mode, plan.intent),
+        suggested_reply=_suggested_reply_for(mode, plan.intent, request),
         requires_human_review=_requires_review(plan.actions),
         risk_level=_risk_for(plan.actions),
         missing_fields=[],
@@ -158,7 +158,11 @@ def _legacy_order_payload(proposals: list[NoraProposal]) -> dict[str, Any] | Non
     return None
 
 
-def _suggested_reply_for(mode: str, intent: str) -> str:
+def _suggested_reply_for(
+    mode: str,
+    intent: str,
+    request: WhatsAppRouteRequest | None = None,
+) -> str:
     if intent == "pedido":
         return "Recibido. Voy a validar los datos del pedido y te confirmamos en breve."
     if intent == "consulta_pedidos":
@@ -177,6 +181,34 @@ def _suggested_reply_for(mode: str, intent: str) -> str:
         return "Recibido. Voy a dejar el gasto listo para revision."
     if intent == "resumen_conversacion":
         return "Prepare un resumen operativo de esta conversacion."
+    if intent == "clasificacion":
+        if request and request.user and request.user.name:
+            name = request.user.name.split()[0]
+            if mode == "comercial":
+                return (
+                    f"¡Hola {name}! Puedo ayudarte a consultar pedidos, "
+                    "revisar tu cartera, registrar gastos, consultar tu agenda, "
+                    "o registrar soportes de pago. ¿En que puedo ayudarte?"
+                )
+            if mode == "admin":
+                return (
+                    f"¡Hola {name}! Puedo ayudarte a consultar pedidos, "
+                    "revisar guias logisticas, procesar soportes de pago, "
+                    "o hacer un resumen de conversacion. ¿En que puedo ayudarte?"
+                )
+        if request and request.customer:
+            display = (
+                request.customer.get("displayName")
+                or request.customer.get("legalName")
+                or ""
+            )
+            prefix = f"¡Hola {display}! " if display else "¡Hola! "
+            return (
+                f"{prefix}Recibimos tu mensaje. Puedo ayudarte a hacer pedidos, "
+                "consultar el estado de tus pedidos, "
+                "o registrar soportes de pago. ¿En que puedo ayudarte?"
+            )
+        return "¡Hola! ¿En que puedo ayudarte?"
     return "Recibido. Dejamos el mensaje pendiente de revision."
 
 
