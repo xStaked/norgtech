@@ -131,7 +131,7 @@ def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
 
 def _requires_review(actions: list[PlannedAction]) -> bool:
     if not actions:
-        return True
+        return False
     for action in actions:
         capability = get_capability(action.domain, action.action)
         if capability is None or capability.requires_human_review:

@@ -56,6 +56,27 @@ def test_comercial_user_can_query_today_agenda():
     assert result["proposals"] == []
 
 
+def test_comercial_greeting_auto_replies_without_human_review():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "hola nora",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sales",
+                "email": "sales@norgtech.local",
+            },
+        }
+    )
+
+    assert result["mode"] == "comercial"
+    assert result["intent"] == "clasificacion"
+    assert result["requires_human_review"] is False
+    assert result["proposals"] == []
+    assert result["suggested_reply"]
+
+
 def test_cliente_order_response_includes_structured_proposal_list():
     result = route_whatsapp_message(
         {
