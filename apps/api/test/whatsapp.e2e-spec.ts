@@ -39,8 +39,30 @@ describe("WhatsApp inbox", () => {
   ];
 
   const customers = [
-    { id: "customer-1", displayName: "Agro Norte" },
-    { id: "customer-2", displayName: "Agro Sur" },
+    { id: "customer-1", displayName: "Agro Norte", legalName: "Agro Norte SAS" },
+    { id: "customer-2", displayName: "Agro Sur", legalName: "Agro Sur SAS" },
+  ];
+  const companies = [
+    { id: "company-1", name: "Norgtech", prefix: "NOR", isActive: true },
+    { id: "company-2", name: "Zentrade", prefix: "ZEN", isActive: true },
+  ];
+  const zones = [
+    { id: "zone-1", name: "Costa" },
+    { id: "zone-2", name: "Interior" },
+  ];
+  const customerZones = [
+    {
+      id: "customer-zone-1",
+      customerId: "customer-1",
+      zoneId: "zone-1",
+      isActive: true,
+    },
+    {
+      id: "customer-zone-2",
+      customerId: "customer-2",
+      zoneId: "zone-2",
+      isActive: true,
+    },
   ];
   const contacts = [
     {
@@ -133,7 +155,32 @@ describe("WhatsApp inbox", () => {
     const result = { ...conversation } as Record<string, unknown>;
 
     if (include?.customer) {
-      result.customer = customers.find((customer) => customer.id === conversation.customerId) ?? null;
+      const customer =
+        customers.find((item) => item.id === conversation.customerId) ?? null;
+
+      if (
+        customer &&
+        typeof include.customer === "object" &&
+        "include" in include.customer &&
+        include.customer.include &&
+        typeof include.customer.include === "object" &&
+        "customerZones" in include.customer.include
+      ) {
+        result.customer = {
+          ...customer,
+          customerZones: customerZones
+            .filter(
+              (customerZone) =>
+                customerZone.customerId === customer.id && customerZone.isActive,
+            )
+            .map((customerZone) => ({
+              ...customerZone,
+              zone: zones.find((zone) => zone.id === customerZone.zoneId) ?? null,
+            })),
+        };
+      } else {
+        result.customer = customer;
+      }
     }
     if (include?.contact) {
       result.contact = contacts.find((contact) => contact.id === conversation.contactId) ?? null;
@@ -194,6 +241,11 @@ describe("WhatsApp inbox", () => {
       customer: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           customers.find((customer) => customer.id === id) ?? null,
+      },
+      company: {
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          companies.find((company) => company.id === id) ?? null,
+        findMany: async () => companies.filter((company) => company.isActive),
       },
       contact: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -445,6 +497,12 @@ describe("WhatsApp inbox", () => {
       },
       order: {
         count: async () => orders.length,
+        findFirst: async () =>
+          orders
+            .filter((order) => typeof order.orderNumber === "string")
+            .sort((left, right) =>
+              String(right.orderNumber).localeCompare(String(left.orderNumber)),
+            )[0] ?? null,
         create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
           const order = {
             id: `order-${orders.length + 1}`,
@@ -630,6 +688,7 @@ describe("WhatsApp inbox", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceConversationId: "conversation-ignored",
         billingCompanyNameSnapshot: "Facturadora WhatsApp SAS",
         branchNameSnapshot: "Sucursal WhatsApp",
@@ -653,6 +712,7 @@ describe("WhatsApp inbox", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         items: [{ productName: "Fertilizante especial", quantity: 2, unitPrice: 0 }],
       })
       .expect(404);
@@ -800,13 +860,28 @@ describe("WhatsApp inbox", () => {
         }),
       }),
     );
-    expect(globalThis.fetch).toHaveBeenCalledWith(
-      "http://localhost:8000/whatsapp/route",
+    const noraRouteCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+      ([url]) => url === "http://localhost:8000/whatsapp/route",
+    );
+
+    expect(noraRouteCall).toBeDefined();
+    expect(noraRouteCall?.[1]).toEqual(
       expect.objectContaining({
         method: "POST",
-        body: expect.stringContaining("Necesito 10 bultos de producto A"),
       }),
     );
+
+    const noraRouteBody = JSON.parse(String(noraRouteCall?.[1]?.body ?? "{}"));
+
+    expect(noraRouteBody).toMatchObject({
+      sender_type: "cliente",
+      conversation_id: expect.any(String),
+      customer: expect.objectContaining({ id: expect.any(String) }),
+    });
+    expect(noraRouteBody.message).toBe("Necesito 10 bultos de producto A");
+    expect(Array.isArray(noraRouteBody.companies)).toBe(true);
+    expect(Array.isArray(noraRouteBody.customer_zones)).toBe(true);
+    expect(Array.isArray(noraRouteBody.recent_messages)).toBe(true);
   });
 
   it("auto-sends low-risk Nora replies that do not require human review", async () => {

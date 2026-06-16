@@ -227,6 +227,66 @@ export class WhatsAppService {
     });
   }
 
+  async getNoraConversationContext(conversationId: string) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        customer: {
+          include: {
+            customerZones: {
+              where: { isActive: true },
+              include: { zone: true },
+            },
+          },
+        },
+        contact: true,
+        messages: {
+          orderBy: { createdAt: "desc" },
+          take: 8,
+        },
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+
+    const companies = await this.prisma.company.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, prefix: true },
+    });
+
+    return {
+      customer: conversation.customer
+        ? {
+            id: conversation.customer.id,
+            displayName: conversation.customer.displayName,
+            legalName: conversation.customer.legalName,
+          }
+        : null,
+      contact: conversation.contact
+        ? {
+            id: conversation.contact.id,
+            fullName: conversation.contact.fullName,
+          }
+        : null,
+      companies,
+      customer_zones:
+        conversation.customer?.customerZones.map((customerZone) => ({
+          id: customerZone.id,
+          name: customerZone.zone.name,
+        })) ?? [],
+      recent_messages: conversation.messages
+        .slice()
+        .reverse()
+        .map((message) => ({
+          role: message.role,
+          body: message.body,
+        })),
+    };
+  }
+
   async resolveSenderByPhone(phone: string): Promise<ResolvedWhatsAppSender> {
     const normalizedPhone = this.normalizePhone(phone);
 

@@ -26,6 +26,8 @@ export class NoraRoutingService {
 
     await this.updateConversationIdentity(conversation.id, sender);
 
+    const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
+
     const input = {
       body: message.body,
       conversationId: conversation.id,
@@ -50,11 +52,16 @@ export class NoraRoutingService {
         message: message.body,
         conversation_id: conversation.id,
         customer:
-          "customerId" in sender
+          context.customer ??
+          ("customerId" in sender
             ? {
                 id: sender.customerId,
               }
-            : undefined,
+            : undefined),
+        contact: context.contact ?? undefined,
+        companies: context.companies,
+        customer_zones: context.customer_zones,
+        recent_messages: context.recent_messages,
       });
 
       const updatedLog = await this.prisma.noraActionLog.update({
