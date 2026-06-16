@@ -33,7 +33,7 @@ describe("WhatsApp inbox", () => {
       id: "sales-user-id",
       name: "Sales",
       email: "sales@norgtech.local",
-      phone: "+573001000003",
+      phone: "+573004445566",
       passwordHash,
       role: UserRole.comercial,
       active: true,
@@ -335,8 +335,10 @@ describe("WhatsApp inbox", () => {
           users.find((user) => user.email === where.email || user.id === where.id) ?? null,
         findMany: async ({
           where,
+          select,
         }: {
           where?: { active?: boolean; phone?: { not?: null } };
+          select?: Record<string, unknown>;
         } = {}) =>
           users.filter((user) => {
             if (typeof where?.active === "boolean" && user.active !== where.active) {
@@ -346,7 +348,7 @@ describe("WhatsApp inbox", () => {
               return false;
             }
             return true;
-          }),
+          }).map((user) => (select ? applySelect(user, select) : user)),
       },
       customer: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -485,11 +487,14 @@ describe("WhatsApp inbox", () => {
 
           const conversation = {
             id: `conversation-${conversations.length + 1}`,
+            senderType: WhatsAppSenderType.desconocido,
+            customerId: null,
+            contactId: null,
             createdAt: new Date("2026-05-22T11:10:00.000Z"),
             updatedAt: new Date("2026-05-22T11:10:00.000Z"),
             ...create,
           };
-          conversations.push(conversation as (typeof conversations)[number]);
+          conversations.push(conversation as unknown as (typeof conversations)[number]);
           return conversation;
         },
       },
@@ -1127,7 +1132,7 @@ describe("WhatsApp inbox", () => {
           phone_number_id: "phone-number-1",
           message: {
             id: "wamid-sales-user",
-            from: "573001000003",
+            from: "573004445566",
             timestamp: "2026-05-22T20:02:00.000Z",
             text: { body: "Que tengo pendiente hoy?" },
             profile: { name: "Sales" },
@@ -1139,13 +1144,16 @@ describe("WhatsApp inbox", () => {
     expect(conversations).toContainEqual(
       expect.objectContaining({
         id: response.body.conversationId,
-        phone: "573001000003",
+        phone: "573004445566",
         senderType: WhatsAppSenderType.comercial,
+        customerId: null,
+        contactId: null,
       }),
     );
     expect(noraActions).toContainEqual(
       expect.objectContaining({
         conversationId: response.body.conversationId,
+        actorUserId: "sales-user-id",
         mode: "comercial",
         input: expect.objectContaining({
           senderType: WhatsAppSenderType.comercial,
@@ -1179,6 +1187,61 @@ describe("WhatsApp inbox", () => {
         email: "sales@norgtech.local",
       },
     });
+    expect(noraRouteBody.customer).toBeUndefined();
+    expect(noraRouteBody.contact).toBeUndefined();
+  });
+
+  it("auto-sends Nora first-contact prompts for unregistered senders", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "primer_contacto",
+        summary: "Numero no registrado inicia conversacion.",
+        suggested_reply:
+          "Hola, recibimos tu mensaje. Para ayudarte, por favor comparte tu nombre y la empresa o cliente que representas.",
+        requires_human_review: false,
+        risk_level: "medium",
+        missing_fields: [],
+        proposals: [],
+        proposed_order: null,
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-first-contact",
+            from: "573009990001",
+            timestamp: "2026-05-22T20:03:00.000Z",
+            text: { body: "Hola, quiero informacion" },
+            profile: { name: "Prospecto" },
+          },
+        },
+      })
+      .expect(201);
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: response.body.conversationId,
+        senderType: WhatsAppSenderType.desconocido,
+        customerId: null,
+        contactId: null,
+      }),
+    );
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        conversationId: response.body.conversationId,
+        direction: WhatsAppMessageDirection.outbound,
+        role: WhatsAppMessageRole.assistant,
+        body: expect.stringContaining("comparte tu nombre"),
+        deliveryStatus: "sent",
+      }),
+    );
   });
 
   it("receives a top-level Kapso v2 message webhook", async () => {

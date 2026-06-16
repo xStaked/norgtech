@@ -23,7 +23,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
                 "Hola, recibimos tu mensaje. Para ayudarte, por favor comparte tu nombre "
                 "y la empresa o cliente que representas."
             ),
-            requires_human_review=True,
+            requires_human_review=False,
             risk_level="medium",
             missing_fields=[],
             proposals=[],

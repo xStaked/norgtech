@@ -205,7 +205,7 @@ def test_unknown_unregistered_sender_gets_first_contact_response_without_tools()
 
     assert result["mode"] == "cliente"
     assert result["intent"] == "primer_contacto"
-    assert result["requires_human_review"] is True
+    assert result["requires_human_review"] is False
     assert result["proposals"] == []
     assert "nombre" in result["suggested_reply"].lower()
 

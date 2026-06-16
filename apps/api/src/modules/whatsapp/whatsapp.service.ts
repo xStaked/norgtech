@@ -317,20 +317,6 @@ export class WhatsAppService {
   async resolveSenderByPhone(phone: string): Promise<ResolvedWhatsAppSender> {
     const normalizedPhone = this.normalizePhone(phone);
 
-    const exactContact = await this.prisma.contact.findFirst({
-      where: { phone },
-      include: { customer: true },
-    });
-    const contact = exactContact ?? (await this.findContactByNormalizedPhone(normalizedPhone));
-
-    if (contact) {
-      return {
-        senderType: WhatsAppSenderType.cliente,
-        contactId: contact.id,
-        customerId: contact.customerId,
-      };
-    }
-
     const mappedUser =
       (await this.findUserByNormalizedPhone(normalizedPhone)) ??
       (await this.resolveUserByPhoneInNonProduction(normalizedPhone));
@@ -342,6 +328,20 @@ export class WhatsAppService {
         userRole: mappedUser.role,
         userName: mappedUser.name,
         userEmail: mappedUser.email,
+      };
+    }
+
+    const exactContact = await this.prisma.contact.findFirst({
+      where: { phone },
+      include: { customer: true },
+    });
+    const contact = exactContact ?? (await this.findContactByNormalizedPhone(normalizedPhone));
+
+    if (contact) {
+      return {
+        senderType: WhatsAppSenderType.cliente,
+        contactId: contact.id,
+        customerId: contact.customerId,
       };
     }
 
@@ -406,6 +406,13 @@ export class WhatsAppService {
   private async findUserByNormalizedPhone(normalizedPhone: string) {
     const users = await this.prisma.user.findMany({
       where: { active: true, phone: { not: null } },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        phone: true,
+        role: true,
+      },
     });
 
     return (

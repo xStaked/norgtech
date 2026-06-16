@@ -39,6 +39,7 @@ export class NoraRoutingService {
     const actionLog = await this.prisma.noraActionLog.create({
       data: {
         conversationId: conversation.id,
+        ...("userId" in sender && { actorUserId: sender.userId }),
         mode: this.modeFor(sender.senderType),
         action: "classify_inbound_message",
         status: NoraActionStatus.proposed,
@@ -144,6 +145,8 @@ export class NoraRoutingService {
         where: { id: conversationId },
         data: {
           senderType: sender.senderType,
+          customerId: null,
+          contactId: null,
         },
       });
     }
