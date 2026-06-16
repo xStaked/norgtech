@@ -35,6 +35,10 @@ const e164PhonePattern = /^\+[1-9]\d{9,14}$/;
 const phoneValidationMessage =
   "El telefono debe tener formato internacional, por ejemplo +573001234567";
 
+function normalizePhoneInput(value: string) {
+  return value.trim().replace(/[\s().-]/g, "");
+}
+
 function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
@@ -155,6 +159,15 @@ export function UserManagementClient({
     event.preventDefault();
     setError(null);
     setTemporaryPassword(null);
+
+    const normalizedPhone = normalizePhoneInput(phone);
+
+    if (!e164PhonePattern.test(normalizedPhone)) {
+      setError(phoneValidationMessage);
+      setPhone(normalizedPhone);
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -163,7 +176,7 @@ export function UserManagementClient({
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
-          phone: phone.trim(),
+          phone: normalizedPhone,
           role,
         }),
       });
@@ -287,9 +300,9 @@ export function UserManagementClient({
     }
 
     const draftValue = draftPhones[user.id] ?? user.phone ?? "";
-    const trimmedPhone = draftValue.trim();
+    const normalizedPhone = normalizePhoneInput(draftValue);
 
-    if (!trimmedPhone) {
+    if (!normalizedPhone) {
       setPhoneErrors((current) => ({
         ...current,
         [user.id]: phoneValidationMessage,
@@ -301,7 +314,7 @@ export function UserManagementClient({
       return;
     }
 
-    if (trimmedPhone === (user.phone ?? "")) {
+    if (normalizedPhone === (user.phone ?? "")) {
       clearPhoneError(user.id);
       if (draftValue !== (user.phone ?? "")) {
         setDraftPhones((current) => ({
@@ -312,7 +325,7 @@ export function UserManagementClient({
       return;
     }
 
-    if (!e164PhonePattern.test(trimmedPhone)) {
+    if (!e164PhonePattern.test(normalizedPhone)) {
       setPhoneErrors((current) => ({
         ...current,
         [user.id]: phoneValidationMessage,
@@ -324,7 +337,7 @@ export function UserManagementClient({
       return;
     }
 
-    const updatedUser = await patchUser(user.id, { phone: trimmedPhone });
+    const updatedUser = await patchUser(user.id, { phone: normalizedPhone });
     if (updatedUser) {
       clearPhoneError(user.id);
     }
@@ -429,8 +442,8 @@ export function UserManagementClient({
                     value={phone}
                     onChange={(event) => setPhone(event.target.value)}
                     placeholder="+573001234567"
-                    pattern="^\\+[1-9]\\d{9,14}$"
                     required
+                    title="Usa formato internacional, por ejemplo +573001234567"
                   />
                 </div>
 
@@ -541,7 +554,6 @@ export function UserManagementClient({
                             onBlur={() => void handlePhoneBlur(user)}
                             disabled={pending}
                             placeholder="+573001234567"
-                            pattern="^\\+[1-9]\\d{9,14}$"
                             title="Usa formato internacional, por ejemplo +573001234567"
                             aria-label={`Telefono de ${user.email}`}
                           />
