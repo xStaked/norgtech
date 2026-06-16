@@ -91,7 +91,10 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
             summary=f"Consulta de cupo o cartera: {message}",
         )
 
-    if any(word in normalized for word in EXPENSE_WORDS):
+    if any(word in normalized for word in EXPENSE_WORDS) or (
+        _phrase_matches(normalized, "factura")
+        and request.sender_type in ("comercial", "admin")
+    ):
         amount = _expense_amount(message)
         return NoraPlan(
             intent="gasto",
