@@ -24,6 +24,7 @@ describe("WhatsApp inbox", () => {
       id: "admin-user-id",
       name: "Admin",
       email: "admin@norgtech.local",
+      phone: "+573001000001",
       passwordHash,
       role: UserRole.administrador,
       active: true,
@@ -32,6 +33,7 @@ describe("WhatsApp inbox", () => {
       id: "sales-user-id",
       name: "Sales",
       email: "sales@norgtech.local",
+      phone: "+573001000003",
       passwordHash,
       role: UserRole.comercial,
       active: true,
@@ -331,6 +333,20 @@ describe("WhatsApp inbox", () => {
       user: {
         findUnique: async ({ where }: { where: { email?: string; id?: string } }) =>
           users.find((user) => user.email === where.email || user.id === where.id) ?? null,
+        findMany: async ({
+          where,
+        }: {
+          where?: { active?: boolean; phone?: { not?: null } };
+        } = {}) =>
+          users.filter((user) => {
+            if (typeof where?.active === "boolean" && user.active !== where.active) {
+              return false;
+            }
+            if (where?.phone?.not === null && user.phone === null) {
+              return false;
+            }
+            return true;
+          }),
       },
       customer: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -1085,6 +1101,84 @@ describe("WhatsApp inbox", () => {
         deliveryStatus: "sent",
       }),
     );
+  });
+
+  it("routes CRM commercial user phones to Nora with user context", async () => {
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "comercial",
+        intent: "agenda",
+        summary: "Comercial consulta agenda.",
+        suggested_reply: "Voy a revisar tu agenda y pendientes.",
+        requires_human_review: false,
+        risk_level: "low",
+        missing_fields: [],
+        proposals: [],
+        proposed_order: null,
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-sales-user",
+            from: "573001000003",
+            timestamp: "2026-05-22T20:02:00.000Z",
+            text: { body: "Que tengo pendiente hoy?" },
+            profile: { name: "Sales" },
+          },
+        },
+      })
+      .expect(201);
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: response.body.conversationId,
+        phone: "573001000003",
+        senderType: WhatsAppSenderType.comercial,
+      }),
+    );
+    expect(noraActions).toContainEqual(
+      expect.objectContaining({
+        conversationId: response.body.conversationId,
+        mode: "comercial",
+        input: expect.objectContaining({
+          senderType: WhatsAppSenderType.comercial,
+          userId: "sales-user-id",
+          userRole: UserRole.comercial,
+        }),
+      }),
+    );
+
+    const noraRouteCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+      ([url, options]) => {
+        if (url !== "http://localhost:8000/whatsapp/route") {
+          return false;
+        }
+
+        const body = JSON.parse(String(options?.body ?? "{}")) as { message?: string };
+        return body.message === "Que tengo pendiente hoy?";
+      },
+    );
+
+    expect(noraRouteCall).toBeDefined();
+    const noraRouteBody = JSON.parse(String(noraRouteCall?.[1]?.body ?? "{}"));
+
+    expect(noraRouteBody).toMatchObject({
+      sender_type: "comercial",
+      message: "Que tengo pendiente hoy?",
+      user: {
+        id: "sales-user-id",
+        role: UserRole.comercial,
+        name: "Sales",
+        email: "sales@norgtech.local",
+      },
+    });
   });
 
   it("receives a top-level Kapso v2 message webhook", async () => {

@@ -52,10 +52,16 @@ export type ResolvedWhatsAppSender =
   | {
       senderType: typeof WhatsAppSenderType.admin;
       userId: string;
+      userRole: UserRole;
+      userName: string;
+      userEmail: string;
     }
   | {
       senderType: typeof WhatsAppSenderType.comercial;
       userId: string;
+      userRole: UserRole;
+      userName: string;
+      userEmail: string;
     }
   | {
       senderType: typeof WhatsAppSenderType.desconocido;
@@ -325,12 +331,17 @@ export class WhatsAppService {
       };
     }
 
-    const mappedUser = await this.resolveUserByPhoneInNonProduction(normalizedPhone);
+    const mappedUser =
+      (await this.findUserByNormalizedPhone(normalizedPhone)) ??
+      (await this.resolveUserByPhoneInNonProduction(normalizedPhone));
 
     if (mappedUser) {
       return {
         senderType: this.senderTypeForUserRole(mappedUser.role),
         userId: mappedUser.id,
+        userRole: mappedUser.role,
+        userName: mappedUser.name,
+        userEmail: mappedUser.email,
       };
     }
 
@@ -388,6 +399,17 @@ export class WhatsAppService {
 
     return (
       contacts.find((contact) => this.normalizePhone(contact.phone ?? "") === normalizedPhone) ??
+      null
+    );
+  }
+
+  private async findUserByNormalizedPhone(normalizedPhone: string) {
+    const users = await this.prisma.user.findMany({
+      where: { active: true, phone: { not: null } },
+    });
+
+    return (
+      users.find((user) => this.normalizePhone(user.phone ?? "") === normalizedPhone) ??
       null
     );
   }

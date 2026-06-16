@@ -22,11 +22,38 @@ def test_comercial_mode_limits_to_sales_context():
         {
             "sender_type": "comercial",
             "message": "Como van mis pedidos pendientes?",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sales",
+                "email": "sales@norgtech.local",
+            },
         }
     )
 
     assert result["mode"] == "comercial"
     assert result["intent"] == "consulta_pedidos"
+
+
+def test_comercial_user_can_query_today_agenda():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Que tengo pendiente hoy?",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sales",
+                "email": "sales@norgtech.local",
+            },
+        }
+    )
+
+    assert result["mode"] == "comercial"
+    assert result["intent"] == "agenda"
+    assert result["risk_level"] == "low"
+    assert result["requires_human_review"] is False
+    assert result["proposals"] == []
 
 
 def test_cliente_order_response_includes_structured_proposal_list():
@@ -158,6 +185,7 @@ def test_small_plain_expense_amount_builds_expense_draft():
         {
             "sender_type": "comercial",
             "message": "Gasto de peaje por 500",
+            "user": {"id": "sales-user-id", "role": "comercial"},
         }
     )
 
@@ -165,6 +193,21 @@ def test_small_plain_expense_amount_builds_expense_draft():
     assert result["proposals"][0]["type"] == "expense_draft"
     assert result["proposals"][0]["payload"]["amount"] == 500
     assert result["proposals"][0]["payload"]["category"] == "peajes"
+
+
+def test_unknown_unregistered_sender_gets_first_contact_response_without_tools():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "desconocido",
+            "message": "Gasto de peaje por 500",
+        }
+    )
+
+    assert result["mode"] == "cliente"
+    assert result["intent"] == "primer_contacto"
+    assert result["requires_human_review"] is True
+    assert result["proposals"] == []
+    assert "nombre" in result["suggested_reply"].lower()
 
 
 def test_payment_support_with_customer_context_returns_proposal():

@@ -19,12 +19,22 @@ class NoraMessageContext(BaseModel):
     body: str
 
 
+class NoraUserContext(BaseModel):
+    id: str
+    role: str
+    name: str | None = None
+    email: str | None = None
+
+
 class WhatsAppRouteRequest(BaseModel):
     sender_type: Literal["cliente", "comercial", "admin", "desconocido"]
     message: str
     conversation_id: str | None = None
     customer: dict[str, Any] | None = None
     contact: dict[str, Any] | None = None
+    user: NoraUserContext | None = None
+    user_id: str | None = None
+    user_role: str | None = None
     companies: list[NoraCompanyContext] = Field(default_factory=list)
     customer_zones: list[NoraZoneContext] = Field(default_factory=list)
     recent_messages: list[NoraMessageContext] = Field(default_factory=list)

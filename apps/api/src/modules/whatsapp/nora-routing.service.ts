@@ -32,6 +32,8 @@ export class NoraRoutingService {
       senderType: sender.senderType,
       customerId: "customerId" in sender ? sender.customerId : null,
       contactId: "contactId" in sender ? sender.contactId : null,
+      userId: "userId" in sender ? sender.userId : null,
+      userRole: "userRole" in sender ? sender.userRole : null,
     } satisfies Prisma.InputJsonObject;
 
     const actionLog = await this.prisma.noraActionLog.create({
@@ -62,6 +64,16 @@ export class NoraRoutingService {
         companies: context.companies,
         customer_zones: context.customer_zones,
         recent_messages: context.recent_messages,
+        ...("userId" in sender
+          ? {
+              user: {
+                id: sender.userId,
+                role: sender.userRole,
+                name: sender.userName,
+                email: sender.userEmail,
+              },
+            }
+          : {}),
       });
 
       const updatedLog = await this.prisma.noraActionLog.update({

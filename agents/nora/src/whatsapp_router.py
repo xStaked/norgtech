@@ -13,6 +13,23 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
         else WhatsAppRouteRequest.model_validate(payload)
     )
     mode = mode_for_sender(request.sender_type)
+
+    if request.sender_type == "desconocido" and not request.customer and not request.contact:
+        response = WhatsAppRouteResponse(
+            mode=mode,
+            intent="primer_contacto",
+            summary=f"Numero no registrado inicia conversacion: {request.message.strip()}",
+            suggested_reply=(
+                "Hola, recibimos tu mensaje. Para ayudarte, por favor comparte tu nombre "
+                "y la empresa o cliente que representas."
+            ),
+            requires_human_review=True,
+            risk_level="medium",
+            missing_fields=[],
+            proposals=[],
+        )
+        return response.model_dump()
+
     plan = plan_message(request)
     validation = validate_plan(request, plan)
 
