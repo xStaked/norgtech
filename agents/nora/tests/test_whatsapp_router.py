@@ -190,3 +190,31 @@ def test_admin_logistics_message_returns_logistics_event_proposal():
 
     assert result["intent"] == "guia_logistica"
     assert result["proposals"][0]["type"] == "logistics_event"
+
+
+def test_expense_amount_prefers_value_after_por_over_date_tokens():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Gasto de peaje 12/06 por 500",
+        }
+    )
+
+    assert result["intent"] == "gasto"
+    assert result["proposals"][0]["type"] == "expense_draft"
+    assert result["proposals"][0]["payload"]["amount"] == 500
+    assert result["proposals"][0]["payload"]["category"] == "peajes"
+
+
+def test_expense_amount_prefers_money_over_headcount():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Gasto de almuerzo 2 personas por 45.000",
+        }
+    )
+
+    assert result["intent"] == "gasto"
+    assert result["proposals"][0]["type"] == "expense_draft"
+    assert result["proposals"][0]["payload"]["amount"] == 45000
+    assert result["proposals"][0]["payload"]["category"] == "alimentacion"

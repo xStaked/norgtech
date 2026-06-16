@@ -228,11 +228,27 @@ def _expense_category(normalized_message: str) -> str:
 
 
 def _expense_amount(message: str) -> int | None:
-    match = re.search(r"(?:\$?\s*)(\d{1,3}(?:\.\d{3})+|\d+)", message)
-    if not match:
+    matches = list(re.finditer(r"\$?\s*(\d{1,3}(?:\.\d{3})+|\d+)", message))
+    if not matches:
         return None
-    digits = match.group(1).replace(".", "")
+    scored_matches = [
+        (_expense_amount_score(message, match), match.start(), match) for match in matches
+    ]
+    _, _, best_match = max(scored_matches, key=lambda item: (item[0], item[1]))
+    digits = best_match.group(1).replace(".", "")
     return int(digits)
+
+
+def _expense_amount_score(message: str, match: re.Match[str]) -> tuple[int, int, int]:
+    token = match.group(1)
+    before = message[: match.start()].lower()
+    raw = match.group(0)
+
+    after_por = 1 if re.search(r"por\s*$", before) else 0
+    has_currency = 1 if "$" in raw else 0
+    money_shaped = 1 if "." in token or len(token.replace(".", "")) >= 4 else 0
+
+    return (after_por, has_currency, money_shaped)
 
 
 def _phrase_matches(message: str, candidate: str) -> bool:
