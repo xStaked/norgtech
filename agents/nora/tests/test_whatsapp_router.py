@@ -218,3 +218,45 @@ def test_expense_amount_prefers_money_over_headcount():
     assert result["proposals"][0]["type"] == "expense_draft"
     assert result["proposals"][0]["payload"]["amount"] == 45000
     assert result["proposals"][0]["payload"]["category"] == "alimentacion"
+
+
+def test_expense_amount_keeps_first_money_value_when_headcount_appears_later():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Gasto de peaje 500 con 2 personas",
+        }
+    )
+
+    assert result["intent"] == "gasto"
+    assert result["proposals"][0]["type"] == "expense_draft"
+    assert result["proposals"][0]["payload"]["amount"] == 500
+    assert result["proposals"][0]["payload"]["category"] == "peajes"
+
+
+def test_expense_amount_without_money_clarifies_when_only_headcount_is_present():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Gasto de almuerzo 2 personas",
+        }
+    )
+
+    assert result["intent"] == "clarification"
+    assert result["missing_fields"] == ["amount"]
+    assert "valor del gasto" in result["suggested_reply"].lower()
+    assert result["proposals"] == []
+
+
+def test_expense_amount_ignores_date_like_tokens_without_money_value():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Gasto de peaje 12/06",
+        }
+    )
+
+    assert result["intent"] == "clarification"
+    assert result["missing_fields"] == ["amount"]
+    assert "valor del gasto" in result["suggested_reply"].lower()
+    assert result["proposals"] == []

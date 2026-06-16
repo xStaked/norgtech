@@ -234,21 +234,43 @@ def _expense_amount(message: str) -> int | None:
     scored_matches = [
         (_expense_amount_score(message, match), match.start(), match) for match in matches
     ]
-    _, _, best_match = max(scored_matches, key=lambda item: (item[0], item[1]))
+    valid_matches = [item for item in scored_matches if item[0] is not None]
+    if not valid_matches:
+        return None
+    _, _, best_match = max(valid_matches, key=lambda item: (item[0], item[1]))
     digits = best_match.group(1).replace(".", "")
     return int(digits)
 
 
-def _expense_amount_score(message: str, match: re.Match[str]) -> tuple[int, int, int]:
+def _expense_amount_score(message: str, match: re.Match[str]) -> tuple[int, int, int, int] | None:
     token = match.group(1)
     before = message[: match.start()].lower()
     raw = match.group(0)
+    digits = token.replace(".", "")
+
+    if _is_date_like_number(message, match):
+        return None
 
     after_por = 1 if re.search(r"por\s*$", before) else 0
     has_currency = 1 if "$" in raw else 0
-    money_shaped = 1 if "." in token or len(token.replace(".", "")) >= 4 else 0
+    money_shaped = 1 if "." in token or len(digits) >= 4 else 0
+    incidental = 1 if _is_incidental_count(message, match) else 0
 
-    return (after_por, has_currency, money_shaped)
+    if incidental and not (after_por or has_currency or money_shaped):
+        return None
+
+    return (after_por, has_currency, money_shaped, 1 - incidental)
+
+
+def _is_date_like_number(message: str, match: re.Match[str]) -> bool:
+    before = message[max(0, match.start() - 3) : match.start()]
+    after = message[match.end() : match.end() + 3]
+    return bool(re.search(r"[/-]\d{1,2}", after)) or bool(re.search(r"\d{1,2}[/-]$", before))
+
+
+def _is_incidental_count(message: str, match: re.Match[str]) -> bool:
+    after = message[match.end() :].lower()
+    return bool(re.match(r"\s*(?:con\s+)?personas?\b", after))
 
 
 def _phrase_matches(message: str, candidate: str) -> bool:
