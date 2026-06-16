@@ -177,7 +177,10 @@ def test_payment_support_with_customer_context_returns_proposal():
     )
 
     assert result["intent"] == "soporte_pago"
+    assert result["risk_level"] == "high"
+    assert result["requires_human_review"] is True
     assert result["proposals"][0]["type"] == "payment_support"
+    assert result["proposals"][0]["payload"]["customerId"] == "customer-1"
 
 
 def test_admin_logistics_message_returns_logistics_event_proposal():
@@ -189,6 +192,8 @@ def test_admin_logistics_message_returns_logistics_event_proposal():
     )
 
     assert result["intent"] == "guia_logistica"
+    assert result["risk_level"] == "high"
+    assert result["requires_human_review"] is True
     assert result["proposals"][0]["type"] == "logistics_event"
 
 
