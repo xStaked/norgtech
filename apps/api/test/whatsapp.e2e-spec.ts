@@ -141,7 +141,7 @@ describe("WhatsApp inbox", () => {
     },
   ];
   const auditLogs: Array<Record<string, unknown>> = [];
-  const noraActions = [
+  const noraActions: Array<Record<string, unknown>> = [
     {
       id: "nora-action-1",
       conversationId: "conversation-1",
@@ -307,6 +307,22 @@ describe("WhatsApp inbox", () => {
         summary: "Cliente solicita 10 bultos de producto A para la costa.",
         suggested_reply: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
         requires_human_review: true,
+        risk_level: "high",
+        missing_fields: [],
+        proposals: [
+          {
+            type: "order_draft",
+            title: "Borrador de pedido",
+            payload: {
+              customerId: "customer-1",
+              companyId: "company-1",
+              customerZoneId: "zone-1",
+              sourceConversationId: "conversation-2",
+              items: [],
+            },
+            requires_human_review: true,
+          },
+        ],
         proposed_order: { items: [{ name: "producto A", quantity: 10 }] },
       }),
     })) as unknown as typeof globalThis.fetch;
@@ -958,6 +974,15 @@ describe("WhatsApp inbox", () => {
         output: expect.objectContaining({
           mode: "cliente",
           intent: "pedido",
+          risk_level: "high",
+          proposals: [
+            expect.objectContaining({
+              type: "order_draft",
+              payload: expect.objectContaining({
+                sourceConversationId: expect.any(String),
+              }),
+            }),
+          ],
           proposed_order: expect.objectContaining({
             items: [expect.objectContaining({ name: "producto A", quantity: 10 })],
           }),
@@ -1004,6 +1029,21 @@ describe("WhatsApp inbox", () => {
         body: "Necesito 10 bultos de producto A",
       },
     ]);
+
+    const action = noraActions.find((item) => item.conversationId === "conversation-2");
+    expect(action?.status).toBe(NoraActionStatus.proposed);
+    expect(action?.output).toMatchObject({
+      intent: "pedido",
+      risk_level: "high",
+      proposals: [
+        expect.objectContaining({
+          type: "order_draft",
+          payload: expect.objectContaining({
+            sourceConversationId: expect.any(String),
+          }),
+        }),
+      ],
+    });
   });
 
   it("auto-sends low-risk Nora replies that do not require human review", async () => {
