@@ -120,6 +120,11 @@ export class KapsoWebhookService {
     const text = this.asRecord(message?.text);
     const image = this.asRecord(message?.image);
     const document = this.asRecord(message?.document);
+    const profile = this.asRecord(message?.profile);
+    const senderName =
+      this.asString(profile?.name) ??
+      this.asString(conversationKapso?.contact_name) ??
+      this.asString(conversationKapso?.contactName);
     const body =
       this.asString(text?.body) ??
       this.asString(image?.caption) ??
@@ -136,12 +141,6 @@ export class KapsoWebhookService {
       }
       throw new BadRequestException("Kapso message webhook is missing required fields");
     }
-
-    const profile = this.asRecord(message?.profile);
-    const senderName =
-      this.asString(profile?.name) ??
-      this.asString(conversationKapso?.contact_name) ??
-      this.asString(conversationKapso?.contactName);
 
     return { phoneNumberId, waId, messageId, senderName, body, payload: data };
   }
