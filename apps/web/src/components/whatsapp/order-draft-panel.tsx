@@ -18,8 +18,12 @@ export function OrderDraftPanel({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestOrder = conversation?.orders?.[0] ?? null;
-  const latestProposal = conversation?.noraActions?.find((action) => action.output?.proposed_order)
-    ?.output?.proposed_order;
+  const latestProposal =
+    conversation?.noraActions
+      ?.flatMap((action) => action.output?.proposals ?? [])
+      .find((proposal) => proposal.type === "order_draft")?.payload ??
+    conversation?.noraActions?.find((action) => action.output?.proposed_order)?.output
+      ?.proposed_order;
   const canCreateDraft = Boolean(conversation?.customer?.id && latestProposal && !latestOrder);
 
   async function createDraft() {

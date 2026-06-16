@@ -31,20 +31,35 @@ export type WhatsAppInternalNote = {
   createdAt: string;
 };
 
+export type NoraRiskLevel = "low" | "medium" | "high";
+
+export type NoraProposal = {
+  type: "order_draft" | "payment_support" | "logistics_event" | "expense_draft";
+  title: string;
+  payload: Record<string, unknown>;
+  requires_human_review: boolean;
+};
+
+export type NoraActionOutput = {
+  mode?: string;
+  intent?: string;
+  summary?: string;
+  suggested_reply?: string;
+  requires_human_review?: boolean;
+  risk_level?: NoraRiskLevel;
+  missing_fields?: string[];
+  blocked_reason?: string | null;
+  proposals?: NoraProposal[];
+  proposed_order?: Record<string, unknown>;
+};
+
 export type NoraActionLog = {
   id: string;
   mode: string;
   action: string;
   status: "proposed" | "confirmed" | "executed" | "discarded" | "failed";
   input: Record<string, unknown>;
-  output?: {
-    mode?: string;
-    intent?: string;
-    summary?: string;
-    suggested_reply?: string;
-    requires_human_review?: boolean;
-    proposed_order?: Record<string, unknown>;
-  } | null;
+  output?: NoraActionOutput | null;
   error?: string | null;
   createdAt: string;
 };
