@@ -44,6 +44,7 @@ describe("WhatsApp inbox", () => {
   ];
   const companies = [
     { id: "company-1", name: "Norgtech", prefix: "NOR", isActive: true },
+    { id: "company-3", name: "Archivada", prefix: "ARC", isActive: false },
     { id: "company-2", name: "Zentrade", prefix: "ZEN", isActive: true },
   ];
   const zones = [
@@ -56,6 +57,12 @@ describe("WhatsApp inbox", () => {
       customerId: "customer-1",
       zoneId: "zone-1",
       isActive: true,
+    },
+    {
+      id: "customer-zone-inactive",
+      customerId: "customer-1",
+      zoneId: "zone-2",
+      isActive: false,
     },
     {
       id: "customer-zone-2",
@@ -148,42 +155,84 @@ describe("WhatsApp inbox", () => {
   ];
   const accounts: Array<Record<string, unknown>> = [];
 
+  const applySelect = (
+    record: Record<string, unknown>,
+    select?: Record<string, unknown>,
+  ) => {
+    if (!select) {
+      return record;
+    }
+
+    return Object.fromEntries(
+      Object.entries(select)
+        .filter(([, enabled]) => enabled === true)
+        .map(([key]) => [key, record[key]]),
+    );
+  };
+
   const buildConversation = (
     conversation: Record<string, unknown>,
     include?: Record<string, unknown>,
+    select?: Record<string, unknown>,
   ) => {
-    const result = { ...conversation } as Record<string, unknown>;
+    const result = select
+      ? applySelect(conversation, select)
+      : ({ ...conversation } as Record<string, unknown>);
+    const customerArg = include?.customer ?? select?.customer;
+    const contactArg = include?.contact ?? select?.contact;
+    const messagesArg = include?.messages ?? select?.messages;
 
-    if (include?.customer) {
+    if (customerArg) {
       const customer =
         customers.find((item) => item.id === conversation.customerId) ?? null;
 
       if (
         customer &&
-        typeof include.customer === "object" &&
-        "include" in include.customer &&
-        include.customer.include &&
-        typeof include.customer.include === "object" &&
-        "customerZones" in include.customer.include
+        typeof customerArg === "object" &&
+        ("include" in customerArg || "select" in customerArg)
       ) {
+        const customerSelection =
+          "include" in customerArg ? customerArg.include : customerArg.select;
+        const selectedCustomer = applySelect(
+          customer,
+          "select" in customerArg ? (customerArg.select as Record<string, unknown>) : undefined,
+        );
+
         result.customer = {
-          ...customer,
-          customerZones: customerZones
-            .filter(
-              (customerZone) =>
-                customerZone.customerId === customer.id && customerZone.isActive,
-            )
-            .map((customerZone) => ({
-              ...customerZone,
-              zone: zones.find((zone) => zone.id === customerZone.zoneId) ?? null,
-            })),
+          ...selectedCustomer,
         };
+
+        if (
+          customerSelection &&
+          typeof customerSelection === "object" &&
+          "customerZones" in customerSelection
+        ) {
+          result.customer = {
+            ...(result.customer as Record<string, unknown>),
+            customerZones: customerZones
+              .filter(
+                (customerZone) =>
+                  customerZone.customerId === customer.id && customerZone.isActive,
+              )
+              .map((customerZone) => {
+                const zone = zones.find((item) => item.id === customerZone.zoneId) ?? null;
+                return {
+                  id: customerZone.id,
+                  zone: zone ? { name: zone.name } : null,
+                };
+              }),
+          };
+        }
       } else {
         result.customer = customer;
       }
     }
-    if (include?.contact) {
-      result.contact = contacts.find((contact) => contact.id === conversation.contactId) ?? null;
+    if (contactArg) {
+      const contact = contacts.find((item) => item.id === conversation.contactId) ?? null;
+      result.contact =
+        contact && typeof contactArg === "object" && "select" in contactArg
+          ? applySelect(contact, contactArg.select as Record<string, unknown>)
+          : contact;
     }
     if (include?.assignedToUser) {
       result.assignedToUser =
@@ -204,8 +253,37 @@ describe("WhatsApp inbox", () => {
     if (include?.notes) {
       result.notes = notes.filter((note) => note.conversationId === conversation.id);
     }
-    if (include?.messages) {
-      result.messages = messages.filter((message) => message.conversationId === conversation.id);
+    if (messagesArg) {
+      const messageOptions =
+        typeof messagesArg === "object" ? (messagesArg as Record<string, unknown>) : {};
+      let conversationMessages = messages.filter(
+        (message) => message.conversationId === conversation.id,
+      );
+
+      if (
+        messageOptions.orderBy &&
+        typeof messageOptions.orderBy === "object" &&
+        "createdAt" in messageOptions.orderBy
+      ) {
+        const direction = (messageOptions.orderBy as { createdAt?: string }).createdAt;
+        conversationMessages = conversationMessages
+          .slice()
+          .sort((left, right) =>
+            direction === "desc"
+              ? right.createdAt.getTime() - left.createdAt.getTime()
+              : left.createdAt.getTime() - right.createdAt.getTime(),
+          );
+      }
+
+      if (typeof messageOptions.take === "number") {
+        conversationMessages = conversationMessages.slice(0, messageOptions.take);
+      }
+
+      result.messages = conversationMessages.map((message) =>
+        messageOptions.select
+          ? applySelect(message, messageOptions.select as Record<string, unknown>)
+          : message,
+      );
     }
     if (include?.orders) {
       result.orders = orders.filter((order) => order.sourceConversationId === conversation.id);
@@ -245,7 +323,31 @@ describe("WhatsApp inbox", () => {
       company: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           companies.find((company) => company.id === id) ?? null,
-        findMany: async () => companies.filter((company) => company.isActive),
+        findMany: async ({
+          where,
+          orderBy,
+          select,
+        }: {
+          where?: { isActive?: boolean };
+          orderBy?: { name?: "asc" | "desc" };
+          select?: Record<string, unknown>;
+        } = {}) => {
+          let result = companies.slice();
+
+          if (typeof where?.isActive === "boolean") {
+            result = result.filter((company) => company.isActive === where.isActive);
+          }
+
+          if (orderBy?.name) {
+            result = result.sort((left, right) =>
+              orderBy.name === "desc"
+                ? right.name.localeCompare(left.name)
+                : left.name.localeCompare(right.name),
+            );
+          }
+
+          return result.map((company) => applySelect(company, select));
+        },
       },
       contact: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -296,12 +398,14 @@ describe("WhatsApp inbox", () => {
         findUnique: async ({
           where: { id },
           include,
+          select,
         }: {
           where: { id: string };
           include?: Record<string, unknown>;
+          select?: Record<string, unknown>;
         }) => {
           const conversation = conversations.find((item) => item.id === id);
-          return conversation ? buildConversation(conversation, include) : null;
+          return conversation ? buildConversation(conversation, include, select) : null;
         },
         update: async ({
           where: { id },
@@ -875,13 +979,31 @@ describe("WhatsApp inbox", () => {
 
     expect(noraRouteBody).toMatchObject({
       sender_type: "cliente",
-      conversation_id: expect.any(String),
-      customer: expect.objectContaining({ id: expect.any(String) }),
+      conversation_id: "conversation-2",
+      customer: {
+        id: "customer-1",
+        displayName: "Agro Norte",
+        legalName: "Agro Norte SAS",
+      },
+      contact: {
+        id: "contact-1",
+        fullName: "Laura Cliente",
+      },
     });
     expect(noraRouteBody.message).toBe("Necesito 10 bultos de producto A");
-    expect(Array.isArray(noraRouteBody.companies)).toBe(true);
-    expect(Array.isArray(noraRouteBody.customer_zones)).toBe(true);
-    expect(Array.isArray(noraRouteBody.recent_messages)).toBe(true);
+    expect(noraRouteBody.companies).toEqual([
+      { id: "company-1", name: "Norgtech", prefix: "NOR" },
+      { id: "company-2", name: "Zentrade", prefix: "ZEN" },
+    ]);
+    expect(noraRouteBody.customer_zones).toEqual([
+      { id: "customer-zone-1", name: "Costa" },
+    ]);
+    expect(noraRouteBody.recent_messages).toEqual([
+      {
+        role: WhatsAppMessageRole.user,
+        body: "Necesito 10 bultos de producto A",
+      },
+    ]);
   });
 
   it("auto-sends low-risk Nora replies that do not require human review", async () => {

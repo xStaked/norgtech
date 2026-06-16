@@ -230,19 +230,40 @@ export class WhatsAppService {
   async getNoraConversationContext(conversationId: string) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
-      include: {
+      select: {
+        id: true,
         customer: {
-          include: {
+          select: {
+            id: true,
+            displayName: true,
+            legalName: true,
             customerZones: {
               where: { isActive: true },
-              include: { zone: true },
+              select: {
+                id: true,
+                zone: {
+                  select: {
+                    name: true,
+                  },
+                },
+              },
             },
           },
         },
-        contact: true,
+        contact: {
+          select: {
+            id: true,
+            fullName: true,
+          },
+        },
         messages: {
           orderBy: { createdAt: "desc" },
           take: 8,
+          select: {
+            role: true,
+            body: true,
+            createdAt: true,
+          },
         },
       },
     });

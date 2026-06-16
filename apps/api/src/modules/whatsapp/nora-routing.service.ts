@@ -26,8 +26,6 @@ export class NoraRoutingService {
 
     await this.updateConversationIdentity(conversation.id, sender);
 
-    const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
-
     const input = {
       body: message.body,
       conversationId: conversation.id,
@@ -47,6 +45,8 @@ export class NoraRoutingService {
     });
 
     try {
+      const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
+
       const noraResponse = await this.requestNoraRoute({
         sender_type: sender.senderType,
         message: message.body,
