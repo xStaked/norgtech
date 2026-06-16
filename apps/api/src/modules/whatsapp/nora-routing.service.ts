@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import {
   NoraActionStatus,
   Prisma,
@@ -16,6 +16,8 @@ type RouteInboundMessageInput = {
 
 @Injectable()
 export class NoraRoutingService {
+  private readonly logger = new Logger(NoraRoutingService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsAppService: WhatsAppService,
@@ -88,7 +90,9 @@ export class NoraRoutingService {
       if (suggestedReply && !this.requiresHumanReview(noraResponse)) {
         try {
           await this.whatsAppService.sendAgentReply(conversation.id, suggestedReply);
+          this.logger.log(`Nora auto-replied to conversation ${conversation.id}: "${suggestedReply.substring(0, 60)}..."`);
         } catch (sendError) {
+          this.logger.error(`Failed to send Nora reply to conversation ${conversation.id}: ${this.safeErrorMessage(sendError)}`);
           await this.prisma.noraActionLog.update({
             where: { id: actionLog.id },
             data: {
