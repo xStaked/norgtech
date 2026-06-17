@@ -2,6 +2,7 @@ import {
   BadGatewayException,
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from "@nestjs/common";
 import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
@@ -69,6 +70,8 @@ export type ResolvedWhatsAppSender =
 
 @Injectable()
 export class WhatsAppService {
+  private readonly logger = new Logger(WhatsAppService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
@@ -202,6 +205,8 @@ export class WhatsAppService {
         },
       });
     } catch (error) {
+      const safeError = this.getSafeErrorMessage(error);
+      this.logger.error(`Kapso send failed for conversation ${conversation.id} (to: ${conversation.waId}): ${safeError}`);
       await this.prisma.whatsAppMessage.update({
         where: { id: message.id },
         data: {
