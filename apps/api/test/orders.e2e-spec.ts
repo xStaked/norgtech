@@ -370,6 +370,14 @@ describe("Orders", () => {
     globalThis.__ADMIN_TOKEN__ = loginResponse.body.accessToken;
   });
 
+  async function getToken(email: string) {
+    const response = await request(globalThis.__APP__)
+      .post("/auth/login")
+      .send({ email, password: "Admin123*" })
+      .expect(200);
+    return response.body.accessToken;
+  }
+
   afterAll(async () => {
     globalThis.__ADMIN_TOKEN__ = undefined;
     globalThis.__APP__ = undefined;
@@ -782,5 +790,175 @@ describe("Orders", () => {
 
     expect(response.headers["content-type"]).toContain("spreadsheetml.sheet");
     expect(response.body.length).toBeGreaterThan(1000);
+  });
+
+  it("creates an invoice from an order and marks it facturado", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 2, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    const response = await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+
+    expect(response.body.id).toMatch(/^invoice-/);
+    expect(response.body.orderId).toBe(createResponse.body.id);
+    expect(response.body.customerId).toBe("customer-1");
+    expect(response.body.companyId).toBe("company-1");
+    expect(response.body.invoiceNumber).toMatch(/^NOR-\d{3}$/);
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.taxAmount)).toBe(19000);
+    expect(Number(response.body.totalAmount)).toBe(119000);
+    expect(response.body.status).toBe("emitida");
+
+    const updatedOrder = orders.find((order) => order.id === createResponse.body.id);
+    expect(updatedOrder?.status).toBe("facturado");
+  });
+
+  it("blocks a second active invoice for the same order", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+
+    const duplicate = await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(400);
+
+    expect(duplicate.body.message).toBe("Order already has an active invoice");
+  });
+
+  it("allows a new invoice when previous order invoice is anulada", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    const first = await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+    const stored = invoices.find((invoice) => invoice.id === first.body.id);
+    if (stored) stored.status = InvoiceStatus.anulada;
+
+    const second = await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+
+    expect(second.body.id).not.toBe(first.body.id);
+  });
+
+  it("calculates invoice due date from customer payment days", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    const response = await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+
+    const issue = new Date(response.body.issueDate);
+    const due = new Date(response.body.dueDate);
+    expect(Math.round((due.getTime() - issue.getTime()) / 86_400_000)).toBe(30);
+  });
+
+  it("does not move delivered orders backwards when invoicing", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    const stored = orders.find((order) => order.id === createResponse.body.id);
+    if (stored) stored.status = "entregado";
+
+    await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+
+    expect(stored?.status).toBe("entregado");
+  });
+
+  it("rejects direct invoice creation from order for comercial role", async () => {
+    const comercialToken = await getToken("comercial@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .expect(403);
   });
 });
