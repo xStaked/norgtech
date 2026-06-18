@@ -949,7 +949,9 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${token}`)
       .expect(201);
 
-    expect(stored?.status).toBe("entregado");
+    const current = orders.find((order) => order.id === createResponse.body.id);
+    expect(current).toBeDefined();
+    expect(current?.status).toBe("entregado");
   });
 
   it("rejects direct invoice creation from order for comercial role", async () => {
