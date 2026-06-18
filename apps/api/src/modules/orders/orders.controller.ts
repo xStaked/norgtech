@@ -112,4 +112,14 @@ export class OrdersController {
   ) {
     return this.ordersService.createBillingRequest(user, orderId);
   }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "director_comercial", "facturacion")
+  @Post(":id/invoice")
+  createInvoiceFromOrder(
+    @CurrentUser() user: AuthUser,
+    @Param("id") orderId: string,
+  ) {
+    return this.ordersService.createInvoiceFromOrder(user, orderId);
+  }
 }

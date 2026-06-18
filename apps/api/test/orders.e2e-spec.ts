@@ -143,6 +143,25 @@ describe("Orders", () => {
       },
     };
 
+    const withOrderIncludes = (
+      order: Record<string, unknown>,
+      include?: Record<string, unknown>,
+    ) => ({
+      ...order,
+      company: include?.company ? companies.find((c) => c.id === order.companyId) : order.company,
+      customer: include?.customer
+        ? {
+            id: order.customerId,
+            displayName: "Agro Norte",
+            paymentDays: 30,
+            ...(order.customer as object | undefined),
+          }
+        : order.customer,
+      invoices: include?.invoices
+        ? invoices.filter((invoice) => invoice.orderId === order.id)
+        : order.invoices,
+    });
+
     const prismaStub = {
       user,
       customer,
@@ -224,9 +243,12 @@ describe("Orders", () => {
             .filter((order) => String(order.orderNumber).startsWith(startsWith))
             .sort((a, b) => String(b.orderNumber).localeCompare(String(a.orderNumber)))[0] ?? null;
         },
-        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+        findUnique: async ({
+          where: { id },
+          include,
+        }: { where: { id: string }; include?: Record<string, unknown> }) => {
           const found = orders.find((o) => o.id === id);
-          return found ? JSON.parse(JSON.stringify(found)) : null;
+          return found ? JSON.parse(JSON.stringify(withOrderIncludes(found, include))) : null;
         },
         findMany: async () => orders.map((o) => JSON.parse(JSON.stringify(o))),
         update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
@@ -306,9 +328,12 @@ describe("Orders", () => {
               pendingOrders.push(order);
               return order;
             },
-            findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+            findUnique: async ({
+              where: { id },
+              include,
+            }: { where: { id: string }; include?: Record<string, unknown> }) => {
               const found = orders.find((o) => o.id === id) ?? pendingOrders.find((o) => o.id === id);
-              return found ? JSON.parse(JSON.stringify(found)) : null;
+              return found ? JSON.parse(JSON.stringify(withOrderIncludes(found, include))) : null;
             },
             update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
               let idx = orders.findIndex((o) => o.id === id);

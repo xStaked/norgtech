@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { OrderStatus, Prisma } from "@prisma/client";
+import { InvoiceStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -9,6 +9,34 @@ import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
 import { allowedTransitions } from "./order-status-transition-map";
+
+const INVOICE_ALLOWED_ORDER_STATUSES: OrderStatus[] = [
+  OrderStatus.orden_facturacion,
+  OrderStatus.facturado,
+  OrderStatus.despachado,
+  OrderStatus.entregado,
+];
+
+const ORDER_STATUS_RANK: Record<OrderStatus, number> = {
+  recibido: 0,
+  orden_facturacion: 1,
+  facturado: 2,
+  despachado: 3,
+  en_transito: 4,
+  entregado: 5,
+};
+
+const includeInvoiceRelations = {
+  company: true,
+  customer: { select: { id: true, displayName: true, taxId: true, creditLimit: true, paymentDays: true } },
+  order: { select: { id: true, orderNumber: true, status: true } },
+  payments: {
+    include: {
+      supports: true,
+    },
+    orderBy: { paymentDate: "desc" as const },
+  },
+} satisfies Prisma.InvoiceInclude;
 
 @Injectable()
 export class OrdersService {
@@ -233,6 +261,113 @@ export class OrdersService {
       );
 
       return order;
+    });
+  }
+
+  async createInvoiceFromOrder(user: AuthUser, orderId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: {
+          customer: true,
+          company: true,
+          items: true,
+          invoices: true,
+        },
+      });
+
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+      if (!INVOICE_ALLOWED_ORDER_STATUSES.includes(order.status)) {
+        throw new BadRequestException("Order status is not invoiceable");
+      }
+      if (!order.companyId || !order.company || !order.company.isActive) {
+        throw new BadRequestException("Order billing company is missing or inactive");
+      }
+      if (!order.customerId || !order.customer) {
+        throw new BadRequestException("Order customer is missing");
+      }
+      if (!order.items.length) {
+        throw new BadRequestException("Order has no items to invoice");
+      }
+
+      const activeInvoice = await tx.invoice.findFirst({
+        where: {
+          orderId: order.id,
+          status: { not: InvoiceStatus.anulada },
+        },
+      });
+      if (activeInvoice) {
+        throw new BadRequestException("Order already has an active invoice");
+      }
+
+      const totals = this.calculateInvoiceTotalsFromOrder(order);
+      await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx);
+
+      const issueDate = new Date();
+      const dueDate = this.calculateInvoiceDueDate(issueDate, order.customer.paymentDays);
+      const invoiceNumber = await this.nextInvoiceNumber(order.company.prefix, tx);
+      const previousOrderState = JSON.parse(JSON.stringify(order));
+
+      const invoice = await tx.invoice.create({
+        data: {
+          invoiceNumber,
+          companyId: order.companyId,
+          customerId: order.customerId,
+          orderId: order.id,
+          issueDate,
+          dueDate,
+          subtotal: totals.subtotal,
+          taxAmount: totals.taxAmount,
+          totalAmount: totals.totalAmount,
+          totalPaid: 0,
+          status: InvoiceStatus.emitida,
+          notes: `Generada desde pedido ${order.orderNumber ?? order.id}`,
+          createdBy: user.id,
+          updatedBy: user.id,
+        },
+        include: includeInvoiceRelations,
+      });
+
+      if (ORDER_STATUS_RANK[order.status] < ORDER_STATUS_RANK.facturado) {
+        const updatedOrder = await tx.order.update({
+          where: { id: order.id },
+          data: {
+            status: OrderStatus.facturado,
+            updatedBy: user.id,
+          },
+        });
+
+        await this.auditService.record(
+          {
+            entityType: "Order",
+            entityId: order.id,
+            action: "order.status_changed",
+            actorUserId: user.id,
+            previousState: previousOrderState,
+            nextState: JSON.parse(JSON.stringify(updatedOrder)),
+          },
+          tx,
+        );
+      }
+
+      await this.auditService.record(
+        {
+          entityType: "Invoice",
+          entityId: invoice.id,
+          action: "invoice.created_from_order",
+          actorUserId: user.id,
+          nextState: JSON.parse(JSON.stringify({
+            invoice,
+            orderTotal: order.total,
+            computedItemTotal: totals.itemTotal,
+          })),
+        },
+        tx,
+      );
+
+      return invoice;
     });
   }
 
@@ -483,6 +618,61 @@ export class OrdersService {
     }
 
     const parts = last.orderNumber.split("-");
+    const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
+    return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
+  }
+
+  private calculateInvoiceTotalsFromOrder(order: {
+    total: Prisma.Decimal | number | string;
+    items: Array<{
+      quantity: Prisma.Decimal | number | string;
+      subtotal: Prisma.Decimal | number | string;
+      taxAmount: Prisma.Decimal | number | string;
+      totalWithTax: Prisma.Decimal | number | string;
+    }>;
+  }) {
+    const subtotal = order.items.reduce(
+      (sum, item) => sum.plus(new Prisma.Decimal(item.subtotal)),
+      new Prisma.Decimal(0),
+    ).toDecimalPlaces(2);
+    const taxAmount = order.items.reduce(
+      (sum, item) =>
+        sum.plus(new Prisma.Decimal(item.taxAmount).times(new Prisma.Decimal(item.quantity))),
+      new Prisma.Decimal(0),
+    ).toDecimalPlaces(2);
+    const itemTotal = order.items.reduce(
+      (sum, item) => sum.plus(new Prisma.Decimal(item.totalWithTax)),
+      new Prisma.Decimal(0),
+    ).toDecimalPlaces(2);
+    const orderTotal = new Prisma.Decimal(order.total).toDecimalPlaces(2);
+    const totalAmount = itemTotal.minus(orderTotal).abs().lte(1)
+      ? orderTotal
+      : itemTotal;
+
+    return { subtotal, taxAmount, totalAmount, itemTotal };
+  }
+
+  private calculateInvoiceDueDate(issueDate: Date, paymentDays: number | null): Date {
+    const due = new Date(issueDate);
+    due.setDate(due.getDate() + (paymentDays ?? 0));
+    return due;
+  }
+
+  private async nextInvoiceNumber(
+    companyPrefix: string,
+    client: Pick<Prisma.TransactionClient, "invoice">,
+  ): Promise<string> {
+    const last = await client.invoice.findFirst({
+      where: { invoiceNumber: { startsWith: `${companyPrefix}-` } },
+      orderBy: { invoiceNumber: "desc" },
+      select: { invoiceNumber: true },
+    });
+
+    if (!last?.invoiceNumber) {
+      return `${companyPrefix}-001`;
+    }
+
+    const parts = last.invoiceNumber.split("-");
     const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
     return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
   }
