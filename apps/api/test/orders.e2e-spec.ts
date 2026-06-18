@@ -1,6 +1,6 @@
 import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
-import { UserRole } from "@prisma/client";
+import { InvoiceStatus, Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -18,6 +18,7 @@ describe("Orders", () => {
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const auditLogs: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
+  const invoices: Array<Record<string, any>> = [];
   const products: Array<Record<string, unknown>> = [
     {
       id: "product-1",
@@ -31,6 +32,50 @@ describe("Orders", () => {
       updatedBy: "admin-user-id",
       createdAt: new Date("2026-04-29T00:00:00.000Z"),
       updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    },
+  ];
+  const companies = [
+    {
+      id: "company-1",
+      name: "Nortech",
+      legalName: "Tecnologia de Nutricion Organica SAS",
+      nit: "900999888-1",
+      prefix: "NOR",
+      isActive: true,
+    },
+  ];
+  const users = [
+    {
+      id: "admin-user-id",
+      name: "Admin",
+      email: "admin@norgtech.local",
+      passwordHash,
+      role: UserRole.administrador,
+      active: true,
+    },
+    {
+      id: "facturacion-user-id",
+      name: "Facturacion",
+      email: "facturacion@norgtech.local",
+      passwordHash,
+      role: UserRole.facturacion,
+      active: true,
+    },
+    {
+      id: "comercial-user-id",
+      name: "Comercial",
+      email: "comercial@norgtech.local",
+      passwordHash,
+      role: UserRole.comercial,
+      active: true,
+    },
+    {
+      id: "logistics-user-id",
+      name: "Logistics",
+      email: "logistics@norgtech.local",
+      passwordHash,
+      role: UserRole.logistica,
+      active: true,
     },
   ];
   const whatsAppConversations: Array<Record<string, unknown>> = [
@@ -57,27 +102,10 @@ describe("Orders", () => {
   beforeAll(async () => {
     const user = {
       findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
-        if (where.email === "admin@norgtech.local") {
-          return {
-            id: "admin-user-id",
-            name: "Admin",
-            email: "admin@norgtech.local",
-            passwordHash,
-            role: UserRole.administrador,
-            active: true,
-          };
+        if (where.email) {
+          return users.find((u) => u.email === where.email) ?? null;
         }
-        if (where.id === "logistics-user-id") {
-          return {
-            id: "logistics-user-id",
-            name: "Logistics",
-            email: "logistics@norgtech.local",
-            passwordHash,
-            role: UserRole.logistica,
-            active: true,
-          };
-        }
-        return null;
+        return users.find((u) => u.id === where.id) ?? null;
       },
     };
 
@@ -91,6 +119,9 @@ describe("Orders", () => {
             address: "Calle 10 # 20-30",
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
+            creditLimit: new Prisma.Decimal(5000000),
+            paymentDays: 30,
+            assignedToUserId: "comercial-user-id",
             segment: { discountPercent: 0 },
           };
         }
@@ -102,6 +133,9 @@ describe("Orders", () => {
             address: "Carrera 40 # 50-60",
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
+            creditLimit: null,
+            paymentDays: null,
+            assignedToUserId: null,
             segment: { discountPercent: 10 },
           };
         }
@@ -112,6 +146,36 @@ describe("Orders", () => {
     const prismaStub = {
       user,
       customer,
+      company: {
+        findUnique: async ({ where }: { where: { id?: string; prefix?: string } }) => {
+          if (where.id) return companies.find((c) => c.id === where.id) ?? null;
+          if (where.prefix) return companies.find((c) => c.prefix === where.prefix) ?? null;
+          return companies[0] ?? null;
+        },
+      },
+      invoice: {
+        findFirst: async ({ where }: { where: any }) => {
+          const byOrder = invoices.filter((invoice) => invoice.orderId === where.orderId);
+          const statusNot = where.status?.not;
+          const startsWith = where.invoiceNumber?.startsWith;
+          if (where.orderId) {
+            return byOrder.find((invoice) => !statusNot || invoice.status !== statusNot) ?? null;
+          }
+          if (startsWith) {
+            return [...invoices]
+              .filter((invoice) => String(invoice.invoiceNumber).startsWith(startsWith))
+              .sort((a, b) => String(b.invoiceNumber).localeCompare(String(a.invoiceNumber)))[0] ?? null;
+          }
+          return null;
+        },
+        aggregate: async ({ where }: { where: any }) => {
+          const total = invoices
+            .filter((invoice) => invoice.customerId === where.customerId)
+            .filter((invoice) => !where.status?.notIn?.includes(invoice.status))
+            .reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0);
+          return { _sum: { totalAmount: total } };
+        },
+      },
       product: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           products.find((p) => p.id === id) ?? null,
@@ -147,6 +211,13 @@ describe("Orders", () => {
           throw new Error("order.create must run inside a transaction");
         },
         count: async () => orders.length,
+        findFirst: async ({ where }: { where: any }) => {
+          const startsWith = where.orderNumber?.startsWith;
+          if (!startsWith) return null;
+          return [...orders]
+            .filter((order) => String(order.orderNumber).startsWith(startsWith))
+            .sort((a, b) => String(b.orderNumber).localeCompare(String(a.orderNumber)))[0] ?? null;
+        },
         findUnique: async ({ where: { id } }: { where: { id: string } }) => {
           const found = orders.find((o) => o.id === id);
           return found ? JSON.parse(JSON.stringify(found)) : null;
@@ -180,15 +251,41 @@ describe("Orders", () => {
         const pendingOrders: Array<Record<string, unknown>> = [];
         const pendingAuditLogs: Array<Record<string, unknown>> = [];
         const pendingBillingRequests: Array<Record<string, unknown>> = [];
+        const pendingInvoices: Array<Record<string, any>> = [];
 
         const result = await callback({
+          company: prismaStub.company,
+          customer,
+          invoice: {
+            findFirst: prismaStub.invoice.findFirst,
+            aggregate: prismaStub.invoice.aggregate,
+            create: async ({ data, include }: { data: Record<string, any>; include?: Record<string, unknown> }) => {
+              const invoice = {
+                id: `invoice-${invoices.length + pendingInvoices.length + 1}`,
+                ...data,
+                status: data.status ?? InvoiceStatus.emitida,
+                totalPaid: data.totalPaid ?? 0,
+                createdAt: new Date("2026-04-29T00:00:00.000Z"),
+                updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+                company: include?.company ? companies.find((c) => c.id === data.companyId) : undefined,
+                customer: include?.customer ? { id: data.customerId, displayName: "Agro Norte" } : undefined,
+                order: include?.order ? { id: data.orderId, orderNumber: "NOR-001", status: "facturado" } : undefined,
+                payments: include?.payments ? [] : undefined,
+              };
+              pendingInvoices.push(invoice);
+              return invoice;
+            },
+          },
           order: {
             create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
               const order = {
                 id: `order-${orders.length + pendingOrders.length + 1}`,
                 status: "recibido",
                 ...data,
+                companyId: data.companyId ?? "company-1",
                 items: include?.items ? (data.items as { create: unknown[] }).create : undefined,
+                company: include?.company ? companies[0] : undefined,
+                invoices: include?.invoices ? [] : undefined,
                 customer: include?.customer ? { id: "customer-1", displayName: "Agro Norte" } : undefined,
                 opportunity: null,
                 sourceQuote: null,
@@ -248,6 +345,7 @@ describe("Orders", () => {
         });
 
         orders.push(...pendingOrders);
+        invoices.push(...pendingInvoices);
         auditLogs.push(...pendingAuditLogs);
         return result;
       },
@@ -286,6 +384,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         items: [
           { productId: "product-1", quantity: 2, unitPrice: 50000 },
         ],
@@ -305,6 +404,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-2",
+        companyId: "company-1",
         items: [
           { productId: "product-1", quantity: 2, unitPrice: 99999 },
         ],
@@ -328,6 +428,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-2",
+        companyId: "company-1",
         items: [
           { quantity: 3, unitPrice: 25000, notes: "Servicio especial" },
         ],
@@ -348,6 +449,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceQuoteId: "quote-customer-1",
         purchaseOrderNumber: "OC-7788",
         orderDate: "2026-05-22",
@@ -370,7 +472,6 @@ describe("Orders", () => {
         approvalName: "Diana Gerente",
         reviewDate: "2026-05-23",
         preparedByName: "Admin",
-        zone: "Norte",
         preparedByRole: "Comercial",
         items: [
           {
@@ -384,7 +485,7 @@ describe("Orders", () => {
       })
       .expect(201);
 
-    expect(response.body.orderNumber).toMatch(/^PED-\d{6}$/);
+    expect(response.body.orderNumber).toMatch(/^NOR-\d{3}$/);
     expect(response.body.purchaseOrderNumber).toBe("OC-7788");
     expect(response.body.customerNameSnapshot).toBe("Agro Norte");
     expect(response.body.customerNitSnapshot).toBe("900111222-1");
@@ -394,7 +495,6 @@ describe("Orders", () => {
     expect(response.body.requesterName).toBe("Laura Cliente");
     expect(response.body.receiverName).toBe("Carlos Bodega");
     expect(response.body.invoiceFilingPlace).toBe("Oficina principal");
-    expect(response.body.zone).toBe("Norte");
     expect(Number(response.body.subtotal)).toBe(100000);
     expect(Number(response.body.items[0].taxAmount)).toBe(19000);
     expect(Number(response.body.items[0].totalWithTax)).toBe(119000);
@@ -410,6 +510,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceConversationId: "conversation-customer-1",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
@@ -425,6 +526,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceConversationId: "conversation-unassigned",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
@@ -439,6 +541,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceConversationId: "conversation-customer-2",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
@@ -453,6 +556,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceConversationId: "missing-conversation",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
@@ -467,6 +571,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         opportunityId: "opportunity-customer-2",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
@@ -481,6 +586,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceQuoteId: "quote-customer-2",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
@@ -495,6 +601,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
       .expect(201);
@@ -545,6 +652,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
       .expect(201);
@@ -562,6 +670,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
       .expect(201);
@@ -598,6 +707,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
       })
       .expect(201);
@@ -649,6 +759,7 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         purchaseOrderNumber: "OC-EXPORT",
         requesterName: "Laura Cliente",
         requesterEmail: "laura@example.com",
