@@ -155,18 +155,24 @@ describe("Orders", () => {
       },
       invoice: {
         findFirst: async ({ where }: { where: any }) => {
-          const byOrder = invoices.filter((invoice) => invoice.orderId === where.orderId);
-          const statusNot = where.status?.not;
           const startsWith = where.invoiceNumber?.startsWith;
-          if (where.orderId) {
-            return byOrder.find((invoice) => !statusNot || invoice.status !== statusNot) ?? null;
-          }
-          if (startsWith) {
-            return [...invoices]
-              .filter((invoice) => String(invoice.invoiceNumber).startsWith(startsWith))
-              .sort((a, b) => String(b.invoiceNumber).localeCompare(String(a.invoiceNumber)))[0] ?? null;
-          }
-          return null;
+          const statusFilter = where.status;
+          const statusNot = typeof statusFilter === "object" ? statusFilter?.not : undefined;
+          const statusNotIn = typeof statusFilter === "object" ? statusFilter?.notIn : undefined;
+          const exactStatus = typeof statusFilter === "string" ? statusFilter : undefined;
+
+          const matches = (invoice: Record<string, any>) => {
+            if (where.orderId && invoice.orderId !== where.orderId) return false;
+            if (startsWith && !String(invoice.invoiceNumber).startsWith(startsWith)) return false;
+            if (statusNot && invoice.status === statusNot) return false;
+            if (statusNotIn?.includes(invoice.status)) return false;
+            if (exactStatus && invoice.status !== exactStatus) return false;
+            return true;
+          };
+
+          return [...invoices]
+            .filter(matches)
+            .sort((a, b) => String(b.invoiceNumber).localeCompare(String(a.invoiceNumber)))[0] ?? null;
         },
         aggregate: async ({ where }: { where: any }) => {
           const total = invoices
@@ -883,7 +889,8 @@ describe("Orders", () => {
       .set("Authorization", `Bearer ${token}`)
       .expect(201);
     const stored = invoices.find((invoice) => invoice.id === first.body.id);
-    if (stored) stored.status = InvoiceStatus.anulada;
+    expect(stored).toBeDefined();
+    stored!.status = InvoiceStatus.anulada;
 
     const second = await request(globalThis.__APP__)
       .post(`/orders/${createResponse.body.id}/invoice`)
@@ -934,7 +941,8 @@ describe("Orders", () => {
       .expect(201);
 
     const stored = orders.find((order) => order.id === createResponse.body.id);
-    if (stored) stored.status = "entregado";
+    expect(stored).toBeDefined();
+    stored!.status = "entregado";
 
     await request(globalThis.__APP__)
       .post(`/orders/${createResponse.body.id}/invoice`)
