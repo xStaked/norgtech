@@ -245,8 +245,8 @@ export class WhatsAppOrderAutomationService {
     }
 
     const skuContained = products.filter((product) => {
-      const sku = this.normalize(product.sku);
-      return sku.length >= 3 && normalizedRef.includes(sku);
+      const skuTokens = this.tokens(product.sku);
+      return skuTokens.length > 0 && this.containsTokenSequence(this.tokens(productRef), skuTokens);
     });
     if (skuContained.length === 1) {
       return { decision: "created" as const, product: skuContained[0] };
@@ -313,5 +313,19 @@ export class WhatsAppOrderAutomationService {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
+  }
+
+  private tokens(value?: string | null) {
+    return this.normalize(value).split(/\s+/).filter(Boolean);
+  }
+
+  private containsTokenSequence(haystack: string[], needle: string[]) {
+    if (needle.length === 0 || needle.length > haystack.length) {
+      return false;
+    }
+
+    return haystack.some((_, index) =>
+      needle.every((token, needleIndex) => haystack[index + needleIndex] === token),
+    );
   }
 }

@@ -92,6 +92,15 @@ describe("WhatsApp inbox", () => {
       basePrice: 65000,
       active: true,
     },
+    {
+      id: "product-3",
+      name: "Solar Mix",
+      sku: "SOL",
+      unit: "kg",
+      presentation: "Bulto 25kg",
+      basePrice: 42000,
+      active: true,
+    },
   ];
   const contacts = [
     {
@@ -915,6 +924,25 @@ describe("WhatsApp inbox", () => {
     ]);
     expect(response.body.reply).toContain("Recibimos tu pedido");
     expect(response.body.reply).toContain("Fertilizante");
+  });
+
+  it("does not auto-create when a short SKU appears inside an unrelated product ref", async () => {
+    const orderCountBefore = orders.length;
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/conversation-1/order-automation")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        companyRef: "NOR",
+        zoneRef: "Costa",
+        items: [{ productRef: "consola industrial", quantity: 1 }],
+        notes: "Necesito 1 consola industrial por NOR para Costa",
+      })
+      .expect(201);
+
+    expect(["needs_clarification", "human_review"]).toContain(response.body.decision);
+    expect(response.body.decision).not.toBe("created");
+    expect(orders).toHaveLength(orderCountBefore);
   });
 
   it("creates an order draft from a WhatsApp conversation", async () => {
