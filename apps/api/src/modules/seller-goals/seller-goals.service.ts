@@ -41,7 +41,7 @@ export class SellerGoalsService {
     await this.ensureNoDuplicate(userId, dto.periodType, periodValue);
 
     try {
-      return await this.sellerGoal.create({
+      return await this.prisma.sellerGoal.create({
         data: {
           userId,
           periodType: dto.periodType,
@@ -67,7 +67,7 @@ export class SellerGoalsService {
     this.ensureCanRead(user, userId);
     await this.ensureEligibleSeller(userId);
 
-    return this.sellerGoal.findMany({
+    return this.prisma.sellerGoal.findMany({
       where: { userId },
       orderBy: [{ periodValue: "desc" }, { createdAt: "desc" }],
     });
@@ -82,7 +82,7 @@ export class SellerGoalsService {
     this.ensureCanWrite(user);
     await this.ensureEligibleSeller(userId);
 
-    const goal = await this.sellerGoal.findUnique({
+    const goal = await this.prisma.sellerGoal.findUnique({
       where: { id: goalId },
     });
 
@@ -100,7 +100,7 @@ export class SellerGoalsService {
       await this.ensureNoDuplicate(userId, periodType, periodValue, goalId);
     }
 
-    return this.sellerGoal.update({
+    return this.prisma.sellerGoal.update({
       where: { id: goalId },
       data: {
         ...dto,
@@ -115,7 +115,7 @@ export class SellerGoalsService {
   async remove(user: AuthUser, userId: string, goalId: string) {
     this.ensureCanWrite(user);
 
-    const goal = await this.sellerGoal.findUnique({
+    const goal = await this.prisma.sellerGoal.findUnique({
       where: { id: goalId },
     });
 
@@ -123,7 +123,7 @@ export class SellerGoalsService {
       throw new NotFoundException("Seller goal not found");
     }
 
-    return this.sellerGoal.delete({
+    return this.prisma.sellerGoal.delete({
       where: { id: goalId },
     });
   }
@@ -181,10 +181,6 @@ export class SellerGoalsService {
     };
   }
 
-  private get sellerGoal() {
-    return (this.prisma as unknown as { sellerGoal: any }).sellerGoal;
-  }
-
   private ensureCanWrite(user: AuthUser) {
     if (!WRITE_ROLES.includes(user.role)) {
       throw new ForbiddenException("Insufficient permissions");
@@ -221,7 +217,7 @@ export class SellerGoalsService {
     periodValue: string,
     excludeGoalId?: string,
   ) {
-    const existing = await this.sellerGoal.findFirst({
+    const existing = await this.prisma.sellerGoal.findFirst({
       where: { userId, periodType, periodValue },
     });
 
@@ -246,7 +242,7 @@ export class SellerGoalsService {
         periodType,
         periodValue,
       );
-      const found = await this.sellerGoal.findFirst({
+      const found = await this.prisma.sellerGoal.findFirst({
         where: {
           userId,
           periodType,
@@ -262,7 +258,7 @@ export class SellerGoalsService {
       return found;
     }
 
-    const found = await this.sellerGoal.findFirst({
+    const found = await this.prisma.sellerGoal.findFirst({
       where: { userId },
       orderBy: { createdAt: "desc" },
     });
