@@ -189,10 +189,44 @@ describe("SellerGoals", () => {
           }
           return result.length > 0 ? { ...result[0] } : null;
         },
-        findMany: async ({ where }: { where?: { userId?: string } }) => {
+        findMany: async ({
+          where,
+          include,
+        }: {
+          where?: {
+            userId?: string;
+            periodType?: string;
+            periodValue?: string;
+          };
+          include?: { user?: unknown };
+        }) => {
           return goals
-            .filter((goal) => !where?.userId || goal.userId === where.userId)
-            .map((goal) => ({ ...goal }));
+            .filter((goal) => {
+              if (where?.userId && goal.userId !== where.userId) return false;
+              if (where?.periodType && goal.periodType !== where.periodType) {
+                return false;
+              }
+              if (where?.periodValue && goal.periodValue !== where.periodValue) {
+                return false;
+              }
+              return true;
+            })
+            .map((goal) => {
+              const foundUser = users.find((user) => user.id === goal.userId);
+              return {
+                ...goal,
+                ...(include?.user && foundUser
+                  ? {
+                      user: {
+                        id: foundUser.id,
+                        name: foundUser.name,
+                        active: foundUser.active,
+                        role: foundUser.role,
+                      },
+                    }
+                  : {}),
+              };
+            });
         },
       },
       order: {
@@ -361,5 +395,68 @@ describe("SellerGoals", () => {
     expect(response.body.ordersCount).toBe(2);
     expect(response.body.customersCount).toBe(1);
     expect(response.body.percentage).toBe(40);
+  });
+
+  it("returns seller goals dashboard totals and items for the selected period", async () => {
+    await request(globalThis.__APP__)
+      .post("/users/seller-user-id/seller-goals")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        periodType: "mensual",
+        periodValue: "2026-06",
+        targetAmount: 300000000,
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .post("/users/other-seller-id/seller-goals")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        periodType: "mensual",
+        periodValue: "2026-06",
+        targetAmount: 200000000,
+      })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-06")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(response.body.periodType).toBe("mensual");
+    expect(response.body.periodValue).toBe("2026-06");
+    expect(response.body.companyId).toBeNull();
+    expect(response.body.totals).toEqual({
+      targetAmount: 500000000,
+      soldAmount: 250000000,
+      percentage: 50,
+      remainingAmount: 250000000,
+      sellers: 2,
+    });
+    expect(response.body.items).toHaveLength(2);
+    expect(response.body.items[0]).toEqual(
+      expect.objectContaining({
+        userId: "seller-user-id",
+        sellerName: "Seller",
+        targetAmount: 300000000,
+        soldAmount: 160000000,
+        percentage: 53.33,
+        remainingAmount: 140000000,
+        ordersCount: 3,
+        customersCount: 1,
+      }),
+    );
+    expect(response.body.items[1]).toEqual(
+      expect.objectContaining({
+        userId: "other-seller-id",
+        sellerName: "Other Seller",
+        targetAmount: 200000000,
+        soldAmount: 90000000,
+        percentage: 45,
+        remainingAmount: 110000000,
+        ordersCount: 1,
+        customersCount: 1,
+      }),
+    );
   });
 });

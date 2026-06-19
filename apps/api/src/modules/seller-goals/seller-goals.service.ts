@@ -144,40 +144,61 @@ export class SellerGoalsService {
       goal.periodValue,
     );
 
-    const orders = await this.prisma.order.findMany({
-      where: {
-        customer: { assignedToUserId: userId },
-        status: { in: PROGRESS_STATUSES },
-        orderDate: { gte: start, lte: end },
-        ...(companyId ? { companyId } : {}),
+    return this.buildProgress(
+      {
+        ...goal,
+        user: { name: seller.name },
+        range: { start, end },
       },
-      select: { id: true, total: true, customerId: true },
+      companyId,
+    );
+  }
+
+  async getDashboard(
+    user: AuthUser,
+    periodType?: string,
+    periodValue?: string,
+    companyId?: string,
+  ) {
+    if (!WRITE_ROLES.includes(user.role)) {
+      throw new ForbiddenException("Insufficient permissions");
+    }
+
+    const normalizedPeriod = this.normalizeDashboardPeriod(
+      periodType,
+      periodValue,
+    );
+    const goals = await this.prisma.sellerGoal.findMany({
+      where: normalizedPeriod,
+      include: {
+        user: { select: { id: true, name: true, active: true, role: true } },
+      },
+      orderBy: { periodValue: "desc" },
     });
 
-    const soldAmount = orders.reduce(
-      (sum, order) => sum + Number(order.total),
+    const items = await Promise.all(
+      goals.map((goal) => this.buildProgress(goal, companyId)),
+    );
+    const targetAmount = items.reduce(
+      (sum, item) => sum + item.targetAmount,
       0,
     );
-    const targetAmount = Number(goal.targetAmount);
-    const ordersCount = orders.length;
-    const customersCount = new Set(orders.map((order) => order.customerId)).size;
-    const percentage =
-      targetAmount > 0
-        ? Number(((soldAmount / targetAmount) * 100).toFixed(2))
-        : 0;
+    const soldAmount = items.reduce((sum, item) => sum + item.soldAmount, 0);
 
     return {
-      userId,
-      sellerName: seller.name,
+      ...normalizedPeriod,
       companyId: companyId ?? null,
-      periodType: goal.periodType,
-      periodValue: goal.periodValue,
-      targetAmount,
-      soldAmount,
-      remainingAmount: Math.max(0, targetAmount - soldAmount),
-      percentage,
-      ordersCount,
-      customersCount,
+      totals: {
+        targetAmount,
+        soldAmount,
+        percentage:
+          targetAmount > 0
+            ? Number(((soldAmount / targetAmount) * 100).toFixed(2))
+            : 0,
+        remainingAmount: Math.max(0, targetAmount - soldAmount),
+        sellers: items.length,
+      },
+      items: items.sort((a, b) => b.percentage - a.percentage),
     };
   }
 
@@ -268,6 +289,75 @@ export class SellerGoalsService {
     }
 
     return found;
+  }
+
+  private normalizeDashboardPeriod(periodType?: string, periodValue?: string) {
+    if ((periodType && !periodValue) || (!periodType && periodValue)) {
+      throw new BadRequestException(
+        "periodType and periodValue are required together",
+      );
+    }
+
+    if (periodType && periodValue) {
+      return {
+        periodType,
+        periodValue: this.normalizeAndValidatePeriod(periodType, periodValue),
+      };
+    }
+
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    return {
+      periodType: "mensual",
+      periodValue: `${now.getFullYear()}-${month}`,
+    };
+  }
+
+  private async buildProgress(
+    goal: {
+      userId: string;
+      periodType: string;
+      periodValue: string;
+      targetAmount: unknown;
+      user?: { name: string } | null;
+      range?: { start: Date; end: Date };
+    },
+    companyId?: string,
+  ) {
+    const { start, end } =
+      goal.range ?? this.getPeriodRange(goal.periodType, goal.periodValue);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        customer: { assignedToUserId: goal.userId },
+        status: { in: PROGRESS_STATUSES },
+        orderDate: { gte: start, lte: end },
+        ...(companyId ? { companyId } : {}),
+      },
+      select: { id: true, total: true, customerId: true },
+    });
+    const soldAmount = orders.reduce(
+      (sum, order) => sum + Number(order.total),
+      0,
+    );
+    const targetAmount = Number(goal.targetAmount);
+    const percentage =
+      targetAmount > 0
+        ? Number(((soldAmount / targetAmount) * 100).toFixed(2))
+        : 0;
+
+    return {
+      userId: goal.userId,
+      sellerName: goal.user?.name ?? "",
+      companyId: companyId ?? null,
+      periodType: goal.periodType,
+      periodValue: goal.periodValue,
+      targetAmount,
+      soldAmount,
+      remainingAmount: Math.max(0, targetAmount - soldAmount),
+      percentage,
+      ordersCount: orders.length,
+      customersCount: new Set(orders.map((order) => order.customerId)).size,
+    };
   }
 
   private normalizeAndValidatePeriod(periodType: string, periodValue: string) {
