@@ -94,6 +94,7 @@ def test_cliente_order_response_includes_structured_proposal_list():
     assert result["risk_level"] == "high"
     assert result["requires_human_review"] is False
     assert result["proposals"][0]["type"] == "order_draft"
+    assert result["proposals"][0]["requires_human_review"] is True
     assert result["proposals"][0]["payload"]["customerId"] == "customer-1"
     assert result["proposals"][0]["payload"]["companyId"] == "company-nt"
     assert result["proposals"][0]["payload"]["customerZoneId"] == "zone-costa"

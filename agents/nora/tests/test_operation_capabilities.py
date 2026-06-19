@@ -27,6 +27,16 @@ def test_registry_matches_initial_contract():
             "Preparar borrador de pedido",
         ),
         (
+            "orders",
+            "resolve_and_create_from_whatsapp",
+            ("cliente",),
+            "write",
+            False,
+            ("customer_id", "company_ref", "items"),
+            "high",
+            "Resolver y crear pedido desde WhatsApp cuando los datos son claros",
+        ),
+        (
             "credit",
             "summary",
             ("comercial", "admin"),
@@ -127,6 +137,17 @@ def test_order_draft_requires_human_review_and_core_fields():
     assert capability is not None
     assert capability.requires_human_review is True
     assert capability.required_fields == ("customer_id", "company_id", "items")
+    assert capability.risk_level == "high"
+
+
+def test_whatsapp_order_automation_can_run_without_human_review():
+    capability = get_capability("orders", "resolve_and_create_from_whatsapp")
+
+    assert capability is not None
+    assert capability.modes == ("cliente",)
+    assert capability.kind == "write"
+    assert capability.requires_human_review is False
+    assert capability.required_fields == ("customer_id", "company_ref", "items")
     assert capability.risk_level == "high"
 
 
