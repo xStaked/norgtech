@@ -11,8 +11,10 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "../orders/dto/create-order.dto";
 import { OrdersService } from "../orders/orders.service";
+import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
+import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 
 const conversationSummaryInclude = {
   customer: true,
@@ -75,6 +77,7 @@ export class WhatsAppService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
+    private readonly orderAutomation: WhatsAppOrderAutomationService,
   ) {}
 
   listConversations() {
@@ -236,6 +239,14 @@ export class WhatsAppService {
       sourceConversationId: conversationId,
       approvalStatus: dto.approvalStatus ?? "en_revision",
     });
+  }
+
+  async processOrderAutomation(
+    user: AuthUser,
+    conversationId: string,
+    dto: ProcessOrderAutomationDto,
+  ) {
+    return this.orderAutomation.process(user, conversationId, dto);
   }
 
   async getNoraConversationContext(conversationId: string) {

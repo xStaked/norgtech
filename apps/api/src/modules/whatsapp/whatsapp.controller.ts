@@ -16,6 +16,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "../orders/dto/create-order.dto";
 import { CreateInternalNoteDto } from "./dto/create-internal-note.dto";
 import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
+import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
 import { KapsoWebhookService } from "./kapso-webhook.service";
@@ -112,5 +113,20 @@ export class WhatsAppController {
     dto: CreateOrderDto,
   ) {
     return this.whatsAppService.createOrderDraft(user, id, dto);
+  }
+
+  @Post("conversations/:id/order-automation")
+  processOrderAutomation(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: ProcessOrderAutomationDto,
+  ) {
+    return this.whatsAppService.processOrderAutomation(user, id, dto);
   }
 }
