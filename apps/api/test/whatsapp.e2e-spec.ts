@@ -1189,6 +1189,86 @@ describe("WhatsApp inbox", () => {
     });
   });
 
+  it("webhook creates a clear order candidate and sends summary reply", async () => {
+    const orderCountBefore = orders.length;
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Cliente solicita 10 bultos de FERT-001 por NOR para Costa.",
+        suggested_reply: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        requires_human_review: true,
+        risk_level: "high",
+        missing_fields: [],
+        proposals: [],
+        order_candidate: {
+          customerId: "customer-1",
+          companyRef: "NOR",
+          zoneRef: "Costa",
+          items: [{ productRef: "FERT-001", quantity: 10, presentation: "bultos" }],
+          notes: "Necesito 10 bultos de FERT-001 por NOR para Costa",
+          sourceConversationId: "conversation-2",
+        },
+      }),
+    });
+
+    await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: [
+          {
+            phone_number_id: "phone-number-1",
+            message: {
+              id: "msg-auto-order",
+              from: "573001112233",
+              text: { body: "Necesito 10 bultos de FERT-001 por NOR para Costa" },
+              profile: { name: "Laura Cliente" },
+            },
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(orders).toHaveLength(orderCountBefore + 1);
+    expect(orders).toContainEqual(
+      expect.objectContaining({
+        sourceConversationId: "conversation-2",
+        customerId: "customer-1",
+        companyId: "company-1",
+        customerZoneId: "customer-zone-1",
+        items: [
+          expect.objectContaining({
+            productId: "product-1",
+            quantity: 10,
+            presentationSnapshot: "bultos",
+          }),
+        ],
+      }),
+    );
+    expect(
+      messages.some(
+        (message) =>
+          String(message.direction) === WhatsAppMessageDirection.outbound &&
+          String(message.body).includes("Recibimos tu pedido"),
+      ),
+    ).toBe(true);
+    expect(noraActions).toContainEqual(
+      expect.objectContaining({
+        conversationId: "conversation-2",
+        status: NoraActionStatus.executed,
+        output: expect.objectContaining({
+          order_automation: expect.objectContaining({
+            decision: "created",
+            reply: expect.stringContaining("Recibimos tu pedido"),
+          }),
+        }),
+      }),
+    );
+  });
+
   it("auto-sends low-risk Nora replies that do not require human review", async () => {
     (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,
