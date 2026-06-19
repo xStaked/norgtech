@@ -162,6 +162,25 @@ describe("WhatsApp inbox", () => {
       customer: customers[0],
     },
   ];
+  const findLatestOrderByNumber = ({
+    where,
+  }: {
+    where?: { orderNumber?: { startsWith?: string } };
+  } = {}) => {
+    const startsWith = where?.orderNumber?.startsWith;
+
+    return (
+      orders
+        .filter((order) => typeof order.orderNumber === "string")
+        .filter(
+          (order) =>
+            !startsWith || String(order.orderNumber).startsWith(startsWith),
+        )
+        .sort((left, right) =>
+          String(right.orderNumber).localeCompare(String(left.orderNumber)),
+        )[0] ?? null
+    );
+  };
   const auditLogs: Array<Record<string, unknown>> = [];
   const noraActions: Array<Record<string, unknown>> = [
     {
@@ -672,7 +691,7 @@ describe("WhatsApp inbox", () => {
       },
       order: {
         count: async () => orders.length,
-        findFirst: async () => null,
+        findFirst: findLatestOrderByNumber,
         create: async () => {
           throw new Error("order.create must run inside a transaction");
         },
@@ -727,7 +746,7 @@ describe("WhatsApp inbox", () => {
               orders.push(order as (typeof orders)[number]);
               return order;
             },
-            findFirst: async () => null,
+            findFirst: findLatestOrderByNumber,
           },
         };
 

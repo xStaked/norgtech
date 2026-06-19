@@ -1,6 +1,8 @@
 import { Type } from "class-transformer";
 import {
+  ArrayMinSize,
   IsArray,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -10,6 +12,7 @@ import {
 
 export class OrderAutomationItemDto {
   @IsString()
+  @IsNotEmpty()
   productRef!: string;
 
   @Type(() => Number)
@@ -40,6 +43,7 @@ export class ProcessOrderAutomationDto {
   zoneRef?: string;
 
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => OrderAutomationItemDto)
   items!: OrderAutomationItemDto[];
