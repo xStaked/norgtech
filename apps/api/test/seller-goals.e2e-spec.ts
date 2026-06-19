@@ -355,6 +355,8 @@ describe("SellerGoals", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .expect(200);
 
+    expect(response.body.sellerName).toBe("Seller");
+    expect(response.body.companyId).toBe("company-1");
     expect(response.body.soldAmount).toBe(120000000);
     expect(response.body.ordersCount).toBe(2);
     expect(response.body.customersCount).toBe(1);

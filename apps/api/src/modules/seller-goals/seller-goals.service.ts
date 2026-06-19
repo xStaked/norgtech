@@ -136,7 +136,7 @@ export class SellerGoalsService {
     companyId?: string,
   ) {
     this.ensureCanRead(user, userId);
-    await this.ensureEligibleSeller(userId);
+    const seller = await this.ensureEligibleSeller(userId);
 
     const goal = await this.findGoalForProgress(userId, periodType, periodValue);
     const { start, end } = this.getPeriodRange(
@@ -168,6 +168,8 @@ export class SellerGoalsService {
 
     return {
       userId,
+      sellerName: seller.name,
+      companyId: companyId ?? null,
       periodType: goal.periodType,
       periodValue: goal.periodValue,
       targetAmount,
