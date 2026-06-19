@@ -51,6 +51,16 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
         summary="Preparar borrador de pedido",
     ),
     NoraCapability(
+        domain="orders",
+        action="resolve_and_create_from_whatsapp",
+        modes=("cliente",),
+        kind="write",
+        requires_human_review=False,
+        required_fields=("customer_id", "company_ref", "items"),
+        risk_level="high",
+        summary="Resolver y crear pedido desde WhatsApp cuando los datos son claros",
+    ),
+    NoraCapability(
         domain="credit",
         action="summary",
         modes=("comercial", "admin"),

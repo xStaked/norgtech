@@ -13,7 +13,7 @@ def test_cliente_mode_extracts_order_intent():
 
     assert result["mode"] == "cliente"
     assert result["intent"] == "pedido"
-    assert result["requires_human_review"] is True
+    assert result["requires_human_review"] is False
     assert result["proposed_order"]["source"] == "whatsapp"
 
 
@@ -92,7 +92,7 @@ def test_cliente_order_response_includes_structured_proposal_list():
     assert result["mode"] == "cliente"
     assert result["intent"] == "pedido"
     assert result["risk_level"] == "high"
-    assert result["requires_human_review"] is True
+    assert result["requires_human_review"] is False
     assert result["proposals"][0]["type"] == "order_draft"
     assert result["proposals"][0]["payload"]["customerId"] == "customer-1"
     assert result["proposals"][0]["payload"]["companyId"] == "company-nt"
@@ -116,7 +116,7 @@ def test_cliente_order_missing_company_asks_one_clarification():
     )
 
     assert result["intent"] == "clarification"
-    assert result["missing_fields"] == ["company_id"]
+    assert result["missing_fields"] == ["company_ref"]
     assert "empresa" in result["suggested_reply"].lower()
     assert result["proposals"] == []
 
@@ -163,7 +163,7 @@ def test_comercial_expense_message_builds_expense_draft_proposal():
     )
 
 
-def test_overlapping_zones_require_clarification_instead_of_first_match():
+def test_order_without_product_marks_items_missing():
     result = route_whatsapp_message(
         {
             "sender_type": "cliente",
@@ -179,7 +179,7 @@ def test_overlapping_zones_require_clarification_instead_of_first_match():
     )
 
     assert result["intent"] == "clarification"
-    assert result["missing_fields"] == ["customer_zone_id"]
+    assert result["missing_fields"] == ["items"]
 
 
 def test_short_company_prefix_does_not_match_inside_word():
@@ -198,7 +198,7 @@ def test_short_company_prefix_does_not_match_inside_word():
     )
 
     assert result["intent"] == "clarification"
-    assert result["missing_fields"] == ["company_id"]
+    assert result["missing_fields"] == ["company_ref"]
 
 
 def test_small_plain_expense_amount_builds_expense_draft():
@@ -377,3 +377,53 @@ def test_expense_image_keeps_expense_context_and_asks_for_amount():
     assert "foto" in result["suggested_reply"].lower()
     assert "valor" in result["suggested_reply"].lower()
     assert result["proposals"] == []
+
+
+def test_cliente_order_returns_order_candidate_refs_and_items():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "cliente",
+            "message": "Necesito 10 bultos de Fertilizante FERT-001 por Nanonutricion para Costa",
+            "conversation_id": "conversation-1",
+            "customer": {"id": "customer-1", "displayName": "Agro Norte"},
+            "companies": [
+                {"id": "company-nt", "name": "Nortech", "prefix": "NT"},
+                {"id": "company-nn", "name": "Nanonutricion", "prefix": "NN"},
+            ],
+            "customer_zones": [{"id": "cz-costa", "name": "Costa"}],
+        }
+    )
+
+    assert result["intent"] == "pedido"
+    assert result["order_candidate"]["customerId"] == "customer-1"
+    assert result["order_candidate"]["companyRef"] == "Nanonutricion"
+    assert result["order_candidate"]["zoneRef"] == "Costa"
+    assert result["order_candidate"]["items"] == [
+        {
+            "productRef": "Fertilizante FERT-001",
+            "quantity": 10,
+            "presentation": "bultos",
+            "notes": "Necesito 10 bultos de Fertilizante FERT-001 por Nanonutricion para Costa",
+        }
+    ]
+    assert result["proposals"][0]["payload"]["items"][0]["productRef"] == "Fertilizante FERT-001"
+
+
+def test_cliente_order_without_quantity_marks_items_missing():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "cliente",
+            "message": "Necesito Fertilizante para Costa por Nanonutricion",
+            "conversation_id": "conversation-1",
+            "customer": {"id": "customer-1", "displayName": "Agro Norte"},
+            "companies": [
+                {"id": "company-nt", "name": "Nortech", "prefix": "NT"},
+                {"id": "company-nn", "name": "Nanonutricion", "prefix": "NN"},
+            ],
+            "customer_zones": [{"id": "cz-costa", "name": "Costa"}],
+        }
+    )
+
+    assert result["intent"] == "clarification"
+    assert result["missing_fields"] == ["items"]
+    assert "cantidad" in result["suggested_reply"].lower()

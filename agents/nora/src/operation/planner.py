@@ -173,17 +173,31 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
         )
 
     if any(word in normalized for word in ORDER_WORDS):
+        quantity, presentation = _quantity_and_presentation(message)
+        product_ref = _product_ref(message, quantity, presentation)
+        items = []
+        if product_ref and quantity is not None:
+            items.append(
+                {
+                    "product_ref": product_ref,
+                    "quantity": quantity,
+                    "presentation": presentation,
+                    "notes": message,
+                }
+            )
         return NoraPlan(
             intent="pedido",
             actions=[
                 PlannedAction(
                     domain="orders",
-                    action="create_draft",
+                    action="resolve_and_create_from_whatsapp",
                     fields={
                         "customer_id": _customer_id(request),
+                        "company_ref": _company_ref(request, normalized),
                         "company_id": _company_id(request, normalized),
                         "customer_zone_id": _customer_zone_id(request, normalized),
-                        "items": [{"rawText": message}],
+                        "zone_ref": _zone_ref(request, normalized),
+                        "items": items,
                         "notes": message,
                         "source_conversation_id": request.conversation_id,
                     },
@@ -205,6 +219,71 @@ def _customer_id(request: WhatsAppRouteRequest) -> str | None:
         return None
     value = request.customer.get("id")
     return str(value) if value else None
+
+
+def _quantity_and_presentation(message: str) -> tuple[float | None, str | None]:
+    match = re.search(
+        r"(?P<quantity>\d+(?:[.,]\d+)?)\s*(?P<presentation>bultos?|kg|kilos?|toneladas?|unidades?)?",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None, None
+    quantity = float(match.group("quantity").replace(",", "."))
+    presentation = match.group("presentation")
+    return quantity, presentation.lower() if presentation else None
+
+
+def _product_ref(message: str, quantity: float | None, presentation: str | None) -> str | None:
+    cleaned = message.strip()
+    if quantity is not None:
+        cleaned = re.sub(
+            r"\b\d+(?:[.,]\d+)?\s*(?:bultos?|kg|kilos?|toneladas?|unidades?)?\b",
+            "",
+            cleaned,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+    cleaned = re.sub(
+        r"^(?:necesito|pedido|cotizar|solicito|quiero)\b",
+        " ",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"^\s*de\b", " ", cleaned, flags=re.IGNORECASE)
+    split_match = re.search(r"\b(?:por|para)\b", cleaned, flags=re.IGNORECASE)
+    if split_match:
+        cleaned = cleaned[: split_match.start()]
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" ,-")
+    return cleaned or None
+
+
+def _company_ref(request: WhatsAppRouteRequest, normalized_message: str) -> str | None:
+    if len(request.companies) == 1:
+        company = request.companies[0]
+        return company.name or company.prefix or company.id
+
+    matches: list[str] = []
+    for company in request.companies:
+        for candidate in (company.name, company.prefix, company.id):
+            if candidate and _phrase_matches(normalized_message, candidate):
+                matches.append(candidate)
+
+    unique_matches = list(dict.fromkeys(matches))
+    return unique_matches[0] if len(unique_matches) == 1 else None
+
+
+def _zone_ref(request: WhatsAppRouteRequest, normalized_message: str) -> str | None:
+    if len(request.customer_zones) == 1:
+        return request.customer_zones[0].name
+
+    matches: list[str] = []
+    for zone in request.customer_zones:
+        if _phrase_matches(normalized_message, zone.name):
+            matches.append(zone.name)
+
+    unique_matches = list(dict.fromkeys(matches))
+    return unique_matches[0] if len(unique_matches) == 1 else None
 
 
 def _company_id(request: WhatsAppRouteRequest, normalized_message: str) -> str | None:

@@ -40,6 +40,24 @@ class WhatsAppRouteRequest(BaseModel):
     recent_messages: list[NoraMessageContext] = Field(default_factory=list)
 
 
+class NoraOrderCandidateItem(BaseModel):
+    productRef: str
+    quantity: float
+    presentation: str | None = None
+    notes: str | None = None
+
+
+class NoraOrderCandidate(BaseModel):
+    customerId: str | None = None
+    companyRef: str | None = None
+    customerZoneId: str | None = None
+    zoneRef: str | None = None
+    items: list[NoraOrderCandidateItem] = Field(default_factory=list)
+    deliveryInstructions: str | None = None
+    notes: str | None = None
+    sourceConversationId: str | None = None
+
+
 class NoraProposal(BaseModel):
     type: Literal[
         "order_draft",
@@ -63,3 +81,4 @@ class WhatsAppRouteResponse(BaseModel):
     blocked_reason: str | None = None
     proposals: list[NoraProposal] = Field(default_factory=list)
     proposed_order: dict[str, Any] | None = None
+    order_candidate: NoraOrderCandidate | None = None

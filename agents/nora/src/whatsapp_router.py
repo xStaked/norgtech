@@ -1,6 +1,12 @@
 from typing import Any
 
-from .models.whatsapp_models import NoraProposal, WhatsAppRouteRequest, WhatsAppRouteResponse
+from .models.whatsapp_models import (
+    NoraOrderCandidate,
+    NoraOrderCandidateItem,
+    NoraProposal,
+    WhatsAppRouteRequest,
+    WhatsAppRouteResponse,
+)
 from .operation.capabilities import get_capability
 from .operation.planner import PlannedAction, plan_message
 from .operation.validator import mode_for_sender, validate_plan
@@ -62,6 +68,14 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
 
     proposals = [_proposal_for_action(action) for action in plan.actions]
     proposals = [proposal for proposal in proposals if proposal is not None]
+    order_candidate = next(
+        (
+            candidate
+            for candidate in (_order_candidate_for_action(action) for action in plan.actions)
+            if candidate is not None
+        ),
+        None,
+    )
 
     response = WhatsAppRouteResponse(
         mode=mode,
@@ -73,20 +87,35 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
         missing_fields=[],
         proposals=proposals,
         proposed_order=_legacy_order_payload(proposals),
+        order_candidate=order_candidate,
     )
     return response.model_dump()
 
 
 def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
-    if action.domain == "orders" and action.action == "create_draft":
+    if action.domain == "orders" and action.action in (
+        "create_draft",
+        "resolve_and_create_from_whatsapp",
+    ):
+        items = [
+            {
+                "productRef": item.get("product_ref"),
+                "quantity": item.get("quantity"),
+                "presentation": item.get("presentation"),
+                "notes": item.get("notes"),
+            }
+            for item in action.fields.get("items", [])
+        ]
         return NoraProposal(
             type="order_draft",
             title="Borrador de pedido",
             payload={
                 "customerId": action.fields.get("customer_id"),
                 "companyId": action.fields.get("company_id"),
+                "companyRef": action.fields.get("company_ref"),
                 "customerZoneId": action.fields.get("customer_zone_id"),
-                "items": action.fields.get("items", []),
+                "zoneRef": action.fields.get("zone_ref"),
+                "items": items,
                 "notes": action.fields.get("notes"),
                 "sourceConversationId": action.fields.get("source_conversation_id"),
                 "approvalStatus": "en_revision",
@@ -127,6 +156,30 @@ def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
         )
 
     return None
+
+
+def _order_candidate_for_action(action: PlannedAction) -> NoraOrderCandidate | None:
+    if action.domain != "orders" or action.action != "resolve_and_create_from_whatsapp":
+        return None
+    items = [
+        NoraOrderCandidateItem(
+            productRef=str(item["product_ref"]),
+            quantity=float(item["quantity"]),
+            presentation=item.get("presentation"),
+            notes=item.get("notes"),
+        )
+        for item in action.fields.get("items", [])
+        if item.get("product_ref") and item.get("quantity") is not None
+    ]
+    return NoraOrderCandidate(
+        customerId=action.fields.get("customer_id"),
+        companyRef=action.fields.get("company_ref"),
+        customerZoneId=action.fields.get("customer_zone_id"),
+        zoneRef=action.fields.get("zone_ref"),
+        items=items,
+        notes=action.fields.get("notes"),
+        sourceConversationId=action.fields.get("source_conversation_id"),
+    )
 
 
 def _requires_review(actions: list[PlannedAction]) -> bool:
@@ -221,7 +274,7 @@ def _clarification_for(
     missing_fields: list[str],
     request: WhatsAppRouteRequest | None = None,
 ) -> str:
-    if "company_id" in missing_fields:
+    if "company_id" in missing_fields or "company_ref" in missing_fields:
         return "Para preparar el pedido, dime por cual empresa debe salir."
     if "customer_zone_id" in missing_fields:
         return "Para preparar el pedido, dime la zona o sede de despacho."
@@ -235,7 +288,7 @@ def _clarification_for(
     if "customer_id" in missing_fields:
         return "Necesito identificar el cliente antes de continuar."
     if "items" in missing_fields:
-        return "Dime que productos y cantidades necesita el pedido."
+        return "Dime que productos y que cantidad necesita el pedido."
     return "Me falta un dato para continuar. Puedes confirmarme la informacion faltante?"
 
 
