@@ -73,6 +73,26 @@ describe("WhatsApp inbox", () => {
       isActive: true,
     },
   ];
+  const products = [
+    {
+      id: "product-1",
+      name: "Fertilizante",
+      sku: "FERT-001",
+      unit: "kg",
+      presentation: "Bulto 50kg",
+      basePrice: 50000,
+      active: true,
+    },
+    {
+      id: "product-2",
+      name: "Fertilizante Plus",
+      sku: "FERT-PLUS",
+      unit: "kg",
+      presentation: "Bulto 50kg",
+      basePrice: 65000,
+      active: true,
+    },
+  ];
   const contacts = [
     {
       id: "contact-1",
@@ -383,6 +403,28 @@ describe("WhatsApp inbox", () => {
           return result.map((company) => applySelect(company, select));
         },
       },
+      customerZone: {
+        findMany: async ({
+          where,
+        }: {
+          where?: { customerId?: string; isActive?: boolean };
+        } = {}) =>
+          customerZones
+            .filter(
+              (customerZone) =>
+                !where?.customerId || customerZone.customerId === where.customerId,
+            )
+            .filter(
+              (customerZone) =>
+                where?.isActive === undefined || customerZone.isActive === where.isActive,
+            )
+            .map((customerZone) => ({
+              ...customerZone,
+              zone: zones.find((zone) => zone.id === customerZone.zoneId) ?? null,
+            })),
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          customerZones.find((customerZone) => customerZone.id === id) ?? null,
+      },
       contact: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           contacts.find((contact) => contact.id === id) ?? null,
@@ -618,17 +660,9 @@ describe("WhatsApp inbox", () => {
             : noraActions,
       },
       product: {
+        findMany: async () => products,
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-          id === "product-1"
-            ? {
-                id,
-                name: "Fertilizante",
-                sku: "FERT-001",
-                unit: "kg",
-                presentation: "Bulto 50kg",
-                basePrice: 50000,
-              }
-            : null,
+          products.find((product) => product.id === id) ?? null,
       },
       opportunity: {
         findUnique: async () => null,
@@ -638,33 +672,9 @@ describe("WhatsApp inbox", () => {
       },
       order: {
         count: async () => orders.length,
-        findFirst: async () =>
-          orders
-            .filter((order) => typeof order.orderNumber === "string")
-            .sort((left, right) =>
-              String(right.orderNumber).localeCompare(String(left.orderNumber)),
-            )[0] ?? null,
-        create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
-          const order = {
-            id: `order-${orders.length + 1}`,
-            status: "recibido",
-            createdAt: new Date("2026-05-22T11:20:00.000Z"),
-            updatedAt: new Date("2026-05-22T11:20:00.000Z"),
-            ...data,
-            items: include?.items ? (data.items as { create: unknown[] }).create : undefined,
-            customer: include?.customer
-              ? customers.find((customer) => customer.id === data.customerId) ?? null
-              : undefined,
-            opportunity: null,
-            sourceQuote: null,
-            sourceConversation: include?.sourceConversation
-              ? conversations.find(
-                  (conversation) => conversation.id === data.sourceConversationId,
-                ) ?? null
-              : undefined,
-          };
-          orders.push(order as (typeof orders)[number]);
-          return order;
+        findFirst: async () => null,
+        create: async () => {
+          throw new Error("order.create must run inside a transaction");
         },
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           orders.find((order) => order.id === id) ?? null,
@@ -680,7 +690,49 @@ describe("WhatsApp inbox", () => {
           return auditLog;
         },
       },
-      $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => callback(prismaStub),
+      $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => {
+        const tx = {
+          ...prismaStub,
+          order: {
+            ...prismaStub.order,
+            create: async ({
+              data,
+            }: {
+              data: Record<string, unknown>;
+            }) => {
+              const orderId = `order-${orders.length + 1}`;
+              const order = {
+                id: orderId,
+                status: "recibido",
+                createdAt: new Date("2026-05-22T11:20:00.000Z"),
+                updatedAt: new Date("2026-05-22T11:20:00.000Z"),
+                ...data,
+                items: (data.items as { create: Record<string, unknown>[] }).create.map(
+                  (item, index) => ({
+                    id: `order-item-${orders.length + 1}-${index + 1}`,
+                    orderId,
+                    ...item,
+                  }),
+                ),
+                customer:
+                  customers.find((customer) => customer.id === data.customerId) ?? null,
+                company: companies.find((company) => company.id === data.companyId) ?? null,
+                opportunity: null,
+                sourceQuote: null,
+                sourceConversation:
+                  conversations.find(
+                    (conversation) => conversation.id === data.sourceConversationId,
+                  ) ?? null,
+              };
+              orders.push(order as (typeof orders)[number]);
+              return order;
+            },
+            findFirst: async () => null,
+          },
+        };
+
+        return callback(tx);
+      },
     };
 
     moduleRef = await Test.createTestingModule({
@@ -821,6 +873,29 @@ describe("WhatsApp inbox", () => {
         lastMessageAt: expect.any(Date),
       }),
     );
+  });
+
+  it("creates an order automatically from a clear WhatsApp order candidate", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/conversation-1/order-automation")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({
+        companyRef: "NOR",
+        zoneRef: "Costa",
+        items: [{ productRef: "FERT-001", quantity: 10, presentation: "bultos" }],
+        notes: "Necesito 10 bultos de FERT-001 por NOR para Costa",
+      })
+      .expect(201);
+
+    expect(response.body.decision).toBe("created");
+    expect(response.body.order.customerId).toBe("customer-1");
+    expect(response.body.order.companyId).toBe("company-1");
+    expect(response.body.order.customerZoneId).toBe("customer-zone-1");
+    expect(response.body.summary.items).toEqual([
+      { name: "Fertilizante", sku: "FERT-001", quantity: 10, unit: "kg" },
+    ]);
+    expect(response.body.reply).toContain("Recibimos tu pedido");
+    expect(response.body.reply).toContain("Fertilizante");
   });
 
   it("creates an order draft from a WhatsApp conversation", async () => {
