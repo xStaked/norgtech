@@ -38,7 +38,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             mode=mode,
             intent="clarification",
             summary=plan.summary,
-            suggested_reply=_clarification_for(validation.missing_fields),
+            suggested_reply=_clarification_for(validation.missing_fields, request),
             requires_human_review=False,
             risk_level=_risk_for(plan.actions),
             missing_fields=validation.missing_fields,
@@ -178,6 +178,11 @@ def _suggested_reply_for(
     if intent == "agenda":
         return "Voy a revisar tu agenda y pendientes."
     if intent == "gasto":
+        if request and _is_expense_support_question(request.message):
+            return (
+                "Si, puedes pasarme la foto del soporte. Si ahi no se ve el valor, "
+                "tambien necesitare que me lo escribas para dejar el gasto listo."
+            )
         return "Recibido. Voy a dejar el gasto listo para revision."
     if intent == "resumen_conversacion":
         return "Prepare un resumen operativo de esta conversacion."
@@ -212,15 +217,33 @@ def _suggested_reply_for(
     return "Recibido. Dejamos el mensaje pendiente de revision."
 
 
-def _clarification_for(missing_fields: list[str]) -> str:
+def _clarification_for(
+    missing_fields: list[str],
+    request: WhatsAppRouteRequest | None = None,
+) -> str:
     if "company_id" in missing_fields:
         return "Para preparar el pedido, dime por cual empresa debe salir."
     if "customer_zone_id" in missing_fields:
         return "Para preparar el pedido, dime la zona o sede de despacho."
     if "amount" in missing_fields:
+        if request and _is_expense_support_message(request.message):
+            return (
+                "Recibi la foto del soporte. Necesito tambien el valor del gasto "
+                "para dejarlo listo."
+            )
         return "Necesito el valor del gasto para dejarlo registrado."
     if "customer_id" in missing_fields:
         return "Necesito identificar el cliente antes de continuar."
     if "items" in missing_fields:
         return "Dime que productos y cantidades necesita el pedido."
     return "Me falta un dato para continuar. Puedes confirmarme la informacion faltante?"
+
+
+def _is_expense_support_question(message: str) -> bool:
+    normalized = message.strip().lower()
+    return "foto" in normalized or "imagen" in normalized or "soporte" in normalized
+
+
+def _is_expense_support_message(message: str) -> bool:
+    normalized = message.strip().lower()
+    return normalized in ("[imagen]", "[documento]") or _is_expense_support_question(normalized)

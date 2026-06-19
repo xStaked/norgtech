@@ -1191,6 +1191,103 @@ describe("WhatsApp inbox", () => {
     expect(noraRouteBody.contact).toBeUndefined();
   });
 
+  it("normalizes commercial expense support images and sends recent context to Nora", async () => {
+    const expenseConversation = conversations.find(
+      (conversation) =>
+        conversation.accountId === "kapso-account-1" &&
+        conversation.waId === "573004445566",
+    );
+
+    expect(expenseConversation).toBeDefined();
+
+    messages.push(
+      {
+        id: "message-expense-start",
+        conversationId: expenseConversation?.id ?? "",
+        direction: WhatsAppMessageDirection.inbound,
+        role: WhatsAppMessageRole.user,
+        body: "registrar gastos",
+        createdAt: new Date("2026-05-22T11:08:00.000Z"),
+      } as unknown as (typeof messages)[number],
+      {
+        id: "message-expense-amount-prompt",
+        conversationId: expenseConversation?.id ?? "",
+        direction: WhatsAppMessageDirection.outbound,
+        role: WhatsAppMessageRole.assistant,
+        body: "Necesito el valor del gasto para dejarlo registrado.",
+        createdAt: new Date("2026-05-22T11:09:00.000Z"),
+      } as unknown as (typeof messages)[number],
+    );
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "comercial",
+        intent: "clarification",
+        summary: "Soporte de gasto recibido por WhatsApp",
+        suggested_reply: "Recibi la foto del soporte. Necesito tambien el valor del gasto.",
+        requires_human_review: false,
+        risk_level: "medium",
+        missing_fields: ["amount"],
+        proposals: [],
+        proposed_order: null,
+      }),
+    });
+
+    await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-expense-image",
+            from: "573004445566",
+            timestamp: "2026-05-22T20:05:00.000Z",
+            image: { id: "image-1" },
+            profile: { name: "Sales" },
+          },
+        },
+      })
+      .expect(201);
+
+    const noraRouteCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+      ([url, options]) => {
+        if (url !== "http://localhost:8000/whatsapp/route") {
+          return false;
+        }
+
+        const body = JSON.parse(String(options?.body ?? "{}")) as { message?: string };
+        return body.message === "[Imagen]";
+      },
+    );
+
+    expect(noraRouteCall).toBeDefined();
+    const noraRouteBody = JSON.parse(String(noraRouteCall?.[1]?.body ?? "{}"));
+
+    expect(noraRouteBody).toMatchObject({
+      sender_type: "comercial",
+      message: "[Imagen]",
+      conversation_id: expenseConversation?.id,
+      user: {
+        id: "sales-user-id",
+        role: UserRole.comercial,
+        name: "Sales",
+        email: "sales@norgtech.local",
+      },
+    });
+    expect(noraRouteBody.recent_messages).toEqual(
+      expect.arrayContaining([
+        { role: WhatsAppMessageRole.user, body: "registrar gastos" },
+        {
+          role: WhatsAppMessageRole.assistant,
+          body: "Necesito el valor del gasto para dejarlo registrado.",
+        },
+        { role: WhatsAppMessageRole.user, body: "[Imagen]" },
+      ]),
+    );
+  });
+
   it("auto-sends Nora first-contact prompts for unregistered senders", async () => {
     (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
       ok: true,

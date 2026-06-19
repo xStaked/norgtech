@@ -28,6 +28,7 @@ LOGISTICS_WORDS = ("guia", "guía", "transportadora", "despacho", "transito", "t
 EXPENSE_WORDS = ("gasto", "almuerzo", "hotel", "gasolina", "peaje", "parqueadero")
 AGENDA_WORDS = ("agenda", "visita", "pendiente hoy", "tengo hoy")
 SUMMARY_WORDS = ("resume", "resumen", "clasifica", "intencion", "intención")
+SUPPORT_MEDIA_WORDS = ("foto", "imagen", "documento", "archivo", "factura", "recibo")
 
 
 @dataclass
@@ -48,6 +49,36 @@ class NoraPlan:
 def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
     message = request.message.strip()
     normalized = message.lower()
+    normalized_context = _recent_context(request)
+
+    if request.sender_type == "comercial" and _is_expense_media_follow_up(
+        normalized,
+        normalized_context,
+    ):
+        if _is_media_placeholder(normalized):
+            return NoraPlan(
+                intent="gasto",
+                actions=[
+                    PlannedAction(
+                        domain="expenses",
+                        action="create_expense_draft",
+                        fields={
+                            "expense_date": date.today().isoformat(),
+                            "category": "otros",
+                            "amount": None,
+                            "description": "Soporte de gasto recibido por WhatsApp",
+                        },
+                        confidence=0.72,
+                    )
+                ],
+                summary="Soporte de gasto recibido por WhatsApp",
+            )
+
+        return NoraPlan(
+            intent="gasto",
+            actions=[],
+            summary=f"Pregunta sobre soporte de gasto: {message}",
+        )
 
     if any(word in normalized for word in PAYMENT_WORDS):
         return NoraPlan(
@@ -216,6 +247,24 @@ def _conversation_summary(request: WhatsAppRouteRequest) -> str:
         return "No hay mensajes recientes suficientes para resumir la conversacion."
     text = " ".join(message.body for message in request.recent_messages[-4:])
     return f"Resumen operativo de la conversacion: {text[:400]}"
+
+
+def _recent_context(request: WhatsAppRouteRequest) -> str:
+    return " ".join(
+        _normalize_phrase(message.body) for message in request.recent_messages[-6:]
+    )
+
+
+def _is_expense_media_follow_up(normalized_message: str, normalized_context: str) -> bool:
+    if not any(word in normalized_context for word in ("gasto", "gastos")):
+        return False
+    return _is_media_placeholder(normalized_message) or any(
+        word in normalized_message for word in SUPPORT_MEDIA_WORDS
+    )
+
+
+def _is_media_placeholder(normalized_message: str) -> bool:
+    return normalized_message.strip().lower() in ("[imagen]", "[documento]")
 
 
 def _expense_category(normalized_message: str) -> str:

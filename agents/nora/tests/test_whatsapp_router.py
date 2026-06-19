@@ -329,3 +329,51 @@ def test_expense_amount_ignores_date_like_tokens_without_money_value():
     assert result["missing_fields"] == ["amount"]
     assert "valor del gasto" in result["suggested_reply"].lower()
     assert result["proposals"] == []
+
+
+def test_expense_photo_question_keeps_expense_context_instead_of_greeting():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "te puedo pasar la foto?",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "recent_messages": [
+                {"role": "user", "body": "registrar gastos"},
+                {
+                    "role": "assistant",
+                    "body": "Necesito el valor del gasto para dejarlo registrado.",
+                },
+            ],
+        }
+    )
+
+    assert result["mode"] == "comercial"
+    assert result["intent"] == "gasto"
+    assert result["requires_human_review"] is False
+    assert result["proposals"] == []
+    assert "foto" in result["suggested_reply"].lower()
+    assert "hola" not in result["suggested_reply"].lower()
+
+
+def test_expense_image_keeps_expense_context_and_asks_for_amount():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "[Imagen]",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "recent_messages": [
+                {"role": "user", "body": "registrar gastos"},
+                {
+                    "role": "assistant",
+                    "body": "Necesito el valor del gasto para dejarlo registrado.",
+                },
+            ],
+        }
+    )
+
+    assert result["mode"] == "comercial"
+    assert result["intent"] == "clarification"
+    assert result["missing_fields"] == ["amount"]
+    assert "foto" in result["suggested_reply"].lower()
+    assert "valor" in result["suggested_reply"].lower()
+    assert result["proposals"] == []
