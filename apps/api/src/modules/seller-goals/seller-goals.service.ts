@@ -169,16 +169,20 @@ export class SellerGoalsService {
       periodValue,
     );
     const goals = await this.prisma.sellerGoal.findMany({
-      where: normalizedPeriod,
+      where: {
+        ...normalizedPeriod,
+        user: {
+          active: true,
+          role: { in: SELLER_ROLES },
+        },
+      },
       include: {
         user: { select: { id: true, name: true, active: true, role: true } },
       },
       orderBy: { periodValue: "desc" },
     });
 
-    const items = await Promise.all(
-      goals.map((goal) => this.buildProgress(goal, companyId)),
-    );
+    const items = await this.buildDashboardItems(goals, companyId);
     const targetAmount = items.reduce(
       (sum, item) => sum + item.targetAmount,
       0,
@@ -358,6 +362,79 @@ export class SellerGoalsService {
       ordersCount: orders.length,
       customersCount: new Set(orders.map((order) => order.customerId)).size,
     };
+  }
+
+  private async buildDashboardItems(
+    goals: Array<{
+      userId: string;
+      periodType: string;
+      periodValue: string;
+      targetAmount: unknown;
+      user?: { name: string } | null;
+    }>,
+    companyId?: string,
+  ) {
+    if (goals.length === 0) {
+      return [];
+    }
+
+    const { start, end } = this.getPeriodRange(
+      goals[0].periodType,
+      goals[0].periodValue,
+    );
+    const sellerIds = goals.map((goal) => goal.userId);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        customer: { assignedToUserId: { in: sellerIds } },
+        status: { in: PROGRESS_STATUSES },
+        orderDate: { gte: start, lte: end },
+        ...(companyId ? { companyId } : {}),
+      },
+      select: {
+        id: true,
+        total: true,
+        customerId: true,
+        customer: { select: { assignedToUserId: true } },
+      },
+    });
+
+    const ordersBySeller = new Map<string, typeof orders>();
+    for (const order of orders) {
+      const sellerId = order.customer?.assignedToUserId;
+      if (!sellerId) continue;
+      const sellerOrders = ordersBySeller.get(sellerId) ?? [];
+      sellerOrders.push(order);
+      ordersBySeller.set(sellerId, sellerOrders);
+    }
+
+    return goals.map((goal) => {
+      const sellerOrders = ordersBySeller.get(goal.userId) ?? [];
+      const soldAmount = sellerOrders.reduce(
+        (sum, order) => sum + Number(order.total),
+        0,
+      );
+      const targetAmount = Number(goal.targetAmount);
+      const percentage =
+        targetAmount > 0
+          ? Number(((soldAmount / targetAmount) * 100).toFixed(2))
+          : 0;
+
+      return {
+        userId: goal.userId,
+        sellerName: goal.user?.name ?? "",
+        companyId: companyId ?? null,
+        periodType: goal.periodType,
+        periodValue: goal.periodValue,
+        targetAmount,
+        soldAmount,
+        remainingAmount: Math.max(0, targetAmount - soldAmount),
+        percentage,
+        ordersCount: sellerOrders.length,
+        customersCount: new Set(
+          sellerOrders.map((order) => order.customerId),
+        ).size,
+      };
+    });
   }
 
   private normalizeAndValidatePeriod(periodType: string, periodValue: string) {

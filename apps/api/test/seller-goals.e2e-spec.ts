@@ -19,6 +19,7 @@ describe("SellerGoals", () => {
     "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const goals: Array<Record<string, unknown>> = [];
   let goalCounter = 0;
+  let orderFindManyCalls = 0;
 
   const users = [
     {
@@ -53,6 +54,14 @@ describe("SellerGoals", () => {
       role: UserRole.facturacion,
       active: true,
     },
+    {
+      id: "inactive-seller-id",
+      name: "Inactive Seller",
+      email: "inactive-seller@norgtech.local",
+      passwordHash,
+      role: UserRole.comercial,
+      active: false,
+    },
   ];
 
   const customers = [
@@ -65,6 +74,16 @@ describe("SellerGoals", () => {
       id: "other-customer-id",
       displayName: "Agro Sur",
       assignedToUserId: "other-seller-id",
+    },
+    {
+      id: "billing-customer-id",
+      displayName: "Agro Billing",
+      assignedToUserId: "billing-user-id",
+    },
+    {
+      id: "inactive-customer-id",
+      displayName: "Agro Inactive",
+      assignedToUserId: "inactive-seller-id",
     },
   ];
 
@@ -128,6 +147,26 @@ describe("SellerGoals", () => {
       companyId: "company-2",
       orderDate: new Date("2026-06-18T12:00:00.000Z"),
       createdAt: new Date("2026-06-18T12:00:00.000Z"),
+    },
+    {
+      id: "order-billing-user",
+      customerId: "billing-customer-id",
+      customer: customers[2],
+      status: OrderStatus.facturado,
+      total: 60000000,
+      companyId: "company-1",
+      orderDate: new Date("2026-06-11T12:00:00.000Z"),
+      createdAt: new Date("2026-06-11T12:00:00.000Z"),
+    },
+    {
+      id: "order-inactive-seller",
+      customerId: "inactive-customer-id",
+      customer: customers[3],
+      status: OrderStatus.facturado,
+      total: 80000000,
+      companyId: "company-1",
+      orderDate: new Date("2026-06-13T12:00:00.000Z"),
+      createdAt: new Date("2026-06-13T12:00:00.000Z"),
     },
   ];
 
@@ -197,6 +236,10 @@ describe("SellerGoals", () => {
             userId?: string;
             periodType?: string;
             periodValue?: string;
+            user?: {
+              active?: boolean;
+              role?: { in?: UserRole[] };
+            };
           };
           include?: { user?: unknown };
         }) => {
@@ -208,6 +251,22 @@ describe("SellerGoals", () => {
               }
               if (where?.periodValue && goal.periodValue !== where.periodValue) {
                 return false;
+              }
+              if (where?.user) {
+                const foundUser = users.find((user) => user.id === goal.userId);
+                if (!foundUser) return false;
+                if (
+                  where.user.active !== undefined &&
+                  foundUser.active !== where.user.active
+                ) {
+                  return false;
+                }
+                if (
+                  where.user.role?.in &&
+                  !where.user.role.in.includes(foundUser.role)
+                ) {
+                  return false;
+                }
               }
               return true;
             })
@@ -234,20 +293,30 @@ describe("SellerGoals", () => {
           where,
         }: {
           where?: {
-            customer?: { assignedToUserId?: string };
+            customer?: { assignedToUserId?: string | { in?: string[] } };
             status?: { in?: string[] };
             orderDate?: { gte?: Date; lte?: Date };
             companyId?: string;
           };
         }) => {
+          orderFindManyCalls++;
           return orders
             .filter((order) => {
-              if (
-                where?.customer?.assignedToUserId &&
-                order.customer.assignedToUserId !==
-                  where.customer.assignedToUserId
-              ) {
-                return false;
+              const assignedToUserId = where?.customer?.assignedToUserId;
+              if (assignedToUserId) {
+                if (
+                  typeof assignedToUserId === "string" &&
+                  order.customer.assignedToUserId !== assignedToUserId
+                ) {
+                  return false;
+                }
+                if (
+                  typeof assignedToUserId !== "string" &&
+                  assignedToUserId.in &&
+                  !assignedToUserId.in.includes(order.customer.assignedToUserId)
+                ) {
+                  return false;
+                }
               }
               if (
                 where?.status?.in &&
@@ -321,6 +390,7 @@ describe("SellerGoals", () => {
   beforeEach(() => {
     goals.length = 0;
     goalCounter = 0;
+    orderFindManyCalls = 0;
   });
 
   afterAll(async () => {
@@ -418,6 +488,34 @@ describe("SellerGoals", () => {
       })
       .expect(201);
 
+    goals.push(
+      {
+        id: "billing-goal",
+        userId: "billing-user-id",
+        periodType: "mensual",
+        periodValue: "2026-06",
+        targetAmount: 100000000,
+        notes: null,
+        createdBy: "admin-user-id",
+        updatedBy: "admin-user-id",
+        createdAt: new Date("2026-06-01T00:00:03.000Z"),
+        updatedAt: new Date("2026-06-01T00:00:03.000Z"),
+      },
+      {
+        id: "inactive-goal",
+        userId: "inactive-seller-id",
+        periodType: "mensual",
+        periodValue: "2026-06",
+        targetAmount: 150000000,
+        notes: null,
+        createdBy: "admin-user-id",
+        updatedBy: "admin-user-id",
+        createdAt: new Date("2026-06-01T00:00:04.000Z"),
+        updatedAt: new Date("2026-06-01T00:00:04.000Z"),
+      },
+    );
+    orderFindManyCalls = 0;
+
     const response = await request(globalThis.__APP__)
       .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-06")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
@@ -433,7 +531,12 @@ describe("SellerGoals", () => {
       remainingAmount: 250000000,
       sellers: 2,
     });
+    expect(orderFindManyCalls).toBe(1);
     expect(response.body.items).toHaveLength(2);
+    expect(response.body.items.map((item: { userId: string }) => item.userId)).toEqual([
+      "seller-user-id",
+      "other-seller-id",
+    ]);
     expect(response.body.items[0]).toEqual(
       expect.objectContaining({
         userId: "seller-user-id",
