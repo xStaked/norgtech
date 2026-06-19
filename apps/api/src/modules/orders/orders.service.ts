@@ -662,11 +662,9 @@ export class OrdersService {
       new Prisma.Decimal(0),
     ).toDecimalPlaces(2);
     const orderTotal = new Prisma.Decimal(order.total).toDecimalPlaces(2);
-    const totalAmount = itemTotal.isZero()
+    const totalAmount = itemTotal.isZero() || itemTotal.minus(orderTotal).abs().lte(1)
       ? orderTotal
-      : itemTotal.minus(orderTotal).abs().lte(1)
-        ? orderTotal
-        : itemTotal;
+      : itemTotal;
 
     return { subtotal, taxAmount, totalAmount, itemTotal };
   }
@@ -681,19 +679,22 @@ export class OrdersService {
     companyPrefix: string,
     client: Pick<Prisma.TransactionClient, "invoice">,
   ): Promise<string> {
-    const last = await client.invoice.findFirst({
+    const invoices = await client.invoice.findMany({
       where: { invoiceNumber: { startsWith: `${companyPrefix}-` } },
-      orderBy: { invoiceNumber: "desc" },
       select: { invoiceNumber: true },
     });
 
-    if (!last?.invoiceNumber) {
+    const nextSequence = invoices.reduce((max, invoice) => {
+      const match = invoice.invoiceNumber.match(/-(\d+)$/);
+      const seq = match ? Number.parseInt(match[1], 10) : 0;
+      return Number.isFinite(seq) && seq > max ? seq : max;
+    }, 0);
+
+    if (nextSequence === 0) {
       return `${companyPrefix}-001`;
     }
 
-    const parts = last.invoiceNumber.split("-");
-    const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
-    return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
+    return `${companyPrefix}-${String(nextSequence + 1).padStart(3, "0")}`;
   }
 
   private isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {

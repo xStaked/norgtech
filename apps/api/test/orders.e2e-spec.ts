@@ -19,6 +19,9 @@ describe("Orders", () => {
   const auditLogs: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
   const invoices: Array<Record<string, any>> = [];
+  let invoiceCreateFailure:
+    | { target: "orderId" | "invoiceNumber"; triggered: boolean }
+    | null = null;
   const products: Array<Record<string, unknown>> = [
     {
       id: "product-1",
@@ -184,6 +187,21 @@ describe("Orders", () => {
         .sort((a, b) => String(b.invoiceNumber).localeCompare(String(a.invoiceNumber)))[0] ?? null;
     };
 
+    const listInvoices = (where: any, sourceInvoices: Array<Record<string, any>>) =>
+      [...sourceInvoices].filter((invoice) => {
+        const startsWith = where.invoiceNumber?.startsWith;
+        const statusFilter = where.status;
+        const statusNot = typeof statusFilter === "object" ? statusFilter?.not : undefined;
+        const statusNotIn = typeof statusFilter === "object" ? statusFilter?.notIn : undefined;
+        const exactStatus = typeof statusFilter === "string" ? statusFilter : undefined;
+        if (where.orderId && invoice.orderId !== where.orderId) return false;
+        if (startsWith && !String(invoice.invoiceNumber).startsWith(startsWith)) return false;
+        if (statusNot && invoice.status === statusNot) return false;
+        if (statusNotIn?.includes(invoice.status)) return false;
+        if (exactStatus && invoice.status !== exactStatus) return false;
+        return true;
+      });
+
     const aggregateInvoices = (where: any, sourceInvoices: Array<Record<string, any>>) => {
       const total = sourceInvoices
         .filter((invoice) => invoice.customerId === where.customerId)
@@ -206,6 +224,9 @@ describe("Orders", () => {
         findFirst: async ({ where }: { where: any }) => {
           return findInvoice(where, invoices);
         },
+        findMany: async ({ where }: { where: any }) => listInvoices(where ?? {}, invoices),
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          invoices.find((invoice) => invoice.id === id) ?? null,
         aggregate: async ({ where }: { where: any }) => {
           return aggregateInvoices(where, invoices);
         },
@@ -295,9 +316,26 @@ describe("Orders", () => {
           customer,
           invoice: {
             findFirst: async ({ where }: { where: any }) => findInvoice(where, [...invoices, ...pendingInvoices]),
+            findMany: async ({ where }: { where: any }) =>
+              listInvoices(where ?? {}, [...invoices, ...pendingInvoices]),
             aggregate: async ({ where }: { where: any }) =>
               aggregateInvoices(where, [...invoices, ...pendingInvoices]),
             create: async ({ data, include }: { data: Record<string, any>; include?: Record<string, unknown> }) => {
+              if (invoiceCreateFailure && !invoiceCreateFailure.triggered) {
+                invoiceCreateFailure.triggered = true;
+                throw new Prisma.PrismaClientKnownRequestError(
+                  invoiceCreateFailure.target === "orderId"
+                    ? "Unique constraint failed on the fields: (`orderId`)"
+                    : "Unique constraint failed on the fields: (`invoiceNumber`)",
+                  {
+                    code: "P2002",
+                    clientVersion: "test",
+                    meta: {
+                      target: [invoiceCreateFailure.target],
+                    },
+                  },
+                );
+              }
               const invoice = {
                 id: `invoice-${invoices.length + pendingInvoices.length + 1}`,
                 ...data,
@@ -312,6 +350,21 @@ describe("Orders", () => {
               };
               pendingInvoices.push(invoice);
               return invoice;
+            },
+            update: async ({ where: { id }, data, include }: { where: { id: string }; data: Record<string, any>; include?: Record<string, unknown> }) => {
+              const idx = invoices.findIndex((invoice) => invoice.id === id);
+              if (idx !== -1) {
+                invoices[idx] = { ...invoices[idx], ...data, updatedAt: new Date() };
+                return JSON.parse(JSON.stringify(invoices[idx]));
+              }
+
+              const pendingIdx = pendingInvoices.findIndex((invoice) => invoice.id === id);
+              if (pendingIdx !== -1) {
+                pendingInvoices[pendingIdx] = { ...pendingInvoices[pendingIdx], ...data, updatedAt: new Date() };
+                return JSON.parse(JSON.stringify(pendingInvoices[pendingIdx]));
+              }
+
+              return null;
             },
           },
           order: {
@@ -904,6 +957,79 @@ describe("Orders", () => {
     expect(Number(response.body.subtotal)).toBe(100000);
     expect(Number(response.body.taxAmount)).toBe(19000);
     expect(Number(response.body.totalAmount)).toBe(119000);
+    const auditEntry = auditLogs.find(
+      (entry) =>
+        entry.action === "invoice.created_from_order" &&
+        (entry as Record<string, any>).nextState?.invoice?.orderId === createResponse.body.id,
+    );
+    expect(auditEntry).toBeDefined();
+    expect(Number((auditEntry as Record<string, any>).nextState.orderTotal)).toBe(119000);
+    expect(Number((auditEntry as Record<string, any>).nextState.computedItemTotal)).toBe(0);
+  });
+
+  it("maps invoice unique conflicts to an active invoice error", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    invoiceCreateFailure = { target: "orderId", triggered: false };
+    let response: request.Response;
+    try {
+      response = await request(globalThis.__APP__)
+        .post(`/orders/${createResponse.body.id}/invoice`)
+        .set("Authorization", `Bearer ${token}`)
+        .expect(400);
+    } finally {
+      invoiceCreateFailure = null;
+    }
+
+    expect(response.body.message).toBe("Order already has an active invoice");
+  });
+
+  it("retries invoice creation when the invoice number collides", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    invoiceCreateFailure = { target: "invoiceNumber", triggered: false };
+    let response: request.Response;
+    try {
+      response = await request(globalThis.__APP__)
+        .post(`/orders/${createResponse.body.id}/invoice`)
+        .set("Authorization", `Bearer ${token}`)
+        .expect(201);
+    } finally {
+      invoiceCreateFailure = null;
+    }
+
+    expect(response.body.orderId).toBe(createResponse.body.id);
+    expect(response.body.invoiceNumber).toMatch(/^NOR-\d{3}$/);
   });
 
   it("blocks a second active invoice for the same order", async () => {
@@ -959,9 +1085,12 @@ describe("Orders", () => {
       .post(`/orders/${createResponse.body.id}/invoice`)
       .set("Authorization", `Bearer ${token}`)
       .expect(201);
-    const stored = invoices.find((invoice) => invoice.id === first.body.id);
-    expect(stored).toBeDefined();
-    stored!.status = InvoiceStatus.anulada;
+
+    await request(globalThis.__APP__)
+      .patch(`/invoices/${first.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: InvoiceStatus.anulada })
+      .expect(200);
 
     const second = await request(globalThis.__APP__)
       .post(`/orders/${createResponse.body.id}/invoice`)

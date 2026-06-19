@@ -64,7 +64,6 @@ export class InvoicesService {
       }
     }
 
-    const invoiceNumber = dto.invoiceNumber?.trim() || (await this.nextInvoiceNumber(company.prefix));
     const issueDate = dto.issueDate ? new Date(dto.issueDate) : new Date();
     const dueDate = dto.dueDate
       ? new Date(dto.dueDate)
@@ -72,42 +71,65 @@ export class InvoicesService {
 
     const totalAmount = new Prisma.Decimal(dto.totalAmount);
 
-    return this.prisma.$transaction(async (tx) => {
-      await this.credit.assertCreditLimit(dto.customerId, totalAmount, tx);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          await this.credit.assertCreditLimit(dto.customerId, totalAmount, tx);
 
-      const invoice = await tx.invoice.create({
-        data: {
-          invoiceNumber,
-          companyId: dto.companyId,
-          customerId: dto.customerId,
-          orderId: dto.orderId || null,
-          issueDate,
-          dueDate,
-          subtotal: dto.subtotal,
-          taxAmount: dto.taxAmount,
-          totalAmount,
-          totalPaid: 0,
-          status: "emitida",
-          notes: dto.notes || null,
-          createdBy: user.id,
-          updatedBy: user.id,
-        },
-        include: includeInvoiceRelations,
-      });
+          const invoiceNumber =
+            dto.invoiceNumber?.trim() || (await this.nextInvoiceNumber(company.prefix, tx));
 
-      await this.auditService.record(
-        {
-          entityType: "Invoice",
-          entityId: invoice.id,
-          action: "invoice.created",
-          actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(invoice)),
-        },
-        tx,
-      );
+          const invoice = await tx.invoice.create({
+            data: {
+              invoiceNumber,
+              companyId: dto.companyId,
+              customerId: dto.customerId,
+              orderId: dto.orderId || null,
+              issueDate,
+              dueDate,
+              subtotal: dto.subtotal,
+              taxAmount: dto.taxAmount,
+              totalAmount,
+              totalPaid: 0,
+              status: "emitida",
+              notes: dto.notes || null,
+              createdBy: user.id,
+              updatedBy: user.id,
+            },
+            include: includeInvoiceRelations,
+          });
 
-      return invoice;
-    });
+          await this.auditService.record(
+            {
+              entityType: "Invoice",
+              entityId: invoice.id,
+              action: "invoice.created",
+              actorUserId: user.id,
+              nextState: JSON.parse(JSON.stringify(invoice)),
+            },
+            tx,
+          );
+
+          return invoice;
+        });
+      } catch (error) {
+        if (!this.isUniqueConstraintError(error)) {
+          throw error;
+        }
+        if (this.isOrderActiveInvoiceConstraintError(error)) {
+          throw new BadRequestException("Order already has an active invoice");
+        }
+        if (dto.invoiceNumber?.trim()) {
+          throw new BadRequestException("Invoice number already exists");
+        }
+        if (attempt === 0) {
+          continue;
+        }
+        throw new BadRequestException("Invoice number already exists");
+      }
+    }
+
+    throw new BadRequestException("Invoice number already exists");
   }
 
   findAll(user: AuthUser, filters: ListInvoicesDto) {
@@ -420,19 +442,38 @@ export class InvoicesService {
     return due;
   }
 
-  private async nextInvoiceNumber(companyPrefix: string): Promise<string> {
-    const last = await this.prisma.invoice.findFirst({
+  private async nextInvoiceNumber(
+    companyPrefix: string,
+    client: Pick<Prisma.TransactionClient, "invoice">,
+  ): Promise<string> {
+    const invoices = await client.invoice.findMany({
       where: { invoiceNumber: { startsWith: `${companyPrefix}-` } },
-      orderBy: { invoiceNumber: "desc" },
       select: { invoiceNumber: true },
     });
 
-    if (!last?.invoiceNumber) {
+    const nextSequence = invoices.reduce((max, invoice) => {
+      const match = invoice.invoiceNumber.match(/-(\d+)$/);
+      const seq = match ? Number.parseInt(match[1], 10) : 0;
+      return Number.isFinite(seq) && seq > max ? seq : max;
+    }, 0);
+
+    if (nextSequence === 0) {
       return `${companyPrefix}-001`;
     }
 
-    const parts = last.invoiceNumber.split("-");
-    const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
-    return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
+    return `${companyPrefix}-${String(nextSequence + 1).padStart(3, "0")}`;
+  }
+
+  private isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  }
+
+  private isOrderActiveInvoiceConstraintError(error: unknown): boolean {
+    if (!this.isUniqueConstraintError(error)) {
+      return false;
+    }
+
+    const target = error.meta?.target;
+    return Array.isArray(target) && target.includes("orderId");
   }
 }

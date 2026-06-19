@@ -1,6 +1,6 @@
 import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
-import { InvoiceStatus, PaymentMethod, UserRole } from "@prisma/client";
+import { InvoiceStatus, PaymentMethod, Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -52,7 +52,7 @@ describe("Invoices", () => {
       id: "customer-1",
       displayName: "Agro Norte",
       taxId: "900111222-1",
-      creditLimit: 5000000,
+      creditLimit: new Prisma.Decimal(5000000),
       paymentDays: 30,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
@@ -81,6 +81,38 @@ describe("Invoices", () => {
     },
   ];
 
+  const companies = [
+    {
+      id: "company-1",
+      name: "Nortech",
+      legalName: "Tecnologia de Nutricion Organica SAS",
+      nit: "900999888-1",
+      prefix: "NOR",
+      isActive: true,
+    },
+  ];
+
+  const listInvoices = (where: any, sourceInvoices: Array<Record<string, unknown>>) =>
+    [...sourceInvoices].filter((invoice) => {
+      const startsWith = where?.invoiceNumber?.startsWith;
+      const statusFilter = where?.status;
+      const statusNot = typeof statusFilter === "object" ? statusFilter?.not : undefined;
+      const statusNotIn = typeof statusFilter === "object" ? statusFilter?.notIn : undefined;
+      const exactStatus = typeof statusFilter === "string" ? statusFilter : undefined;
+      if (where?.orderId && invoice.orderId !== where.orderId) return false;
+      if (startsWith && !String(invoice.invoiceNumber).startsWith(startsWith)) return false;
+      if (statusNot && invoice.status === statusNot) return false;
+      if (statusNotIn?.includes(invoice.status)) return false;
+      if (exactStatus && invoice.status !== exactStatus) return false;
+      return true;
+    });
+
+  const hasInvoiceNumber = (invoiceNumber: string, sourceInvoices: Array<Record<string, unknown>>) =>
+    sourceInvoices.some((invoice) => invoice.invoiceNumber === invoiceNumber);
+
+  const hasActiveOrderInvoice = (orderId: string, sourceInvoices: Array<Record<string, unknown>>) =>
+    sourceInvoices.some((invoice) => invoice.orderId === orderId && invoice.status !== InvoiceStatus.anulada);
+
   beforeAll(async () => {
     const user = {
       findUnique: async ({
@@ -101,6 +133,22 @@ describe("Invoices", () => {
       },
     };
 
+    const company = {
+      findUnique: async ({
+        where,
+      }: {
+        where: { id?: string; prefix?: string };
+      }) => {
+        if (where.id) {
+          return companies.find((c) => c.id === where.id) ?? null;
+        }
+        if (where.prefix) {
+          return companies.find((c) => c.prefix === where.prefix) ?? null;
+        }
+        return companies[0] ?? null;
+      },
+    };
+
     const order = {
       findUnique: async ({ where: { id } }: { where: { id: string } }) => {
         return orders.find((o) => o.id === id) ?? null;
@@ -110,9 +158,30 @@ describe("Invoices", () => {
     const txStub = {
       user,
       customer,
+      company,
       order,
       invoice: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
+          if (hasInvoiceNumber(String(data.invoiceNumber), invoices)) {
+            throw new Prisma.PrismaClientKnownRequestError(
+              "Unique constraint failed on the fields: (`invoiceNumber`)",
+              {
+                code: "P2002",
+                clientVersion: "test",
+                meta: { target: ["invoiceNumber"] },
+              },
+            );
+          }
+          if (data.orderId && hasActiveOrderInvoice(String(data.orderId), invoices)) {
+            throw new Prisma.PrismaClientKnownRequestError(
+              "Unique constraint failed on the fields: (`orderId`)",
+              {
+                code: "P2002",
+                clientVersion: "test",
+                meta: { target: ["orderId"] },
+              },
+            );
+          }
           const invoice = {
             id: `invoice-${invoices.length + 1}`,
             ...data,
@@ -120,6 +189,7 @@ describe("Invoices", () => {
             status: "emitida",
             createdAt: new Date(),
             updatedAt: new Date(),
+            company: companies.find((c) => c.id === data.companyId) ?? null,
             customer: customers.find((c) => c.id === data.customerId),
             order: orders.find((o) => o.id === data.orderId) ?? null,
             payments: [],
@@ -130,9 +200,15 @@ describe("Invoices", () => {
         findUnique: async ({ where: { id } }: { where: { id: string } }) => {
           return invoices.find((i) => (i as any).id === id) ?? null;
         },
-        findMany: async () => invoices,
+        findMany: async ({ where }: { where?: any }) => listInvoices(where ?? {}, invoices),
         count: async () => invoices.length,
-        aggregate: async () => ({ _sum: { totalAmount: 0 } }),
+        aggregate: async ({ where }: { where: any }) => ({
+          _sum: {
+            totalAmount: invoices
+              .filter((invoice) => !where?.status?.notIn?.includes(invoice.status))
+              .reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0),
+          },
+        }),
         update: async ({
           where: { id },
           data,
@@ -216,6 +292,7 @@ describe("Invoices", () => {
       .post("/invoices")
       .set("Authorization", `Bearer ${token}`)
       .send({
+        companyId: "company-1",
         customerId: "customer-1",
         orderId: "order-1",
         subtotal: 100000,
@@ -230,12 +307,45 @@ describe("Invoices", () => {
     expect(Number(response.body.totalAmount)).toBe(119000);
   });
 
+  it("should reject duplicate invoice numbers", async () => {
+    const token = await getToken("admin@norgtech.local");
+    const first = await request(app.getHttpServer())
+      .post("/invoices")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        companyId: "company-1",
+        customerId: "customer-1",
+        invoiceNumber: "NOR-900",
+        subtotal: 100000,
+        taxAmount: 19000,
+        totalAmount: 119000,
+      });
+
+    expect(first.status).toBe(201);
+
+    const second = await request(app.getHttpServer())
+      .post("/invoices")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        companyId: "company-1",
+        customerId: "customer-1",
+        invoiceNumber: "NOR-900",
+        subtotal: 100000,
+        taxAmount: 19000,
+        totalAmount: 119000,
+      });
+
+    expect(second.status).toBe(400);
+    expect(second.body.message).toBe("Invoice number already exists");
+  });
+
   it("should reject invoice exceeding credit limit", async () => {
     const token = await getToken("admin@norgtech.local");
     const response = await request(app.getHttpServer())
       .post("/invoices")
       .set("Authorization", `Bearer ${token}`)
       .send({
+        companyId: "company-1",
         customerId: "customer-1",
         subtotal: 6000000,
         taxAmount: 1140000,
@@ -243,7 +353,7 @@ describe("Invoices", () => {
       });
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain("Credit limit exceeded");
+    expect(response.body.message).toContain("Credito excedido");
   });
 
   it("should list invoices", async () => {
