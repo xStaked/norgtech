@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { type UserRole, USER_ROLES } from "@/lib/auth";
@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { SellerGoalsManager } from "@/components/users/seller-goals-manager";
 import { type ManagedUser } from "@/components/users/types";
 
 interface UserManagementClientProps {
@@ -34,6 +35,7 @@ const selectClasses =
 const e164PhonePattern = /^\+[1-9]\d{9,14}$/;
 const phoneValidationMessage =
   "El telefono debe tener formato internacional, por ejemplo +573001234567";
+const sellerGoalRoles = new Set<UserRole>(["comercial", "director_comercial"]);
 
 function normalizePhoneInput(value: string) {
   return value.trim().replace(/[\s().-]/g, "");
@@ -507,107 +509,117 @@ export function UserManagementClient({
                   const lockedCurrentUser = user.id === currentUserId;
                   const pending = isPending(user.id);
                   const disableRowControls = lockedCurrentUser || pending;
+                  const showSellerGoals = sellerGoalRoles.has(user.role);
 
                   return (
-                    <TableRow key={user.id}>
-                      <TableCell className="align-top">
-                        <div className="grid gap-1">
-                          <Input
-                            value={draftNames[user.id] ?? user.name}
-                            onChange={(event) =>
-                              setDraftNames((current) => ({
-                                ...current,
-                                [user.id]: event.target.value,
-                              }))
-                            }
-                            onBlur={() => void handleNameBlur(user)}
-                            disabled={pending}
-                            aria-label={`Nombre de ${user.email}`}
-                          />
-                          {pending ? (
-                            <p className="text-xs text-muted-foreground">
-                              Guardando cambios...
-                            </p>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <div className="grid gap-1">
-                          <span className="text-sm text-foreground">{user.email}</span>
-                          {lockedCurrentUser ? (
-                            <Badge variant="secondary">Tu usuario</Badge>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <div className="grid gap-1">
-                          <Input
-                            type="tel"
-                            value={draftPhones[user.id] ?? user.phone ?? ""}
-                            onChange={(event) => {
-                              clearPhoneError(user.id);
-                              setDraftPhones((current) => ({
-                                ...current,
-                                [user.id]: event.target.value,
-                              }));
-                            }}
-                            onBlur={() => void handlePhoneBlur(user)}
-                            disabled={pending}
-                            placeholder="+573001234567"
-                            title="Usa formato internacional, por ejemplo +573001234567"
-                            aria-label={`Telefono de ${user.email}`}
-                          />
-                          {phoneErrors[user.id] ? (
-                            <p className="text-xs text-destructive">{phoneErrors[user.id]}</p>
-                          ) : null}
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <select
-                          className={selectClasses}
-                          value={user.role}
-                          onChange={(event) => void handleRoleChange(user, event.target.value as UserRole)}
-                          disabled={disableRowControls}
-                          aria-label={`Rol de ${user.email}`}
-                        >
-                          {USER_ROLES.map((roleOption) => (
-                            <option key={roleOption} value={roleOption}>
-                              {roleOption}
-                            </option>
-                          ))}
-                        </select>
-                        {lockedCurrentUser ? (
-                          <p className="mt-1 text-xs text-muted-foreground">
-                            No puedes quitar tu propio acceso de administrador desde aqui.
-                          </p>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="align-top">
-                        <div className="grid gap-2">
-                          <label className="inline-flex items-center gap-2 text-sm text-foreground">
-                            <input
-                              type="checkbox"
-                              checked={user.active}
-                              onChange={(event) => void handleActiveToggle(user, event.target.checked)}
-                              disabled={disableRowControls}
-                              className="h-4 w-4 rounded border-input"
+                    <Fragment key={user.id}>
+                      <TableRow>
+                        <TableCell className="align-top">
+                          <div className="grid gap-1">
+                            <Input
+                              value={draftNames[user.id] ?? user.name}
+                              onChange={(event) =>
+                                setDraftNames((current) => ({
+                                  ...current,
+                                  [user.id]: event.target.value,
+                                }))
+                              }
+                              onBlur={() => void handleNameBlur(user)}
+                              disabled={pending}
+                              aria-label={`Nombre de ${user.email}`}
                             />
-                            <span>{user.active ? "Activo" : "Inactivo"}</span>
-                          </label>
+                            {pending ? (
+                              <p className="text-xs text-muted-foreground">
+                                Guardando cambios...
+                              </p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="grid gap-1">
+                            <span className="text-sm text-foreground">{user.email}</span>
+                            {lockedCurrentUser ? (
+                              <Badge variant="secondary">Tu usuario</Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="grid gap-1">
+                            <Input
+                              type="tel"
+                              value={draftPhones[user.id] ?? user.phone ?? ""}
+                              onChange={(event) => {
+                                clearPhoneError(user.id);
+                                setDraftPhones((current) => ({
+                                  ...current,
+                                  [user.id]: event.target.value,
+                                }));
+                              }}
+                              onBlur={() => void handlePhoneBlur(user)}
+                              disabled={pending}
+                              placeholder="+573001234567"
+                              title="Usa formato internacional, por ejemplo +573001234567"
+                              aria-label={`Telefono de ${user.email}`}
+                            />
+                            {phoneErrors[user.id] ? (
+                              <p className="text-xs text-destructive">{phoneErrors[user.id]}</p>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <select
+                            className={selectClasses}
+                            value={user.role}
+                            onChange={(event) => void handleRoleChange(user, event.target.value as UserRole)}
+                            disabled={disableRowControls}
+                            aria-label={`Rol de ${user.email}`}
+                          >
+                            {USER_ROLES.map((roleOption) => (
+                              <option key={roleOption} value={roleOption}>
+                                {roleOption}
+                              </option>
+                            ))}
+                          </select>
                           {lockedCurrentUser ? (
-                            <p className="text-xs text-muted-foreground">
+                            <p className="mt-1 text-xs text-muted-foreground">
                               No puedes quitar tu propio acceso de administrador desde aqui.
                             </p>
                           ) : null}
-                          <Badge variant={user.active ? "secondary" : "outline"}>
-                            {user.active ? "Activo" : "Inactivo"}
-                          </Badge>
-                        </div>
-                      </TableCell>
-                      <TableCell className="align-top text-sm text-muted-foreground">
-                        {formatDate(user.updatedAt)}
-                      </TableCell>
-                    </TableRow>
+                        </TableCell>
+                        <TableCell className="align-top">
+                          <div className="grid gap-2">
+                            <label className="inline-flex items-center gap-2 text-sm text-foreground">
+                              <input
+                                type="checkbox"
+                                checked={user.active}
+                                onChange={(event) => void handleActiveToggle(user, event.target.checked)}
+                                disabled={disableRowControls}
+                                className="h-4 w-4 rounded border-input"
+                              />
+                              <span>{user.active ? "Activo" : "Inactivo"}</span>
+                            </label>
+                            {lockedCurrentUser ? (
+                              <p className="text-xs text-muted-foreground">
+                                No puedes quitar tu propio acceso de administrador desde aqui.
+                              </p>
+                            ) : null}
+                            <Badge variant={user.active ? "secondary" : "outline"}>
+                              {user.active ? "Activo" : "Inactivo"}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell className="align-top text-sm text-muted-foreground">
+                          {formatDate(user.updatedAt)}
+                        </TableCell>
+                      </TableRow>
+                      {showSellerGoals ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="bg-muted/10">
+                            <SellerGoalsManager userId={user.id} canManage />
+                          </TableCell>
+                        </TableRow>
+                      ) : null}
+                    </Fragment>
                   );
                 })}
               </TableBody>
