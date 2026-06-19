@@ -2,7 +2,6 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   NoraActionStatus,
   Prisma,
-  UserRole,
   WhatsAppConversation,
   WhatsAppMessage,
   WhatsAppSenderType,
@@ -16,6 +15,13 @@ import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.serv
 type RouteInboundMessageInput = {
   conversation: WhatsAppConversation;
   message: WhatsAppMessage;
+};
+
+type AutomationRoutingResult = {
+  decision: "created" | "needs_clarification" | "human_review";
+  reply?: unknown;
+  question?: unknown;
+  [key: string]: unknown;
 };
 
 @Injectable()
@@ -196,7 +202,7 @@ export class NoraRoutingService {
     noraResponse: Record<string, unknown>,
     conversationId: string,
     sender: ResolvedWhatsAppSender,
-  ) {
+  ): Promise<AutomationRoutingResult | undefined> {
     if (noraResponse.intent !== "pedido") {
       return undefined;
     }
@@ -206,11 +212,37 @@ export class NoraRoutingService {
       return undefined;
     }
 
+    if (candidate.items.length === 0) {
+      return {
+        decision: "needs_clarification",
+        missingField: "items",
+        question: "Para preparar el pedido, enviame producto y cantidad mayor a cero.",
+      };
+    }
+
+    const existingAutomatedOrder = await this.findExistingAutomatedOrder(conversationId);
+    if (existingAutomatedOrder) {
+      return {
+        decision: "human_review",
+        reason: "La conversacion ya tiene un pedido creado por automatizacion de Nora.",
+        existingOrder: existingAutomatedOrder,
+      };
+    }
+
+    const actor = await this.automationActorFor(sender);
+    if (!actor) {
+      return {
+        decision: "human_review",
+        reason: "NORA_AUTOMATION_USER_ID no esta configurado o no corresponde a un usuario activo.",
+        proposal: candidate,
+      };
+    }
+
     return this.orderAutomation.process(
-      this.automationActorFor(sender),
+      actor,
       conversationId,
       candidate,
-    );
+    ) as Promise<AutomationRoutingResult>;
   }
 
   private extractOrderCandidate(candidate: unknown): ProcessOrderAutomationDto | undefined {
@@ -230,7 +262,7 @@ export class NoraRoutingService {
             const productRef = this.stringValue(itemSource.productRef);
             const quantity = Number(itemSource.quantity);
 
-            if (!productRef || !Number.isFinite(quantity)) {
+            if (!productRef || !Number.isFinite(quantity) || quantity <= 0) {
               return null;
             }
 
@@ -268,7 +300,7 @@ export class NoraRoutingService {
     };
   }
 
-  private automationActorFor(sender: ResolvedWhatsAppSender): AuthUser {
+  private async automationActorFor(sender: ResolvedWhatsAppSender): Promise<AuthUser | null> {
     if ("userId" in sender) {
       return {
         id: sender.userId,
@@ -277,11 +309,59 @@ export class NoraRoutingService {
       };
     }
 
+    const automationUserId = process.env.NORA_AUTOMATION_USER_ID?.trim();
+    if (!automationUserId) {
+      return null;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: automationUserId },
+    });
+
+    if (!user?.active) {
+      return null;
+    }
+
     return {
-      id: process.env.NORA_AUTOMATION_USER_ID ?? "admin-user-id",
-      email: "nora@norgtech.local",
-      role: UserRole.administrador,
+      id: user.id,
+      email: user.email,
+      role: user.role,
     };
+  }
+
+  private async findExistingAutomatedOrder(conversationId: string) {
+    const existingOrder = await this.prisma.order.findFirst({
+      where: { sourceConversationId: conversationId },
+      orderBy: { createdAt: "desc" },
+      include: { items: true, customer: true },
+    });
+
+    if (!existingOrder) {
+      return null;
+    }
+
+    const actionLogs = await this.prisma.noraActionLog.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: "desc" },
+      take: 20,
+    });
+
+    const hasAutomationCreatedOrder = actionLogs.some((actionLog) => {
+      if (!actionLog.output || typeof actionLog.output !== "object" || Array.isArray(actionLog.output)) {
+        return false;
+      }
+
+      const output = actionLog.output as Record<string, unknown>;
+      const automation = output.order_automation;
+      return (
+        automation !== null &&
+        typeof automation === "object" &&
+        !Array.isArray(automation) &&
+        (automation as Record<string, unknown>).decision === "created"
+      );
+    });
+
+    return hasAutomationCreatedOrder ? existingOrder : null;
   }
 
   private extractSuggestedReply(

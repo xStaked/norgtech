@@ -18,6 +18,7 @@ describe("WhatsApp inbox", () => {
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   let adminToken: string;
   let originalFetch: typeof globalThis.fetch;
+  let originalNoraAutomationUserId: string | undefined;
 
   const users = [
     {
@@ -349,6 +350,8 @@ describe("WhatsApp inbox", () => {
 
   beforeAll(async () => {
     originalFetch = globalThis.fetch;
+    originalNoraAutomationUserId = process.env.NORA_AUTOMATION_USER_ID;
+    process.env.NORA_AUTOMATION_USER_ID = "admin-user-id";
     globalThis.fetch = jest.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -700,7 +703,26 @@ describe("WhatsApp inbox", () => {
       },
       order: {
         count: async () => orders.length,
-        findFirst: findLatestOrderByNumber,
+        findFirst: async ({
+          where,
+        }: {
+          where?: {
+            orderNumber?: { startsWith?: string };
+            sourceConversationId?: string;
+          };
+        } = {}) => {
+          if (where?.sourceConversationId) {
+            return (
+              orders
+                .filter((order) => order.sourceConversationId === where.sourceConversationId)
+                .sort((left, right) =>
+                  String(right.createdAt ?? "").localeCompare(String(left.createdAt ?? "")),
+                )[0] ?? null
+            );
+          }
+
+          return findLatestOrderByNumber({ where });
+        },
         create: async () => {
           throw new Error("order.create must run inside a transaction");
         },
@@ -783,6 +805,11 @@ describe("WhatsApp inbox", () => {
 
   afterAll(async () => {
     globalThis.fetch = originalFetch;
+    if (originalNoraAutomationUserId === undefined) {
+      delete process.env.NORA_AUTOMATION_USER_ID;
+    } else {
+      process.env.NORA_AUTOMATION_USER_ID = originalNoraAutomationUserId;
+    }
     if (app) {
       await app.close();
     }
@@ -1263,6 +1290,160 @@ describe("WhatsApp inbox", () => {
           order_automation: expect.objectContaining({
             decision: "created",
             reply: expect.stringContaining("Recibimos tu pedido"),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("does not create duplicate orders when Nora retries the same order candidate", async () => {
+    contacts.push({
+      id: "contact-idempotent",
+      customerId: "customer-1",
+      fullName: "Cliente Idempotente",
+      phone: "+573009001001",
+    });
+    const orderCountBefore = orders.length;
+    const outboundCountBefore = messages.filter(
+      (message) => String(message.direction) === WhatsAppMessageDirection.outbound,
+    ).length;
+    const noraOrderResponse = {
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Cliente solicita 10 bultos de FERT-001 por NOR para Costa.",
+        suggested_reply: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        requires_human_review: true,
+        risk_level: "high",
+        missing_fields: [],
+        proposals: [],
+        order_candidate: {
+          customerId: "customer-1",
+          companyRef: "NOR",
+          zoneRef: "Costa",
+          items: [{ productRef: "FERT-001", quantity: 10, presentation: "bultos" }],
+          notes: "Necesito 10 bultos de FERT-001 por NOR para Costa",
+          sourceConversationId: "ignored-by-api",
+        },
+      }),
+    };
+
+    (globalThis.fetch as jest.Mock)
+      .mockResolvedValueOnce(noraOrderResponse)
+      .mockResolvedValueOnce(noraOrderResponse);
+
+    const webhookPayload = {
+      type: "whatsapp.message.received",
+      data: [
+        {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "msg-auto-order-retry",
+            from: "573009001001",
+            text: { body: "Necesito 10 bultos de FERT-001 por NOR para Costa" },
+            profile: { name: "Cliente Idempotente" },
+          },
+        },
+      ],
+    };
+
+    const firstResponse = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send(webhookPayload)
+      .expect(201);
+
+    await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send(webhookPayload)
+      .expect(201);
+
+    const createdOrders = orders.filter(
+      (order) => order.sourceConversationId === firstResponse.body.conversationId,
+    );
+    const outboundMessages = messages.filter(
+      (message) =>
+        message.conversationId === firstResponse.body.conversationId &&
+        String(message.direction) === WhatsAppMessageDirection.outbound,
+    );
+
+    expect(orders).toHaveLength(orderCountBefore + 1);
+    expect(createdOrders).toHaveLength(1);
+    expect(outboundMessages).toHaveLength(1);
+    expect(
+      messages.filter((message) => String(message.direction) === WhatsAppMessageDirection.outbound),
+    ).toHaveLength(outboundCountBefore + 1);
+    expect(noraActions).toContainEqual(
+      expect.objectContaining({
+        conversationId: firstResponse.body.conversationId,
+        output: expect.objectContaining({
+          order_automation: expect.objectContaining({
+            decision: "human_review",
+            reason: expect.stringContaining("ya tiene un pedido"),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it("does not create an order for invalid Nora candidate quantities", async () => {
+    contacts.push({
+      id: "contact-invalid-quantity",
+      customerId: "customer-1",
+      fullName: "Cliente Cantidad Invalida",
+      phone: "+573009001002",
+    });
+    const orderCountBefore = orders.length;
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Cliente envia un pedido sin cantidad valida.",
+        suggested_reply: "Recibido. Vamos a validar disponibilidad y datos del pedido.",
+        requires_human_review: true,
+        risk_level: "high",
+        missing_fields: [],
+        proposals: [],
+        order_candidate: {
+          customerId: "customer-1",
+          companyRef: "NOR",
+          zoneRef: "Costa",
+          items: [{ productRef: "FERT-001", quantity: 0, presentation: "bultos" }],
+          notes: "Necesito 0 bultos de FERT-001 por NOR para Costa",
+          sourceConversationId: "ignored-by-api",
+        },
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: [
+          {
+            phone_number_id: "phone-number-1",
+            message: {
+              id: "msg-invalid-quantity",
+              from: "573009001002",
+              text: { body: "Necesito 0 bultos de FERT-001 por NOR para Costa" },
+              profile: { name: "Cliente Cantidad Invalida" },
+            },
+          },
+        ],
+      })
+      .expect(201);
+
+    expect(orders).toHaveLength(orderCountBefore);
+    expect(noraActions).toContainEqual(
+      expect.objectContaining({
+        conversationId: response.body.conversationId,
+        status: NoraActionStatus.proposed,
+        output: expect.objectContaining({
+          order_automation: expect.objectContaining({
+            decision: "needs_clarification",
+            missingField: "items",
           }),
         }),
       }),
