@@ -7,12 +7,15 @@ import { DashboardService } from "../src/modules/dashboard/dashboard.service";
 import { JwtAuthGuard } from "../src/modules/auth/jwt-auth.guard";
 import { RolesGuard } from "../src/modules/auth/roles.guard";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { SellerGoalsService } from "../src/modules/seller-goals/seller-goals.service";
 
 describe("Dashboard advanced commercial summary", () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
 
   beforeAll(async () => {
+    jest.useFakeTimers({ now: new Date("2026-06-01T12:00:00.000Z") });
+
     const users = [
       {
         id: "admin-user-id",
@@ -74,6 +77,7 @@ describe("Dashboard advanced commercial summary", () => {
         subtotal: 840,
         status: "recibido",
         customer: customers[0],
+        customerZone: { zone: { name: "Antioquia" } },
       },
       {
         id: "order-current-2",
@@ -84,6 +88,7 @@ describe("Dashboard advanced commercial summary", () => {
         subtotal: 1680,
         status: "recibido",
         customer: customers[1],
+        customerZone: { zone: { name: "Cundinamarca" } },
       },
       {
         id: "order-old-1",
@@ -94,6 +99,7 @@ describe("Dashboard advanced commercial summary", () => {
         subtotal: 590,
         status: "entregado",
         customer: customers[2],
+        customerZone: { zone: { name: "Antioquia" } },
       },
     ];
 
@@ -238,6 +244,10 @@ describe("Dashboard advanced commercial summary", () => {
           provide: PrismaService,
           useValue: prismaStub,
         },
+        {
+          provide: SellerGoalsService,
+          useValue: {},
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -278,6 +288,7 @@ describe("Dashboard advanced commercial summary", () => {
     if (moduleRef) {
       await moduleRef.close();
     }
+    jest.useRealTimers();
   });
 
   it("returns advanced commercial aggregates for the requested window", async () => {
