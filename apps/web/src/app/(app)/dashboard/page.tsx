@@ -11,6 +11,10 @@ import {
   CommercialAdvancedDashboard,
   type CommercialAdvancedSummary,
 } from "@/components/dashboard/commercial-advanced-dashboard";
+import {
+  SellerGoalsDashboard,
+  type SellerGoalsSummary,
+} from "@/components/dashboard/seller-goals-dashboard";
 import { CreditAlertsWidget } from "@/components/dashboard/credit-alerts-widget";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
@@ -83,6 +87,7 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
 });
 
 const commercialAdvancedRoles = new Set(["administrador", "director_comercial", "comercial"]);
+const sellerGoalsRoles = new Set(["administrador", "director_comercial"]);
 
 function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig)[number]["key"]) {
   const value = summary?.[key] ?? 0;
@@ -99,16 +104,23 @@ export default async function DashboardPage({
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
   const canViewCommercialAdvanced = userRole ? commercialAdvancedRoles.has(userRole) : false;
+  const canViewSellerGoals = userRole ? sellerGoalsRoles.has(userRole) : false;
 
   const summaryQuery = companyId ? `/dashboard/summary?companyId=${companyId}` : "/dashboard/summary";
   const commercialQuery = companyId
     ? `/dashboard/commercial-advanced?days=90&companyId=${companyId}`
     : "/dashboard/commercial-advanced?days=90";
+  const sellerGoalsQuery = companyId
+    ? `/dashboard/seller-goals?companyId=${companyId}`
+    : "/dashboard/seller-goals";
 
-  const [response, commercialAdvancedResponse, companiesRes] = await Promise.all([
+  const [response, commercialAdvancedResponse, sellerGoalsResponse, companiesRes] = await Promise.all([
     apiFetch(summaryQuery),
     canViewCommercialAdvanced
       ? apiFetch(commercialQuery)
+      : Promise.resolve(null),
+    canViewSellerGoals
+      ? apiFetch(sellerGoalsQuery)
       : Promise.resolve(null),
     apiFetch("/companies"),
   ]);
@@ -119,6 +131,8 @@ export default async function DashboardPage({
   const summary: DashboardSummary | null = response.ok ? await response.json() : null;
   const commercialAdvancedSummary: CommercialAdvancedSummary | null =
     commercialAdvancedResponse?.ok ? await commercialAdvancedResponse.json() : null;
+  const sellerGoalsSummary: SellerGoalsSummary | null =
+    sellerGoalsResponse?.ok ? await sellerGoalsResponse.json() : null;
 
   return (
     <div className="space-y-6">
@@ -202,6 +216,8 @@ export default async function DashboardPage({
 
       {/* Goals Progress Section */}
       <CustomerGoalsDashboard />
+
+      <SellerGoalsDashboard summary={sellerGoalsSummary} />
 
       <CommercialAdvancedDashboard summary={commercialAdvancedSummary} />
 
