@@ -265,110 +265,127 @@ export class OrdersService {
   }
 
   async createInvoiceFromOrder(user: AuthUser, orderId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({
-        where: { id: orderId },
-        include: {
-          customer: true,
-          company: true,
-          items: true,
-          invoices: true,
-        },
-      });
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const order = await tx.order.findUnique({
+            where: { id: orderId },
+            include: {
+              customer: true,
+              company: true,
+              items: true,
+              invoices: true,
+            },
+          });
 
-      if (!order) {
-        throw new NotFoundException("Order not found");
-      }
-      if (!INVOICE_ALLOWED_ORDER_STATUSES.includes(order.status)) {
-        throw new BadRequestException("Order status is not invoiceable");
-      }
-      if (!order.companyId || !order.company || !order.company.isActive) {
-        throw new BadRequestException("Order billing company is missing or inactive");
-      }
-      if (!order.customerId || !order.customer) {
-        throw new BadRequestException("Order customer is missing");
-      }
-      if (!order.items.length) {
-        throw new BadRequestException("Order has no items to invoice");
-      }
+          if (!order) {
+            throw new NotFoundException("Order not found");
+          }
+          if (!INVOICE_ALLOWED_ORDER_STATUSES.includes(order.status)) {
+            throw new BadRequestException("Order status is not invoiceable");
+          }
+          if (!order.companyId || !order.company || !order.company.isActive) {
+            throw new BadRequestException("Order billing company is missing or inactive");
+          }
+          if (!order.customerId || !order.customer) {
+            throw new BadRequestException("Order customer is missing");
+          }
+          if (!order.items.length) {
+            throw new BadRequestException("Order has no items to invoice");
+          }
 
-      const activeInvoice = await tx.invoice.findFirst({
-        where: {
-          orderId: order.id,
-          status: { not: InvoiceStatus.anulada },
-        },
-      });
-      if (activeInvoice) {
-        throw new BadRequestException("Order already has an active invoice");
-      }
+          const activeInvoice = await tx.invoice.findFirst({
+            where: {
+              orderId: order.id,
+              status: { not: InvoiceStatus.anulada },
+            },
+          });
+          if (activeInvoice) {
+            throw new BadRequestException("Order already has an active invoice");
+          }
 
-      const totals = this.calculateInvoiceTotalsFromOrder(order);
-      await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx);
+          const totals = this.calculateInvoiceTotalsFromOrder(order);
+          await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx);
 
-      const issueDate = new Date();
-      const dueDate = this.calculateInvoiceDueDate(issueDate, order.customer.paymentDays);
-      const invoiceNumber = await this.nextInvoiceNumber(order.company.prefix, tx);
-      const previousOrderState = JSON.parse(JSON.stringify(order));
+          const issueDate = new Date();
+          const dueDate = this.calculateInvoiceDueDate(issueDate, order.customer.paymentDays);
+          const invoiceNumber = await this.nextInvoiceNumber(order.company.prefix, tx);
+          const previousOrderState = JSON.parse(JSON.stringify(order));
 
-      const invoice = await tx.invoice.create({
-        data: {
-          invoiceNumber,
-          companyId: order.companyId,
-          customerId: order.customerId,
-          orderId: order.id,
-          issueDate,
-          dueDate,
-          subtotal: totals.subtotal,
-          taxAmount: totals.taxAmount,
-          totalAmount: totals.totalAmount,
-          totalPaid: 0,
-          status: InvoiceStatus.emitida,
-          notes: `Generada desde pedido ${order.orderNumber ?? order.id}`,
-          createdBy: user.id,
-          updatedBy: user.id,
-        },
-        include: includeInvoiceRelations,
-      });
+          const invoice = await tx.invoice.create({
+            data: {
+              invoiceNumber,
+              companyId: order.companyId,
+              customerId: order.customerId,
+              orderId: order.id,
+              issueDate,
+              dueDate,
+              subtotal: totals.subtotal,
+              taxAmount: totals.taxAmount,
+              totalAmount: totals.totalAmount,
+              totalPaid: 0,
+              status: InvoiceStatus.emitida,
+              notes: `Generada desde pedido ${order.orderNumber ?? order.id}`,
+              createdBy: user.id,
+              updatedBy: user.id,
+            },
+            include: includeInvoiceRelations,
+          });
 
-      if (ORDER_STATUS_RANK[order.status] < ORDER_STATUS_RANK.facturado) {
-        const updatedOrder = await tx.order.update({
-          where: { id: order.id },
-          data: {
-            status: OrderStatus.facturado,
-            updatedBy: user.id,
-          },
+          if (ORDER_STATUS_RANK[order.status] < ORDER_STATUS_RANK.facturado) {
+            const updatedOrder = await tx.order.update({
+              where: { id: order.id },
+              data: {
+                status: OrderStatus.facturado,
+                updatedBy: user.id,
+              },
+            });
+
+            await this.auditService.record(
+              {
+                entityType: "Order",
+                entityId: order.id,
+                action: "order.status_changed",
+                actorUserId: user.id,
+                previousState: previousOrderState,
+                nextState: JSON.parse(JSON.stringify(updatedOrder)),
+              },
+              tx,
+            );
+          }
+
+          await this.auditService.record(
+            {
+              entityType: "Invoice",
+              entityId: invoice.id,
+              action: "invoice.created_from_order",
+              actorUserId: user.id,
+              nextState: JSON.parse(JSON.stringify({
+                invoice,
+                orderTotal: order.total,
+                computedItemTotal: totals.itemTotal,
+              })),
+            },
+            tx,
+          );
+
+          return invoice;
         });
-
-        await this.auditService.record(
-          {
-            entityType: "Order",
-            entityId: order.id,
-            action: "order.status_changed",
-            actorUserId: user.id,
-            previousState: previousOrderState,
-            nextState: JSON.parse(JSON.stringify(updatedOrder)),
-          },
-          tx,
-        );
+      } catch (error) {
+        if (!this.isUniqueConstraintError(error)) {
+          throw error;
+        }
+        if (this.isOrderActiveInvoiceConstraintError(error)) {
+          throw new BadRequestException("Order already has an active invoice");
+        }
+        if (attempt === 0) {
+          continue;
+        }
+        throw new BadRequestException("Unable to generate invoice number");
       }
+    }
 
-      await this.auditService.record(
-        {
-          entityType: "Invoice",
-          entityId: invoice.id,
-          action: "invoice.created_from_order",
-          actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify({
-            invoice,
-            orderTotal: order.total,
-            computedItemTotal: totals.itemTotal,
-          })),
-        },
-        tx,
-      );
-
-      return invoice;
-    });
+    throw new BadRequestException("Unable to generate invoice number");
   }
 
   findAll(status?: OrderStatus, companyId?: string) {
@@ -645,9 +662,11 @@ export class OrdersService {
       new Prisma.Decimal(0),
     ).toDecimalPlaces(2);
     const orderTotal = new Prisma.Decimal(order.total).toDecimalPlaces(2);
-    const totalAmount = itemTotal.minus(orderTotal).abs().lte(1)
+    const totalAmount = itemTotal.isZero()
       ? orderTotal
-      : itemTotal;
+      : itemTotal.minus(orderTotal).abs().lte(1)
+        ? orderTotal
+        : itemTotal;
 
     return { subtotal, taxAmount, totalAmount, itemTotal };
   }
@@ -675,5 +694,18 @@ export class OrdersService {
     const parts = last.invoiceNumber.split("-");
     const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
     return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
+  }
+
+  private isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+  }
+
+  private isOrderActiveInvoiceConstraintError(error: unknown): boolean {
+    if (!this.isUniqueConstraintError(error)) {
+      return false;
+    }
+
+    const target = error.meta?.target;
+    return Array.isArray(target) && target.includes("orderId");
   }
 }

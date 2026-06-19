@@ -146,6 +146,7 @@ describe("Orders", () => {
     const withOrderIncludes = (
       order: Record<string, unknown>,
       include?: Record<string, unknown>,
+      visibleInvoices: Array<Record<string, any>> = invoices,
     ) => ({
       ...order,
       company: include?.company ? companies.find((c) => c.id === order.companyId) : order.company,
@@ -158,9 +159,38 @@ describe("Orders", () => {
           }
         : order.customer,
       invoices: include?.invoices
-        ? invoices.filter((invoice) => invoice.orderId === order.id)
+        ? visibleInvoices.filter((invoice) => invoice.orderId === order.id)
         : order.invoices,
     });
+
+    const findInvoice = (where: any, sourceInvoices: Array<Record<string, any>>) => {
+      const startsWith = where.invoiceNumber?.startsWith;
+      const statusFilter = where.status;
+      const statusNot = typeof statusFilter === "object" ? statusFilter?.not : undefined;
+      const statusNotIn = typeof statusFilter === "object" ? statusFilter?.notIn : undefined;
+      const exactStatus = typeof statusFilter === "string" ? statusFilter : undefined;
+
+      const matches = (invoice: Record<string, any>) => {
+        if (where.orderId && invoice.orderId !== where.orderId) return false;
+        if (startsWith && !String(invoice.invoiceNumber).startsWith(startsWith)) return false;
+        if (statusNot && invoice.status === statusNot) return false;
+        if (statusNotIn?.includes(invoice.status)) return false;
+        if (exactStatus && invoice.status !== exactStatus) return false;
+        return true;
+      };
+
+      return [...sourceInvoices]
+        .filter(matches)
+        .sort((a, b) => String(b.invoiceNumber).localeCompare(String(a.invoiceNumber)))[0] ?? null;
+    };
+
+    const aggregateInvoices = (where: any, sourceInvoices: Array<Record<string, any>>) => {
+      const total = sourceInvoices
+        .filter((invoice) => invoice.customerId === where.customerId)
+        .filter((invoice) => !where.status?.notIn?.includes(invoice.status))
+        .reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0);
+      return { _sum: { totalAmount: total } };
+    };
 
     const prismaStub = {
       user,
@@ -174,31 +204,10 @@ describe("Orders", () => {
       },
       invoice: {
         findFirst: async ({ where }: { where: any }) => {
-          const startsWith = where.invoiceNumber?.startsWith;
-          const statusFilter = where.status;
-          const statusNot = typeof statusFilter === "object" ? statusFilter?.not : undefined;
-          const statusNotIn = typeof statusFilter === "object" ? statusFilter?.notIn : undefined;
-          const exactStatus = typeof statusFilter === "string" ? statusFilter : undefined;
-
-          const matches = (invoice: Record<string, any>) => {
-            if (where.orderId && invoice.orderId !== where.orderId) return false;
-            if (startsWith && !String(invoice.invoiceNumber).startsWith(startsWith)) return false;
-            if (statusNot && invoice.status === statusNot) return false;
-            if (statusNotIn?.includes(invoice.status)) return false;
-            if (exactStatus && invoice.status !== exactStatus) return false;
-            return true;
-          };
-
-          return [...invoices]
-            .filter(matches)
-            .sort((a, b) => String(b.invoiceNumber).localeCompare(String(a.invoiceNumber)))[0] ?? null;
+          return findInvoice(where, invoices);
         },
         aggregate: async ({ where }: { where: any }) => {
-          const total = invoices
-            .filter((invoice) => invoice.customerId === where.customerId)
-            .filter((invoice) => !where.status?.notIn?.includes(invoice.status))
-            .reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0);
-          return { _sum: { totalAmount: total } };
+          return aggregateInvoices(where, invoices);
         },
       },
       product: {
@@ -285,8 +294,9 @@ describe("Orders", () => {
           company: prismaStub.company,
           customer,
           invoice: {
-            findFirst: prismaStub.invoice.findFirst,
-            aggregate: prismaStub.invoice.aggregate,
+            findFirst: async ({ where }: { where: any }) => findInvoice(where, [...invoices, ...pendingInvoices]),
+            aggregate: async ({ where }: { where: any }) =>
+              aggregateInvoices(where, [...invoices, ...pendingInvoices]),
             create: async ({ data, include }: { data: Record<string, any>; include?: Record<string, unknown> }) => {
               const invoice = {
                 id: `invoice-${invoices.length + pendingInvoices.length + 1}`,
@@ -333,7 +343,9 @@ describe("Orders", () => {
               include,
             }: { where: { id: string }; include?: Record<string, unknown> }) => {
               const found = orders.find((o) => o.id === id) ?? pendingOrders.find((o) => o.id === id);
-              return found ? JSON.parse(JSON.stringify(withOrderIncludes(found, include))) : null;
+              return found
+                ? JSON.parse(JSON.stringify(withOrderIncludes(found, include, [...invoices, ...pendingInvoices])))
+                : null;
             },
             update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
               let idx = orders.findIndex((o) => o.id === id);
@@ -858,6 +870,40 @@ describe("Orders", () => {
 
     const updatedOrder = orders.find((order) => order.id === createResponse.body.id);
     expect(updatedOrder?.status).toBe("facturado");
+  });
+
+  it("uses the order total when legacy item totals are zero", async () => {
+    const token = await getToken("facturacion@norgtech.local");
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 2, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    const stored = orders.find((order) => order.id === createResponse.body.id) as
+      | Record<string, any>
+      | undefined;
+    expect(stored).toBeDefined();
+    stored!.items[0].totalWithTax = 0;
+
+    await request(globalThis.__APP__)
+      .patch(`/orders/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "orden_facturacion" })
+      .expect(200);
+
+    const response = await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/invoice`)
+      .set("Authorization", `Bearer ${token}`)
+      .expect(201);
+
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.taxAmount)).toBe(19000);
+    expect(Number(response.body.totalAmount)).toBe(119000);
   });
 
   it("blocks a second active invoice for the same order", async () => {
