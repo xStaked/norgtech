@@ -1949,6 +1949,121 @@ describe("WhatsApp inbox", () => {
     );
   });
 
+  it("starts an expense case with attachment metadata from a direct support image", async () => {
+    const account = {
+      id: "account-expense-direct",
+      phoneNumberId: "phone-number-expense-direct",
+      phoneNumber: "phone-number-expense-direct",
+      displayName: "WhatsApp",
+      active: true,
+    };
+    accounts.push(account);
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "comercial",
+        intent: "gasto",
+        summary: "Soporte de gasto recibido por WhatsApp.",
+        suggested_reply:
+          "Recibi el soporte. Voy a extraer los datos; si falta cliente o valor, te lo pido enseguida.",
+        requires_human_review: false,
+        risk_level: "medium",
+        missing_fields: [],
+        proposals: [],
+        case_transition: {
+          action: "start_case",
+          type: "expense",
+          missingFields: ["amount", "expenseDate", "category", "description"],
+          lastQuestion:
+            "Recibi el soporte. Voy a extraer los datos; si falta cliente o valor, te lo pido enseguida.",
+        },
+      }),
+    });
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .send({
+          type: "whatsapp.message.received",
+          data: {
+            phone_number_id: "phone-number-expense-direct",
+            message: {
+              id: "wamid-expense-direct-image",
+              from: "+573004445566",
+              timestamp: "2026-06-21T17:20:00.000Z",
+              image: {
+                id: "image-direct-1",
+                mime_type: "image/jpeg",
+                caption: "Factura almuerzo",
+              },
+              profile: { name: "Sales" },
+            },
+          },
+        })
+        .expect(201);
+
+      const conversationId = response.body.conversationId;
+      const noraRouteCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+        ([url, options]) => {
+          if (url !== "http://localhost:8000/whatsapp/route") {
+            return false;
+          }
+
+          const body = JSON.parse(String(options?.body ?? "{}")) as {
+            conversation_id?: string;
+          };
+          return body.conversation_id === conversationId;
+        },
+      );
+      const noraRouteBody = JSON.parse(String(noraRouteCall?.[1]?.body ?? "{}"));
+
+      expect(noraRouteBody.media).toEqual(
+        expect.objectContaining({
+          kind: "image",
+          providerMediaId: "image-direct-1",
+          contentType: "image/jpeg",
+          caption: "Factura almuerzo",
+        }),
+      );
+      expect(noraCases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            conversationId,
+            type: "expense",
+            missingFields: expect.arrayContaining(["amount"]),
+            attachments: [
+              expect.objectContaining({
+                messageId: response.body.messageId,
+                kind: "image",
+                provider: "kapso",
+                providerMediaId: "image-direct-1",
+                contentType: "image/jpeg",
+                caption: "Factura almuerzo",
+              }),
+            ],
+          }),
+        ]),
+      );
+    } finally {
+      const accountIndex = accounts.findIndex((item) => item.id === "account-expense-direct");
+      if (accountIndex !== -1) {
+        accounts.splice(accountIndex, 1);
+      }
+      const conversationIndex = conversations.findIndex(
+        (item) => item.accountId === "account-expense-direct",
+      );
+      if (conversationIndex !== -1) {
+        const conversationId = conversations[conversationIndex].id;
+        conversations.splice(conversationIndex, 1);
+        const caseIndex = noraCases.findIndex((item) => item.conversationId === conversationId);
+        if (caseIndex !== -1) {
+          noraCases.splice(caseIndex, 1);
+        }
+      }
+    }
+  });
+
   it("creates a new-customer subcase when an open order receives crea uno nuevo", async () => {
     const account = {
       id: "account-sergio-case",

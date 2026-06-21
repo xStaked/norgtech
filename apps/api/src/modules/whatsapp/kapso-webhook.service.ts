@@ -134,15 +134,68 @@ export class KapsoWebhookService {
 
     if (!body) {
       if (image?.id) {
-        return { phoneNumberId, waId, messageId, senderName, body: "[Imagen]", payload: data };
+        return {
+          phoneNumberId,
+          waId,
+          messageId,
+          senderName,
+          body: "[Imagen]",
+          payload: {
+            ...data,
+            mediaKind: "image",
+            mediaId: this.asString(image.id),
+            contentType: this.asString(image.mime_type),
+            caption: this.asString(image.caption),
+          },
+        };
       }
       if (document?.id) {
-        return { phoneNumberId, waId, messageId, senderName, body: "[Documento]", payload: data };
+        return {
+          phoneNumberId,
+          waId,
+          messageId,
+          senderName,
+          body: "[Documento]",
+          payload: {
+            ...data,
+            mediaKind: "document",
+            mediaId: this.asString(document.id),
+            contentType: this.asString(document.mime_type),
+            fileName: this.asString(document.filename),
+            caption: this.asString(document.caption),
+          },
+        };
       }
       throw new BadRequestException("Kapso message webhook is missing required fields");
     }
 
-    return { phoneNumberId, waId, messageId, senderName, body, payload: data };
+    return {
+      phoneNumberId,
+      waId,
+      messageId,
+      senderName,
+      body,
+      payload: {
+        ...data,
+        ...(image?.id
+          ? {
+              mediaKind: "image",
+              mediaId: this.asString(image.id),
+              contentType: this.asString(image.mime_type),
+              caption: this.asString(image.caption),
+            }
+          : {}),
+        ...(document?.id
+          ? {
+              mediaKind: "document",
+              mediaId: this.asString(document.id),
+              contentType: this.asString(document.mime_type),
+              fileName: this.asString(document.filename),
+              caption: this.asString(document.caption),
+            }
+          : {}),
+      },
+    };
   }
 
   private isInboundMessageEvent(dto: KapsoWebhookDto) {

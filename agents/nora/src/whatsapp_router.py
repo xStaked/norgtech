@@ -229,6 +229,17 @@ def _case_transition_for(
             ),
         )
 
+    if request.sender_type == "comercial" and plan.intent == "gasto" and not request.open_case:
+        return NoraCaseTransition(
+            action="start_case",
+            type="expense",
+            extractedData={
+                "description": request.message,
+            },
+            missingFields=["amount"],
+            lastQuestion="Listo. Dime el valor del gasto y el cliente o visita a asociar.",
+        )
+
     return None
 
 
@@ -286,6 +297,8 @@ def _suggested_reply_for(
                 "Si, puedes pasarme la foto del soporte. Si ahi no se ve el valor, "
                 "tambien necesitare que me lo escribas para dejar el gasto listo."
             )
+        if request and not request.open_case:
+            return "Listo. Dime el valor del gasto y el cliente o visita a asociar."
         return "Recibido. Voy a dejar el gasto listo para revision."
     if intent == "resumen_conversacion":
         return "Prepare un resumen operativo de esta conversacion."

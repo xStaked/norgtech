@@ -496,3 +496,22 @@ def test_expense_image_without_context_starts_expense_case():
     assert result["case_transition"]["type"] == "expense"
     assert "soporte" in result["suggested_reply"].lower()
     assert "hola" not in result["suggested_reply"].lower()
+
+
+def test_expense_text_starts_case_when_no_open_case():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Voy a registrar un gasto de almuerzo",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+        }
+    )
+
+    assert result["intent"] == "gasto"
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "expense"
+    assert result["case_transition"]["extractedData"]["description"] == (
+        "Voy a registrar un gasto de almuerzo"
+    )
+    assert "valor" in result["suggested_reply"].lower()

@@ -115,6 +115,15 @@ export class NoraCaseService {
     });
   }
 
+  async appendAttachmentFromMessage(
+    caseId: string,
+    attachment: NoraCaseAttachment,
+  ) {
+    return this.updateCase(caseId, {
+      attachments: [attachment],
+    });
+  }
+
   private async createCaseWithClient(
     prisma: NoraCasePrismaClient,
     input: NoraCaseTransitionInput,

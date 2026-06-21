@@ -137,6 +137,13 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
             summary=f"Consulta de cupo o cartera: {message}",
         )
 
+    if request.sender_type == "comercial" and _starts_expense_form(normalized):
+        return NoraPlan(
+            intent="gasto",
+            actions=[],
+            summary=f"Inicio conversacional de gasto comercial: {message}",
+        )
+
     if any(word in normalized for word in EXPENSE_WORDS) or (
         _phrase_matches(normalized, "factura")
         and request.sender_type in ("comercial", "admin")
@@ -364,6 +371,19 @@ def _wants_new_customer(normalized_message: str) -> bool:
 
 def _is_inbound_media(request: WhatsAppRouteRequest, normalized_message: str) -> bool:
     return request.media is not None
+
+
+def _starts_expense_form(normalized_message: str) -> bool:
+    return any(
+        phrase in normalized_message
+        for phrase in (
+            "registrar un gasto",
+            "registrar gasto",
+            "generar un gasto",
+            "crear un gasto",
+            "voy a registrar un gasto",
+        )
+    )
 
 
 def _is_expense_media_follow_up(normalized_message: str, normalized_context: str) -> bool:

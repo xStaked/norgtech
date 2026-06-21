@@ -10,6 +10,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { ResolvedWhatsAppSender, WhatsAppService } from "./whatsapp.service";
@@ -106,6 +107,7 @@ export class NoraRoutingService {
       const caseResult = await this.processCaseTransition(
         noraResponse,
         conversation.id,
+        message,
         sender,
       );
       const output = {
@@ -215,6 +217,7 @@ export class NoraRoutingService {
   private async processCaseTransition(
     noraResponse: Record<string, unknown>,
     conversationId: string,
+    message: WhatsAppMessage,
     sender: ResolvedWhatsAppSender,
   ) {
     const transition = noraResponse.case_transition;
@@ -241,11 +244,13 @@ export class NoraRoutingService {
     }
 
     if (action === "start_case" && source.type === NoraConversationCaseType.expense) {
+      const attachment = this.caseAttachmentFromMessage(message);
       return this.noraCaseService.createCase({
         conversationId,
         type: NoraConversationCaseType.expense,
         extractedData: this.objectValue(source.extractedData) ?? {},
         missingFields: this.stringArrayValue(source.missingFields),
+        attachments: attachment ? [attachment] : [],
         lastQuestion: this.stringValue(source.lastQuestion) ?? null,
         riskLevel: "medium",
         createdByUserId: actorUserId,
@@ -487,8 +492,43 @@ export class NoraRoutingService {
     };
   }
 
-  private mediaPayloadFromMessage(message: WhatsAppMessage) {
-    if (message.body !== "[Imagen]" && message.body !== "[Documento]") {
+  private mediaPayloadFromMessage(message: WhatsAppMessage):
+    | {
+        kind: "image" | "document";
+        providerMediaId?: string;
+        fileName?: string;
+        contentType?: string;
+        caption?: string;
+      }
+    | undefined {
+    const payload =
+      message.payload && typeof message.payload === "object" && !Array.isArray(message.payload)
+        ? (message.payload as Record<string, unknown>)
+        : {};
+    const mediaKind = this.stringValue(payload.mediaKind);
+    const kind =
+      mediaKind === "image" || message.body === "[Imagen]"
+        ? "image"
+        : mediaKind === "document" || message.body === "[Documento]"
+          ? "document"
+          : null;
+
+    if (!kind) {
+      return undefined;
+    }
+
+    return {
+      kind,
+      providerMediaId: this.stringValue(payload.mediaId) ?? this.stringValue(payload.id),
+      fileName: this.stringValue(payload.fileName),
+      contentType: this.stringValue(payload.contentType),
+      caption: this.stringValue(payload.caption),
+    };
+  }
+
+  private caseAttachmentFromMessage(message: WhatsAppMessage): NoraCaseAttachment | undefined {
+    const mediaPayload = this.mediaPayloadFromMessage(message);
+    if (!mediaPayload) {
       return undefined;
     }
     const payload =
@@ -497,11 +537,14 @@ export class NoraRoutingService {
         : {};
 
     return {
-      kind: message.body === "[Imagen]" ? "image" : "document",
-      providerMediaId: this.stringValue(payload.mediaId) ?? this.stringValue(payload.id),
-      fileName: this.stringValue(payload.fileName),
-      contentType: this.stringValue(payload.contentType),
-      caption: this.stringValue(payload.caption),
+      messageId: message.id,
+      kind: mediaPayload.kind,
+      provider: "kapso",
+      ...(mediaPayload.providerMediaId && { providerMediaId: mediaPayload.providerMediaId }),
+      ...(mediaPayload.fileName && { fileName: mediaPayload.fileName }),
+      ...(mediaPayload.contentType && { contentType: mediaPayload.contentType }),
+      ...(mediaPayload.caption && { caption: mediaPayload.caption }),
+      payload,
     };
   }
 
