@@ -29,7 +29,7 @@ def test_registry_matches_initial_contract():
         (
             "orders",
             "resolve_and_create_from_whatsapp",
-            ("cliente",),
+            ("cliente", "comercial", "admin"),
             "write",
             False,
             ("customer_id", "company_ref", "items"),
@@ -144,7 +144,7 @@ def test_whatsapp_order_automation_can_run_without_human_review():
     capability = get_capability("orders", "resolve_and_create_from_whatsapp")
 
     assert capability is not None
-    assert capability.modes == ("cliente",)
+    assert capability.modes == ("cliente", "comercial", "admin")
     assert capability.kind == "write"
     assert capability.requires_human_review is False
     assert capability.required_fields == ("customer_id", "company_ref", "items")

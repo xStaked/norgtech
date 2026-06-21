@@ -53,7 +53,7 @@ CAPABILITIES: tuple[NoraCapability, ...] = (
     NoraCapability(
         domain="orders",
         action="resolve_and_create_from_whatsapp",
-        modes=("cliente",),
+        modes=("cliente", "comercial", "admin"),
         kind="write",
         requires_human_review=False,
         required_fields=("customer_id", "company_ref", "items"),

@@ -35,6 +35,31 @@ def test_comercial_mode_limits_to_sales_context():
     assert result["intent"] == "consulta_pedidos"
 
 
+def test_internal_user_order_request_asks_for_customer_instead_of_unsupported():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "necesito 10 bultos de FERT-001 por NOR para la zona Costa",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sergio-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+            "companies": [{"id": "company-nor", "name": "Norgtech", "prefix": "NOR"}],
+            "customer_zones": [{"id": "zone-costa", "name": "Costa"}],
+        }
+    )
+
+    assert result["mode"] == "comercial"
+    assert result["intent"] == "clarification"
+    assert result["requires_human_review"] is False
+    assert result["missing_fields"] == ["customer_id"]
+    assert "cliente" in result["suggested_reply"].lower()
+    assert result["blocked_reason"] is None
+
+
 def test_comercial_user_can_query_today_agenda():
     result = route_whatsapp_message(
         {
