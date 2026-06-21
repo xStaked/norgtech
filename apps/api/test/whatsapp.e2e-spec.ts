@@ -2,6 +2,10 @@ import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import {
   NoraActionStatus,
+  NoraCaseRiskLevel,
+  NoraConversationCase,
+  NoraConversationCaseStatus,
+  NoraConversationCaseType,
   UserRole,
   WhatsAppConversationStatus,
   WhatsAppMessageDirection,
@@ -10,6 +14,7 @@ import {
 } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
+import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 
 describe("WhatsApp inbox", () => {
@@ -17,6 +22,7 @@ describe("WhatsApp inbox", () => {
   let moduleRef: TestingModule;
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   let adminToken: string;
+  let noraCaseService: NoraCaseService;
   let originalFetch: typeof globalThis.fetch;
   let originalNoraAutomationUserId: string | undefined;
 
@@ -241,14 +247,14 @@ describe("WhatsApp inbox", () => {
       const parentCaseId = where?.parentCaseId;
       const type = where?.type;
       const status = where?.status as { in?: string[] } | undefined;
-      const allowedStatuses = status?.in ?? openCaseStatuses;
+      const allowedStatuses = status?.in;
       return (
         noraCases
           .filter((item) => !id || item.id === id)
           .filter((item) => !conversationId || item.conversationId === conversationId)
           .filter((item) => parentCaseId === undefined || item.parentCaseId === parentCaseId)
           .filter((item) => !type || item.type === type)
-          .filter((item) => allowedStatuses.includes(String(item.status)))
+          .filter((item) => !allowedStatuses || allowedStatuses.includes(String(item.status)))
           .sort((left, right) => {
             const leftDate = left.updatedAt as Date;
             const rightDate = right.updatedAt as Date;
@@ -835,6 +841,7 @@ describe("WhatsApp inbox", () => {
           return auditLog;
         },
       },
+      $queryRaw: jest.fn(async () => [{ id: "locked-case" }]),
       $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => {
         const tx = {
           ...prismaStub,
@@ -889,6 +896,7 @@ describe("WhatsApp inbox", () => {
 
     app = moduleRef.createNestApplication();
     await app.init();
+    noraCaseService = moduleRef.get(NoraCaseService);
 
     const loginResponse = await request(app.getHttpServer())
       .post("/auth/login")
@@ -954,6 +962,84 @@ describe("WhatsApp inbox", () => {
         lastQuestion: "Necesito identificar el cliente antes de continuar.",
       }),
     ]);
+  });
+
+  it("reuses an existing open new-customer subcase for the same order case", async () => {
+    const createdIds: string[] = [];
+
+    try {
+      const orderCase = noraCases.find((item) => item.id === "case-order-1");
+      expect(orderCase).toBeDefined();
+
+      const first = await noraCaseService.createNewCustomerSubcase(
+        orderCase as NoraConversationCase,
+        "sales-user-id",
+      );
+      createdIds.push(String(first.id));
+
+      const second = await noraCaseService.createNewCustomerSubcase(
+        orderCase as NoraConversationCase,
+        "sales-user-id",
+      );
+
+      expect(second.id).toBe(first.id);
+      expect(
+        noraCases.filter(
+          (item) =>
+            item.parentCaseId === "case-order-1" &&
+            item.type === NoraConversationCaseType.new_customer &&
+            openCaseStatuses.includes(String(item.status)),
+        ),
+      ).toHaveLength(1);
+      expect(first).toEqual(
+        expect.objectContaining({
+          status: NoraConversationCaseStatus.collecting_info,
+          riskLevel: NoraCaseRiskLevel.high,
+          missingFields: expect.arrayContaining(["displayName", "contactName"]),
+        }),
+      );
+    } finally {
+      for (const createdId of createdIds) {
+        const index = noraCases.findIndex((item) => item.id === createdId);
+        if (index !== -1) {
+          noraCases.splice(index, 1);
+        }
+      }
+    }
+  });
+
+  it("updates Nora case JSON fields under a transaction without dropping existing data", async () => {
+    const index = noraCases.findIndex((item) => item.id === "case-order-1");
+    const original = { ...noraCases[index] };
+
+    try {
+      const updated = await noraCaseService.updateCase("case-order-1", {
+        extractedData: { billingCompanyRef: "NOR" },
+        attachments: [
+          {
+            messageId: "message-attachment-1",
+            kind: "image",
+            provider: "kapso",
+            providerMediaId: "image-attachment-1",
+          },
+        ],
+      });
+
+      expect(updated.extractedData).toEqual(
+        expect.objectContaining({
+          customerRef: "Agro Costa",
+          billingCompanyRef: "NOR",
+        }),
+      );
+      expect(updated.attachments).toEqual([
+        expect.objectContaining({
+          messageId: "message-attachment-1",
+          providerMediaId: "image-attachment-1",
+        }),
+      ]);
+    } finally {
+      noraCases[index] = original;
+    }
   });
 
   it("patches conversation status", async () => {
