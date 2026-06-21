@@ -239,7 +239,28 @@ describe("WhatsApp inbox", () => {
   ];
   const accounts: Array<Record<string, unknown>> = [];
   const openCaseStatuses = ["collecting_info", "ready_for_review", "blocked"];
-  let transactionQueue: Promise<unknown> = Promise.resolve();
+  const caseLockQueues = new Map<string, Promise<void>>();
+  const caseLockCalls: string[] = [];
+
+  const acquireCaseLock = async (caseId: string) => {
+    let releaseCurrentLock: () => void = () => undefined;
+    const previousLock = caseLockQueues.get(caseId) ?? Promise.resolve();
+    const currentLock = previousLock.then(
+      () =>
+        new Promise<void>((resolve) => {
+          releaseCurrentLock = resolve;
+        }),
+    );
+    caseLockQueues.set(caseId, currentLock);
+    await previousLock;
+
+    return () => {
+      releaseCurrentLock();
+      if (caseLockQueues.get(caseId) === currentLock) {
+        caseLockQueues.delete(caseId);
+      }
+    };
+  };
 
   const prismaNoraConversationCase = {
     findFirst: jest.fn(async ({ where }: { where?: Record<string, unknown> } = {}) => {
@@ -844,52 +865,60 @@ describe("WhatsApp inbox", () => {
       },
       $queryRaw: jest.fn(async () => [{ id: "locked-case" }]),
       $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => {
-        const run = transactionQueue.then(async () => {
-          const tx = {
-            ...prismaStub,
-            order: {
-              ...prismaStub.order,
-              create: async ({
-                data,
-              }: {
-                data: Record<string, unknown>;
-              }) => {
-                const orderId = `order-${orders.length + 1}`;
-                const order = {
-                  id: orderId,
-                  status: "recibido",
-                  createdAt: new Date("2026-05-22T11:20:00.000Z"),
-                  updatedAt: new Date("2026-05-22T11:20:00.000Z"),
-                  ...data,
-                  items: (data.items as { create: Record<string, unknown>[] }).create.map(
-                    (item, index) => ({
-                      id: `order-item-${orders.length + 1}-${index + 1}`,
-                      orderId,
-                      ...item,
-                    }),
-                  ),
-                  customer:
-                    customers.find((customer) => customer.id === data.customerId) ?? null,
-                  company: companies.find((company) => company.id === data.companyId) ?? null,
-                  opportunity: null,
-                  sourceQuote: null,
-                  sourceConversation:
-                    conversations.find(
-                      (conversation) => conversation.id === data.sourceConversationId,
-                    ) ?? null,
-                };
-                orders.push(order as (typeof orders)[number]);
-                return order;
-              },
-              findFirst: findLatestOrderByNumber,
+        const lockReleases: Array<() => void> = [];
+        const tx = {
+          ...prismaStub,
+          $queryRaw: jest.fn(async (_strings: TemplateStringsArray, caseId: string) => {
+            caseLockCalls.push(caseId);
+            const releaseLock = await acquireCaseLock(caseId);
+            lockReleases.push(releaseLock);
+            return noraCases.some((item) => item.id === caseId) ? [{ id: caseId }] : [];
+          }),
+          order: {
+            ...prismaStub.order,
+            create: async ({
+              data,
+            }: {
+              data: Record<string, unknown>;
+            }) => {
+              const orderId = `order-${orders.length + 1}`;
+              const order = {
+                id: orderId,
+                status: "recibido",
+                createdAt: new Date("2026-05-22T11:20:00.000Z"),
+                updatedAt: new Date("2026-05-22T11:20:00.000Z"),
+                ...data,
+                items: (data.items as { create: Record<string, unknown>[] }).create.map(
+                  (item, index) => ({
+                    id: `order-item-${orders.length + 1}-${index + 1}`,
+                    orderId,
+                    ...item,
+                  }),
+                ),
+                customer:
+                  customers.find((customer) => customer.id === data.customerId) ?? null,
+                company: companies.find((company) => company.id === data.companyId) ?? null,
+                opportunity: null,
+                sourceQuote: null,
+                sourceConversation:
+                  conversations.find(
+                    (conversation) => conversation.id === data.sourceConversationId,
+                  ) ?? null,
+              };
+              orders.push(order as (typeof orders)[number]);
+              return order;
             },
-          };
+            findFirst: findLatestOrderByNumber,
+          },
+        };
 
-          return callback(tx);
-        });
-
-        transactionQueue = run.catch(() => undefined);
-        return run;
+        try {
+          return await callback(tx);
+        } finally {
+          for (const releaseLock of lockReleases.reverse()) {
+            releaseLock();
+          }
+        }
       },
     };
 
@@ -972,6 +1001,7 @@ describe("WhatsApp inbox", () => {
 
   it("serializes overlapping new-customer subcase creation for the same order case", async () => {
     const createdIds: string[] = [];
+    caseLockCalls.length = 0;
 
     try {
       const orderCase = noraCases.find((item) => item.id === "case-order-1");
@@ -1004,6 +1034,7 @@ describe("WhatsApp inbox", () => {
           missingFields: expect.arrayContaining(["displayName", "contactName"]),
         }),
       );
+      expect(caseLockCalls.filter((caseId) => caseId === "case-order-1")).toHaveLength(2);
     } finally {
       for (const createdId of createdIds) {
         const index = noraCases.findIndex((item) => item.id === createdId);
@@ -1014,15 +1045,43 @@ describe("WhatsApp inbox", () => {
     }
   });
 
-  it("serializes overlapping Nora case JSON updates without dropping either change", async () => {
+  it("serializes overlapping Nora case extractedData updates without dropping either change", async () => {
     const index = noraCases.findIndex((item) => item.id === "case-order-1");
     const original = { ...noraCases[index] };
+    caseLockCalls.length = 0;
 
     try {
       await Promise.all([
         noraCaseService.updateCase("case-order-1", {
           extractedData: { billingCompanyRef: "NOR" },
         }),
+        noraCaseService.updateCase("case-order-1", {
+          extractedData: { requestedBy: "Sergio" },
+        }),
+      ]);
+
+      const updated = noraCases[index];
+
+      expect(updated.extractedData).toEqual(
+        expect.objectContaining({
+          customerRef: "Agro Costa",
+          billingCompanyRef: "NOR",
+          requestedBy: "Sergio",
+        }),
+      );
+      expect(caseLockCalls.filter((caseId) => caseId === "case-order-1")).toHaveLength(2);
+    } finally {
+      noraCases[index] = original;
+    }
+  });
+
+  it("serializes overlapping Nora case attachment appends without dropping either file", async () => {
+    const index = noraCases.findIndex((item) => item.id === "case-order-1");
+    const original = { ...noraCases[index] };
+    caseLockCalls.length = 0;
+
+    try {
+      await Promise.all([
         noraCaseService.updateCase("case-order-1", {
           attachments: [
             {
@@ -1033,22 +1092,31 @@ describe("WhatsApp inbox", () => {
             },
           ],
         }),
+        noraCaseService.updateCase("case-order-1", {
+          attachments: [
+            {
+              messageId: "message-attachment-2",
+              kind: "document",
+              provider: "kapso",
+              providerMediaId: "document-attachment-2",
+            },
+          ],
+        }),
       ]);
 
       const updated = noraCases[index];
 
-      expect(updated.extractedData).toEqual(
-        expect.objectContaining({
-          customerRef: "Agro Costa",
-          billingCompanyRef: "NOR",
-        }),
-      );
       expect(updated.attachments).toEqual([
         expect.objectContaining({
           messageId: "message-attachment-1",
           providerMediaId: "image-attachment-1",
         }),
+        expect.objectContaining({
+          messageId: "message-attachment-2",
+          providerMediaId: "document-attachment-2",
+        }),
       ]);
+      expect(caseLockCalls.filter((caseId) => caseId === "case-order-1")).toHaveLength(2);
     } finally {
       noraCases[index] = original;
     }
