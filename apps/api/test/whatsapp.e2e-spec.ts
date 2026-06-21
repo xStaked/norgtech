@@ -1949,33 +1949,142 @@ describe("WhatsApp inbox", () => {
     );
   });
 
-  // Enabled in Task 4 when Nora routing can create the child case.
-  it.skip("creates a new-customer subcase when an open order receives crea uno nuevo", async () => {
-    const response = await request(app.getHttpServer())
-      .post("/whatsapp/webhooks/kapso")
-      .send({
-        type: "whatsapp.message.received",
-        data: {
-          phone_number_id: "phone-number-1",
-          message: {
-            id: "kapso-create-new-customer",
-            from: "+573004445566",
-            text: { body: "crea uno nuevo" },
-          },
-        },
-      })
-      .expect(201);
+  it("creates a new-customer subcase when an open order receives crea uno nuevo", async () => {
+    const account = {
+      id: "account-sergio-case",
+      phoneNumberId: "phone-number-case",
+      phoneNumber: "phone-number-case",
+      displayName: "WhatsApp",
+      active: true,
+    };
+    const conversation = {
+      id: "conversation-sergio-case",
+      accountId: account.id,
+      waId: "+573004445566",
+      phone: "+573004445566",
+      senderName: "Sales",
+      senderType: WhatsAppSenderType.comercial,
+      status: WhatsAppConversationStatus.nuevo,
+      assignedToUserId: "sales-user-id",
+      customerId: null,
+      contactId: null,
+      lastMessageAt: new Date("2026-06-21T16:10:00.000Z"),
+      lastMessageText: "Necesito identificar el cliente antes de continuar.",
+      createdAt: new Date("2026-06-21T16:09:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:10:00.000Z"),
+    };
+    const orderCase = {
+      id: "case-order-sergio",
+      conversationId: conversation.id,
+      parentCaseId: null,
+      type: "order",
+      status: "collecting_info",
+      extractedData: {
+        companyRef: "Nanonutricion",
+        zoneRef: "Costa",
+        items: [{ productRef: "Fertilizante", quantity: 5, presentation: "bultos" }],
+      },
+      missingFields: ["customerId"],
+      attachments: [],
+      proposal: null,
+      lastQuestion: "Necesito identificar el cliente antes de continuar.",
+      riskLevel: "high",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:10:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:10:00.000Z"),
+    };
+    accounts.push(account);
+    conversations.push(conversation as unknown as (typeof conversations)[number]);
+    noraCases.unshift(orderCase);
 
-    expect(response.body.ignored).toBe(false);
-    expect(noraCases).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "comercial",
+        intent: "continuar_caso",
+        summary: "El usuario quiere crear una propuesta de cliente nuevo.",
+        suggested_reply:
+          "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social o nombre comercial.",
+        requires_human_review: false,
+        risk_level: "high",
+        missing_fields: [],
+        proposals: [],
+        case_transition: {
+          action: "create_new_customer_subcase",
+          caseId: "case-order-sergio",
           type: "new_customer",
-          parentCaseId: "case-order-1",
-          missingFields: expect.arrayContaining(["displayName"]),
-        }),
-      ]),
-    );
+          missingFields: ["displayName", "contactName"],
+          lastQuestion:
+            "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social o nombre comercial.",
+        },
+      }),
+    });
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .send({
+          type: "whatsapp.message.received",
+          data: {
+            phone_number_id: "phone-number-case",
+            message: {
+              id: "kapso-create-new-customer",
+              from: "+573004445566",
+              text: { body: "crea uno nuevo" },
+            },
+          },
+        })
+        .expect(201);
+
+      expect(response.body.ignored).toBe(false);
+      const noraRouteCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+        ([url, options]) => {
+          if (url !== "http://localhost:8000/whatsapp/route") {
+            return false;
+          }
+
+          const body = JSON.parse(String(options?.body ?? "{}")) as { message?: string };
+          return body.message === "crea uno nuevo";
+        },
+      );
+      const noraRouteBody = JSON.parse(String(noraRouteCall?.[1]?.body ?? "{}"));
+      expect(noraRouteBody.open_case).toEqual(
+        expect.objectContaining({ id: "case-order-sergio", type: "order" }),
+      );
+
+      expect(noraCases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: "new_customer",
+            parentCaseId: "case-order-sergio",
+            missingFields: expect.arrayContaining(["displayName"]),
+          }),
+        ]),
+      );
+    } finally {
+      const removeMatching = (
+        collection: Array<Record<string, unknown>>,
+        predicate: (item: Record<string, unknown>) => boolean,
+      ) => {
+        let index = collection.findIndex(predicate);
+        if (index !== -1) {
+          collection.splice(index, 1);
+        }
+        index = collection.findIndex(predicate);
+        if (index !== -1) {
+          collection.splice(index, 1);
+        }
+      };
+      removeMatching(
+        noraCases,
+        (item) => item.id === "case-order-sergio" || item.parentCaseId === "case-order-sergio",
+      );
+      removeMatching(conversations, (item) => item.id === "conversation-sergio-case");
+      removeMatching(accounts, (item) => item.id === "account-sergio-case");
+    }
   });
 
   it("auto-sends Nora first-contact prompts for unregistered senders", async () => {

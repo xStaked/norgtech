@@ -1,6 +1,8 @@
 import { Injectable, Logger } from "@nestjs/common";
 import {
   NoraActionStatus,
+  NoraConversationCase,
+  NoraConversationCaseType,
   Prisma,
   WhatsAppConversation,
   WhatsAppMessage,
@@ -8,6 +10,7 @@ import {
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { NoraCaseService } from "./nora-case.service";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { ResolvedWhatsAppSender, WhatsAppService } from "./whatsapp.service";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
@@ -32,6 +35,7 @@ export class NoraRoutingService {
     private readonly prisma: PrismaService,
     private readonly whatsAppService: WhatsAppService,
     private readonly orderAutomation: WhatsAppOrderAutomationService,
+    private readonly noraCaseService: NoraCaseService,
   ) {}
 
   async routeInboundMessage({ conversation, message }: RouteInboundMessageInput) {
@@ -62,6 +66,8 @@ export class NoraRoutingService {
 
     try {
       const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
+      const openCase = await this.noraCaseService.findOpenCase(conversation.id);
+      const mediaPayload = this.mediaPayloadFromMessage(message);
 
       const noraResponse = await this.requestNoraRoute({
         sender_type: sender.senderType,
@@ -78,6 +84,8 @@ export class NoraRoutingService {
         companies: context.companies,
         customer_zones: context.customer_zones,
         recent_messages: context.recent_messages,
+        ...(openCase && { open_case: this.openCasePayload(openCase) }),
+        ...(mediaPayload && { media: mediaPayload }),
         ...("userId" in sender
           ? {
               user: {
@@ -95,9 +103,15 @@ export class NoraRoutingService {
         conversation.id,
         sender,
       );
+      const caseResult = await this.processCaseTransition(
+        noraResponse,
+        conversation.id,
+        sender,
+      );
       const output = {
         ...noraResponse,
         ...(automationResult && { order_automation: this.toJsonSafeValue(automationResult) }),
+        ...(caseResult && { case_transition_result: this.toJsonSafeValue(caseResult) }),
       };
 
       const updatedLog = await this.prisma.noraActionLog.update({
@@ -196,6 +210,49 @@ export class NoraRoutingService {
     }
 
     return response.json() as Promise<Record<string, unknown>>;
+  }
+
+  private async processCaseTransition(
+    noraResponse: Record<string, unknown>,
+    conversationId: string,
+    sender: ResolvedWhatsAppSender,
+  ) {
+    const transition = noraResponse.case_transition;
+    if (!transition || typeof transition !== "object" || Array.isArray(transition)) {
+      return undefined;
+    }
+
+    const source = transition as Record<string, unknown>;
+    const action = this.stringValue(source.action);
+    const actorUserId = "userId" in sender ? sender.userId : null;
+
+    if (action === "create_new_customer_subcase") {
+      const caseId = this.stringValue(source.caseId);
+      if (!caseId) {
+        return undefined;
+      }
+      const orderCase = await this.prisma.noraConversationCase.findFirst({
+        where: { id: caseId, conversationId },
+      });
+      if (!orderCase) {
+        return undefined;
+      }
+      return this.noraCaseService.createNewCustomerSubcase(orderCase, actorUserId);
+    }
+
+    if (action === "start_case" && source.type === NoraConversationCaseType.expense) {
+      return this.noraCaseService.createCase({
+        conversationId,
+        type: NoraConversationCaseType.expense,
+        extractedData: this.objectValue(source.extractedData) ?? {},
+        missingFields: this.stringArrayValue(source.missingFields),
+        lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+        riskLevel: "medium",
+        createdByUserId: actorUserId,
+      });
+    }
+
+    return undefined;
   }
 
   private async processOrderCandidate(
@@ -374,6 +431,17 @@ export class NoraRoutingService {
       return automationReply;
     }
 
+    const caseTransition =
+      noraResponse.case_transition &&
+      typeof noraResponse.case_transition === "object" &&
+      !Array.isArray(noraResponse.case_transition)
+        ? (noraResponse.case_transition as Record<string, unknown>)
+        : null;
+    const caseQuestion = this.stringValue(caseTransition?.lastQuestion);
+    if (caseQuestion) {
+      return caseQuestion;
+    }
+
     const reply = noraResponse.suggested_reply;
     return this.stringValue(reply);
   }
@@ -394,6 +462,47 @@ export class NoraRoutingService {
 
   private stringValue(value: unknown) {
     return typeof value === "string" && value.trim().length > 0 ? value.trim() : undefined;
+  }
+
+  private stringArrayValue(value: unknown): string[] {
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  }
+
+  private objectValue(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : undefined;
+  }
+
+  private openCasePayload(openCase: NoraConversationCase) {
+    return {
+      id: openCase.id,
+      type: openCase.type,
+      status: openCase.status,
+      extractedData: openCase.extractedData,
+      missingFields: Array.isArray(openCase.missingFields) ? openCase.missingFields : [],
+      lastQuestion: openCase.lastQuestion,
+    };
+  }
+
+  private mediaPayloadFromMessage(message: WhatsAppMessage) {
+    if (message.body !== "[Imagen]" && message.body !== "[Documento]") {
+      return undefined;
+    }
+    const payload =
+      message.payload && typeof message.payload === "object" && !Array.isArray(message.payload)
+        ? (message.payload as Record<string, unknown>)
+        : {};
+
+    return {
+      kind: message.body === "[Imagen]" ? "image" : "document",
+      providerMediaId: this.stringValue(payload.mediaId) ?? this.stringValue(payload.id),
+      fileName: this.stringValue(payload.fileName),
+      contentType: this.stringValue(payload.contentType),
+      caption: this.stringValue(payload.caption),
+    };
   }
 
   private toJsonSafeValue(value: unknown) {
