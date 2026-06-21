@@ -232,6 +232,64 @@ describe("WhatsApp inbox", () => {
     },
   ];
   const accounts: Array<Record<string, unknown>> = [];
+  const openCaseStatuses = ["collecting_info", "ready_for_review", "blocked"];
+
+  const prismaNoraConversationCase = {
+    findFirst: jest.fn(async ({ where }: { where?: Record<string, unknown> } = {}) => {
+      const id = where?.id;
+      const conversationId = where?.conversationId;
+      const parentCaseId = where?.parentCaseId;
+      const type = where?.type;
+      const status = where?.status as { in?: string[] } | undefined;
+      const allowedStatuses = status?.in ?? openCaseStatuses;
+      return (
+        noraCases
+          .filter((item) => !id || item.id === id)
+          .filter((item) => !conversationId || item.conversationId === conversationId)
+          .filter((item) => parentCaseId === undefined || item.parentCaseId === parentCaseId)
+          .filter((item) => !type || item.type === type)
+          .filter((item) => allowedStatuses.includes(String(item.status)))
+          .sort((left, right) => {
+            const leftDate = left.updatedAt as Date;
+            const rightDate = right.updatedAt as Date;
+            return rightDate.getTime() - leftDate.getTime();
+          })[0] ?? null
+      );
+    }),
+    create: jest.fn(async ({ data }: { data: Record<string, unknown> }) => {
+      const item = {
+        id: `case-${noraCases.length + 1}`,
+        status: "collecting_info",
+        extractedData: {},
+        missingFields: [],
+        attachments: [],
+        riskLevel: "medium",
+        createdAt: new Date("2026-06-21T16:11:00.000Z"),
+        updatedAt: new Date("2026-06-21T16:11:00.000Z"),
+        ...data,
+      };
+      noraCases.unshift(item);
+      return item;
+    }),
+    update: jest.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id: string };
+        data: Record<string, unknown>;
+      }) => {
+        const index = noraCases.findIndex((item) => item.id === where.id);
+        if (index === -1) return null;
+        noraCases[index] = {
+          ...noraCases[index],
+          ...data,
+          updatedAt: new Date("2026-06-21T16:12:00.000Z"),
+        };
+        return noraCases[index];
+      },
+    ),
+  };
 
   const applySelect = (
     record: Record<string, unknown>,
@@ -726,6 +784,7 @@ describe("WhatsApp inbox", () => {
             ? noraActions.filter((action) => action.conversationId === where.conversationId)
             : noraActions,
       },
+      noraConversationCase: prismaNoraConversationCase,
       product: {
         findMany: async () => products,
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -1720,6 +1779,35 @@ describe("WhatsApp inbox", () => {
           body: "Necesito el valor del gasto para dejarlo registrado.",
         },
         { role: WhatsAppMessageRole.user, body: "[Imagen]" },
+      ]),
+    );
+  });
+
+  // Enabled in Task 4 when Nora routing can create the child case.
+  it.skip("creates a new-customer subcase when an open order receives crea uno nuevo", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "kapso-create-new-customer",
+            from: "+573004445566",
+            text: { body: "crea uno nuevo" },
+          },
+        },
+      })
+      .expect(201);
+
+    expect(response.body.ignored).toBe(false);
+    expect(noraCases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "new_customer",
+          parentCaseId: "case-order-1",
+          missingFields: expect.arrayContaining(["displayName"]),
+        }),
       ]),
     );
   });
