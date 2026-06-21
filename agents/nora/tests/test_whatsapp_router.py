@@ -453,3 +453,46 @@ def test_cliente_order_without_quantity_marks_items_missing():
     assert result["intent"] == "clarification"
     assert result["missing_fields"] == ["items"]
     assert "cantidad" in result["suggested_reply"].lower()
+
+
+def test_order_open_case_create_new_customer_continues_instead_of_greeting():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "crea uno nuevo",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-order-1",
+                "type": "order",
+                "status": "collecting_info",
+                "extractedData": {"customerRef": "Agro Costa"},
+                "missingFields": ["customer_id"],
+                "lastQuestion": "Necesito identificar el cliente antes de continuar.",
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    assert result["case_transition"]["action"] == "create_new_customer_subcase"
+    assert result["case_transition"]["caseId"] == "case-order-1"
+    assert "razon social" in result["suggested_reply"].lower()
+    assert "hola" not in result["suggested_reply"].lower()
+
+
+def test_expense_image_without_context_starts_expense_case():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "[Imagen]",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "media": {"kind": "image", "providerMediaId": "media-1"},
+        }
+    )
+
+    assert result["intent"] == "gasto"
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "expense"
+    assert "soporte" in result["suggested_reply"].lower()
+    assert "hola" not in result["suggested_reply"].lower()

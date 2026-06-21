@@ -16,6 +16,7 @@ PlannedIntent = Literal[
     "gasto",
     "agenda",
     "resumen_conversacion",
+    "continuar_caso",
     "clasificacion",
 ]
 
@@ -50,6 +51,20 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
     message = request.message.strip()
     normalized = message.lower()
     normalized_context = _recent_context(request)
+
+    if request.open_case and request.open_case.type == "order" and _wants_new_customer(normalized):
+        return NoraPlan(
+            intent="continuar_caso",
+            actions=[],
+            summary="El usuario quiere crear una propuesta de cliente nuevo para continuar el pedido.",
+        )
+
+    if request.sender_type == "comercial" and _is_inbound_media(request, normalized):
+        return NoraPlan(
+            intent="gasto",
+            actions=[],
+            summary="Soporte de gasto recibido por WhatsApp.",
+        )
 
     if request.sender_type == "comercial" and _is_expense_media_follow_up(
         normalized,
@@ -332,6 +347,23 @@ def _recent_context(request: WhatsAppRouteRequest) -> str:
     return " ".join(
         _normalize_phrase(message.body) for message in request.recent_messages[-6:]
     )
+
+
+def _wants_new_customer(normalized_message: str) -> bool:
+    return any(
+        phrase in normalized_message
+        for phrase in (
+            "crea uno nuevo",
+            "crear uno nuevo",
+            "crealo nuevo",
+            "cliente nuevo",
+            "nuevo cliente",
+        )
+    )
+
+
+def _is_inbound_media(request: WhatsAppRouteRequest, normalized_message: str) -> bool:
+    return request.media is not None
 
 
 def _is_expense_media_follow_up(normalized_message: str, normalized_context: str) -> bool:

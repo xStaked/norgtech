@@ -26,6 +26,23 @@ class NoraUserContext(BaseModel):
     email: str | None = None
 
 
+class NoraOpenCaseContext(BaseModel):
+    id: str
+    type: Literal["order", "new_customer", "expense"]
+    status: str
+    extractedData: dict[str, Any] = Field(default_factory=dict)
+    missingFields: list[str] = Field(default_factory=list)
+    lastQuestion: str | None = None
+
+
+class NoraMediaContext(BaseModel):
+    kind: Literal["image", "document"]
+    providerMediaId: str | None = None
+    fileName: str | None = None
+    contentType: str | None = None
+    caption: str | None = None
+
+
 class WhatsAppRouteRequest(BaseModel):
     sender_type: Literal["cliente", "comercial", "admin", "desconocido"]
     message: str
@@ -38,6 +55,8 @@ class WhatsAppRouteRequest(BaseModel):
     companies: list[NoraCompanyContext] = Field(default_factory=list)
     customer_zones: list[NoraZoneContext] = Field(default_factory=list)
     recent_messages: list[NoraMessageContext] = Field(default_factory=list)
+    open_case: NoraOpenCaseContext | None = None
+    media: NoraMediaContext | None = None
 
 
 class NoraOrderCandidateItem(BaseModel):
@@ -70,6 +89,21 @@ class NoraProposal(BaseModel):
     requires_human_review: bool = True
 
 
+class NoraCaseTransition(BaseModel):
+    action: Literal[
+        "none",
+        "start_case",
+        "update_case",
+        "create_new_customer_subcase",
+        "cancel_case",
+    ] = "none"
+    caseId: str | None = None
+    type: Literal["order", "new_customer", "expense"] | None = None
+    extractedData: dict[str, Any] = Field(default_factory=dict)
+    missingFields: list[str] = Field(default_factory=list)
+    lastQuestion: str | None = None
+
+
 class WhatsAppRouteResponse(BaseModel):
     mode: Literal["cliente", "comercial", "admin"]
     intent: str
@@ -82,3 +116,4 @@ class WhatsAppRouteResponse(BaseModel):
     proposals: list[NoraProposal] = Field(default_factory=list)
     proposed_order: dict[str, Any] | None = None
     order_candidate: NoraOrderCandidate | None = None
+    case_transition: NoraCaseTransition | None = None

@@ -1,6 +1,7 @@
 from typing import Any
 
 from .models.whatsapp_models import (
+    NoraCaseTransition,
     NoraOrderCandidate,
     NoraOrderCandidateItem,
     NoraProposal,
@@ -33,10 +34,12 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             risk_level="medium",
             missing_fields=[],
             proposals=[],
+            case_transition=None,
         )
         return response.model_dump()
 
     plan = plan_message(request)
+    case_transition = _case_transition_for(request, plan)
     validation = validate_plan(request, plan)
 
     if not validation.ok and validation.missing_fields:
@@ -49,6 +52,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             risk_level=_risk_for(plan.actions),
             missing_fields=validation.missing_fields,
             proposals=[],
+            case_transition=case_transition,
         )
         return response.model_dump()
 
@@ -63,6 +67,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             missing_fields=[],
             blocked_reason=validation.blocked_reason,
             proposals=[],
+            case_transition=case_transition,
         )
         return response.model_dump()
 
@@ -88,6 +93,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
         proposals=proposals,
         proposed_order=_legacy_order_payload(proposals),
         order_candidate=order_candidate,
+        case_transition=case_transition,
     )
     return response.model_dump()
 
@@ -192,6 +198,40 @@ def _requires_review(actions: list[PlannedAction]) -> bool:
     return False
 
 
+def _case_transition_for(
+    request: WhatsAppRouteRequest,
+    plan: Any,
+) -> NoraCaseTransition | None:
+    if (
+        request.open_case
+        and request.open_case.type == "order"
+        and plan.intent == "continuar_caso"
+    ):
+        return NoraCaseTransition(
+            action="create_new_customer_subcase",
+            caseId=request.open_case.id,
+            type="new_customer",
+            missingFields=["displayName", "contactName"],
+            lastQuestion=(
+                "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social "
+                "o nombre comercial."
+            ),
+        )
+
+    if request.sender_type == "comercial" and plan.intent == "gasto" and request.media:
+        return NoraCaseTransition(
+            action="start_case",
+            type="expense",
+            missingFields=["amount", "expenseDate", "category", "description"],
+            lastQuestion=(
+                "Recibi el soporte. Voy a extraer los datos; si falta cliente o valor, "
+                "te lo pido enseguida."
+            ),
+        )
+
+    return None
+
+
 def _risk_for(actions: list[PlannedAction]) -> str:
     ranking = {"low": 0, "medium": 1, "high": 2}
     risk = "low"
@@ -216,6 +256,11 @@ def _suggested_reply_for(
     intent: str,
     request: WhatsAppRouteRequest | None = None,
 ) -> str:
+    if intent == "continuar_caso":
+        return (
+            "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social "
+            "o nombre comercial."
+        )
     if intent == "pedido":
         return "Recibido. Voy a validar los datos del pedido y te confirmamos en breve."
     if intent == "consulta_pedidos":
@@ -231,6 +276,11 @@ def _suggested_reply_for(
     if intent == "agenda":
         return "Voy a revisar tu agenda y pendientes."
     if intent == "gasto":
+        if request and request.media:
+            return (
+                "Recibi el soporte. Voy a extraer los datos; si falta cliente o valor, "
+                "te lo pido enseguida."
+            )
         if request and _is_expense_support_question(request.message):
             return (
                 "Si, puedes pasarme la foto del soporte. Si ahi no se ve el valor, "
