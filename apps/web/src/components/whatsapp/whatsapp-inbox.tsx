@@ -53,6 +53,7 @@ export function WhatsAppInbox({
             messages: [],
             notes: [],
             noraActions: [],
+            noraCases: [],
             orders: [],
           }
         : null,

@@ -1,7 +1,11 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { NoraProposal, WhatsAppConversationDetail } from "./whatsapp-types";
+import type {
+  NoraConversationCase,
+  NoraProposal,
+  WhatsAppConversationDetail,
+} from "./whatsapp-types";
 
 type NoraSuggestionPanelProps = {
   conversation: WhatsAppConversationDetail | null;
@@ -18,6 +22,7 @@ export function NoraSuggestionPanel({ conversation }: NoraSuggestionPanelProps) 
   const output = latestAction?.output ?? null;
   const proposals = output?.proposals ?? [];
   const automation = output?.order_automation ?? null;
+  const activeCase = conversation?.noraCases?.[0] ?? null;
 
   if (!conversation) {
     return (
@@ -96,6 +101,8 @@ export function NoraSuggestionPanel({ conversation }: NoraSuggestionPanelProps) 
             </div>
           ) : null}
 
+          {activeCase ? <NoraCasePreview activeCase={activeCase} /> : null}
+
           {output.suggested_reply ? (
             <div>
               <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
@@ -135,6 +142,46 @@ function formatCurrency(value: number) {
     currency: "COP",
     maximumFractionDigits: 0,
   }).format(value);
+}
+
+function NoraCasePreview({ activeCase }: { activeCase: NoraConversationCase }) {
+  return (
+    <div className="rounded-md border border-border bg-background p-2 text-sm">
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <span className="font-semibold">Caso activo</span>
+        <Badge variant="outline">{activeCase.type}</Badge>
+      </div>
+      <div className="mb-2 flex flex-wrap gap-2">
+        <Badge variant="secondary">{activeCase.status}</Badge>
+        <Badge variant={activeCase.riskLevel === "high" ? "destructive" : "secondary"}>
+          Riesgo {riskLabels[activeCase.riskLevel] ?? activeCase.riskLevel}
+        </Badge>
+      </div>
+      {activeCase.lastQuestion ? (
+        <div className="mb-2 rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">
+          {activeCase.lastQuestion}
+        </div>
+      ) : null}
+      {activeCase.missingFields.length > 0 ? (
+        <div className="mb-2 text-muted-foreground">
+          Faltan: {activeCase.missingFields.join(", ")}
+        </div>
+      ) : null}
+      {activeCase.attachments.length > 0 ? (
+        <div className="mb-2 text-muted-foreground">
+          Adjuntos: {activeCase.attachments.length}
+        </div>
+      ) : null}
+      <pre className="max-h-40 overflow-auto rounded bg-muted p-2 text-xs text-muted-foreground">
+        {JSON.stringify(activeCase.extractedData, null, 2)}
+      </pre>
+      {activeCase.proposal ? (
+        <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs text-muted-foreground">
+          {JSON.stringify(activeCase.proposal, null, 2)}
+        </pre>
+      ) : null}
+    </div>
+  );
 }
 
 function ProposalPreview({ proposal }: { proposal: NoraProposal }) {

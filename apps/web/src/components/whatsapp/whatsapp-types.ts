@@ -33,6 +33,33 @@ export type WhatsAppInternalNote = {
 
 export type NoraRiskLevel = "low" | "medium" | "high";
 
+export type NoraConversationCaseType = "order" | "new_customer" | "expense";
+
+export type NoraConversationCaseStatus =
+  | "collecting_info"
+  | "ready_for_review"
+  | "approved"
+  | "executed"
+  | "cancelled"
+  | "blocked";
+
+export type NoraConversationCase = {
+  id: string;
+  parentCaseId?: string | null;
+  type: NoraConversationCaseType;
+  status: NoraConversationCaseStatus;
+  extractedData: Record<string, unknown>;
+  missingFields: string[];
+  attachments: Array<Record<string, unknown>>;
+  proposal?: Record<string, unknown> | null;
+  lastQuestion?: string | null;
+  riskLevel: NoraRiskLevel;
+  executedEntityType?: string | null;
+  executedEntityId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type NoraProposal = {
   type: "order_draft" | "payment_support" | "logistics_event" | "expense_draft";
   title: string;
@@ -101,5 +128,6 @@ export type WhatsAppConversationDetail = WhatsAppConversation & {
   messages: WhatsAppMessage[];
   notes: WhatsAppInternalNote[];
   noraActions: NoraActionLog[];
+  noraCases: NoraConversationCase[];
   orders: WhatsAppOrder[];
 };
