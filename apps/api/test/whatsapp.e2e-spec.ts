@@ -239,6 +239,7 @@ describe("WhatsApp inbox", () => {
   ];
   const accounts: Array<Record<string, unknown>> = [];
   const openCaseStatuses = ["collecting_info", "ready_for_review", "blocked"];
+  let transactionQueue: Promise<unknown> = Promise.resolve();
 
   const prismaNoraConversationCase = {
     findFirst: jest.fn(async ({ where }: { where?: Record<string, unknown> } = {}) => {
@@ -843,47 +844,52 @@ describe("WhatsApp inbox", () => {
       },
       $queryRaw: jest.fn(async () => [{ id: "locked-case" }]),
       $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => {
-        const tx = {
-          ...prismaStub,
-          order: {
-            ...prismaStub.order,
-            create: async ({
-              data,
-            }: {
-              data: Record<string, unknown>;
-            }) => {
-              const orderId = `order-${orders.length + 1}`;
-              const order = {
-                id: orderId,
-                status: "recibido",
-                createdAt: new Date("2026-05-22T11:20:00.000Z"),
-                updatedAt: new Date("2026-05-22T11:20:00.000Z"),
-                ...data,
-                items: (data.items as { create: Record<string, unknown>[] }).create.map(
-                  (item, index) => ({
-                    id: `order-item-${orders.length + 1}-${index + 1}`,
-                    orderId,
-                    ...item,
-                  }),
-                ),
-                customer:
-                  customers.find((customer) => customer.id === data.customerId) ?? null,
-                company: companies.find((company) => company.id === data.companyId) ?? null,
-                opportunity: null,
-                sourceQuote: null,
-                sourceConversation:
-                  conversations.find(
-                    (conversation) => conversation.id === data.sourceConversationId,
-                  ) ?? null,
-              };
-              orders.push(order as (typeof orders)[number]);
-              return order;
+        const run = transactionQueue.then(async () => {
+          const tx = {
+            ...prismaStub,
+            order: {
+              ...prismaStub.order,
+              create: async ({
+                data,
+              }: {
+                data: Record<string, unknown>;
+              }) => {
+                const orderId = `order-${orders.length + 1}`;
+                const order = {
+                  id: orderId,
+                  status: "recibido",
+                  createdAt: new Date("2026-05-22T11:20:00.000Z"),
+                  updatedAt: new Date("2026-05-22T11:20:00.000Z"),
+                  ...data,
+                  items: (data.items as { create: Record<string, unknown>[] }).create.map(
+                    (item, index) => ({
+                      id: `order-item-${orders.length + 1}-${index + 1}`,
+                      orderId,
+                      ...item,
+                    }),
+                  ),
+                  customer:
+                    customers.find((customer) => customer.id === data.customerId) ?? null,
+                  company: companies.find((company) => company.id === data.companyId) ?? null,
+                  opportunity: null,
+                  sourceQuote: null,
+                  sourceConversation:
+                    conversations.find(
+                      (conversation) => conversation.id === data.sourceConversationId,
+                    ) ?? null,
+                };
+                orders.push(order as (typeof orders)[number]);
+                return order;
+              },
+              findFirst: findLatestOrderByNumber,
             },
-            findFirst: findLatestOrderByNumber,
-          },
-        };
+          };
 
-        return callback(tx);
+          return callback(tx);
+        });
+
+        transactionQueue = run.catch(() => undefined);
+        return run;
       },
     };
 
@@ -964,33 +970,33 @@ describe("WhatsApp inbox", () => {
     ]);
   });
 
-  it("reuses an existing open new-customer subcase for the same order case", async () => {
+  it("serializes overlapping new-customer subcase creation for the same order case", async () => {
     const createdIds: string[] = [];
 
     try {
       const orderCase = noraCases.find((item) => item.id === "case-order-1");
       expect(orderCase).toBeDefined();
 
-      const first = await noraCaseService.createNewCustomerSubcase(
-        orderCase as NoraConversationCase,
-        "sales-user-id",
-      );
-      createdIds.push(String(first.id));
-
-      const second = await noraCaseService.createNewCustomerSubcase(
-        orderCase as NoraConversationCase,
-        "sales-user-id",
-      );
+      const [first, second] = await Promise.all([
+        noraCaseService.createNewCustomerSubcase(
+          orderCase as NoraConversationCase,
+          "sales-user-id",
+        ),
+        noraCaseService.createNewCustomerSubcase(
+          orderCase as NoraConversationCase,
+          "sales-user-id",
+        ),
+      ]);
+      createdIds.push(String(first.id), String(second.id));
 
       expect(second.id).toBe(first.id);
-      expect(
-        noraCases.filter(
-          (item) =>
-            item.parentCaseId === "case-order-1" &&
-            item.type === NoraConversationCaseType.new_customer &&
-            openCaseStatuses.includes(String(item.status)),
-        ),
-      ).toHaveLength(1);
+      const openNewCustomerChildren = noraCases.filter(
+        (item) =>
+          item.parentCaseId === "case-order-1" &&
+          item.type === NoraConversationCaseType.new_customer &&
+          openCaseStatuses.includes(String(item.status)),
+      );
+      expect(openNewCustomerChildren).toHaveLength(1);
       expect(first).toEqual(
         expect.objectContaining({
           status: NoraConversationCaseStatus.collecting_info,
@@ -1008,22 +1014,28 @@ describe("WhatsApp inbox", () => {
     }
   });
 
-  it("updates Nora case JSON fields under a transaction without dropping existing data", async () => {
+  it("serializes overlapping Nora case JSON updates without dropping either change", async () => {
     const index = noraCases.findIndex((item) => item.id === "case-order-1");
     const original = { ...noraCases[index] };
 
     try {
-      const updated = await noraCaseService.updateCase("case-order-1", {
-        extractedData: { billingCompanyRef: "NOR" },
-        attachments: [
-          {
-            messageId: "message-attachment-1",
-            kind: "image",
-            provider: "kapso",
-            providerMediaId: "image-attachment-1",
-          },
-        ],
-      });
+      await Promise.all([
+        noraCaseService.updateCase("case-order-1", {
+          extractedData: { billingCompanyRef: "NOR" },
+        }),
+        noraCaseService.updateCase("case-order-1", {
+          attachments: [
+            {
+              messageId: "message-attachment-1",
+              kind: "image",
+              provider: "kapso",
+              providerMediaId: "image-attachment-1",
+            },
+          ],
+        }),
+      ]);
+
+      const updated = noraCases[index];
 
       expect(updated.extractedData).toEqual(
         expect.objectContaining({
