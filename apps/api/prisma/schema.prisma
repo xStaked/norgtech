@@ -178,6 +178,27 @@ enum NoraActionStatus {
   failed
 }
 
+enum NoraConversationCaseType {
+  order
+  new_customer
+  expense
+}
+
+enum NoraConversationCaseStatus {
+  collecting_info
+  ready_for_review
+  approved
+  executed
+  cancelled
+  blocked
+}
+
+enum NoraCaseRiskLevel {
+  low
+  medium
+  high
+}
+
 model Zone {
   id         String   @id @default(cuid())
   name       String   @unique
@@ -240,6 +261,8 @@ model User {
   whatsappMessages              WhatsAppMessage[]          @relation("WhatsAppMessageAuthor")
   whatsappInternalNotes         WhatsAppInternalNote[]
   noraActions                   NoraActionLog[]
+  createdNoraCases              NoraConversationCase[]     @relation("NoraCaseCreatedBy")
+  approvedNoraCases             NoraConversationCase[]     @relation("NoraCaseApprovedBy")
   submittedCommercialExpenses   CommercialExpense[]        @relation("CommercialExpenseSubmitter")
   reviewedCommercialExpenses    CommercialExpense[]        @relation("CommercialExpenseReviewer")
   uploadedExpenseSupports       CommercialExpenseSupport[] @relation("CommercialExpenseSupportUploader")
@@ -320,6 +343,7 @@ model WhatsAppConversation {
   tags             WhatsAppConversationTag[]
   orders           Order[]
   noraActions      NoraActionLog[]
+  noraCases        NoraConversationCase[]
 
   @@unique([accountId, waId])
   @@index([status, updatedAt])
@@ -388,6 +412,37 @@ model NoraActionLog {
   @@index([conversationId, createdAt])
   @@index([actorUserId])
   @@index([status])
+}
+
+model NoraConversationCase {
+  id                 String                     @id @default(cuid())
+  conversationId     String
+  parentCaseId       String?
+  type               NoraConversationCaseType
+  status             NoraConversationCaseStatus @default(collecting_info)
+  extractedData      Json                       @default("{}")
+  missingFields      Json                       @default("[]")
+  attachments        Json                       @default("[]")
+  proposal           Json?
+  lastQuestion       String?
+  riskLevel          NoraCaseRiskLevel          @default(medium)
+  createdByUserId    String?
+  approvedByUserId   String?
+  executedEntityType String?
+  executedEntityId   String?
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+
+  conversation       WhatsAppConversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parentCase         NoraConversationCase?      @relation("NoraCaseChildren", fields: [parentCaseId], references: [id])
+  childCases         NoraConversationCase[]     @relation("NoraCaseChildren")
+  createdByUser      User?                      @relation("NoraCaseCreatedBy", fields: [createdByUserId], references: [id])
+  approvedByUser     User?                      @relation("NoraCaseApprovedBy", fields: [approvedByUserId], references: [id])
+
+  @@index([conversationId, status, updatedAt])
+  @@index([parentCaseId])
+  @@index([createdByUserId])
+  @@index([approvedByUserId])
 }
 
 model AuditLog {

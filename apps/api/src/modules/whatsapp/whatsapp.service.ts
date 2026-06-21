@@ -40,6 +40,9 @@ const conversationDetailInclude = {
   noraActions: {
     orderBy: { createdAt: "desc" },
   },
+  noraCases: {
+    orderBy: { updatedAt: "desc" },
+  },
 } satisfies Prisma.WhatsAppConversationInclude;
 
 const sendMessageConversationInclude = {

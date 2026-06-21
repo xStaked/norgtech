@@ -204,6 +204,33 @@ describe("WhatsApp inbox", () => {
       updatedAt: new Date("2026-05-22T10:03:00.000Z"),
     },
   ];
+  const noraCases: Array<Record<string, unknown>> = [
+    {
+      id: "case-order-1",
+      conversationId: "conversation-1",
+      parentCaseId: null,
+      type: "order",
+      status: "collecting_info",
+      extractedData: {
+        customerRef: "Agro Costa",
+        companyRef: "Nanonutricion",
+        zoneRef: "Costa",
+        items: [{ productRef: "Fertilizante", quantity: 5, presentation: "bultos" }],
+        deliveryInstructions: "Despachar esta semana",
+      },
+      missingFields: ["customerId"],
+      attachments: [],
+      proposal: null,
+      lastQuestion: "Necesito identificar el cliente antes de continuar.",
+      riskLevel: "high",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:10:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:10:00.000Z"),
+    },
+  ];
   const accounts: Array<Record<string, unknown>> = [];
 
   const applySelect = (
@@ -343,6 +370,15 @@ describe("WhatsApp inbox", () => {
       result.noraActions = noraActions.filter(
         (action) => action.conversationId === conversation.id,
       );
+    }
+    if (include?.noraCases) {
+      result.noraCases = noraCases
+        .filter((item) => item.conversationId === conversation.id)
+        .sort((left, right) => {
+          const leftDate = left.updatedAt as Date;
+          const rightDate = right.updatedAt as Date;
+          return rightDate.getTime() - leftDate.getTime();
+        });
     }
 
     return result;
@@ -842,6 +878,23 @@ describe("WhatsApp inbox", () => {
     expect(response.body.orders[0].items).toHaveLength(1);
     expect(response.body.orders[0].customer.id).toBe("customer-1");
     expect(response.body.noraActions).toHaveLength(1);
+  });
+
+  it("includes Nora active cases in conversation detail", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/whatsapp/conversations/conversation-1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .expect(200);
+
+    expect(response.body.noraCases).toEqual([
+      expect.objectContaining({
+        id: "case-order-1",
+        type: "order",
+        status: "collecting_info",
+        missingFields: ["customerId"],
+        lastQuestion: "Necesito identificar el cliente antes de continuar.",
+      }),
+    ]);
   });
 
   it("patches conversation status", async () => {
