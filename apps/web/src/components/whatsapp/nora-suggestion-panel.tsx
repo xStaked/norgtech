@@ -17,6 +17,7 @@ export function NoraSuggestionPanel({ conversation }: NoraSuggestionPanelProps) 
   const latestAction = conversation?.noraActions?.[0] ?? null;
   const output = latestAction?.output ?? null;
   const proposals = output?.proposals ?? [];
+  const automation = output?.order_automation ?? null;
 
   if (!conversation) {
     return (
@@ -71,6 +72,30 @@ export function NoraSuggestionPanel({ conversation }: NoraSuggestionPanelProps) 
             </div>
           ) : null}
 
+          {automation ? (
+            <div className="rounded-md border border-border bg-background p-2 text-sm">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="font-semibold">Automatización de pedido</span>
+                <Badge variant={automation.decision === "created" ? "secondary" : "outline"}>
+                  {automation.decision}
+                </Badge>
+              </div>
+              {automation.decision === "created" ? (
+                <div className="space-y-1 text-muted-foreground">
+                  <div>Empresa: {automation.summary?.company ?? "Sin empresa"}</div>
+                  <div>Zona: {automation.summary?.zone ?? "Sin zona"}</div>
+                  <div>Total: {formatCurrency(automation.summary?.total ?? 0)}</div>
+                </div>
+              ) : null}
+              {automation.decision === "needs_clarification" ? (
+                <div className="text-amber-700">{automation.question}</div>
+              ) : null}
+              {automation.decision === "human_review" ? (
+                <div className="text-muted-foreground">{automation.reason}</div>
+              ) : null}
+            </div>
+          ) : null}
+
           {output.suggested_reply ? (
             <div>
               <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
@@ -102,6 +127,14 @@ export function NoraSuggestionPanel({ conversation }: NoraSuggestionPanelProps) 
       )}
     </div>
   );
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 function ProposalPreview({ proposal }: { proposal: NoraProposal }) {

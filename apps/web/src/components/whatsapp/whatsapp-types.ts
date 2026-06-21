@@ -40,6 +40,30 @@ export type NoraProposal = {
   requires_human_review: boolean;
 };
 
+export type OrderAutomationResult =
+  | {
+      decision: "created";
+      order?: { id: string; orderNumber?: string | null; status?: string | null };
+      summary?: {
+        company?: string | null;
+        zone?: string | null;
+        items?: Array<{ name: string; sku?: string; quantity: number; unit?: string }>;
+        total?: number;
+      };
+      reply?: string;
+    }
+  | {
+      decision: "needs_clarification";
+      missingField?: string;
+      question: string;
+    }
+  | {
+      decision: "human_review";
+      reason: string;
+      proposal?: NoraProposal;
+      existingOrder?: { id: string; orderNumber?: string | null; status?: string | null };
+    };
+
 export type NoraActionOutput = {
   mode?: string;
   intent?: string;
@@ -51,6 +75,8 @@ export type NoraActionOutput = {
   blocked_reason?: string | null;
   proposals?: NoraProposal[];
   proposed_order?: Record<string, unknown>;
+  order_automation?: OrderAutomationResult;
+  order_candidate?: Record<string, unknown>;
 };
 
 export type NoraActionLog = {

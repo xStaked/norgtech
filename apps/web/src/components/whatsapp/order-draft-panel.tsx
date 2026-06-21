@@ -24,7 +24,14 @@ export function OrderDraftPanel({
       .find((proposal) => proposal.type === "order_draft")?.payload ??
     conversation?.noraActions?.find((action) => action.output?.proposed_order)?.output
       ?.proposed_order;
-  const canCreateDraft = Boolean(conversation?.customer?.id && latestProposal && !latestOrder);
+  const proposalItems = Array.isArray(latestProposal?.items) ? latestProposal.items : [];
+  const canCreateDraft = Boolean(
+    conversation?.customer?.id &&
+      latestProposal &&
+      !latestOrder &&
+      proposalItems.length > 0 &&
+      proposalItems.every((item) => Boolean((item as Record<string, unknown>).productId)),
+  );
 
   async function createDraft() {
     if (!conversation?.customer?.id || !latestProposal || creating) return;
@@ -75,7 +82,11 @@ export function OrderDraftPanel({
             size="sm"
             onClick={createDraft}
             disabled={!canCreateDraft || creating}
-            title={canCreateDraft ? "Crear pedido" : "Vincula un cliente antes de crear pedido"}
+            title={
+              canCreateDraft
+                ? "Crear pedido"
+                : "La propuesta necesita productos resueltos antes de crear pedido"
+            }
           >
             <FilePlus2 />
             Crear pedido
@@ -129,10 +140,7 @@ function buildOrderPayload(
     notes: getString(proposal.notes),
     committedDeliveryDate: getString(proposal.committedDeliveryDate),
     logisticsNotes: getString(proposal.logisticsNotes),
-    items:
-      items.length > 0
-        ? items
-        : [{ productName: "Item por confirmar", quantity: 1, unitPrice: 0 }],
+    items,
   };
 }
 
