@@ -58,10 +58,19 @@ export class WhatsAppOrderAutomationService {
       throw new NotFoundException("WhatsApp conversation not found");
     }
 
-    if (!conversation.customer) {
+    const customer =
+      conversation.customer ?? (await this.resolveCustomer(dto.customerRef));
+    if (customer === undefined) {
+      return {
+        decision: "human_review" satisfies AutomationDecision,
+        reason: `Cliente ambiguo: ${dto.customerRef}`,
+        proposal: dto,
+      };
+    }
+    if (!customer) {
       return this.needsClarification(
         "customerId",
-        "Necesito identificar el cliente antes de preparar el pedido.",
+        "Necesito identificar el cliente antes de preparar el pedido. Dime el nombre o NIT del cliente.",
       );
     }
 
@@ -74,7 +83,7 @@ export class WhatsAppOrderAutomationService {
     }
 
     const customerZone = await this.resolveCustomerZone(
-      conversation.customer.id,
+      customer.id,
       dto.customerZoneId,
       dto.zoneRef,
     );
@@ -88,40 +97,22 @@ export class WhatsAppOrderAutomationService {
     const products = await this.prisma.product.findMany({
       where: { active: true },
     });
-    const resolvedItems = [];
+    const resolvedItems: Array<{
+      candidate: OrderAutomationItemDto;
+      product: ActiveProduct | null;
+    }> = [];
 
     for (const item of dto.items) {
       const resolvedProduct = this.resolveProduct(products, item.productRef);
-
-      if (resolvedProduct.decision === "needs_clarification") {
-        return this.needsClarification(
-          "items",
-          `No encontre el producto "${item.productRef}". Puedes enviarme SKU o referencia exacta?`,
-        );
+      if (resolvedProduct.decision === "created") {
+        resolvedItems.push({ candidate: item, product: resolvedProduct.product });
+      } else {
+        resolvedItems.push({ candidate: item, product: null });
       }
-
-      if (resolvedProduct.decision === "human_review") {
-        return {
-          decision: "human_review" satisfies AutomationDecision,
-          reason: `Producto ambiguo: ${item.productRef}`,
-          options: resolvedProduct.options,
-          proposal: {
-            ...dto,
-            customerId: conversation.customer.id,
-            companyId: company.id,
-            customerZoneId: customerZone?.id ?? null,
-          },
-        };
-      }
-
-      resolvedItems.push({
-        candidate: item,
-        product: resolvedProduct.product,
-      });
     }
 
     const payload: CreateOrderDto = {
-      customerId: conversation.customer.id,
+      customerId: customer.id,
       companyId: company.id,
       customerZoneId: customerZone?.id,
       sourceConversationId: conversationId,
@@ -130,13 +121,24 @@ export class WhatsAppOrderAutomationService {
       deliveryInstructions: dto.deliveryInstructions,
       notes: dto.notes,
       approvalStatus: "en_revision",
-      items: resolvedItems.map(({ candidate, product }) => ({
-        productId: product.id,
-        quantity: candidate.quantity,
-        unitPrice: this.decimalToNumber(product.basePrice),
-        presentation: candidate.presentation,
-        notes: candidate.notes,
-      })),
+      items: resolvedItems.map(({ candidate, product }) =>
+        product
+          ? {
+              productId: product.id,
+              quantity: candidate.quantity,
+              unitPrice: this.decimalToNumber(product.basePrice),
+              presentation: candidate.presentation,
+              notes: candidate.notes,
+            }
+          : {
+              productName: candidate.productRef,
+              quantity: candidate.quantity,
+              unitPrice: 0,
+              presentation: candidate.presentation,
+              notes: candidate.notes,
+              needsResolution: true,
+            },
+      ),
     };
 
     try {
@@ -154,10 +156,11 @@ export class WhatsAppOrderAutomationService {
             }
           : null,
         items: resolvedItems.map(({ candidate, product }) => ({
-          name: product.name,
-          sku: product.sku,
+          name: product?.name ?? candidate.productRef,
+          sku: product?.sku ?? "POR RESOLVER",
           quantity: candidate.quantity,
-          unit: product.unit,
+          unit: product?.unit ?? "und",
+          needsResolution: !product,
         })),
         total: this.orderTotalToNumber(order),
       };
@@ -196,6 +199,29 @@ export class WhatsAppOrderAutomationService {
         ),
       ) ?? null
     );
+  }
+
+  private async resolveCustomer(customerRef?: string) {
+    if (!customerRef?.trim()) {
+      return null;
+    }
+    const customers = await this.prisma.customer.findMany({
+      where: { active: true },
+      select: { id: true, displayName: true, legalName: true, taxId: true },
+    });
+    const normalizedRef = this.normalize(customerRef);
+    const matches = customers.filter((candidate) =>
+      [candidate.displayName, candidate.legalName, candidate.taxId].some(
+        (value) => value && this.normalize(value) === normalizedRef,
+      ),
+    );
+    if (matches.length === 1) {
+      return { id: matches[0].id };
+    }
+    if (matches.length > 1) {
+      return undefined; // ambiguous
+    }
+    return null; // not found
   }
 
   private async resolveCustomerZone(
