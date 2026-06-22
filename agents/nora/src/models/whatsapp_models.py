@@ -69,6 +69,7 @@ class NoraOrderCandidateItem(BaseModel):
 class NoraOrderCandidate(BaseModel):
     customerId: str | None = None
     companyRef: str | None = None
+    customerRef: str | None = None
     customerZoneId: str | None = None
     zoneRef: str | None = None
     items: list[NoraOrderCandidateItem] = Field(default_factory=list)

@@ -22,6 +22,20 @@ PlannedIntent = Literal[
 
 
 ORDER_WORDS = ("pedido", "necesito", "cotizar", "bulto", "bultos", "tonelada", "kg")
+CONFIRM_WORDS = (
+    "si",
+    "sí",
+    "confirmo",
+    "confirmar",
+    "dale",
+    "ok",
+    "okay",
+    "listo",
+    "de acuerdo",
+    "correcto",
+    "perfecto",
+    "asi es",
+)
 STATUS_WORDS = ("estado", "pendiente", "despachado", "facturado", "factura")
 CREDIT_WORDS = ("cupo", "cartera", "credito", "crédito", "debe", "saldo")
 PAYMENT_WORDS = ("pago", "pagamos", "soporte", "comprobante", "transferencia")
@@ -47,10 +61,47 @@ class NoraPlan:
     summary: str
 
 
+def _is_order_confirmation(normalized_message: str) -> bool:
+    normalized = _normalize_phrase(normalized_message)
+    return any(normalized == _normalize_phrase(word) for word in CONFIRM_WORDS) or any(
+        word in normalized for word in ("si confirmo", "confirmo el pedido", "confirmo")
+    )
+
+
 def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
     message = request.message.strip()
     normalized = message.lower()
     normalized_context = _recent_context(request)
+
+    if (
+        request.open_case
+        and request.open_case.type == "order"
+        and request.open_case.status == "ready_for_review"
+        and _is_order_confirmation(normalized)
+    ):
+        extracted = request.open_case.extractedData or {}
+        return NoraPlan(
+            intent="pedido",
+            actions=[
+                PlannedAction(
+                    domain="orders",
+                    action="resolve_and_create_from_whatsapp",
+                    fields={
+                        "customer_id": extracted.get("customerId") or _customer_id(request),
+                        "company_ref": extracted.get("companyRef"),
+                        "company_id": extracted.get("companyId"),
+                        "customer_zone_id": extracted.get("customerZoneId"),
+                        "zone_ref": extracted.get("zoneRef"),
+                        "customer_ref": extracted.get("customerRef"),
+                        "items": extracted.get("items", []),
+                        "notes": extracted.get("notes"),
+                        "source_conversation_id": request.conversation_id,
+                    },
+                    confidence=0.9,
+                )
+            ],
+            summary="Confirmacion de pedido recibida; se procede a crear.",
+        )
 
     if request.open_case and request.open_case.type == "order" and _wants_new_customer(normalized):
         return NoraPlan(

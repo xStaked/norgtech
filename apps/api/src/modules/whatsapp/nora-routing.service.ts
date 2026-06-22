@@ -376,6 +376,9 @@ export class NoraRoutingService {
       ...(this.stringValue(source.companyRef) && {
         companyRef: this.stringValue(source.companyRef),
       }),
+      ...(this.stringValue(source.customerRef) && {
+        customerRef: this.stringValue(source.customerRef),
+      }),
       ...(this.stringValue(source.customerZoneId) && {
         customerZoneId: this.stringValue(source.customerZoneId),
       }),
