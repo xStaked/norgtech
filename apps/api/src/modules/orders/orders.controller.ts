@@ -19,6 +19,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
+import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
 import { OrdersService } from "./orders.service";
 import { OrderStatus } from "@prisma/client";
 
@@ -101,6 +102,19 @@ export class OrdersController {
     dto: UpdateOrderLogisticsDto,
   ) {
     return this.ordersService.updateLogistics(user, orderId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "facturacion")
+  @Patch(":id/items/:itemId/resolve")
+  resolveItem(
+    @CurrentUser() user: AuthUser,
+    @Param("id") orderId: string,
+    @Param("itemId") itemId: string,
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    dto: ResolveOrderItemDto,
+  ) {
+    return this.ordersService.resolveOrderItem(user, orderId, itemId, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
