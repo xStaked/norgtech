@@ -706,6 +706,7 @@ describe("WhatsApp inbox", () => {
             senderType: WhatsAppSenderType.desconocido,
             customerId: null,
             contactId: null,
+            status: "nuevo",
             createdAt: new Date("2026-05-22T11:10:00.000Z"),
             updatedAt: new Date("2026-05-22T11:10:00.000Z"),
             ...create,

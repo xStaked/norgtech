@@ -58,9 +58,19 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
       return;
     }
     apiFetchClient("/products")
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) {
+          setError("No se pudo cargar el catálogo de productos (error del servidor)");
+          setProducts([]);
+          return [];
+        }
+        return r.json();
+      })
       .then((data: Product[]) => setProducts(Array.isArray(data) ? data : []))
-      .catch(() => setProducts([]));
+      .catch(() => {
+        setError("No se pudo cargar el catálogo de productos");
+        setProducts([]);
+      });
   }, [isReviewerView]);
 
   if (!isReviewerView) {

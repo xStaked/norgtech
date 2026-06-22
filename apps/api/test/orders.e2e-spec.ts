@@ -1450,4 +1450,59 @@ describe("Orders", () => {
       .expect(200);
     expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
   });
+
+  it("returns 400 when approving an already-approved order", async () => {
+    // order-resolved-wa was just approved by the previous test; approvalStatus is now "aprobado"
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved-wa/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(400);
+    expect(response.body.message).toBe("Order is not pending review");
+  });
+
+  it("notifies the sender over WhatsApp when an order is rejected", async () => {
+    // order-resolved-wa-reject: en_revision, sourceConversationId set → reject should send outbound WA message
+    orders.push({
+      id: "order-resolved-wa-reject",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      sourceConversationId: "conversation-customer-1",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orderItems.push({
+      id: "item-resolved-wa-reject",
+      orderId: "order-resolved-wa-reject",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    });
+
+    outboundMessages.length = 0;
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved-wa-reject/reject`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ reason: "Presupuesto excedido" })
+      .expect(200);
+    expect(response.body.approvalStatus).toBe("rechazado");
+    expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
+  });
 });

@@ -662,6 +662,9 @@ export class OrdersService {
       if (!order) {
         throw new NotFoundException("Order not found");
       }
+      if (order.approvalStatus !== "en_revision") {
+        throw new BadRequestException("Order is not pending review");
+      }
       if (!order.customerId) {
         throw new BadRequestException("Order has no customer assigned");
       }
@@ -713,6 +716,9 @@ export class OrdersService {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) {
         throw new NotFoundException("Order not found");
+      }
+      if (order.approvalStatus !== "en_revision") {
+        throw new BadRequestException("Order is not pending review");
       }
       const previousState = JSON.parse(JSON.stringify(order));
       const reviewer =

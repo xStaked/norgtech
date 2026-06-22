@@ -47,7 +47,7 @@ export class NoraRoutingService {
 
     await this.updateConversationIdentity(conversation.id, sender);
 
-    if (sender.senderType === WhatsAppSenderType.desconocido) {
+    if (sender.senderType === WhatsAppSenderType.desconocido && conversation.status === "nuevo") {
       await this.prisma.whatsAppConversation.update({
         where: { id: conversation.id },
         data: { status: "pendiente" },
