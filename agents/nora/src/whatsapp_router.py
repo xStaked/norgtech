@@ -258,7 +258,7 @@ def _case_transition_for(
             caseId=request.open_case.id,
             type="expense",
             missingFields=request.open_case.missingFields,
-            lastQuestion="Necesito el valor del gasto y el cliente o visita a asociar.",
+            lastQuestion=_expense_continuation_reply(request.open_case),
         )
 
     if request.sender_type == "comercial" and plan.intent == "gasto" and request.media:
@@ -360,7 +360,7 @@ def _suggested_reply_for(
                 "(responde 'sí' para crearlo)"
             )
         if request and request.open_case and request.open_case.type == "expense":
-            return "Necesito el valor del gasto y el cliente o visita a asociar."
+            return _expense_continuation_reply(request.open_case)
         return (
             "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social "
             "o nombre comercial."
@@ -446,6 +446,62 @@ def _clarification_for(
     if "items" in missing_fields:
         return "Dime que productos y que cantidad necesita el pedido."
     return "Me falta un dato para continuar. Puedes confirmarme la informacion faltante?"
+
+
+_EXPENSE_FIELD_LABELS = {
+    "amount": "el valor del gasto",
+    "expenseDate": "la fecha",
+    "category": "la categoria",
+    "description": "la descripcion",
+}
+
+
+def _format_cop(amount: float) -> str:
+    return "$" + f"{int(round(amount)):,}".replace(",", ".")
+
+
+def _join_expense_fields(fields: list[str]) -> str:
+    readable = [_EXPENSE_FIELD_LABELS.get(field, field) for field in fields]
+    if len(readable) == 1:
+        return readable[0]
+    return f"{', '.join(readable[:-1])} y {readable[-1]}"
+
+
+def _expense_continuation_reply(open_case: Any) -> str:
+    """Build Nora's reply when continuing an open expense case.
+
+    Reads the case's actual extractedData/missingFields instead of asking for
+    the value unconditionally, so once the OCR has read the support image Nora
+    acknowledges the value it already has rather than re-asking for it.
+    """
+    extracted = open_case.extractedData or {}
+    missing = open_case.missingFields or []
+
+    amount = extracted.get("amount")
+    has_amount = amount is not None and "amount" not in missing
+    if not has_amount:
+        # Value still unknown: keep asking for it (and the association).
+        return "Necesito el valor del gasto y el cliente o visita a asociar."
+
+    value_phrase = (
+        f"Ya tengo el valor del gasto ({_format_cop(amount)})"
+        if isinstance(amount, (int, float))
+        else "Ya tengo el valor del gasto"
+    )
+
+    other_missing = [field for field in missing if field != "amount"]
+    if other_missing:
+        return (
+            f"{value_phrase}. Me falta {_join_expense_fields(other_missing)} "
+            "y el cliente o visita a asociar."
+        )
+
+    # All required fields captured: gasto is ready, only the optional
+    # customer/visit association remains.
+    return (
+        f"{value_phrase} y los datos del soporte. El gasto quedo listo para "
+        "revision; si quieres lo asocio a un cliente o visita, dime cual."
+    )
 
 
 def _is_expense_support_question(message: str) -> bool:

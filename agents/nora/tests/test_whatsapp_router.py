@@ -606,6 +606,70 @@ def test_expense_open_case_bueno_continues_form_instead_of_greeting():
     assert "hola" not in result["suggested_reply"].lower()
 
 
+def test_expense_open_case_ack_after_ocr_does_not_reask_for_value():
+    # OCR already filled the expense from the support image: amount/date/category
+    # are known and no required fields remain. When the comercial acknowledges,
+    # Nora must NOT ask again for the value she already extracted.
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "ok",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-expense-1",
+                "type": "expense",
+                "status": "collecting_info",
+                "extractedData": {
+                    "amount": 25000,
+                    "expenseDate": "2026-04-24",
+                    "category": "alimentacion",
+                    "description": "INVERSIONES ARIAS SERNA S.A.S.",
+                    "supplierName": "INVERSIONES ARIAS SERNA S.A.S.",
+                },
+                "missingFields": [],
+                "lastQuestion": (
+                    "Lei el soporte: valor $25.000, fecha 2026-04-24, categoria "
+                    "alimentacion, proveedor INVERSIONES ARIAS SERNA S.A.S. Dejo "
+                    "el gasto listo para revision."
+                ),
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    reply = result["suggested_reply"].lower()
+    last_question = (result["case_transition"]["lastQuestion"] or "").lower()
+    # The bug: re-asking "Necesito el valor del gasto..." even though it was read.
+    assert "necesito el valor del gasto" not in reply
+    assert "necesito el valor del gasto" not in last_question
+    # It should acknowledge the value it already has.
+    assert "25.000" in reply or "ya tengo el valor" in reply
+
+
+def test_expense_open_case_ack_with_amount_missing_still_asks_for_value():
+    # When the OCR could not read the amount, asking for the value is correct.
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "ok",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-expense-1",
+                "type": "expense",
+                "status": "collecting_info",
+                "extractedData": {},
+                "missingFields": ["amount", "expenseDate", "category", "description"],
+                "lastQuestion": "Recibi el soporte. Voy a extraer los datos.",
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    assert "valor del gasto" in result["suggested_reply"].lower()
+
+
 def test_expense_text_starts_case_when_no_open_case():
     result = route_whatsapp_message(
         {
