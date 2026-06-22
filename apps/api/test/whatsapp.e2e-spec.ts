@@ -2575,4 +2575,51 @@ describe("WhatsApp inbox", () => {
 
     expect(response.body.message).toBe("Kapso message webhook is missing required fields");
   });
+
+  it("routes unknown senders to human review (status pendiente) without creating an order", async () => {
+    const orderCountBefore = orders.length;
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "primer_contacto",
+        summary: "Numero no registrado inicia conversacion.",
+        suggested_reply:
+          "Hola, recibimos tu mensaje. Para ayudarte, comparte tu nombre y empresa.",
+        requires_human_review: false,
+        risk_level: "low",
+        proposals: [],
+        proposed_order: null,
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-desconocido-handoff",
+            from: "573008880001",
+            timestamp: "2026-06-22T10:00:00.000Z",
+            text: { body: "hola" },
+            profile: { name: "Desconocido" },
+          },
+        },
+      })
+      .expect(201);
+
+    const conversationId = response.body.conversationId;
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: conversationId,
+        senderType: WhatsAppSenderType.desconocido,
+        status: "pendiente",
+      }),
+    );
+    expect(orders).toHaveLength(orderCountBefore);
+  });
 });

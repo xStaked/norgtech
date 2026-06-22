@@ -2,6 +2,7 @@ import { Injectable, Logger } from "@nestjs/common";
 import {
   NoraActionStatus,
   NoraConversationCase,
+  NoraConversationCaseStatus,
   NoraConversationCaseType,
   Prisma,
   WhatsAppConversation,
@@ -45,6 +46,13 @@ export class NoraRoutingService {
     const sender = await this.whatsAppService.resolveSenderByPhone(conversation.phone);
 
     await this.updateConversationIdentity(conversation.id, sender);
+
+    if (sender.senderType === WhatsAppSenderType.desconocido) {
+      await this.prisma.whatsAppConversation.update({
+        where: { id: conversation.id },
+        data: { status: "pendiente" },
+      });
+    }
 
     const input = {
       body: message.body,
@@ -106,6 +114,16 @@ export class NoraRoutingService {
         conversation.id,
         sender,
       );
+
+      if (automationResult?.decision === "created") {
+        const orderCase = await this.noraCaseService.findOpenCase(conversation.id);
+        if (orderCase && orderCase.type === NoraConversationCaseType.order) {
+          await this.noraCaseService.updateCase(orderCase.id, {
+            status: NoraConversationCaseStatus.executed,
+          });
+        }
+      }
+
       const caseResult = await this.processCaseTransition(
         noraResponse,
         conversation.id,
@@ -255,18 +273,38 @@ export class NoraRoutingService {
       return this.noraCaseService.createNewCustomerSubcase(orderCase, actorUserId);
     }
 
-    if (action === "start_case" && source.type === NoraConversationCaseType.expense) {
-      const attachment = this.caseAttachmentFromMessage(message);
-      return this.noraCaseService.createCase({
-        conversationId,
-        type: NoraConversationCaseType.expense,
-        extractedData: this.objectValue(source.extractedData) ?? {},
-        missingFields: this.stringArrayValue(source.missingFields),
-        attachments: attachment ? [attachment] : [],
-        lastQuestion: this.stringValue(source.lastQuestion) ?? null,
-        riskLevel: "medium",
-        createdByUserId: actorUserId,
-      });
+    if (action === "start_case") {
+      const type = this.stringValue(source.type);
+      if (type === NoraConversationCaseType.expense) {
+        const attachment = this.caseAttachmentFromMessage(message);
+        return this.noraCaseService.createCase({
+          conversationId,
+          type: NoraConversationCaseType.expense,
+          extractedData: this.objectValue(source.extractedData) ?? {},
+          missingFields: this.stringArrayValue(source.missingFields),
+          attachments: attachment ? [attachment] : [],
+          lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+          riskLevel: "medium",
+          createdByUserId: actorUserId,
+        });
+      }
+      if (type === NoraConversationCaseType.order) {
+        const missingFields = this.stringArrayValue(source.missingFields);
+        return this.noraCaseService.createCase({
+          conversationId,
+          type: NoraConversationCaseType.order,
+          status:
+            missingFields.length === 0
+              ? NoraConversationCaseStatus.ready_for_review
+              : NoraConversationCaseStatus.collecting_info,
+          extractedData: this.objectValue(source.extractedData) ?? {},
+          missingFields,
+          lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+          riskLevel: "high",
+          createdByUserId: actorUserId,
+        });
+      }
+      return undefined;
     }
 
     if (action === "update_case") {
@@ -280,10 +318,15 @@ export class NoraRoutingService {
       if (!existingCase) {
         return undefined;
       }
+      const nextMissing = this.stringArrayValue(source.missingFields);
       return this.noraCaseService.updateCase(caseId, {
         extractedData: this.objectValue(source.extractedData) ?? {},
-        missingFields: this.stringArrayValue(source.missingFields),
+        missingFields: nextMissing,
         lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+        ...(existingCase.type === NoraConversationCaseType.order &&
+          nextMissing.length === 0 && {
+            status: NoraConversationCaseStatus.ready_for_review,
+          }),
       });
     }
 
