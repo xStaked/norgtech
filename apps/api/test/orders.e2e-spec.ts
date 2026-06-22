@@ -1282,5 +1282,7 @@ describe("Orders", () => {
     expect(item.productId).toBe("product-1");
     expect(item.needsResolution).toBe(false);
     expect(Number(item.unitPrice)).toBe(50000);
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.total)).toBe(119000);
   });
 });
