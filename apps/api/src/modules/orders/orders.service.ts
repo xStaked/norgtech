@@ -7,6 +7,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
+import { RejectOrderDto } from "./dto/reject-order.dto";
 import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
 import { allowedTransitions } from "./order-status-transition-map";
@@ -632,6 +633,102 @@ export class OrdersService {
           entityId: orderId,
           action: "order.item_resolved",
           actorUserId: user.id,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  findReviewQueue() {
+    return this.prisma.order.findMany({
+      where: { approvalStatus: "en_revision" },
+      include: { items: true, customer: true, company: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async approveOrder(user: AuthUser, orderId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+      if (!order.customerId) {
+        throw new BadRequestException("Order has no customer assigned");
+      }
+      if (order.items.some((item) => item.needsResolution)) {
+        throw new BadRequestException("Order has unresolved items");
+      }
+
+      const previousState = JSON.parse(JSON.stringify(order));
+      const reviewer =
+        (await tx.user.findUnique({ where: { id: user.id } }))?.name ?? user.email;
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          approvalStatus: "aprobado",
+          approvalName: reviewer,
+          reviewDate: new Date(),
+          updatedBy: user.id,
+          ...(order.status === OrderStatus.recibido && {
+            status: OrderStatus.orden_facturacion,
+          }),
+        },
+        include: { items: true, customer: true, company: true, sourceConversation: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: orderId,
+          action: "order.approved",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  async rejectOrder(user: AuthUser, orderId: string, dto: RejectOrderDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+      const previousState = JSON.parse(JSON.stringify(order));
+      const reviewer =
+        (await tx.user.findUnique({ where: { id: user.id } }))?.name ?? user.email;
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          approvalStatus: "rechazado",
+          approvalReason: dto.reason,
+          approvalName: reviewer,
+          reviewDate: new Date(),
+          updatedBy: user.id,
+        },
+        include: { items: true, customer: true, company: true, sourceConversation: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: orderId,
+          action: "order.rejected",
+          actorUserId: user.id,
+          previousState,
           nextState: JSON.parse(JSON.stringify(updated)),
         },
         tx,

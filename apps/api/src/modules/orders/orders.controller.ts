@@ -20,6 +20,7 @@ import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
+import { RejectOrderDto } from "./dto/reject-order.dto";
 import { OrdersService } from "./orders.service";
 import { OrderStatus } from "@prisma/client";
 
@@ -48,6 +49,13 @@ export class OrdersController {
   @Get()
   findAll(@Query("status") status?: OrderStatus, @Query("companyId") companyId?: string) {
     return this.ordersService.findAll(status, companyId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "facturacion")
+  @Get("review-queue")
+  findReviewQueue() {
+    return this.ordersService.findReviewQueue();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -102,6 +110,28 @@ export class OrdersController {
     dto: UpdateOrderLogisticsDto,
   ) {
     return this.ordersService.updateLogistics(user, orderId, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "facturacion")
+  @Patch(":id/approve")
+  approveOrder(
+    @CurrentUser() user: AuthUser,
+    @Param("id") orderId: string,
+  ) {
+    return this.ordersService.approveOrder(user, orderId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "facturacion")
+  @Patch(":id/reject")
+  rejectOrder(
+    @CurrentUser() user: AuthUser,
+    @Param("id") orderId: string,
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    dto: RejectOrderDto,
+  ) {
+    return this.ordersService.rejectOrder(user, orderId, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

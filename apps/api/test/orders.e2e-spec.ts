@@ -40,6 +40,44 @@ describe("Orders", () => {
       customProductName: "Producto desconocido",
       notes: null,
     },
+    {
+      id: "item-resolved-1",
+      orderId: "order-resolved",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    },
+    {
+      id: "item-resolved-2",
+      orderId: "order-resolved-2",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    },
   ];
   const invoices: Array<Record<string, any>> = [];
   let invoiceCreateFailure:
@@ -306,7 +344,13 @@ describe("Orders", () => {
           const found = orders.find((o) => o.id === id);
           return found ? JSON.parse(JSON.stringify(withOrderIncludes(found, include))) : null;
         },
-        findMany: async () => orders.map((o) => JSON.parse(JSON.stringify(o))),
+        findMany: async ({ where }: { where?: any } = {}) => {
+          let result = orders;
+          if (where?.approvalStatus) {
+            result = result.filter((o) => o.approvalStatus === where.approvalStatus);
+          }
+          return result.map((o) => JSON.parse(JSON.stringify(withOrderIncludes(o, { items: true, customer: true, company: true }))));
+        },
         update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
           const idx = orders.findIndex((o) => o.id === id);
           if (idx === -1) return null;
@@ -350,6 +394,7 @@ describe("Orders", () => {
         const result = await callback({
           company: prismaStub.company,
           customer,
+          user: prismaStub.user,
           invoice: {
             findFirst: async ({ where }: { where: any }) => findInvoice(where, [...invoices, ...pendingInvoices]),
             findMany: async ({ where }: { where: any }) =>
@@ -507,14 +552,41 @@ describe("Orders", () => {
     await app.init();
     globalThis.__APP__ = app.getHttpServer();
 
-    // Seed the unresolved order (must happen after app.init() so Prisma.Decimal is available)
+    // Seed orders (must happen after app.init() so Prisma.Decimal is available)
     orders.push({
       id: "order-unresolved",
       customerId: "customer-1",
       companyId: "company-1",
       status: "recibido",
+      approvalStatus: "en_revision",
       subtotal: new Prisma.Decimal(0),
       total: new Prisma.Decimal(0),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
+      id: "order-resolved",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
+      id: "order-resolved-2",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
       createdAt: new Date("2026-04-29T00:00:00.000Z"),
@@ -1269,6 +1341,13 @@ describe("Orders", () => {
       .expect(403);
   });
 
+  it("blocks approval while an item needs resolution", async () => {
+    await request(global.__APP__)
+      .patch(`/orders/order-unresolved/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(400);
+  });
+
   it("resolves an unresolved item and recomputes totals", async () => {
     // Arrange: order-unresolved with item-unresolved (productId null, quantity 2, needsResolution true, unitPrice 0)
     // is seeded in beforeAll / orderItems array.
@@ -1284,5 +1363,25 @@ describe("Orders", () => {
     expect(Number(item.unitPrice)).toBe(50000);
     expect(Number(response.body.subtotal)).toBe(100000);
     expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("approves a fully resolved order and advances it to orden_facturacion", async () => {
+    // order-resolved: approvalStatus en_revision, status recibido, all items resolved
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(200);
+    expect(response.body.approvalStatus).toBe("aprobado");
+    expect(response.body.status).toBe("orden_facturacion");
+  });
+
+  it("rejects an order with a reason", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved-2/reject`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ reason: "Cliente con cartera vencida" })
+      .expect(200);
+    expect(response.body.approvalStatus).toBe("rechazado");
+    expect(response.body.approvalReason).toBe("Cliente con cartera vencida");
   });
 });
