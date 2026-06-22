@@ -103,6 +103,18 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
             summary="Confirmacion de pedido recibida; se procede a crear.",
         )
 
+    if (
+        request.open_case
+        and request.open_case.type == "order"
+        and "customerRef" in (request.open_case.missingFields or [])
+        and not _is_order_confirmation(normalized)
+    ):
+        return NoraPlan(
+            intent="continuar_caso",
+            actions=[],
+            summary="El comercial indica el cliente del pedido en curso.",
+        )
+
     if request.open_case and request.open_case.type == "order" and _wants_new_customer(normalized):
         return NoraPlan(
             intent="continuar_caso",

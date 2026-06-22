@@ -218,6 +218,24 @@ def _case_transition_for(
         request.open_case
         and request.open_case.type == "order"
         and plan.intent == "continuar_caso"
+        and "customerRef" in (request.open_case.missingFields or [])
+    ):
+        return NoraCaseTransition(
+            action="update_case",
+            caseId=request.open_case.id,
+            type="order",
+            extractedData={"customerRef": request.message.strip()},
+            missingFields=[],
+            lastQuestion=(
+                "Gracias. ¿Confirmas el pedido para ese cliente? "
+                "(responde 'sí' para crearlo)"
+            ),
+        )
+
+    if (
+        request.open_case
+        and request.open_case.type == "order"
+        and plan.intent == "continuar_caso"
     ):
         return NoraCaseTransition(
             action="create_new_customer_subcase",
@@ -291,8 +309,16 @@ def _case_transition_for(
                     "items": order_action.fields.get("items", []),
                     "notes": order_action.fields.get("notes"),
                 },
-                missingFields=[],
-                lastQuestion=_order_confirmation_question(order_action),
+                missingFields=(
+                    []
+                    if order_action.fields.get("customer_id")
+                    else ["customerRef"]
+                ),
+                lastQuestion=(
+                    _order_confirmation_question(order_action)
+                    if order_action.fields.get("customer_id")
+                    else "¿Para qué cliente es el pedido? Dime el nombre o NIT."
+                ),
             )
 
     return None
@@ -323,6 +349,16 @@ def _suggested_reply_for(
     request: WhatsAppRouteRequest | None = None,
 ) -> str:
     if intent == "continuar_caso":
+        if (
+            request
+            and request.open_case
+            and request.open_case.type == "order"
+            and "customerRef" in (request.open_case.missingFields or [])
+        ):
+            return (
+                "Gracias. ¿Confirmas el pedido para ese cliente? "
+                "(responde 'sí' para crearlo)"
+            )
         if request and request.open_case and request.open_case.type == "expense":
             return "Necesito el valor del gasto y el cliente o visita a asociar."
         return (

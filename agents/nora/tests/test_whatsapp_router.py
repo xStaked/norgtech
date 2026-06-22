@@ -667,3 +667,42 @@ def test_confirmation_on_open_order_case_emits_candidate():
     assert result["order_candidate"] is not None
     assert result["order_candidate"]["items"][0]["productRef"] == "FERT-001"
     assert result["order_candidate"]["customerId"] == "customer-1"
+
+
+def test_comercial_order_without_customer_starts_case_asking_customer():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "necesito 10 bultos de FERT-001 por Nortech",
+            "conversation_id": "conv-2",
+            "user": {"id": "sergio", "role": "comercial", "name": "Sergio", "email": "s@n.local"},
+            "companies": [{"id": "company-nt", "name": "Nortech", "prefix": "NT"}],
+        }
+    )
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "order"
+    assert result["case_transition"]["missingFields"] == ["customerRef"]
+    assert "cliente" in result["suggested_reply"].lower()
+
+
+def test_comercial_replies_customer_updates_order_case():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Es para Agro Norte",
+            "conversation_id": "conv-2",
+            "user": {"id": "sergio", "role": "comercial", "name": "Sergio", "email": "s@n.local"},
+            "companies": [{"id": "company-nt", "name": "Nortech", "prefix": "NT"}],
+            "open_case": {
+                "id": "case-2",
+                "type": "order",
+                "status": "collecting_info",
+                "extractedData": {"companyRef": "Nortech", "items": [{"productRef": "FERT-001", "quantity": 10}]},
+                "missingFields": ["customerRef"],
+            },
+        }
+    )
+    assert result["case_transition"]["action"] == "update_case"
+    assert result["case_transition"]["caseId"] == "case-2"
+    assert result["case_transition"]["extractedData"]["customerRef"] == "Es para Agro Norte"
+    assert "confirm" in result["suggested_reply"].lower()
