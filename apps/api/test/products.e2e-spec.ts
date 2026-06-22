@@ -10,6 +10,8 @@ declare global {
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
   // eslint-disable-next-line no-var
   var __ADMIN_TOKEN__: string | undefined;
+  // eslint-disable-next-line no-var
+  var __FACTURACION_TOKEN__: string | undefined;
 }
 
 describe("Products", () => {
@@ -27,17 +29,31 @@ describe("Products", () => {
       .overrideProvider(PrismaService)
       .useValue({
         user: {
-          findUnique: async ({ where: { email } }: { where: { email: string } }) =>
-            email === "admin@norgtech.local"
-              ? {
-                  id: "admin-user-id",
-                  name: "Admin",
-                  email: "admin@norgtech.local",
-                  passwordHash,
-                  role: UserRole.administrador,
-                  active: true,
-                }
-              : null,
+          findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
+            const byEmail = where.email;
+            const byId = where.id;
+            if (byEmail === "admin@norgtech.local" || byId === "admin-user-id") {
+              return {
+                id: "admin-user-id",
+                name: "Admin",
+                email: "admin@norgtech.local",
+                passwordHash,
+                role: UserRole.administrador,
+                active: true,
+              };
+            }
+            if (byEmail === "facturacion@norgtech.local" || byId === "facturacion-user-id") {
+              return {
+                id: "facturacion-user-id",
+                name: "Facturacion",
+                email: "facturacion@norgtech.local",
+                passwordHash,
+                role: UserRole.facturacion,
+                active: true,
+              };
+            }
+            return null;
+          },
         },
         customer: {
           findUnique: async ({ where: { id }, include }: { where: { id: string }; include?: Record<string, boolean> }) => {
@@ -77,10 +93,18 @@ describe("Products", () => {
       .expect(200);
 
     globalThis.__ADMIN_TOKEN__ = loginResponse.body.accessToken;
+
+    const facturacionLoginResponse = await request(globalThis.__APP__)
+      .post("/auth/login")
+      .send({ email: "facturacion@norgtech.local", password: "Admin123*" })
+      .expect(200);
+
+    globalThis.__FACTURACION_TOKEN__ = facturacionLoginResponse.body.accessToken;
   });
 
   afterAll(async () => {
     globalThis.__ADMIN_TOKEN__ = undefined;
+    globalThis.__FACTURACION_TOKEN__ = undefined;
     globalThis.__APP__ = undefined;
 
     if (app) {
@@ -193,5 +217,14 @@ describe("Products", () => {
       .get(`/products/${productResponse.body.id}/price-for-customer/invalid-customer`)
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .expect(404);
+  });
+
+  it("allows facturacion role to list products", async () => {
+    const response = await request(globalThis.__APP__)
+      .get("/products")
+      .set("Authorization", `Bearer ${globalThis.__FACTURACION_TOKEN__}`)
+      .expect(200);
+
+    expect(Array.isArray(response.body)).toBe(true);
   });
 });

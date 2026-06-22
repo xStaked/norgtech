@@ -734,6 +734,7 @@ model OrderItem {
   totalWithTax         Decimal  @default(0) @db.Decimal(14, 2)
   subtotal             Decimal  @db.Decimal(14, 2)
   notes                String?
+  needsResolution      Boolean  @default(false)
   order                Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product              Product? @relation(fields: [productId], references: [id])
 }

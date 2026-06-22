@@ -5,11 +5,15 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 
+const outboundMessages: Array<Record<string, unknown>> = [];
+
 declare global {
   // eslint-disable-next-line no-var
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
   // eslint-disable-next-line no-var
   var __ADMIN_TOKEN__: string | undefined;
+  // eslint-disable-next-line no-var
+  var __FACTURACION_TOKEN__: string | undefined;
 }
 
 describe("Orders", () => {
@@ -18,6 +22,65 @@ describe("Orders", () => {
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const auditLogs: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
+  const orderItems: Array<Record<string, any>> = [
+    {
+      id: "item-unresolved",
+      orderId: "order-unresolved",
+      productId: null,
+      productSnapshotName: "Producto desconocido",
+      productSnapshotSku: "CUSTOM",
+      unit: "unit",
+      quantity: 2,
+      unitPrice: new Prisma.Decimal(0),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(0),
+      subtotal: new Prisma.Decimal(0),
+      totalWithTax: new Prisma.Decimal(0),
+      needsResolution: true,
+      originalUnitPrice: null,
+      discountPercent: null,
+      customProductName: "Producto desconocido",
+      notes: null,
+    },
+    {
+      id: "item-resolved-1",
+      orderId: "order-resolved",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    },
+    {
+      id: "item-resolved-2",
+      orderId: "order-resolved-2",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    },
+  ];
   const invoices: Array<Record<string, any>> = [];
   let invoiceCreateFailure:
     | { target: "orderId" | "invoiceNumber"; triggered: boolean }
@@ -81,6 +144,7 @@ describe("Orders", () => {
       active: true,
     },
   ];
+  const whatsAppMessages: Array<Record<string, unknown>> = [];
   const whatsAppConversations: Array<Record<string, unknown>> = [
     {
       id: "conversation-customer-1",
@@ -164,6 +228,9 @@ describe("Orders", () => {
       invoices: include?.invoices
         ? visibleInvoices.filter((invoice) => invoice.orderId === order.id)
         : order.invoices,
+      items: include?.items
+        ? (() => { const filtered = orderItems.filter((i) => i.orderId === order.id); return filtered.length > 0 ? filtered : (order.items as unknown[]); })()
+        : order.items,
     });
 
     const findInvoice = (where: any, sourceInvoices: Array<Record<string, any>>) => {
@@ -258,8 +325,29 @@ describe("Orders", () => {
         },
       },
       whatsAppConversation: {
-        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-          whatsAppConversations.find((conversation) => conversation.id === id) ?? null,
+        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+          const conv = whatsAppConversations.find((c) => c.id === id);
+          if (!conv) return null;
+          return { ...conv, waId: "521234567890", account: { phoneNumberId: "phone-1" } };
+        },
+        update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const idx = whatsAppConversations.findIndex((c) => c.id === id);
+          if (idx !== -1) whatsAppConversations[idx] = { ...whatsAppConversations[idx], ...data };
+          return whatsAppConversations[idx] ?? null;
+        },
+      },
+      whatsAppMessage: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const msg = { id: `msg-${whatsAppMessages.length + 1}`, ...data };
+          whatsAppMessages.push(msg);
+          outboundMessages.push(msg);
+          return msg;
+        },
+        update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const idx = whatsAppMessages.findIndex((m) => m.id === id);
+          if (idx !== -1) whatsAppMessages[idx] = { ...whatsAppMessages[idx], ...data };
+          return whatsAppMessages[idx] ?? null;
+        },
       },
       order: {
         create: async () => {
@@ -280,7 +368,13 @@ describe("Orders", () => {
           const found = orders.find((o) => o.id === id);
           return found ? JSON.parse(JSON.stringify(withOrderIncludes(found, include))) : null;
         },
-        findMany: async () => orders.map((o) => JSON.parse(JSON.stringify(o))),
+        findMany: async ({ where }: { where?: any } = {}) => {
+          let result = orders;
+          if (where?.approvalStatus) {
+            result = result.filter((o) => o.approvalStatus === where.approvalStatus);
+          }
+          return result.map((o) => JSON.parse(JSON.stringify(withOrderIncludes(o, { items: true, customer: true, company: true }))));
+        },
         update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
           const idx = orders.findIndex((o) => o.id === id);
           if (idx === -1) return null;
@@ -290,6 +384,16 @@ describe("Orders", () => {
       },
       orderItem: {
         createMany: async () => ({ count: 0 }),
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          orderItems.find((i) => i.id === id) ?? null,
+        findMany: async ({ where }: { where: { orderId?: string } }) =>
+          orderItems.filter((i) => !where?.orderId || i.orderId === where.orderId),
+        update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, any> }) => {
+          const idx = orderItems.findIndex((i) => i.id === id);
+          if (idx === -1) return null;
+          orderItems[idx] = { ...orderItems[idx], ...data };
+          return JSON.parse(JSON.stringify(orderItems[idx]));
+        },
       },
       billingRequest: {
         create: async () => {
@@ -314,6 +418,7 @@ describe("Orders", () => {
         const result = await callback({
           company: prismaStub.company,
           customer,
+          user: prismaStub.user,
           invoice: {
             findFirst: async ({ where }: { where: any }) => findInvoice(where, [...invoices, ...pendingInvoices]),
             findMany: async ({ where }: { where: any }) =>
@@ -400,18 +505,31 @@ describe("Orders", () => {
                 ? JSON.parse(JSON.stringify(withOrderIncludes(found, include, [...invoices, ...pendingInvoices])))
                 : null;
             },
-            update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+            update: async ({ where: { id }, data, include }: { where: { id: string }; data: Record<string, unknown>; include?: Record<string, unknown> }) => {
               let idx = orders.findIndex((o) => o.id === id);
               if (idx !== -1) {
                 orders[idx] = { ...orders[idx], ...data, updatedAt: new Date() };
-                return JSON.parse(JSON.stringify(orders[idx]));
+                return JSON.parse(JSON.stringify(withOrderIncludes(orders[idx], include, [...invoices, ...pendingInvoices])));
               }
               idx = pendingOrders.findIndex((o) => o.id === id);
               if (idx !== -1) {
                 pendingOrders[idx] = { ...pendingOrders[idx], ...data, updatedAt: new Date() };
-                return JSON.parse(JSON.stringify(pendingOrders[idx]));
+                return JSON.parse(JSON.stringify(withOrderIncludes(pendingOrders[idx], include, [...invoices, ...pendingInvoices])));
               }
               return null;
+            },
+          },
+          product: prismaStub.product,
+          orderItem: {
+            findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+              orderItems.find((i) => i.id === id) ?? null,
+            findMany: async ({ where }: { where: { orderId?: string } }) =>
+              orderItems.filter((i) => !where?.orderId || i.orderId === where.orderId),
+            update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, any> }) => {
+              const idx = orderItems.findIndex((i) => i.id === id);
+              if (idx === -1) return null;
+              orderItems[idx] = { ...orderItems[idx], ...data };
+              return JSON.parse(JSON.stringify(orderItems[idx]));
             },
           },
           auditLog: {
@@ -458,12 +576,93 @@ describe("Orders", () => {
     await app.init();
     globalThis.__APP__ = app.getHttpServer();
 
+    // Seed orders (must happen after app.init() so Prisma.Decimal is available)
+    orders.push({
+      id: "order-unresolved",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(0),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
+      id: "order-resolved",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
+      id: "order-resolved-2",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
+      id: "order-resolved-wa",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      sourceConversationId: "conversation-customer-1",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orderItems.push({
+      id: "item-resolved-wa",
+      orderId: "order-resolved-wa",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    });
+
     const loginResponse = await request(globalThis.__APP__)
       .post("/auth/login")
       .send({ email: "admin@norgtech.local", password: "Admin123*" })
       .expect(200);
 
     globalThis.__ADMIN_TOKEN__ = loginResponse.body.accessToken;
+
+    const facturacionLoginResponse = await request(globalThis.__APP__)
+      .post("/auth/login")
+      .send({ email: "facturacion@norgtech.local", password: "Admin123*" })
+      .expect(200);
+
+    globalThis.__FACTURACION_TOKEN__ = facturacionLoginResponse.body.accessToken;
   });
 
   async function getToken(email: string) {
@@ -476,6 +675,7 @@ describe("Orders", () => {
 
   afterAll(async () => {
     globalThis.__ADMIN_TOKEN__ = undefined;
+    globalThis.__FACTURACION_TOKEN__ = undefined;
     globalThis.__APP__ = undefined;
     if (app) {
       await app.close();
@@ -1154,6 +1354,32 @@ describe("Orders", () => {
     expect(current?.status).toBe("entregado");
   });
 
+  it("persists needsResolution for unresolved items", async () => {
+    const response = await request(global.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [
+          { productId: "product-1", quantity: 2, unitPrice: 50000 },
+          { productName: "Algo que Nora no encontro", quantity: 5, unitPrice: 0, needsResolution: true },
+        ],
+      })
+      .expect(201);
+
+    const created = response.body.items as Array<{
+      productId: string | null;
+      needsResolution: boolean;
+      customProductName: string | null;
+    }>;
+    const resolved = created.find((i) => i.productId === "product-1");
+    const unresolved = created.find((i) => i.productId === null);
+    expect(resolved?.needsResolution).toBe(false);
+    expect(unresolved?.needsResolution).toBe(true);
+    expect(unresolved?.customProductName).toBe("Algo que Nora no encontro");
+  });
+
   it("rejects direct invoice creation from order for comercial role", async () => {
     const comercialToken = await getToken("comercial@norgtech.local");
     const createResponse = await request(globalThis.__APP__)
@@ -1170,5 +1396,113 @@ describe("Orders", () => {
       .post(`/orders/${createResponse.body.id}/invoice`)
       .set("Authorization", `Bearer ${comercialToken}`)
       .expect(403);
+  });
+
+  it("blocks approval while an item needs resolution", async () => {
+    await request(global.__APP__)
+      .patch(`/orders/order-unresolved/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(400);
+  });
+
+  it("resolves an unresolved item and recomputes totals", async () => {
+    // Arrange: order-unresolved with item-unresolved (productId null, quantity 2, needsResolution true, unitPrice 0)
+    // is seeded in beforeAll / orderItems array.
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-unresolved/items/item-unresolved/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-unresolved");
+    expect(item.productId).toBe("product-1");
+    expect(item.needsResolution).toBe(false);
+    expect(Number(item.unitPrice)).toBe(50000);
+    expect(Number(response.body.subtotal)).toBe(100000);
+    expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("approves a fully resolved order and advances it to orden_facturacion", async () => {
+    // order-resolved: approvalStatus en_revision, status recibido, all items resolved
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(200);
+    expect(response.body.approvalStatus).toBe("aprobado");
+    expect(response.body.status).toBe("orden_facturacion");
+  });
+
+  it("rejects an order with a reason", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved-2/reject`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ reason: "Cliente con cartera vencida" })
+      .expect(200);
+    expect(response.body.approvalStatus).toBe("rechazado");
+    expect(response.body.approvalReason).toBe("Cliente con cartera vencida");
+  });
+
+  it("notifies the sender over WhatsApp when an order is approved", async () => {
+    outboundMessages.length = 0; // array the whatsAppMessage.create mock pushes into
+    await request(global.__APP__)
+      .patch(`/orders/order-resolved-wa/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(200);
+    expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
+  });
+
+  it("returns 400 when approving an already-approved order", async () => {
+    // order-resolved-wa was just approved by the previous test; approvalStatus is now "aprobado"
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved-wa/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(400);
+    expect(response.body.message).toBe("Order is not pending review");
+  });
+
+  it("notifies the sender over WhatsApp when an order is rejected", async () => {
+    // order-resolved-wa-reject: en_revision, sourceConversationId set → reject should send outbound WA message
+    orders.push({
+      id: "order-resolved-wa-reject",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      sourceConversationId: "conversation-customer-1",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orderItems.push({
+      id: "item-resolved-wa-reject",
+      orderId: "order-resolved-wa-reject",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
+    });
+
+    outboundMessages.length = 0;
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-resolved-wa-reject/reject`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ reason: "Presupuesto excedido" })
+      .expect(200);
+    expect(response.body.approvalStatus).toBe("rechazado");
+    expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
   });
 });

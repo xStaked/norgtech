@@ -113,6 +113,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion", "logistica"] as const,
   },
   {
+    href: "/orders/review",
+    label: "Revisión pedidos",
+    shortLabel: "RV",
+    description: "Cola de pedidos en revisión por aprobar",
+    group: "Comercial",
+    requiredRoles: ["administrador", "facturacion"] as const,
+  },
+  {
     href: "/billing-requests",
     label: "Facturacion",
     shortLabel: "FC",

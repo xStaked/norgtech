@@ -32,6 +32,10 @@ export class OrderAutomationItemDto {
 export class ProcessOrderAutomationDto {
   @IsOptional()
   @IsString()
+  customerRef?: string;
+
+  @IsOptional()
+  @IsString()
   companyRef?: string;
 
   @IsOptional()

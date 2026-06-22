@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { InvoiceStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -6,8 +6,11 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
+import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
+import { RejectOrderDto } from "./dto/reject-order.dto";
 import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
+import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { allowedTransitions } from "./order-status-transition-map";
 
 const INVOICE_ALLOWED_ORDER_STATUSES: OrderStatus[] = [
@@ -45,6 +48,8 @@ export class OrdersService {
     private readonly auditService: AuditService,
     private readonly orderXlsxExportService: OrderXlsxExportService,
     private readonly credit: CreditService,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsApp: WhatsAppService,
   ) {}
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -149,6 +154,7 @@ export class OrdersService {
             totalWithTax,
             subtotal,
             notes: item.notes,
+            needsResolution: false,
           };
         }
         const customProductName = item.productName?.trim() || null;
@@ -176,6 +182,7 @@ export class OrdersService {
           totalWithTax,
           subtotal,
           notes: item.notes,
+          needsResolution: item.needsResolution ?? false,
         };
       }),
     );
@@ -567,6 +574,189 @@ export class OrdersService {
     });
   }
 
+  async resolveOrderItem(
+    user: AuthUser,
+    orderId: string,
+    itemId: string,
+    dto: ResolveOrderItemDto,
+  ) {
+    return this.prisma.$transaction(async (tx) => {
+      const item = await tx.orderItem.findUnique({ where: { id: itemId } });
+      if (!item || item.orderId !== orderId) {
+        throw new NotFoundException("Order item not found");
+      }
+      const product = await tx.product.findUnique({ where: { id: dto.productId } });
+      if (!product) {
+        throw new NotFoundException(`Product ${dto.productId} not found`);
+      }
+
+      const quantity = new Prisma.Decimal(item.quantity);
+      const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
+      const unitPrice = new Prisma.Decimal(dto.unitPrice).toDecimalPlaces(2);
+      const taxAmount = unitPrice.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
+      const subtotal = quantity.times(unitPrice).toDecimalPlaces(2);
+      const totalWithTax = quantity.times(unitPrice.plus(taxAmount)).toDecimalPlaces(2);
+
+      await tx.orderItem.update({
+        where: { id: itemId },
+        data: {
+          productId: product.id,
+          productSnapshotName: product.name,
+          productSnapshotSku: product.sku,
+          unit: product.unit,
+          customProductName: null,
+          originalUnitPrice: product.basePrice,
+          unitPrice,
+          taxAmount,
+          subtotal,
+          totalWithTax,
+          needsResolution: false,
+        },
+      });
+
+      const items = await tx.orderItem.findMany({ where: { orderId } });
+      const orderSubtotal = items.reduce(
+        (sum, current) => sum.plus(new Prisma.Decimal(current.subtotal)),
+        new Prisma.Decimal(0),
+      );
+      const orderTotal = items.reduce(
+        (sum, current) => sum.plus(new Prisma.Decimal(current.totalWithTax)),
+        new Prisma.Decimal(0),
+      );
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { subtotal: orderSubtotal, total: orderTotal, updatedBy: user.id },
+        include: { items: true, customer: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: orderId,
+          action: "order.item_resolved",
+          actorUserId: user.id,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+  }
+
+  findReviewQueue() {
+    return this.prisma.order.findMany({
+      where: { approvalStatus: "en_revision" },
+      include: { items: true, customer: true, company: true },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
+  async approveOrder(user: AuthUser, orderId: string) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+      if (order.approvalStatus !== "en_revision") {
+        throw new BadRequestException("Order is not pending review");
+      }
+      if (!order.customerId) {
+        throw new BadRequestException("Order has no customer assigned");
+      }
+      if (order.items.some((item) => item.needsResolution)) {
+        throw new BadRequestException("Order has unresolved items");
+      }
+
+      const previousState = JSON.parse(JSON.stringify(order));
+      const reviewer =
+        (await tx.user.findUnique({ where: { id: user.id } }))?.name ?? user.email;
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          approvalStatus: "aprobado",
+          approvalName: reviewer,
+          reviewDate: new Date(),
+          updatedBy: user.id,
+          ...(order.status === OrderStatus.recibido && {
+            status: OrderStatus.orden_facturacion,
+          }),
+        },
+        include: { items: true, customer: true, company: true, sourceConversation: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: orderId,
+          action: "order.approved",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+    await this.notifyReviewOutcome(
+      result,
+      `Tu pedido ${result.orderNumber ?? ""} fue aprobado y pasa a facturación. ¡Gracias!`,
+    );
+    return result;
+  }
+
+  async rejectOrder(user: AuthUser, orderId: string, dto: RejectOrderDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const order = await tx.order.findUnique({ where: { id: orderId } });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+      if (order.approvalStatus !== "en_revision") {
+        throw new BadRequestException("Order is not pending review");
+      }
+      const previousState = JSON.parse(JSON.stringify(order));
+      const reviewer =
+        (await tx.user.findUnique({ where: { id: user.id } }))?.name ?? user.email;
+
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: {
+          approvalStatus: "rechazado",
+          approvalReason: dto.reason,
+          approvalName: reviewer,
+          reviewDate: new Date(),
+          updatedBy: user.id,
+        },
+        include: { items: true, customer: true, company: true, sourceConversation: true },
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Order",
+          entityId: orderId,
+          action: "order.rejected",
+          actorUserId: user.id,
+          previousState,
+          nextState: JSON.parse(JSON.stringify(updated)),
+        },
+        tx,
+      );
+
+      return updated;
+    });
+    await this.notifyReviewOutcome(
+      result,
+      `Tu pedido ${result.orderNumber ?? ""} fue rechazado. Motivo: ${dto.reason}`,
+    );
+    return result;
+  }
+
   async exportClientFormat(orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
@@ -578,6 +768,21 @@ export class OrdersService {
     }
 
     return this.orderXlsxExportService.generate(order);
+  }
+
+  private async notifyReviewOutcome(
+    order: { sourceConversationId: string | null; orderNumber: string | null },
+    message: string,
+  ) {
+    if (!order.sourceConversationId) {
+      return;
+    }
+    try {
+      await this.whatsApp.sendAgentReply(order.sourceConversationId, message);
+    } catch (error) {
+      // best-effort: never block the review outcome on a delivery failure
+      console.error("Failed to notify order review outcome over WhatsApp", error);
+    }
   }
 
   private async assertOpportunityBelongsToCustomer(opportunityId: string, customerId: string) {

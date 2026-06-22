@@ -36,14 +36,14 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion")
   @Get()
   findAll() {
     return this.productsService.findAll();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.productsService.findOne(id);

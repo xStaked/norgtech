@@ -73,13 +73,24 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
 
     proposals = [_proposal_for_action(action) for action in plan.actions]
     proposals = [proposal for proposal in proposals if proposal is not None]
-    order_candidate = next(
-        (
-            candidate
-            for candidate in (_order_candidate_for_action(action) for action in plan.actions)
-            if candidate is not None
-        ),
-        None,
+    is_order_confirmation_turn = bool(
+        request.open_case
+        and request.open_case.type == "order"
+        and request.open_case.status == "ready_for_review"
+    )
+    order_candidate = (
+        next(
+            (
+                candidate
+                for candidate in (
+                    _order_candidate_for_action(action) for action in plan.actions
+                )
+                if candidate is not None
+            ),
+            None,
+        )
+        if is_order_confirmation_turn
+        else None
     )
 
     response = WhatsAppRouteResponse(
@@ -169,16 +180,17 @@ def _order_candidate_for_action(action: PlannedAction) -> NoraOrderCandidate | N
         return None
     items = [
         NoraOrderCandidateItem(
-            productRef=str(item["product_ref"]),
+            productRef=str(item.get("product_ref") or item.get("productRef")),
             quantity=float(item["quantity"]),
             presentation=item.get("presentation"),
             notes=item.get("notes"),
         )
         for item in action.fields.get("items", [])
-        if item.get("product_ref") and item.get("quantity") is not None
+        if (item.get("product_ref") or item.get("productRef")) and item.get("quantity") is not None
     ]
     return NoraOrderCandidate(
         customerId=action.fields.get("customer_id"),
+        customerRef=action.fields.get("customer_ref"),
         companyRef=action.fields.get("company_ref"),
         customerZoneId=action.fields.get("customer_zone_id"),
         zoneRef=action.fields.get("zone_ref"),
@@ -202,6 +214,24 @@ def _case_transition_for(
     request: WhatsAppRouteRequest,
     plan: Any,
 ) -> NoraCaseTransition | None:
+    if (
+        request.open_case
+        and request.open_case.type == "order"
+        and plan.intent == "continuar_caso"
+        and "customerRef" in (request.open_case.missingFields or [])
+    ):
+        return NoraCaseTransition(
+            action="update_case",
+            caseId=request.open_case.id,
+            type="order",
+            extractedData={"customerRef": request.message.strip()},
+            missingFields=[],
+            lastQuestion=(
+                "Gracias. ¿Confirmas el pedido para ese cliente? "
+                "(responde 'sí' para crearlo)"
+            ),
+        )
+
     if (
         request.open_case
         and request.open_case.type == "order"
@@ -253,6 +283,44 @@ def _case_transition_for(
             lastQuestion="Listo. Dime el valor del gasto y el cliente o visita a asociar.",
         )
 
+    if (
+        plan.intent == "pedido"
+        and not (request.open_case and request.open_case.type == "order")
+    ):
+        order_action = next(
+            (
+                action
+                for action in plan.actions
+                if action.domain == "orders"
+                and action.action == "resolve_and_create_from_whatsapp"
+            ),
+            None,
+        )
+        if order_action and order_action.fields.get("items"):
+            return NoraCaseTransition(
+                action="start_case",
+                type="order",
+                extractedData={
+                    "customerId": order_action.fields.get("customer_id"),
+                    "companyRef": order_action.fields.get("company_ref"),
+                    "companyId": order_action.fields.get("company_id"),
+                    "customerZoneId": order_action.fields.get("customer_zone_id"),
+                    "zoneRef": order_action.fields.get("zone_ref"),
+                    "items": order_action.fields.get("items", []),
+                    "notes": order_action.fields.get("notes"),
+                },
+                missingFields=(
+                    []
+                    if order_action.fields.get("customer_id")
+                    else ["customerRef"]
+                ),
+                lastQuestion=(
+                    _order_confirmation_question(order_action)
+                    if order_action.fields.get("customer_id")
+                    else "¿Para qué cliente es el pedido? Dime el nombre o NIT."
+                ),
+            )
+
     return None
 
 
@@ -281,6 +349,16 @@ def _suggested_reply_for(
     request: WhatsAppRouteRequest | None = None,
 ) -> str:
     if intent == "continuar_caso":
+        if (
+            request
+            and request.open_case
+            and request.open_case.type == "order"
+            and "customerRef" in (request.open_case.missingFields or [])
+        ):
+            return (
+                "Gracias. ¿Confirmas el pedido para ese cliente? "
+                "(responde 'sí' para crearlo)"
+            )
         if request and request.open_case and request.open_case.type == "expense":
             return "Necesito el valor del gasto y el cliente o visita a asociar."
         return (
@@ -378,3 +456,13 @@ def _is_expense_support_question(message: str) -> bool:
 def _is_expense_support_message(message: str) -> bool:
     normalized = message.strip().lower()
     return normalized in ("[imagen]", "[documento]") or _is_expense_support_question(normalized)
+
+
+def _order_confirmation_question(action: PlannedAction) -> str:
+    lines = []
+    for item in action.fields.get("items", []):
+        qty = item.get("quantity")
+        ref = item.get("product_ref") or item.get("productRef")
+        lines.append(f"- {qty} x {ref}")
+    detail = "\n".join(lines)
+    return f"Voy a registrar este pedido:\n{detail}\n¿Confirmas el pedido? (responde 'sí' para crearlo)"

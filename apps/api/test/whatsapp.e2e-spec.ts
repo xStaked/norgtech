@@ -15,6 +15,7 @@ import {
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
+import { WhatsAppOrderAutomationService } from "../src/modules/whatsapp/whatsapp-order-automation.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 
 describe("WhatsApp inbox", () => {
@@ -141,6 +142,24 @@ describe("WhatsApp inbox", () => {
       updatedAt: new Date("2026-05-22T10:00:00.000Z"),
     },
   ];
+  // Read-only fixture used only by findUnique — not in the mutable conversations
+  // array so it does not affect list/upsert/count tests.
+  const conversationCustomer1Fixture = {
+    id: "conversation-customer-1",
+    accountId: "account-1",
+    waId: "573001112244",
+    phone: "+573001112244",
+    senderName: "Laura Cliente",
+    senderType: WhatsAppSenderType.cliente,
+    status: WhatsAppConversationStatus.nuevo,
+    assignedToUserId: "sales-user-id",
+    customerId: "customer-1",
+    contactId: "contact-1",
+    lastMessageAt: new Date("2026-05-22T10:00:00.000Z"),
+    lastMessageText: "Necesito un pedido urgente",
+    createdAt: new Date("2026-05-22T09:00:00.000Z"),
+    updatedAt: new Date("2026-05-22T10:00:00.000Z"),
+  };
   const messages = [
     {
       id: "message-1",
@@ -633,7 +652,9 @@ describe("WhatsApp inbox", () => {
           include?: Record<string, unknown>;
           select?: Record<string, unknown>;
         }) => {
-          const conversation = conversations.find((item) => item.id === id);
+          const conversation =
+            conversations.find((item) => item.id === id) ??
+            (id === conversationCustomer1Fixture.id ? conversationCustomer1Fixture : undefined);
           return conversation ? buildConversation(conversation, include, select) : null;
         },
         update: async ({
@@ -685,6 +706,7 @@ describe("WhatsApp inbox", () => {
             senderType: WhatsAppSenderType.desconocido,
             customerId: null,
             contactId: null,
+            status: "nuevo",
             createdAt: new Date("2026-05-22T11:10:00.000Z"),
             updatedAt: new Date("2026-05-22T11:10:00.000Z"),
             ...create,
@@ -1225,13 +1247,13 @@ describe("WhatsApp inbox", () => {
     expect(response.body.order.companyId).toBe("company-1");
     expect(response.body.order.customerZoneId).toBe("customer-zone-1");
     expect(response.body.summary.items).toEqual([
-      { name: "Fertilizante", sku: "FERT-001", quantity: 10, unit: "kg" },
+      { name: "Fertilizante", sku: "FERT-001", quantity: 10, unit: "kg", needsResolution: false },
     ]);
     expect(response.body.reply).toContain("Recibimos tu pedido");
     expect(response.body.reply).toContain("Fertilizante");
   });
 
-  it("does not auto-create when a short SKU appears inside an unrelated product ref", async () => {
+  it("creates an order with an unresolved item when a short SKU appears inside an unrelated product ref", async () => {
     const orderCountBefore = orders.length;
 
     const response = await request(app.getHttpServer())
@@ -1245,9 +1267,28 @@ describe("WhatsApp inbox", () => {
       })
       .expect(201);
 
-    expect(["needs_clarification", "human_review"]).toContain(response.body.decision);
-    expect(response.body.decision).not.toBe("created");
-    expect(orders).toHaveLength(orderCountBefore);
+    expect(response.body.decision).toBe("created");
+    expect(response.body.summary.items).toHaveLength(1);
+    expect(response.body.summary.items[0].needsResolution).toBe(true);
+    expect(orders).toHaveLength(orderCountBefore + 1);
+  });
+
+  it("creates an order with an unresolved item when the product does not match", async () => {
+    const automation = moduleRef.get(WhatsAppOrderAutomationService);
+    const result = await automation.process(
+      { id: "admin-user-id", email: "admin@norgtech.local", role: "administrador" },
+      "conversation-customer-1",
+      {
+        companyRef: "NOR",
+        items: [{ productRef: "producto inexistente xyz", quantity: 3 }],
+      },
+    );
+
+    expect(result.decision).toBe("created");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const created = result as any;
+    expect(created.summary.items).toHaveLength(1);
+    expect(created.summary.items[0].needsResolution).toBe(true);
   });
 
   it("creates an order draft from a WhatsApp conversation", async () => {
@@ -2534,5 +2575,111 @@ describe("WhatsApp inbox", () => {
       .expect(400);
 
     expect(response.body.message).toBe("Kapso message webhook is missing required fields");
+  });
+
+  it("routes unknown senders to human review (status pendiente) without creating an order", async () => {
+    const orderCountBefore = orders.length;
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "primer_contacto",
+        summary: "Numero no registrado inicia conversacion.",
+        suggested_reply:
+          "Hola, recibimos tu mensaje. Para ayudarte, comparte tu nombre y empresa.",
+        requires_human_review: false,
+        risk_level: "low",
+        proposals: [],
+        proposed_order: null,
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-desconocido-handoff",
+            from: "573008880001",
+            timestamp: "2026-06-22T10:00:00.000Z",
+            text: { body: "hola" },
+            profile: { name: "Desconocido" },
+          },
+        },
+      })
+      .expect(201);
+
+    const conversationId = response.body.conversationId;
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: conversationId,
+        senderType: WhatsAppSenderType.desconocido,
+        status: "pendiente",
+      }),
+    );
+    expect(orders).toHaveLength(orderCountBefore);
+  });
+
+  it("never runs order automation for desconocido senders even when Nora returns intent=pedido with a valid order_candidate", async () => {
+    const orderCountBefore = orders.length;
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Numero desconocido envia un pedido.",
+        suggested_reply: "Recibido.",
+        requires_human_review: false,
+        risk_level: "high",
+        proposals: [],
+        order_candidate: {
+          companyRef: "NOR",
+          zoneRef: "Costa",
+          items: [{ productRef: "FERT-001", quantity: 5, presentation: "bultos" }],
+        },
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-desconocido-pedido-guard",
+            from: "573008880099",
+            timestamp: "2026-06-22T10:05:00.000Z",
+            text: { body: "Necesito 5 bultos de FERT-001" },
+            profile: { name: "Desconocido Pedido" },
+          },
+        },
+      })
+      .expect(201);
+
+    const conversationId = response.body.conversationId;
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: conversationId,
+        senderType: WhatsAppSenderType.desconocido,
+      }),
+    );
+    // Defensive guard must block order automation entirely — order_automation
+    // must be absent from output, not merely a non-"created" decision.
+    expect(orders).toHaveLength(orderCountBefore);
+    const actionLog = noraActions.find((item) => item.conversationId === conversationId);
+    expect(actionLog).toBeDefined();
+    expect(
+      actionLog &&
+        typeof actionLog.output === "object" &&
+        actionLog.output !== null &&
+        "order_automation" in (actionLog.output as Record<string, unknown>),
+    ).toBe(false);
   });
 });
