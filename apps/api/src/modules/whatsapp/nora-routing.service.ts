@@ -12,6 +12,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
+import { NoraExpenseExtractionService } from "./nora-expense-extraction.service";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { ResolvedWhatsAppSender, WhatsAppService } from "./whatsapp.service";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
@@ -37,6 +38,7 @@ export class NoraRoutingService {
     private readonly whatsAppService: WhatsAppService,
     private readonly orderAutomation: WhatsAppOrderAutomationService,
     private readonly noraCaseService: NoraCaseService,
+    private readonly expenseExtraction: NoraExpenseExtractionService,
   ) {}
 
   async routeInboundMessage({ conversation, message }: RouteInboundMessageInput) {
@@ -141,6 +143,16 @@ export class NoraRoutingService {
             },
           });
         }
+      }
+
+      // Once the case exists and the immediate reply is out, run OCR on the
+      // attached support in the background so we never block the webhook.
+      if (caseResult && mediaPayload && this.isStartExpenseTransition(noraResponse)) {
+        this.expenseExtraction.extractForCaseInBackground({
+          caseId: caseResult.id,
+          conversationId: conversation.id,
+          message,
+        });
       }
 
       return updatedLog;
@@ -497,6 +509,15 @@ export class NoraRoutingService {
     return value && typeof value === "object" && !Array.isArray(value)
       ? (value as Record<string, unknown>)
       : undefined;
+  }
+
+  private isStartExpenseTransition(noraResponse: Record<string, unknown>): boolean {
+    const transition = noraResponse.case_transition;
+    if (!transition || typeof transition !== "object" || Array.isArray(transition)) {
+      return false;
+    }
+    const source = transition as Record<string, unknown>;
+    return source.action === "start_case" && source.type === NoraConversationCaseType.expense;
   }
 
   private openCasePayload(openCase: NoraConversationCase) {

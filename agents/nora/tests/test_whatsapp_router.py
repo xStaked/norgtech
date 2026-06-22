@@ -530,6 +530,33 @@ def test_expense_open_case_ack_continues_form_instead_of_greeting():
     assert "hola" not in result["suggested_reply"].lower()
 
 
+def test_expense_open_case_bueno_continues_form_instead_of_greeting():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "bueno",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-expense-1",
+                "type": "expense",
+                "status": "collecting_info",
+                "extractedData": {},
+                "missingFields": ["amount", "expenseDate", "category", "description"],
+                "lastQuestion": (
+                    "Recibi el soporte. Voy a extraer los datos; si falta cliente o "
+                    "valor, te lo pido enseguida."
+                ),
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    assert result["case_transition"]["action"] == "update_case"
+    assert result["case_transition"]["caseId"] == "case-expense-1"
+    assert "hola" not in result["suggested_reply"].lower()
+
+
 def test_expense_text_starts_case_when_no_open_case():
     result = route_whatsapp_message(
         {

@@ -387,6 +387,7 @@ def _is_expense_case_continuation(normalized_message: str) -> bool:
         "dale",
         "ok",
         "okay",
+        "okey",
         "listo",
         "si",
         "sigue",
@@ -395,6 +396,10 @@ def _is_expense_case_continuation(normalized_message: str) -> bool:
         "de acuerdo",
         "perfecto",
         "recibido",
+        "bueno",
+        "buenisimo",
+        "vale",
+        "ya",
     )
 
 

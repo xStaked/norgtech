@@ -400,6 +400,28 @@ export class WhatsAppService {
     });
   }
 
+  async downloadMedia(phoneNumberId: string, mediaId: string): Promise<Buffer> {
+    const kapsoApiKey = process.env.KAPSO_API_KEY;
+
+    // Mirror sendViaKapso: avoid real network calls in tests / unconfigured envs.
+    if (!kapsoApiKey || process.env.NODE_ENV === "test") {
+      return Buffer.from(`kapso-test-media:${mediaId}`);
+    }
+
+    const client = new WhatsAppClient({
+      baseUrl: process.env.KAPSO_API_BASE_URL ?? "https://api.kapso.ai/meta/whatsapp",
+      kapsoApiKey,
+    });
+
+    const data = await client.media.download({
+      mediaId,
+      phoneNumberId,
+      as: "arrayBuffer",
+    });
+
+    return Buffer.from(data as ArrayBuffer);
+  }
+
   private getSafeErrorMessage(error: unknown) {
     return error instanceof Error && error.message
       ? error.message
