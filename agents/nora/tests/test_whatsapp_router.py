@@ -498,6 +498,38 @@ def test_expense_image_without_context_starts_expense_case():
     assert "hola" not in result["suggested_reply"].lower()
 
 
+def test_expense_open_case_ack_continues_form_instead_of_greeting():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Dale",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-expense-1",
+                "type": "expense",
+                "status": "collecting_info",
+                "extractedData": {},
+                "missingFields": ["amount", "expenseDate", "category", "description"],
+                "lastQuestion": (
+                    "Recibi el soporte. Voy a extraer los datos; si falta cliente o "
+                    "valor, te lo pido enseguida."
+                ),
+            },
+        }
+    )
+
+    assert result["mode"] == "comercial"
+    assert result["intent"] == "continuar_caso"
+    assert result["requires_human_review"] is False
+    assert result["case_transition"]["action"] == "update_case"
+    assert result["case_transition"]["caseId"] == "case-expense-1"
+    assert result["case_transition"]["type"] == "expense"
+    assert "valor" in result["suggested_reply"].lower()
+    assert "cliente" in result["suggested_reply"].lower()
+    assert "hola" not in result["suggested_reply"].lower()
+
+
 def test_expense_text_starts_case_when_no_open_case():
     result = route_whatsapp_message(
         {

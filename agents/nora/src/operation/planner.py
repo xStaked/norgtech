@@ -59,6 +59,18 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
             summary="El usuario quiere crear una propuesta de cliente nuevo para continuar el pedido.",
         )
 
+    if (
+        request.sender_type == "comercial"
+        and request.open_case
+        and request.open_case.type == "expense"
+        and _is_expense_case_continuation(normalized)
+    ):
+        return NoraPlan(
+            intent="continuar_caso",
+            actions=[],
+            summary="El usuario continua un caso de gasto abierto.",
+        )
+
     if request.sender_type == "comercial" and _is_inbound_media(request, normalized):
         return NoraPlan(
             intent="gasto",
@@ -366,6 +378,23 @@ def _wants_new_customer(normalized_message: str) -> bool:
             "cliente nuevo",
             "nuevo cliente",
         )
+    )
+
+
+def _is_expense_case_continuation(normalized_message: str) -> bool:
+    normalized = _normalize_phrase(normalized_message)
+    return normalized in (
+        "dale",
+        "ok",
+        "okay",
+        "listo",
+        "si",
+        "sigue",
+        "continua",
+        "continuemos",
+        "de acuerdo",
+        "perfecto",
+        "recibido",
     )
 
 

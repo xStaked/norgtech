@@ -218,6 +218,19 @@ def _case_transition_for(
             ),
         )
 
+    if (
+        request.open_case
+        and request.open_case.type == "expense"
+        and plan.intent == "continuar_caso"
+    ):
+        return NoraCaseTransition(
+            action="update_case",
+            caseId=request.open_case.id,
+            type="expense",
+            missingFields=request.open_case.missingFields,
+            lastQuestion="Necesito el valor del gasto y el cliente o visita a asociar.",
+        )
+
     if request.sender_type == "comercial" and plan.intent == "gasto" and request.media:
         return NoraCaseTransition(
             action="start_case",
@@ -268,6 +281,8 @@ def _suggested_reply_for(
     request: WhatsAppRouteRequest | None = None,
 ) -> str:
     if intent == "continuar_caso":
+        if request and request.open_case and request.open_case.type == "expense":
+            return "Necesito el valor del gasto y el cliente o visita a asociar."
         return (
             "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social "
             "o nombre comercial."

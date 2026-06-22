@@ -2064,6 +2064,145 @@ describe("WhatsApp inbox", () => {
     }
   });
 
+  it("updates an open expense case and auto-replies without greeting on short acknowledgements", async () => {
+    const account = {
+      id: "account-expense-ack",
+      phoneNumberId: "phone-number-expense-ack",
+      phoneNumber: "phone-number-expense-ack",
+      displayName: "WhatsApp",
+      active: true,
+    };
+    const conversation = {
+      id: "conversation-expense-ack",
+      accountId: account.id,
+      waId: "+573004445566",
+      phone: "+573004445566",
+      senderName: "Sales",
+      senderType: WhatsAppSenderType.comercial,
+      status: WhatsAppConversationStatus.nuevo,
+      assignedToUserId: "sales-user-id",
+      customerId: null,
+      contactId: null,
+      lastMessageAt: new Date("2026-06-21T19:19:50.000Z"),
+      lastMessageText:
+        "Recibi el soporte. Voy a extraer los datos; si falta cliente o valor, te lo pido enseguida.",
+      createdAt: new Date("2026-06-21T19:19:00.000Z"),
+      updatedAt: new Date("2026-06-21T19:19:50.000Z"),
+    };
+    const expenseCase = {
+      id: "case-expense-ack",
+      conversationId: conversation.id,
+      parentCaseId: null,
+      type: "expense",
+      status: "collecting_info",
+      extractedData: {},
+      missingFields: ["amount", "expenseDate", "category", "description"],
+      attachments: [],
+      proposal: null,
+      lastQuestion:
+        "Recibi el soporte. Voy a extraer los datos; si falta cliente o valor, te lo pido enseguida.",
+      riskLevel: "medium",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T19:19:50.000Z"),
+      updatedAt: new Date("2026-06-21T19:19:50.000Z"),
+    };
+    accounts.push(account);
+    conversations.push(conversation as unknown as (typeof conversations)[number]);
+    noraCases.unshift(expenseCase);
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "comercial",
+        intent: "continuar_caso",
+        summary: "El usuario continua un caso de gasto abierto.",
+        suggested_reply: "Necesito el valor del gasto y el cliente o visita a asociar.",
+        requires_human_review: false,
+        risk_level: "medium",
+        missing_fields: [],
+        proposals: [],
+        case_transition: {
+          action: "update_case",
+          caseId: "case-expense-ack",
+          type: "expense",
+          missingFields: ["amount", "customerId"],
+          lastQuestion: "Necesito el valor del gasto y el cliente o visita a asociar.",
+        },
+      }),
+    });
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .send({
+          type: "whatsapp.message.received",
+          data: {
+            phone_number_id: "phone-number-expense-ack",
+            message: {
+              id: "kapso-expense-ack",
+              from: "+573004445566",
+              text: { body: "Dale" },
+            },
+          },
+        })
+        .expect(201);
+
+      expect(response.body.ignored).toBe(false);
+      const noraRouteCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+        ([url, options]) => {
+          if (url !== "http://localhost:8000/whatsapp/route") {
+            return false;
+          }
+
+          const body = JSON.parse(String(options?.body ?? "{}")) as { message?: string };
+          return body.message === "Dale";
+        },
+      );
+      const noraRouteBody = JSON.parse(String(noraRouteCall?.[1]?.body ?? "{}"));
+      expect(noraRouteBody.open_case).toEqual(
+        expect.objectContaining({ id: "case-expense-ack", type: "expense" }),
+      );
+
+      expect(noraCases).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: "case-expense-ack",
+            missingFields: ["amount", "customerId"],
+            lastQuestion: "Necesito el valor del gasto y el cliente o visita a asociar.",
+          }),
+        ]),
+      );
+      expect(messages).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            conversationId: conversation.id,
+            direction: WhatsAppMessageDirection.outbound,
+            role: WhatsAppMessageRole.assistant,
+            body: "Necesito el valor del gasto y el cliente o visita a asociar.",
+          }),
+        ]),
+      );
+    } finally {
+      const removeMatching = (
+        collection: Array<Record<string, unknown>>,
+        predicate: (item: Record<string, unknown>) => boolean,
+      ) => {
+        let index = collection.findIndex(predicate);
+        while (index !== -1) {
+          collection.splice(index, 1);
+          index = collection.findIndex(predicate);
+        }
+      };
+      removeMatching(noraCases, (item) => item.id === "case-expense-ack");
+      removeMatching(conversations, (item) => item.id === "conversation-expense-ack");
+      removeMatching(accounts, (item) => item.id === "account-expense-ack");
+      removeMatching(messages, (item) => item.conversationId === "conversation-expense-ack");
+    }
+  });
+
   it("creates a new-customer subcase when an open order receives crea uno nuevo", async () => {
     const account = {
       id: "account-sergio-case",

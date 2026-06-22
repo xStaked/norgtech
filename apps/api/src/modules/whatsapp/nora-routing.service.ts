@@ -257,6 +257,24 @@ export class NoraRoutingService {
       });
     }
 
+    if (action === "update_case") {
+      const caseId = this.stringValue(source.caseId);
+      if (!caseId) {
+        return undefined;
+      }
+      const existingCase = await this.prisma.noraConversationCase.findFirst({
+        where: { id: caseId, conversationId },
+      });
+      if (!existingCase) {
+        return undefined;
+      }
+      return this.noraCaseService.updateCase(caseId, {
+        extractedData: this.objectValue(source.extractedData) ?? {},
+        missingFields: this.stringArrayValue(source.missingFields),
+        lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+      });
+    }
+
     return undefined;
   }
 
