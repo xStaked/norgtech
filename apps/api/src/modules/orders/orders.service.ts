@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { InvoiceStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -10,6 +10,7 @@ import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
 import { RejectOrderDto } from "./dto/reject-order.dto";
 import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
+import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { allowedTransitions } from "./order-status-transition-map";
 
 const INVOICE_ALLOWED_ORDER_STATUSES: OrderStatus[] = [
@@ -47,6 +48,8 @@ export class OrdersService {
     private readonly auditService: AuditService,
     private readonly orderXlsxExportService: OrderXlsxExportService,
     private readonly credit: CreditService,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsApp: WhatsAppService,
   ) {}
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -651,7 +654,7 @@ export class OrdersService {
   }
 
   async approveOrder(user: AuthUser, orderId: string) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
         include: { items: true },
@@ -698,10 +701,15 @@ export class OrdersService {
 
       return updated;
     });
+    await this.notifyReviewOutcome(
+      result,
+      `Tu pedido ${result.orderNumber ?? ""} fue aprobado y pasa a facturación. ¡Gracias!`,
+    );
+    return result;
   }
 
   async rejectOrder(user: AuthUser, orderId: string, dto: RejectOrderDto) {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({ where: { id: orderId } });
       if (!order) {
         throw new NotFoundException("Order not found");
@@ -736,6 +744,11 @@ export class OrdersService {
 
       return updated;
     });
+    await this.notifyReviewOutcome(
+      result,
+      `Tu pedido ${result.orderNumber ?? ""} fue rechazado. Motivo: ${dto.reason}`,
+    );
+    return result;
   }
 
   async exportClientFormat(orderId: string) {
@@ -749,6 +762,21 @@ export class OrdersService {
     }
 
     return this.orderXlsxExportService.generate(order);
+  }
+
+  private async notifyReviewOutcome(
+    order: { sourceConversationId: string | null; orderNumber: string | null },
+    message: string,
+  ) {
+    if (!order.sourceConversationId) {
+      return;
+    }
+    try {
+      await this.whatsApp.sendAgentReply(order.sourceConversationId, message);
+    } catch (error) {
+      // best-effort: never block the review outcome on a delivery failure
+      console.error("Failed to notify order review outcome over WhatsApp", error);
+    }
   }
 
   private async assertOpportunityBelongsToCustomer(opportunityId: string, customerId: string) {

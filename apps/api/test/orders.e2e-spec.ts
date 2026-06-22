@@ -5,6 +5,8 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 
+const outboundMessages: Array<Record<string, unknown>> = [];
+
 declare global {
   // eslint-disable-next-line no-var
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
@@ -142,6 +144,7 @@ describe("Orders", () => {
       active: true,
     },
   ];
+  const whatsAppMessages: Array<Record<string, unknown>> = [];
   const whatsAppConversations: Array<Record<string, unknown>> = [
     {
       id: "conversation-customer-1",
@@ -322,8 +325,29 @@ describe("Orders", () => {
         },
       },
       whatsAppConversation: {
-        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-          whatsAppConversations.find((conversation) => conversation.id === id) ?? null,
+        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+          const conv = whatsAppConversations.find((c) => c.id === id);
+          if (!conv) return null;
+          return { ...conv, waId: "521234567890", account: { phoneNumberId: "phone-1" } };
+        },
+        update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const idx = whatsAppConversations.findIndex((c) => c.id === id);
+          if (idx !== -1) whatsAppConversations[idx] = { ...whatsAppConversations[idx], ...data };
+          return whatsAppConversations[idx] ?? null;
+        },
+      },
+      whatsAppMessage: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const msg = { id: `msg-${whatsAppMessages.length + 1}`, ...data };
+          whatsAppMessages.push(msg);
+          outboundMessages.push(msg);
+          return msg;
+        },
+        update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+          const idx = whatsAppMessages.findIndex((m) => m.id === id);
+          if (idx !== -1) whatsAppMessages[idx] = { ...whatsAppMessages[idx], ...data };
+          return whatsAppMessages[idx] ?? null;
+        },
       },
       order: {
         create: async () => {
@@ -591,6 +615,39 @@ describe("Orders", () => {
       updatedBy: "admin-user-id",
       createdAt: new Date("2026-04-29T00:00:00.000Z"),
       updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
+      id: "order-resolved-wa",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      sourceConversationId: "conversation-customer-1",
+      subtotal: new Prisma.Decimal(50000),
+      total: new Prisma.Decimal(59500),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orderItems.push({
+      id: "item-resolved-wa",
+      orderId: "order-resolved-wa",
+      productId: "product-1",
+      productSnapshotName: "Fertilizante",
+      productSnapshotSku: "FERT-001",
+      unit: "kg",
+      quantity: 1,
+      unitPrice: new Prisma.Decimal(50000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(9500),
+      subtotal: new Prisma.Decimal(50000),
+      totalWithTax: new Prisma.Decimal(59500),
+      needsResolution: false,
+      originalUnitPrice: new Prisma.Decimal(50000),
+      discountPercent: null,
+      customProductName: null,
+      notes: null,
     });
 
     const loginResponse = await request(globalThis.__APP__)
@@ -1383,5 +1440,14 @@ describe("Orders", () => {
       .expect(200);
     expect(response.body.approvalStatus).toBe("rechazado");
     expect(response.body.approvalReason).toBe("Cliente con cartera vencida");
+  });
+
+  it("notifies the sender over WhatsApp when an order is approved", async () => {
+    outboundMessages.length = 0; // array the whatsAppMessage.create mock pushes into
+    await request(global.__APP__)
+      .patch(`/orders/order-resolved-wa/approve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .expect(200);
+    expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
   });
 });

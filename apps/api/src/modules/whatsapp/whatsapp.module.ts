@@ -1,4 +1,4 @@
-import { Module } from "@nestjs/common";
+import { forwardRef, Module } from "@nestjs/common";
 import { AuthModule } from "../auth/auth.module";
 import {
   ExpenseExtractionProvider,
@@ -14,7 +14,7 @@ import { WhatsAppController, WhatsAppWebhookController } from "./whatsapp.contro
 import { WhatsAppService } from "./whatsapp.service";
 
 @Module({
-  imports: [AuthModule, OrdersModule],
+  imports: [AuthModule, forwardRef(() => OrdersModule)],
   controllers: [WhatsAppController, WhatsAppWebhookController],
   providers: [
     WhatsAppService,
@@ -28,5 +28,6 @@ import { WhatsAppService } from "./whatsapp.service";
       useClass: OpenAIExpenseExtractionProvider,
     },
   ],
+  exports: [WhatsAppService],
 })
 export class WhatsAppModule {}
