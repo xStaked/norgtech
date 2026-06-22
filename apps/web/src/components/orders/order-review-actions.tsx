@@ -50,14 +50,20 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
 
   const role = getUserRoleFromToken(getSessionTokenClient());
 
+  const isReviewerView =
+    approvalStatus === "en_revision" && role && (reviewRoles as readonly string[]).includes(role);
+
   useEffect(() => {
+    if (!isReviewerView) {
+      return;
+    }
     apiFetchClient("/products")
       .then((r) => r.json())
       .then((data: Product[]) => setProducts(Array.isArray(data) ? data : []))
       .catch(() => setProducts([]));
-  }, []);
+  }, [isReviewerView]);
 
-  if (approvalStatus !== "en_revision" || !role || !(reviewRoles as readonly string[]).includes(role)) {
+  if (!isReviewerView) {
     return null;
   }
 
