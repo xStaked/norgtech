@@ -454,6 +454,34 @@ def test_cliente_order_returns_order_candidate_refs_and_items():
             "notes": "Necesito 10 bultos de Fertilizante FERT-001 por Nanonutricion para Costa",
         }
     ]
+    # On a confirmation turn the planner still emits the order_draft proposal
+    # (proposals are not gated; only order_candidate is gated behind confirmation)
+    assert result["proposals"][0]["type"] == "order_draft"
+
+
+def test_cliente_first_order_proposal_carries_product_ref():
+    # Restores coverage of the proposals/proposal-pipeline path dropped when the
+    # confirmation-turn test was adapted for Task 8.  On FIRST detection (no open_case)
+    # order_candidate MUST be None (gated) but proposals IS populated with the draft.
+    result = route_whatsapp_message(
+        {
+            "sender_type": "cliente",
+            "message": "Necesito 10 bultos de Fertilizante FERT-001 por Nanonutricion para Costa",
+            "conversation_id": "conversation-1",
+            "customer": {"id": "customer-1", "displayName": "Agro Norte"},
+            "companies": [
+                {"id": "company-nt", "name": "Nortech", "prefix": "NT"},
+                {"id": "company-nn", "name": "Nanonutricion", "prefix": "NN"},
+            ],
+            "customer_zones": [{"id": "cz-costa", "name": "Costa"}],
+        }
+    )
+
+    assert result["intent"] == "pedido"
+    # Gating: order_candidate is withheld until the customer confirms
+    assert result["order_candidate"] is None
+    # Proposals pipeline: the draft carries the extracted productRef
+    assert result["proposals"][0]["payload"]["items"][0]["productRef"] == "Fertilizante FERT-001"
 
 
 def test_cliente_order_without_quantity_marks_items_missing():
