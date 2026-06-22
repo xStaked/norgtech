@@ -1154,6 +1154,32 @@ describe("Orders", () => {
     expect(current?.status).toBe("entregado");
   });
 
+  it("persists needsResolution for unresolved items", async () => {
+    const response = await request(global.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [
+          { productId: "product-1", quantity: 2, unitPrice: 50000 },
+          { productName: "Algo que Nora no encontro", quantity: 5, unitPrice: 0, needsResolution: true },
+        ],
+      })
+      .expect(201);
+
+    const created = response.body.items as Array<{
+      productId: string | null;
+      needsResolution: boolean;
+      customProductName: string | null;
+    }>;
+    const resolved = created.find((i) => i.productId === "product-1");
+    const unresolved = created.find((i) => i.productId === null);
+    expect(resolved?.needsResolution).toBe(false);
+    expect(unresolved?.needsResolution).toBe(true);
+    expect(unresolved?.customProductName).toBe("Algo que Nora no encontro");
+  });
+
   it("rejects direct invoice creation from order for comercial role", async () => {
     const comercialToken = await getToken("comercial@norgtech.local");
     const createResponse = await request(globalThis.__APP__)

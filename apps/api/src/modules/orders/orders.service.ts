@@ -149,6 +149,7 @@ export class OrdersService {
             totalWithTax,
             subtotal,
             notes: item.notes,
+            needsResolution: false,
           };
         }
         const customProductName = item.productName?.trim() || null;
@@ -176,6 +177,7 @@ export class OrdersService {
           totalWithTax,
           subtotal,
           notes: item.notes,
+          needsResolution: item.needsResolution ?? false,
         };
       }),
     );
