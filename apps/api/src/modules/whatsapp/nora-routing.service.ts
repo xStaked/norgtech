@@ -338,6 +338,10 @@ export class NoraRoutingService {
     conversationId: string,
     sender: ResolvedWhatsAppSender,
   ): Promise<AutomationRoutingResult | undefined> {
+    if (sender.senderType === WhatsAppSenderType.desconocido) {
+      return undefined;
+    }
+
     if (noraResponse.intent !== "pedido") {
       return undefined;
     }

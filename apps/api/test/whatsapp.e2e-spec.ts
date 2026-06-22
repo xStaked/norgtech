@@ -2622,4 +2622,63 @@ describe("WhatsApp inbox", () => {
     );
     expect(orders).toHaveLength(orderCountBefore);
   });
+
+  it("never runs order automation for desconocido senders even when Nora returns intent=pedido with a valid order_candidate", async () => {
+    const orderCountBefore = orders.length;
+
+    (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Numero desconocido envia un pedido.",
+        suggested_reply: "Recibido.",
+        requires_human_review: false,
+        risk_level: "high",
+        proposals: [],
+        order_candidate: {
+          companyRef: "NOR",
+          zoneRef: "Costa",
+          items: [{ productRef: "FERT-001", quantity: 5, presentation: "bultos" }],
+        },
+      }),
+    });
+
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: {
+            id: "wamid-desconocido-pedido-guard",
+            from: "573008880099",
+            timestamp: "2026-06-22T10:05:00.000Z",
+            text: { body: "Necesito 5 bultos de FERT-001" },
+            profile: { name: "Desconocido Pedido" },
+          },
+        },
+      })
+      .expect(201);
+
+    const conversationId = response.body.conversationId;
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: conversationId,
+        senderType: WhatsAppSenderType.desconocido,
+      }),
+    );
+    // Defensive guard must block order automation entirely — order_automation
+    // must be absent from output, not merely a non-"created" decision.
+    expect(orders).toHaveLength(orderCountBefore);
+    const actionLog = noraActions.find((item) => item.conversationId === conversationId);
+    expect(actionLog).toBeDefined();
+    expect(
+      actionLog &&
+        typeof actionLog.output === "object" &&
+        actionLog.output !== null &&
+        "order_automation" in (actionLog.output as Record<string, unknown>),
+    ).toBe(false);
+  });
 });
