@@ -8,6 +8,7 @@ import { OrderActions } from "@/components/orders/order-actions";
 import { OrderStatusTimeline } from "@/components/orders/order-status-timeline";
 import { OrderLogisticsSection } from "@/components/orders/order-logistics-section";
 import { OrderBillingHistory } from "@/components/orders/order-billing-history";
+import { OrderReviewActions } from "@/components/orders/order-review-actions";
 
 interface Customer {
   id: string;
@@ -323,6 +324,16 @@ export default async function OrderDetailPage({
         <div className="mt-6 text-sm font-medium text-muted-foreground">
           {nextAction}
         </div>
+
+        {order.approvalStatus === "en_revision" && (
+          <div className="mt-6">
+            <OrderReviewActions
+              orderId={order.id}
+              approvalStatus={order.approvalStatus}
+              items={order.items}
+            />
+          </div>
+        )}
 
         <div className="mt-6">
           <OrderActions orderId={order.id} currentStatus={order.status} />
