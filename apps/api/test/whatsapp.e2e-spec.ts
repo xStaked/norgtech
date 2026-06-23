@@ -2682,4 +2682,250 @@ describe("WhatsApp inbox", () => {
         "order_automation" in (actionLog.output as Record<string, unknown>),
     ).toBe(false);
   });
+
+  describe("expense-agent branch (NORA_WHATSAPP_AGENT_EXPENSES)", () => {
+    const originalAgentFlag = process.env.NORA_WHATSAPP_AGENT_EXPENSES;
+
+    afterEach(() => {
+      if (originalAgentFlag === undefined) {
+        delete process.env.NORA_WHATSAPP_AGENT_EXPENSES;
+      } else {
+        process.env.NORA_WHATSAPP_AGENT_EXPENSES = originalAgentFlag;
+      }
+    });
+
+    it("routes an open expense case turn to /whatsapp/agent when the flag is on", async () => {
+      process.env.NORA_WHATSAPP_AGENT_EXPENSES = "true";
+
+      const account = {
+        id: "account-agent-expense",
+        phoneNumberId: "phone-number-agent-expense",
+        phoneNumber: "phone-number-agent-expense",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-agent-expense",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-22T10:00:00.000Z"),
+        lastMessageText: "Cuánto fue el gasto?",
+        createdAt: new Date("2026-06-22T09:59:00.000Z"),
+        updatedAt: new Date("2026-06-22T10:00:00.000Z"),
+      };
+      const expenseCase = {
+        id: "case-expense-agent",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "expense",
+        status: "collecting_info",
+        extractedData: { amount: null },
+        missingFields: ["amount"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "Cuánto fue el gasto?",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-22T10:00:00.000Z"),
+        updatedAt: new Date("2026-06-22T10:00:00.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(expenseCase);
+
+      (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          reply_text: "El gasto fue registrado correctamente.",
+          case_update: null,
+          executed_entity: { type: "CommercialExpense", id: "exp_x" },
+        }),
+      });
+
+      try {
+        const response = await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-agent-expense",
+              message: {
+                id: "kapso-agent-expense-reply",
+                from: "+573004445566",
+                text: { body: "Fueron 45000 pesos" },
+              },
+            },
+          })
+          .expect(201);
+
+        expect(response.body.ignored).toBe(false);
+
+        const agentCall = (globalThis.fetch as jest.Mock).mock.calls.find(([url]) =>
+          String(url).endsWith("/whatsapp/agent"),
+        );
+        expect(agentCall).toBeDefined();
+        expect(String(agentCall?.[0])).toContain("/whatsapp/agent");
+        expect(String(agentCall?.[0])).not.toContain("/whatsapp/route");
+
+        const agentBody = JSON.parse(String(agentCall?.[1]?.body ?? "{}"));
+        expect(agentBody.current_message).toBe("Fueron 45000 pesos");
+        expect(agentBody.conversation_id).toBe(conversation.id);
+        expect(agentBody.open_case).toMatchObject({ id: "case-expense-agent", type: "expense" });
+        expect(agentBody.auth).toMatch(/^Bearer /);
+
+        expect(messages).toContainEqual(
+          expect.objectContaining({
+            conversationId: conversation.id,
+            direction: WhatsAppMessageDirection.outbound,
+            role: WhatsAppMessageRole.assistant,
+            body: "El gasto fue registrado correctamente.",
+          }),
+        );
+      } finally {
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(noraCases, (item) => item.id === "case-expense-agent");
+        removeMatching(conversations, (item) => item.id === "conversation-agent-expense");
+        removeMatching(accounts, (item) => item.id === "account-agent-expense");
+        removeMatching(messages, (item) => item.conversationId === "conversation-agent-expense");
+      }
+    });
+
+    it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
+      delete process.env.NORA_WHATSAPP_AGENT_EXPENSES;
+
+      const account = {
+        id: "account-fallback-expense",
+        phoneNumberId: "phone-number-fallback-expense",
+        phoneNumber: "phone-number-fallback-expense",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-fallback-expense",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-22T10:05:00.000Z"),
+        lastMessageText: "Cuánto fue?",
+        createdAt: new Date("2026-06-22T10:04:00.000Z"),
+        updatedAt: new Date("2026-06-22T10:05:00.000Z"),
+      };
+      const expenseCase = {
+        id: "case-expense-fallback",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "expense",
+        status: "collecting_info",
+        extractedData: {},
+        missingFields: ["amount"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "Cuánto fue?",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-22T10:05:00.000Z"),
+        updatedAt: new Date("2026-06-22T10:05:00.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(expenseCase);
+
+      (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          mode: "comercial",
+          intent: "continuar_caso",
+          summary: "El usuario continua un caso de gasto abierto.",
+          suggested_reply: "Recibí el valor. Voy a registrar el gasto.",
+          requires_human_review: false,
+        }),
+      });
+
+      try {
+        const response = await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-fallback-expense",
+              message: {
+                id: "kapso-fallback-expense-reply",
+                from: "+573004445566",
+                text: { body: "Fueron 30000 pesos" },
+              },
+            },
+          })
+          .expect(201);
+
+        expect(response.body.ignored).toBe(false);
+
+        const routerCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url, options]) => {
+            if (!String(url).endsWith("/whatsapp/route")) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as { message?: string };
+            return body.message === "Fueron 30000 pesos";
+          },
+        );
+        expect(routerCall).toBeDefined();
+
+        const agentCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url, options]) => {
+            if (!String(url).endsWith("/whatsapp/agent")) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              current_message?: string;
+            };
+            return body.current_message === "Fueron 30000 pesos";
+          },
+        );
+        expect(agentCall).toBeUndefined();
+      } finally {
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(noraCases, (item) => item.id === "case-expense-fallback");
+        removeMatching(conversations, (item) => item.id === "conversation-fallback-expense");
+        removeMatching(accounts, (item) => item.id === "account-fallback-expense");
+        removeMatching(messages, (item) => item.conversationId === "conversation-fallback-expense");
+      }
+    });
+  });
 });
