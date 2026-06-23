@@ -1,12 +1,15 @@
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const jsonwebtoken = require("jsonwebtoken") as { verify(token: string, secret: string): unknown };
-import { Test } from "@nestjs/testing";
-import { CommercialExpenseCategory, NoraConversationCaseStatus } from "@prisma/client";
+import { INestApplication } from "@nestjs/common";
+import { Test, TestingModule } from "@nestjs/testing";
+import { CommercialExpenseCategory, NoraConversationCaseStatus, UserRole } from "@prisma/client";
+import request from "supertest";
+import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { CommercialExpensesService } from "../src/modules/commercial-expenses/commercial-expenses.service";
 import { AuditService } from "../src/modules/audit/audit.service";
-import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { CommercialExpensesExportService } from "../src/modules/commercial-expenses/commercial-expenses-export.service";
 import { AuthService } from "../src/modules/auth/auth.service";
 import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
@@ -297,5 +300,251 @@ describe("NoraAgentController", () => {
       dto: expect.objectContaining({ amount: 25000 }),
     });
     expect(result).toEqual({ id: "exp_1", status: "pendiente", alreadyExisted: false });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 6: Full-app routing test — POST /whatsapp/agent/expenses
+// ---------------------------------------------------------------------------
+
+describe("POST /whatsapp/agent/expenses (full-app)", () => {
+  let app: INestApplication;
+  let moduleRef: TestingModule;
+  let comercialToken: string;
+
+  const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
+
+  const users = [
+    {
+      id: "agent-comercial-id",
+      name: "Vendedor",
+      email: "vendedor@norgtech.local",
+      phone: "+573001000099",
+      passwordHash,
+      role: UserRole.comercial,
+      active: true,
+    },
+  ];
+
+  // Mutable arrays reset in beforeAll
+  const noraCases: Array<Record<string, unknown>> = [];
+  const expenses: Array<Record<string, unknown>> = [];
+  const auditLogs: Array<Record<string, unknown>> = [];
+
+  const conversation = {
+    id: "agent-conv-1",
+    accountId: "agent-account-1",
+    waId: "573001000099",
+    phone: "+573001000099",
+    senderName: "Vendedor",
+    status: "nuevo",
+    customerId: null,
+    contactId: null,
+    assignedToUserId: "agent-comercial-id",
+    lastMessageAt: new Date("2026-06-22T10:00:00.000Z"),
+    createdAt: new Date("2026-06-22T09:00:00.000Z"),
+    updatedAt: new Date("2026-06-22T10:00:00.000Z"),
+    account: { id: "agent-account-1", phoneNumberId: "pn-agent-1" },
+  };
+
+  const openExpenseCase = {
+    id: "agent-case-1",
+    conversationId: "agent-conv-1",
+    type: "expense",
+    status: "ready_for_review",
+    extractedData: {},
+    missingFields: [],
+    attachments: [
+      {
+        provider: "kapso",
+        kind: "image",
+        providerMediaId: "media-agent-1",
+        contentType: "image/jpeg",
+        messageId: "msg-agent-1",
+      },
+    ],
+    executedEntityId: null,
+    executedEntityType: null,
+    riskLevel: "medium",
+    createdAt: new Date("2026-06-22T09:30:00.000Z"),
+    updatedAt: new Date("2026-06-22T09:30:00.000Z"),
+  };
+
+  beforeAll(async () => {
+    // Seed mutable arrays
+    noraCases.push({ ...openExpenseCase });
+    expenses.splice(0);
+    auditLogs.splice(0);
+
+    const prismaStub = {
+      user: {
+        findUnique: async ({ where }: { where: { email?: string; id?: string } }) =>
+          users.find((u) => u.email === where.email || u.id === where.id) ?? null,
+        findMany: async () => users,
+      },
+      whatsAppConversation: {
+        findUnique: async ({ where }: { where: { id: string } }) =>
+          where.id === conversation.id ? { ...conversation } : null,
+      },
+      noraConversationCase: {
+        findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) => {
+          const statusFilter = (where?.status as { in?: string[] } | undefined)?.in;
+          return (
+            noraCases
+              .filter((c) => !where?.conversationId || c.conversationId === where.conversationId)
+              .filter((c) => !statusFilter || statusFilter.includes(String(c.status)))
+              .sort((a, b) => (b.updatedAt as Date).getTime() - (a.updatedAt as Date).getTime())[0] ??
+            null
+          );
+        },
+        update: async ({
+          where,
+          data,
+        }: {
+          where: { id: string };
+          data: Record<string, unknown>;
+        }) => {
+          const idx = noraCases.findIndex((c) => c.id === where.id);
+          if (idx === -1) return null;
+          noraCases[idx] = { ...noraCases[idx], ...data, updatedAt: new Date() };
+          return noraCases[idx];
+        },
+      },
+      commercialExpense: {
+        create: async ({ data, include: _include }: { data: Record<string, unknown>; include?: unknown }) => {
+          const expense = {
+            id: `exp-${expenses.length + 1}`,
+            status: "pendiente",
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            ...data,
+          };
+          expenses.push(expense);
+          return expense;
+        },
+      },
+      auditLog: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const entry = { id: `audit-${auditLogs.length + 1}`, createdAt: new Date(), ...data };
+          auditLogs.push(entry);
+          return entry;
+        },
+      },
+      customer: { findUnique: async () => null },
+      visit: { findUnique: async () => null },
+      $queryRaw: jest.fn(async () => [{ id: "agent-case-1" }]),
+      $transaction: async <T>(callback: (tx: unknown) => Promise<T>) => {
+        const tx = {
+          customer: { findUnique: async () => null },
+          visit: { findUnique: async () => null },
+          commercialExpense: {
+            create: async ({ data, include: _include }: { data: Record<string, unknown>; include?: unknown }) => {
+              const expense = {
+                id: `exp-${expenses.length + 1}`,
+                status: "pendiente",
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                ...data,
+              };
+              expenses.push(expense);
+              return expense;
+            },
+          },
+          auditLog: {
+            create: async ({ data }: { data: Record<string, unknown> }) => {
+              const entry = { id: `audit-${auditLogs.length + 1}`, createdAt: new Date(), ...data };
+              auditLogs.push(entry);
+              return entry;
+            },
+          },
+          $queryRaw: jest.fn(async () => [{ id: "agent-case-1" }]),
+          noraConversationCase: {
+            findFirst: async ({ where }: { where?: Record<string, unknown> } = {}) => {
+              return noraCases.find((c) => c.id === where?.id) ?? null;
+            },
+            update: async ({
+              where,
+              data,
+            }: {
+              where: { id: string };
+              data: Record<string, unknown>;
+            }) => {
+              const idx = noraCases.findIndex((c) => c.id === where.id);
+              if (idx === -1) return null;
+              noraCases[idx] = { ...noraCases[idx], ...data, updatedAt: new Date() };
+              return noraCases[idx];
+            },
+          },
+        };
+        return callback(tx);
+      },
+    };
+
+    moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService)
+      .useValue(prismaStub)
+      .overrideProvider(R2StorageService)
+      .useValue({
+        uploadExpenseSupport: async () => ({ bucket: "test-bucket", objectKey: "test-key" }),
+        getObjectStream: async () => { throw new Error("not used"); },
+        deleteObject: async () => undefined,
+      })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+
+    const loginRes = await request(app.getHttpServer())
+      .post("/auth/login")
+      .send({ email: "vendedor@norgtech.local", password: "Admin123*" })
+      .expect(200);
+    comercialToken = loginRes.body.accessToken;
+  });
+
+  afterAll(async () => {
+    if (app) await app.close();
+  });
+
+  it("rejects requests without an Authorization header with 401", async () => {
+    await request(app.getHttpServer())
+      .post("/whatsapp/agent/expenses")
+      .send({
+        conversationId: "agent-conv-1",
+        expenseDate: "2026-06-22",
+        category: CommercialExpenseCategory.alimentacion,
+        amount: 30000,
+        description: "Almuerzo visita",
+      })
+      .expect(401);
+  });
+
+  it("creates an expense and marks the case executed when called with a valid JWT", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/agent/expenses")
+      .set("Authorization", `Bearer ${comercialToken}`)
+      .send({
+        conversationId: "agent-conv-1",
+        expenseDate: "2026-06-22",
+        category: CommercialExpenseCategory.alimentacion,
+        amount: 30000,
+        description: "Almuerzo visita",
+      })
+      .expect((res) => {
+        if (res.status !== 200 && res.status !== 201) {
+          throw new Error(`Expected 200/201 but got ${res.status}: ${JSON.stringify(res.body)}`);
+        }
+      });
+
+    expect(response.body).toMatchObject({
+      id: expect.any(String),
+      status: "pendiente",
+      alreadyExisted: false,
+    });
+
+    // Case should now be marked executed
+    const updatedCase = noraCases.find((c) => c.id === "agent-case-1");
+    expect(updatedCase?.status).toBe(NoraConversationCaseStatus.executed);
+    expect(updatedCase?.executedEntityType).toBe("CommercialExpense");
+    expect(updatedCase?.executedEntityId).toBe(response.body.id);
   });
 });
