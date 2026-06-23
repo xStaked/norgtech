@@ -31,6 +31,13 @@ import { UpdateCommercialExpenseDto } from "./dto/update-commercial-expense.dto"
 import { R2StorageService, UploadedExpenseSupport } from "./r2-storage.service";
 
 type ExpenseSupportFile = Express.Multer.File;
+
+export type ExpenseBufferFile = {
+  buffer: Buffer;
+  originalname: string;
+  mimetype: string;
+  size: number;
+};
 type RelationValidationClient = Pick<
   PrismaService | Prisma.TransactionClient,
   "customer" | "visit"
@@ -71,13 +78,34 @@ export class CommercialExpensesService {
     file?: ExpenseSupportFile,
   ): Promise<ExpenseWithRelations> {
     const supportFile = this.assertSupportFile(file);
+    return this.createWithUpload(user, dto, {
+      buffer: supportFile.buffer,
+      originalname: supportFile.originalname,
+      mimetype: supportFile.mimetype,
+      size: supportFile.size,
+    });
+  }
+
+  async createFromBuffer(
+    user: AuthUser,
+    dto: CreateCommercialExpenseDto,
+    file: ExpenseBufferFile,
+  ): Promise<ExpenseWithRelations> {
+    return this.createWithUpload(user, dto, file);
+  }
+
+  private async createWithUpload(
+    user: AuthUser,
+    dto: CreateCommercialExpenseDto,
+    file: ExpenseBufferFile,
+  ): Promise<ExpenseWithRelations> {
     await this.validateOptionalRelations(dto.customerId, dto.visitId);
 
     const uploaded = await this.storageService.uploadExpenseSupport({
-      fileName: supportFile.originalname,
-      contentType: supportFile.mimetype,
-      body: supportFile.buffer,
-      sizeBytes: supportFile.size,
+      fileName: file.originalname,
+      contentType: file.mimetype,
+      body: file.buffer,
+      sizeBytes: file.size,
     });
 
     try {
@@ -110,7 +138,7 @@ export class CommercialExpensesService {
             createdBy: user.id,
             updatedBy: user.id,
             supports: {
-              create: this.supportCreateData(user, supportFile, uploaded),
+              create: this.supportCreateDataFromBuffer(user, file, uploaded),
             },
           },
           include: commercialExpenseInclude,
@@ -552,9 +580,9 @@ export class CommercialExpensesService {
     return controlRoles.includes(user.role);
   }
 
-  private supportCreateData(
+  private supportCreateDataFromBuffer(
     user: AuthUser,
-    file: ExpenseSupportFile,
+    file: ExpenseBufferFile,
     uploaded: UploadedExpenseSupport,
   ): Prisma.CommercialExpenseSupportCreateWithoutExpenseInput {
     return {

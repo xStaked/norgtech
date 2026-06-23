@@ -1,7 +1,11 @@
 import { Test } from "@nestjs/testing";
-import { NoraConversationCaseStatus } from "@prisma/client";
+import { CommercialExpenseCategory, NoraConversationCaseStatus } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
+import { CommercialExpensesService } from "../src/modules/commercial-expenses/commercial-expenses.service";
+import { AuditService } from "../src/modules/audit/audit.service";
+import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
+import { CommercialExpensesExportService } from "../src/modules/commercial-expenses/commercial-expenses-export.service";
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId
@@ -48,5 +52,56 @@ describe("NoraCaseService.updateCase executed fields", () => {
         }),
       }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 2: CommercialExpensesService.createFromBuffer
+// ---------------------------------------------------------------------------
+
+describe("CommercialExpensesService.createFromBuffer", () => {
+  it("uploads the buffer and creates an expense", async () => {
+    const uploaded = { bucket: "b", objectKey: "k" };
+    const storageService = {
+      uploadExpenseSupport: jest.fn().mockResolvedValue(uploaded),
+      deleteObject: jest.fn(),
+    };
+    const created = { id: "exp_1", status: "pendiente" };
+    const tx = {
+      commercialExpense: { create: jest.fn().mockResolvedValue(created) },
+    };
+    const prisma = { $transaction: (fn: (c: typeof tx) => unknown) => fn(tx) };
+    const auditService = { record: jest.fn() };
+    const exportService = {};
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        CommercialExpensesService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AuditService, useValue: auditService },
+        { provide: R2StorageService, useValue: storageService },
+        { provide: CommercialExpensesExportService, useValue: exportService },
+      ],
+    }).compile();
+
+    const service = moduleRef.get(CommercialExpensesService);
+
+    // Stub relation validation to a no-op.
+    (service as any).validateOptionalRelations = async () => undefined;
+
+    const result = await service.createFromBuffer(
+      { id: "user_1" } as never,
+      {
+        expenseDate: "2026-04-24",
+        category: CommercialExpenseCategory.alimentacion,
+        amount: 25000,
+        description: "Almuerzo",
+      } as never,
+      { buffer: Buffer.from("img"), originalname: "soporte.jpg", mimetype: "image/jpeg", size: 3 },
+    );
+
+    expect(storageService.uploadExpenseSupport).toHaveBeenCalled();
+    expect(tx.commercialExpense.create).toHaveBeenCalled();
+    expect(result).toEqual(created);
   });
 });
