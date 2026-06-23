@@ -11,6 +11,7 @@ import { CommercialExpensesExportService } from "../src/modules/commercial-expen
 import { AuthService } from "../src/modules/auth/auth.service";
 import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
 import { NoraExpenseExecutionService } from "../src/modules/whatsapp/nora-expense-execution.service";
+import { NoraAgentController } from "../src/modules/whatsapp/nora-agent.controller";
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId
@@ -266,5 +267,35 @@ describe("NoraExpenseExecutionService.executeFromWhatsApp", () => {
 
     expect(expensesService.createFromBuffer).not.toHaveBeenCalled();
     expect(result).toEqual({ id: "exp_existing", status: "pendiente", alreadyExisted: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5: NoraAgentController delegates to NoraExpenseExecutionService
+// ---------------------------------------------------------------------------
+
+describe("NoraAgentController", () => {
+  it("delegates expense execution to the execution service", async () => {
+    const execution = {
+      executeFromWhatsApp: jest
+        .fn()
+        .mockResolvedValue({ id: "exp_1", status: "pendiente", alreadyExisted: false }),
+    };
+    const controller = new NoraAgentController(execution as never);
+
+    const result = await controller.createExpense({ id: "user_1" } as never, {
+      conversationId: "conv_1",
+      expenseDate: "2026-04-24",
+      category: CommercialExpenseCategory.alimentacion,
+      amount: 25000,
+      description: "Almuerzo",
+    } as never);
+
+    expect(execution.executeFromWhatsApp).toHaveBeenCalledWith({
+      user: { id: "user_1" },
+      conversationId: "conv_1",
+      dto: expect.objectContaining({ amount: 25000 }),
+    });
+    expect(result).toEqual({ id: "exp_1", status: "pendiente", alreadyExisted: false });
   });
 });
