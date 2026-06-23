@@ -304,6 +304,60 @@ describe("NoraAgentController", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task 12: End-to-end scenario — receipt -> confirm -> expense created (idempotent)
+// ---------------------------------------------------------------------------
+
+describe("scenario: receipt -> confirm -> expense created (idempotent)", () => {
+  it("creates once and is idempotent on re-confirm", async () => {
+    const created = { id: "exp_1", status: "pendiente" };
+    let storedExecutedId: string | null = null;
+
+    const noraCaseService = {
+      findOpenCase: jest.fn().mockImplementation(async () => ({
+        id: "case_1",
+        type: "expense",
+        status: storedExecutedId ? "executed" : "ready_for_review",
+        attachments: [
+          { provider: "kapso", kind: "image", providerMediaId: "media_1", contentType: "image/jpeg" },
+        ],
+        executedEntityId: storedExecutedId,
+      })),
+      updateCase: jest.fn().mockImplementation(async (_id: string, input: { executedEntityId?: string }) => {
+        if (input.executedEntityId) storedExecutedId = input.executedEntityId;
+      }),
+    };
+    const expensesService = { createFromBuffer: jest.fn().mockResolvedValue(created) };
+    const whatsAppService = { downloadMedia: jest.fn().mockResolvedValue(Buffer.from("img")) };
+    const prisma = {
+      whatsAppConversation: {
+        findUnique: jest.fn().mockResolvedValue({ account: { phoneNumberId: "pn_1" } }),
+      },
+    };
+
+    const service = new NoraExpenseExecutionService(
+      noraCaseService as never,
+      expensesService as never,
+      whatsAppService as never,
+      prisma as never,
+    );
+
+    const dto = {
+      expenseDate: "2026-04-24",
+      category: CommercialExpenseCategory.alimentacion,
+      amount: 25000,
+      description: "Almuerzo",
+    } as never;
+
+    const first = await service.executeFromWhatsApp({ user: { id: "u" } as never, conversationId: "conv_1", dto });
+    const second = await service.executeFromWhatsApp({ user: { id: "u" } as never, conversationId: "conv_1", dto });
+
+    expect(first).toEqual({ id: "exp_1", status: "pendiente", alreadyExisted: false });
+    expect(second.alreadyExisted).toBe(true);
+    expect(expensesService.createFromBuffer).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task 6: Full-app routing test — POST /whatsapp/agent/expenses
 // ---------------------------------------------------------------------------
 
