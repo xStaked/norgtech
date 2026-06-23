@@ -10,6 +10,7 @@ import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.
 import { CommercialExpensesExportService } from "../src/modules/commercial-expenses/commercial-expenses-export.service";
 import { AuthService } from "../src/modules/auth/auth.service";
 import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
+import { NoraExpenseExecutionService } from "../src/modules/whatsapp/nora-expense-execution.service";
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId
@@ -171,5 +172,99 @@ describe("AuthService.mintScopedToken", () => {
     const service = moduleRef.get(AuthService);
 
     await expect(service.mintScopedToken("user_2")).rejects.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4: NoraExpenseExecutionService.executeFromWhatsApp
+// ---------------------------------------------------------------------------
+
+const baseExpenseDto = {
+  expenseDate: "2026-04-24",
+  category: CommercialExpenseCategory.alimentacion,
+  amount: 25000,
+  description: "Almuerzo",
+} as never;
+
+function buildExpenseExecutionService() {
+  const caseRecord = {
+    id: "case_1",
+    type: "expense",
+    status: "ready_for_review",
+    attachments: [
+      {
+        provider: "kapso",
+        kind: "image",
+        providerMediaId: "media_1",
+        contentType: "image/jpeg",
+        messageId: "msg_1",
+      },
+    ],
+    executedEntityId: null,
+  };
+  const noraCaseService = {
+    findOpenCase: jest.fn().mockResolvedValue(caseRecord),
+    updateCase: jest.fn().mockResolvedValue(undefined),
+  };
+  const expensesService = {
+    createFromBuffer: jest.fn().mockResolvedValue({ id: "exp_1", status: "pendiente" }),
+  };
+  const whatsAppService = {
+    downloadMedia: jest.fn().mockResolvedValue(Buffer.from("img")),
+  };
+  const conversations = {
+    findUnique: jest.fn().mockResolvedValue({ account: { phoneNumberId: "pn_1" } }),
+  };
+  const prismaStub = { whatsAppConversation: conversations } as unknown as PrismaService;
+
+  const service = new NoraExpenseExecutionService(
+    noraCaseService as never,
+    expensesService as never,
+    whatsAppService as never,
+    prismaStub,
+  );
+
+  return { service, noraCaseService, expensesService, whatsAppService, caseRecord };
+}
+
+describe("NoraExpenseExecutionService.executeFromWhatsApp", () => {
+  it("creates the expense and marks the case executed", async () => {
+    const { service, noraCaseService, expensesService } = buildExpenseExecutionService();
+
+    const result = await service.executeFromWhatsApp({
+      user: { id: "user_1" } as never,
+      conversationId: "conv_1",
+      dto: baseExpenseDto,
+    });
+
+    expect(expensesService.createFromBuffer).toHaveBeenCalled();
+    expect(noraCaseService.updateCase).toHaveBeenCalledWith(
+      "case_1",
+      expect.objectContaining({
+        status: NoraConversationCaseStatus.executed,
+        executedEntityType: "CommercialExpense",
+        executedEntityId: "exp_1",
+      }),
+    );
+    expect(result).toEqual({ id: "exp_1", status: "pendiente", alreadyExisted: false });
+  });
+
+  it("is idempotent when the case already has an executedEntityId", async () => {
+    const { service, expensesService } = buildExpenseExecutionService();
+
+    // Re-wire findOpenCase to an already-executed case
+    (service.noraCaseService.findOpenCase as jest.Mock).mockResolvedValue({
+      id: "case_1",
+      executedEntityId: "exp_existing",
+    });
+
+    const result = await service.executeFromWhatsApp({
+      user: { id: "user_1" } as never,
+      conversationId: "conv_1",
+      dto: baseExpenseDto,
+    });
+
+    expect(expensesService.createFromBuffer).not.toHaveBeenCalled();
+    expect(result).toEqual({ id: "exp_existing", status: "pendiente", alreadyExisted: true });
   });
 });
