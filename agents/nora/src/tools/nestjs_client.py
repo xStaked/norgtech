@@ -48,6 +48,8 @@ class NestJSClient:
                 # ponytail: fallback so error is never blank — helps diagnose stale build 404s
                 if not detail or not detail.strip():
                     detail = (r.text[:200] if r.text and r.text.strip() else "(empty body)")
+                target_url = f"{self.base_url}{path}"
+                detail = f"{detail} ({method} {target_url})"
                 raise NestJSAPIError(r.status_code, detail)
             return r.json()
 

@@ -127,4 +127,6 @@ def test_nestjs_client_empty_body_404_yields_nonempty_detail():
 
     detail = asyncio.run(_run())
     assert detail and detail.strip(), f"detail must not be blank, got {detail!r}"
-    assert detail == "(empty body)"
+    assert "(empty body)" in detail
+    assert "/whatsapp/agent/expenses" in detail
+    assert "http://api:3001" in detail
