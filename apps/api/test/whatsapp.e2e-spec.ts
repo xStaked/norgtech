@@ -2814,6 +2814,98 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("routes the first media turn (no expense case yet) to the planner, not the agent", async () => {
+      process.env.NORA_WHATSAPP_AGENT_EXPENSES = "true";
+
+      const account = {
+        id: "account-first-media",
+        phoneNumberId: "phone-number-first-media",
+        phoneNumber: "phone-number-first-media",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-first-media",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-23T10:00:00.000Z"),
+        lastMessageText: "",
+        createdAt: new Date("2026-06-23T09:59:00.000Z"),
+        updatedAt: new Date("2026-06-23T10:00:00.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      // Note: NO expense case seeded — this is the first support image.
+
+      (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          mode: "comercial",
+          intent: "gasto",
+          summary: "Soporte de gasto recibido por WhatsApp.",
+          suggested_reply: "Recibí el soporte. Voy a extraer los datos.",
+          requires_human_review: true,
+          risk_level: "medium",
+          missing_fields: [],
+          proposals: [],
+        }),
+      });
+
+      try {
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-first-media",
+              message: {
+                id: "kapso-first-media-image",
+                from: "+573004445566",
+                image: { id: "image-first-media", mime_type: "image/jpeg" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        // mock.calls accumulates across tests, so scope to THIS conversation.
+        const forThisConversation = (url: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(url)) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              conversation_id?: string;
+            };
+            return body.conversation_id === "conversation-first-media";
+          });
+        expect(forThisConversation("/whatsapp/route")).toBeDefined();
+        expect(forThisConversation("/whatsapp/agent")).toBeUndefined();
+      } finally {
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-first-media");
+        removeMatching(conversations, (item) => item.id === "conversation-first-media");
+        removeMatching(accounts, (item) => item.id === "account-first-media");
+        removeMatching(messages, (item) => item.conversationId === "conversation-first-media");
+      }
+    });
+
     it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
       delete process.env.NORA_WHATSAPP_AGENT_EXPENSES;
 

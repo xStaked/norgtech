@@ -81,12 +81,11 @@ export class NoraRoutingService {
       const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
       const openCase = await this.noraCaseService.findOpenCase(conversation.id);
       const mediaPayload = this.mediaPayloadFromMessage(message);
-      const hasMedia = Boolean(mediaPayload);
 
       if (
         "userId" in sender &&
         sender.userId &&
-        this.isExpenseFlowTurn(sender.senderType, hasMedia, openCase?.type)
+        this.isExpenseFlowTurn(openCase?.type)
       ) {
         try {
           const scopedToken = await this.authService.mintScopedToken(sender.userId);
@@ -285,18 +284,14 @@ export class NoraRoutingService {
     return Promise.resolve(null);
   }
 
-  private isExpenseFlowTurn(
-    senderType: string,
-    hasMedia: boolean,
-    openCaseType?: string,
-  ): boolean {
+  private isExpenseFlowTurn(openCaseType?: string): boolean {
     if (process.env.NORA_WHATSAPP_AGENT_EXPENSES !== "true") {
       return false;
     }
-    if (openCaseType === "expense") {
-      return true;
-    }
-    return senderType === "comercial" && hasMedia;
+    // Only an EXISTING expense case routes to the agent. The first media turn
+    // must go through the planner, which creates the case + queues OCR; the
+    // agent has no data to register until that has happened.
+    return openCaseType === "expense";
   }
 
   private async requestNoraAgent(payload: Record<string, unknown>) {
