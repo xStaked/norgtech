@@ -21,6 +21,66 @@
 
 ---
 
+## Testing Conventions (AUTHORITATIVE — supersedes per-task test mechanics)
+
+The task bodies below sometimes show tests in a mocked-unit style with commands like
+`npx jest src/modules/.../foo.spec.ts`. **That style does not exist in this repo. Ignore those
+commands and colocated `*.spec.ts` paths.** Keep each task's test *intent* (what to assert), but
+implement and run tests as described here.
+
+### NestJS (`apps/api`)
+
+- **No colocated unit specs exist.** All tests live in `apps/api/test/*.e2e-spec.ts` and run under
+  `test/jest-e2e.json` (`testRegex: .*\.e2e-spec\.ts$`, `rootDir: ".."`).
+- **Run:** `cd apps/api && npm test -- -t "<test name>"` for a single test;
+  `cd apps/api && npm test -- test/<file>.e2e-spec.ts` for one file. (`npm test` =
+  `jest --watchman=false --config ./test/jest-e2e.json`.)
+- **Two valid styles, both already in the repo:**
+  1. **Full-app + supertest** (e.g. `whatsapp.e2e-spec.ts`, `commercial-expenses.e2e-spec.ts`):
+     `Test.createTestingModule({ imports: [AppModule] }).overrideProvider(PrismaService).useValue(prismaStub)...`,
+     `app.init()`, then `request(app.getHttpServer()).post(...).set("Authorization", \`Bearer ${token}\`)`.
+     Use this for the HTTP endpoint (Task 5) and the routing branch (Task 11).
+  2. **Service-level via TestingModule with mocked deps** (precedent: `nora-expense-extraction.e2e-spec.ts`
+     builds a module with `{ downloadMedia: jest.fn(), sendAgentReply: jest.fn() }`-style provider values).
+     Use this for the pure service/auth tasks (1, 2, 3, 4) — build a `TestingModule` providing the unit
+     under test plus mocked collaborators, get it via `moduleRef.get(...)`, and assert. Place these in a
+     new `apps/api/test/nora-agent.e2e-spec.ts` unless a more specific existing file fits.
+- **In-memory Prisma stub:** mock only the methods the unit touches, as jest fns over module-scope arrays.
+  Reset arrays in `beforeEach` with `arr.splice(0)`. Shapes to copy:
+  - `noraConversationCase.findFirst({ where })` — filter by `id`/`conversationId`/`status.in`, sort by
+    `updatedAt` desc, return first or `null`.
+  - `noraConversationCase.update({ where:{id}, data })` — merge `data` into the stored record.
+  - `whatsAppConversation.findUnique({ where:{id}, include })` — return record with `account` relation
+    (`{ phoneNumberId }`) when `include.account`.
+  - `commercialExpense.create({ data, include })` — push and return with `status: "pendiente"`.
+  - `$transaction(cb)` — `cb(txStub)` where `txStub` includes a `$queryRaw` jest fn (the case lock helper
+    issues a raw query; return `[{ id: caseId }]`).
+  - `user.findUnique({ where:{email|id} })` — look up the seeded users array (needed for login + scoped token).
+- **Auth tokens:** seed a users array with the shared bcrypt hash
+  `"$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2"` (password `Admin123*`), then
+  `request(app.getHttpServer()).post("/auth/login").send({ email, password: "Admin123*" })` →
+  `body.accessToken`. Roles available in fixtures: `administrador`, `comercial`, `facturacion`.
+- **External services:** override `R2StorageService` (`uploadExpenseSupport`/`getObjectStream`/`deleteObject`)
+  and the OCR provider as in `commercial-expenses.e2e-spec.ts`. `WhatsAppService.downloadMedia` already
+  short-circuits in test mode (`whatsapp.service.ts:408` returns a fake buffer) — no Kapso needed.
+- **Nora HTTP from NestJS:** `globalThis.fetch` is the seam. For the routing-branch test (Task 11),
+  stub `globalThis.fetch` and assert it was called with `…/whatsapp/agent` (not `/whatsapp/route`), and
+  return a canned `{ reply_text, case_update, executed_entity }` body. Restore `originalFetch` in `afterAll`.
+- **Env:** set `NORA_WHATSAPP_AGENT_EXPENSES="true"` (and restore) within tests that exercise the agent branch.
+
+### Nora (`agents/nora`)
+
+- **Interpreter:** the repo has a venv. Run `cd agents/nora && .venv/bin/python -m pytest tests/<file> -v`.
+  (Plain `python`/system `python3` lack pytest.) Tests import `from src.xxx import …`.
+- **Async tests:** `pytest-asyncio` is not a declared dependency. **Do not use `@pytest.mark.asyncio`.**
+  Wrap async calls with `asyncio.run(...)`, e.g. `result = asyncio.run(create_expense.ainvoke({...}))`.
+- Place new tests in `agents/nora/tests/` (e.g. `test_expenses_tool.py`, `test_whatsapp_agent.py`,
+  `test_whatsapp_agent_endpoint.py`), matching the existing `test_whatsapp_router.py` style.
+- The live-LLM test (`test_whatsapp_agent.py`, Task 9) needs model credentials in the env; if absent,
+  skip with `pytest.importorskip`/`pytest.mark.skipif` on the API key rather than stubbing the LLM.
+
+---
+
 ## File Structure
 
 **NestJS (`apps/api/src`):**
