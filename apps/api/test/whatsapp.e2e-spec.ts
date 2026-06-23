@@ -2791,6 +2791,11 @@ describe("WhatsApp inbox", () => {
             body: "El gasto fue registrado correctamente.",
           }),
         );
+
+        const agentAction = noraActions.find(
+          (item) => item.conversationId === conversation.id,
+        );
+        expect(agentAction?.status).toBe(NoraActionStatus.executed);
       } finally {
         const removeMatching = (
           collection: Array<Record<string, unknown>>,
