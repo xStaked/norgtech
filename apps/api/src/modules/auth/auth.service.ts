@@ -12,6 +12,7 @@ type JsonWebTokenModule = {
     secret: string,
     options: { expiresIn: string },
   ): string;
+  verify(token: string, secret: string): unknown;
 };
 
 const bcrypt = require("bcryptjs") as BcryptModule;
@@ -45,5 +46,17 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  async mintScopedToken(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.active) {
+      throw new UnauthorizedException("Cannot mint token for user");
+    }
+    return jsonwebtoken.sign(
+      { sub: user.id, role: user.role, email: user.email },
+      AUTH_JWT_SECRET,
+      { expiresIn: "10m" },
+    );
   }
 }

@@ -1,3 +1,5 @@
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const jsonwebtoken = require("jsonwebtoken") as { verify(token: string, secret: string): unknown };
 import { Test } from "@nestjs/testing";
 import { CommercialExpenseCategory, NoraConversationCaseStatus } from "@prisma/client";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -6,6 +8,8 @@ import { CommercialExpensesService } from "../src/modules/commercial-expenses/co
 import { AuditService } from "../src/modules/audit/audit.service";
 import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { CommercialExpensesExportService } from "../src/modules/commercial-expenses/commercial-expenses-export.service";
+import { AuthService } from "../src/modules/auth/auth.service";
+import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId
@@ -103,5 +107,69 @@ describe("CommercialExpensesService.createFromBuffer", () => {
     expect(storageService.uploadExpenseSupport).toHaveBeenCalled();
     expect(tx.commercialExpense.create).toHaveBeenCalled();
     expect(result).toEqual(created);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 3: AuthService.mintScopedToken
+// ---------------------------------------------------------------------------
+
+describe("AuthService.mintScopedToken", () => {
+  it("signs a short-lived token scoped to the user", async () => {
+    const users = [
+      { id: "user_1", email: "c@x.com", role: "comercial", active: true },
+    ];
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockImplementation(({ where }: { where: { id?: string; email?: string } }) => {
+          return Promise.resolve(users.find((u) => u.id === where.id || u.email === where.email) ?? null);
+        }),
+      },
+    } as unknown as PrismaService;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [AuthService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    const service = moduleRef.get(AuthService);
+
+    const token = await service.mintScopedToken("user_1");
+    const decoded = jsonwebtoken.verify(token, AUTH_JWT_SECRET) as Record<string, unknown>;
+
+    expect(decoded.sub).toBe("user_1");
+    expect(decoded.role).toBe("comercial");
+    expect(decoded.email).toBe("c@x.com");
+  });
+
+  it("rejects missing users", async () => {
+    const prisma = {
+      user: { findUnique: jest.fn().mockResolvedValue(null) },
+    } as unknown as PrismaService;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [AuthService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    const service = moduleRef.get(AuthService);
+
+    await expect(service.mintScopedToken("nope")).rejects.toThrow();
+  });
+
+  it("rejects inactive users", async () => {
+    const prisma = {
+      user: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: "user_2",
+          email: "x@x.com",
+          role: "comercial",
+          active: false,
+        }),
+      },
+    } as unknown as PrismaService;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [AuthService, { provide: PrismaService, useValue: prisma }],
+    }).compile();
+    const service = moduleRef.get(AuthService);
+
+    await expect(service.mintScopedToken("user_2")).rejects.toThrow();
   });
 });
