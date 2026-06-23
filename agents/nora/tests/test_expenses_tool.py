@@ -1,8 +1,8 @@
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from src.tools.expenses import create_expense
-from src.tools.nestjs_client import NestJSAPIError
+from src.tools.nestjs_client import NestJSAPIError, NestJSClient
 
 
 def test_create_expense_posts_to_agent_endpoint():
@@ -100,3 +100,31 @@ def test_create_expense_surfaces_connection_target():
     # The connection target must be visible so a wrong NESTJS_API_URL is obvious.
     assert "http://localhost:3001" in result
     assert "ConnectionError" in result
+
+
+def test_nestjs_client_empty_body_404_yields_nonempty_detail():
+    """A 404 with an empty body must never produce a blank detail string."""
+    fake_response = MagicMock()
+    fake_response.is_error = True
+    fake_response.status_code = 404
+    fake_response.text = ""
+    fake_response.json.side_effect = Exception("no json")
+
+    async def _run():
+        client = NestJSClient.__new__(NestJSClient)
+        client.base_url = "http://api:3001"
+        client.headers = {}
+        fake_http = AsyncMock()
+        fake_http.__aenter__ = AsyncMock(return_value=fake_http)
+        fake_http.__aexit__ = AsyncMock(return_value=False)
+        fake_http.request = AsyncMock(return_value=fake_response)
+        with patch("src.tools.nestjs_client.httpx.AsyncClient", return_value=fake_http):
+            try:
+                await client._request("POST", "/whatsapp/agent/expenses", json={})
+            except NestJSAPIError as e:
+                return e.detail
+        return ""
+
+    detail = asyncio.run(_run())
+    assert detail and detail.strip(), f"detail must not be blank, got {detail!r}"
+    assert detail == "(empty body)"
