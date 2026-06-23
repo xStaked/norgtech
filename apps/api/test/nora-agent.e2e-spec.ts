@@ -274,6 +274,27 @@ describe("NoraExpenseExecutionService.executeFromWhatsApp", () => {
     expect(expensesService.createFromBuffer).not.toHaveBeenCalled();
     expect(result).toEqual({ id: "exp_existing", status: "pendiente", alreadyExisted: true });
   });
+
+  it("releases the claim and rethrows when expense creation fails", async () => {
+    const { service, noraCaseService, expensesService } = buildExpenseExecutionService();
+    (expensesService.createFromBuffer as jest.Mock).mockRejectedValue(
+      new Error("R2 upload failed"),
+    );
+
+    await expect(
+      service.executeFromWhatsApp({
+        user: { id: "user_1" } as never,
+        conversationId: "conv_1",
+        dto: baseExpenseDto,
+      }),
+    ).rejects.toThrow("R2 upload failed");
+
+    // Claim must be released so the commercial can retry (not left stuck).
+    expect(noraCaseService.updateCase).toHaveBeenCalledWith(
+      "case_1",
+      expect.objectContaining({ executedEntityType: null }),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
