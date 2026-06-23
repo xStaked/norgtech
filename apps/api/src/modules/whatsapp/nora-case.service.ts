@@ -121,6 +121,22 @@ export class NoraCaseService {
     });
   }
 
+  /**
+   * Atomic compare-and-swap CLAIM: sets executedEntityType from null → entityType.
+   * Returns true only for the one caller that wins the race; all others get false.
+   * // ponytail: ceiling — a turn that loses the claim race while the winner is
+   * // still mid-create returns alreadyExisted:true with a possibly-null id;
+   * // acceptable (no double-create; user is told it's registered). Per-case
+   * // advisory lock if exact-id-on-race is ever needed.
+   */
+  async claimForExecution(caseId: string, entityType: string): Promise<boolean> {
+    const result = await this.prisma.noraConversationCase.updateMany({
+      where: { id: caseId, executedEntityType: null },
+      data: { executedEntityType: entityType },
+    });
+    return result.count === 1;
+  }
+
   async appendAttachmentFromMessage(
     caseId: string,
     attachment: NoraCaseAttachment,

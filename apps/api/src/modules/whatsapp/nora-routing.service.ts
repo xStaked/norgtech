@@ -110,14 +110,11 @@ export class NoraRoutingService {
             auth: `Bearer ${scopedToken}`,
           });
 
-          if (agentResponse.reply_text) {
-            await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
-          }
           if (agentResponse.case_update && openCase) {
             await this.noraCaseService.updateCase(openCase.id, agentResponse.case_update);
           }
 
-          return await this.prisma.noraActionLog.update({
+          await this.prisma.noraActionLog.update({
             where: { id: actionLog.id },
             data: {
               status: agentResponse.executed_entity
@@ -126,6 +123,11 @@ export class NoraRoutingService {
               output: agentResponse as unknown as Prisma.InputJsonObject,
             },
           });
+
+          if (agentResponse.reply_text) {
+            await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+          }
+          return;
         } catch (error) {
           this.logger.error(
             `Nora agent expense flow failed, falling back to planner: ${String(error)}`,

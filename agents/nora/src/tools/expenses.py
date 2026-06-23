@@ -35,7 +35,9 @@ async def create_expense(
 
     Args:
         expense_date: Fecha del gasto en formato YYYY-MM-DD.
-        category: Categoria del gasto (ej: alimentacion, hospedaje, combustible, peajes, otros).
+        category: Categoria del gasto. Debe ser exactamente uno de (minúsculas, sin tildes):
+            alimentacion, transporte, hospedaje, combustible, peajes, parqueadero,
+            atencion_comercial, otros.
         amount: Valor total del gasto en pesos (numero, sin separadores).
         description: Descripcion corta del gasto.
         supplier_name / supplier_nit / invoice_number / payment_method: datos del soporte (opcionales).

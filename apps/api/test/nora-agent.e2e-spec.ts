@@ -205,10 +205,13 @@ function buildExpenseExecutionService() {
       },
     ],
     executedEntityId: null,
+    executedEntityType: null,
+    extractedData: {},
   };
   const noraCaseService = {
     findOpenCase: jest.fn().mockResolvedValue(caseRecord),
     updateCase: jest.fn().mockResolvedValue(undefined),
+    claimForExecution: jest.fn().mockResolvedValue(true),
   };
   const expensesService = {
     createFromBuffer: jest.fn().mockResolvedValue({ id: "exp_1", status: "pendiente" }),
@@ -311,6 +314,7 @@ describe("scenario: receipt -> confirm -> expense created (idempotent)", () => {
   it("creates once and is idempotent on re-confirm", async () => {
     const created = { id: "exp_1", status: "pendiente" };
     let storedExecutedId: string | null = null;
+    let claimed = false;
 
     const noraCaseService = {
       findOpenCase: jest.fn().mockImplementation(async () => ({
@@ -321,9 +325,17 @@ describe("scenario: receipt -> confirm -> expense created (idempotent)", () => {
           { provider: "kapso", kind: "image", providerMediaId: "media_1", contentType: "image/jpeg" },
         ],
         executedEntityId: storedExecutedId,
+        executedEntityType: storedExecutedId ? "CommercialExpense" : null,
+        extractedData: {},
       })),
       updateCase: jest.fn().mockImplementation(async (_id: string, input: { executedEntityId?: string }) => {
         if (input.executedEntityId) storedExecutedId = input.executedEntityId;
+      }),
+      // First call wins (claimed=false→true, returns true); second call returns false.
+      claimForExecution: jest.fn().mockImplementation(async () => {
+        if (claimed) return false;
+        claimed = true;
+        return true;
       }),
     };
     const expensesService = { createFromBuffer: jest.fn().mockResolvedValue(created) };
@@ -358,6 +370,55 @@ describe("scenario: receipt -> confirm -> expense created (idempotent)", () => {
 });
 
 // ---------------------------------------------------------------------------
+// FIX 2: lost-claim scenario — claimForExecution returns false on first call
+// ---------------------------------------------------------------------------
+
+describe("NoraExpenseExecutionService.executeFromWhatsApp — lost claim race", () => {
+  it("does not call createFromBuffer and returns alreadyExisted:true when claim fails", async () => {
+    const caseWithNoId = {
+      id: "case_race",
+      type: "expense",
+      status: "ready_for_review",
+      attachments: [
+        { provider: "kapso", kind: "image", providerMediaId: "media_1", contentType: "image/jpeg" },
+      ],
+      executedEntityId: null,
+      executedEntityType: null,
+      extractedData: {},
+    };
+
+    const noraCaseService = {
+      findOpenCase: jest.fn().mockResolvedValue(caseWithNoId),
+      updateCase: jest.fn(),
+      claimForExecution: jest.fn().mockResolvedValue(false), // lost the race
+    };
+    const expensesService = { createFromBuffer: jest.fn() };
+    const whatsAppService = { downloadMedia: jest.fn() };
+    const prisma = {
+      whatsAppConversation: {
+        findUnique: jest.fn().mockResolvedValue({ account: { phoneNumberId: "pn_1" } }),
+      },
+    };
+
+    const service = new NoraExpenseExecutionService(
+      noraCaseService as never,
+      expensesService as never,
+      whatsAppService as never,
+      prisma as never,
+    );
+
+    const result = await service.executeFromWhatsApp({
+      user: { id: "u" } as never,
+      conversationId: "conv_race",
+      dto: baseExpenseDto,
+    });
+
+    expect(expensesService.createFromBuffer).not.toHaveBeenCalled();
+    expect(result.alreadyExisted).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task 6: Full-app routing test — POST /whatsapp/agent/expenses
 // ---------------------------------------------------------------------------
 
@@ -365,6 +426,7 @@ describe("POST /whatsapp/agent/expenses (full-app)", () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
   let comercialToken: string;
+  let clienteToken: string;
 
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
 
@@ -376,6 +438,15 @@ describe("POST /whatsapp/agent/expenses (full-app)", () => {
       phone: "+573001000099",
       passwordHash,
       role: UserRole.comercial,
+      active: true,
+    },
+    {
+      id: "agent-tecnico-id",
+      name: "Tecnico",
+      email: "tecnico@norgtech.local",
+      phone: "+573001000098",
+      passwordHash,
+      role: UserRole.tecnico,
       active: true,
     },
   ];
@@ -462,6 +533,21 @@ describe("POST /whatsapp/agent/expenses (full-app)", () => {
           if (idx === -1) return null;
           noraCases[idx] = { ...noraCases[idx], ...data, updatedAt: new Date() };
           return noraCases[idx];
+        },
+        // Atomic CAS claim for claimForExecution
+        updateMany: async ({
+          where,
+          data,
+        }: {
+          where: { id: string; executedEntityType: null };
+          data: Record<string, unknown>;
+        }) => {
+          const idx = noraCases.findIndex(
+            (c) => c.id === where.id && c.executedEntityType === null,
+          );
+          if (idx === -1) return { count: 0 };
+          noraCases[idx] = { ...noraCases[idx], ...data, updatedAt: new Date() };
+          return { count: 1 };
         },
       },
       commercialExpense: {
@@ -553,6 +639,12 @@ describe("POST /whatsapp/agent/expenses (full-app)", () => {
       .send({ email: "vendedor@norgtech.local", password: "Admin123*" })
       .expect(200);
     comercialToken = loginRes.body.accessToken;
+
+    const clienteLoginRes = await request(app.getHttpServer())
+      .post("/auth/login")
+      .send({ email: "tecnico@norgtech.local", password: "Admin123*" })
+      .expect(200);
+    clienteToken = clienteLoginRes.body.accessToken;
   });
 
   afterAll(async () => {
@@ -570,6 +662,20 @@ describe("POST /whatsapp/agent/expenses (full-app)", () => {
         description: "Almuerzo visita",
       })
       .expect(401);
+  });
+
+  it("rejects a JWT for a non-allowed role (tecnico) with 403", async () => {
+    await request(app.getHttpServer())
+      .post("/whatsapp/agent/expenses")
+      .set("Authorization", `Bearer ${clienteToken}`)
+      .send({
+        conversationId: "agent-conv-1",
+        expenseDate: "2026-06-22",
+        category: CommercialExpenseCategory.alimentacion,
+        amount: 30000,
+        description: "Almuerzo visita",
+      })
+      .expect(403);
   });
 
   it("creates an expense and marks the case executed when called with a valid JWT", async () => {

@@ -15,7 +15,7 @@ export type ExecuteExpenseInput = {
 };
 
 export type ExecuteExpenseResult = {
-  id: string;
+  id: string | null;
   status: string;
   alreadyExisted: boolean;
 };
@@ -39,6 +39,15 @@ export class NoraExpenseExecutionService {
       return { id: openCase.executedEntityId, status: "pendiente", alreadyExisted: true };
     }
 
+    // Atomic CAS claim — first concurrent caller wins; others short-circuit here.
+    // ponytail: ceiling — loser returns alreadyExisted:true with possibly-null id;
+    // acceptable (no double-create). Per-case advisory lock if exact id on race needed.
+    const claimed = await this.noraCaseService.claimForExecution(openCase.id, "CommercialExpense");
+    if (!claimed) {
+      const refreshed = await this.noraCaseService.findOpenCase(input.conversationId);
+      return { id: refreshed?.executedEntityId ?? null, status: "pendiente", alreadyExisted: true };
+    }
+
     const attachment = this.firstImageAttachment(openCase.attachments);
     if (!attachment?.providerMediaId) {
       throw new BadRequestException("Case has no support attachment to link");
@@ -51,7 +60,17 @@ export class NoraExpenseExecutionService {
 
     const buffer = await this.whatsAppService.downloadMedia(phoneNumberId, attachment.providerMediaId);
 
-    const expense = await this.expensesService.createFromBuffer(input.user, input.dto, {
+    // FIX 4: backfill extraction provenance from OCR result when the DTO omits them.
+    const dto = { ...input.dto };
+    const extractedData = openCase.extractedData as Record<string, unknown> | null;
+    if (dto.extractionConfidence == null && extractedData?.extractionConfidence != null) {
+      (dto as Record<string, unknown>).extractionConfidence = extractedData.extractionConfidence;
+    }
+    if (dto.extractionModel == null && extractedData?.extractionModel != null) {
+      (dto as Record<string, unknown>).extractionModel = extractedData.extractionModel;
+    }
+
+    const expense = await this.expensesService.createFromBuffer(input.user, dto as CreateCommercialExpenseDto, {
       buffer,
       originalname: attachment.fileName ?? "soporte-whatsapp.jpg",
       mimetype: attachment.contentType ?? "image/jpeg",
