@@ -10,6 +10,7 @@ import {
   WhatsAppSenderType,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuthService } from "../auth/auth.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
@@ -40,6 +41,7 @@ export class NoraRoutingService {
     private readonly orderAutomation: WhatsAppOrderAutomationService,
     private readonly noraCaseService: NoraCaseService,
     private readonly expenseExtraction: NoraExpenseExtractionService,
+    private readonly authService: AuthService,
   ) {}
 
   async routeInboundMessage({ conversation, message }: RouteInboundMessageInput) {
@@ -79,6 +81,60 @@ export class NoraRoutingService {
       const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
       const openCase = await this.noraCaseService.findOpenCase(conversation.id);
       const mediaPayload = this.mediaPayloadFromMessage(message);
+      const hasMedia = Boolean(mediaPayload);
+
+      if (
+        "userId" in sender &&
+        sender.userId &&
+        this.isExpenseFlowTurn(sender.senderType, hasMedia, openCase?.type)
+      ) {
+        try {
+          const scopedToken = await this.authService.mintScopedToken(sender.userId);
+          const agentResponse = await this.requestNoraAgent({
+            current_message: message.body,
+            history: context.recent_messages,
+            open_case: openCase
+              ? {
+                  id: openCase.id,
+                  type: openCase.type,
+                  status: openCase.status,
+                  extractedData: openCase.extractedData,
+                  missingFields: Array.isArray(openCase.missingFields)
+                    ? openCase.missingFields
+                    : [],
+                  lastQuestion: openCase.lastQuestion,
+                  attachments: openCase.attachments,
+                }
+              : null,
+            conversation_id: conversation.id,
+            auth: `Bearer ${scopedToken}`,
+          });
+
+          if (agentResponse.case_update && openCase) {
+            await this.noraCaseService.updateCase(openCase.id, agentResponse.case_update);
+          }
+
+          await this.prisma.noraActionLog.update({
+            where: { id: actionLog.id },
+            data: {
+              status: agentResponse.executed_entity
+                ? NoraActionStatus.executed
+                : NoraActionStatus.proposed,
+              output: agentResponse as unknown as Prisma.InputJsonObject,
+            },
+          });
+
+          if (agentResponse.reply_text) {
+            await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+          }
+          return;
+        } catch (error) {
+          this.logger.error(
+            `Nora agent expense flow failed, falling back to planner: ${String(error)}`,
+          );
+          // fall through to the planner path below
+        }
+      }
 
       const noraResponse = await this.requestNoraRoute({
         sender_type: sender.senderType,
@@ -227,6 +283,37 @@ export class NoraRoutingService {
     }
 
     return Promise.resolve(null);
+  }
+
+  private isExpenseFlowTurn(
+    senderType: string,
+    hasMedia: boolean,
+    openCaseType?: string,
+  ): boolean {
+    if (process.env.NORA_WHATSAPP_AGENT_EXPENSES !== "true") {
+      return false;
+    }
+    if (openCaseType === "expense") {
+      return true;
+    }
+    return senderType === "comercial" && hasMedia;
+  }
+
+  private async requestNoraAgent(payload: Record<string, unknown>) {
+    const noraApiUrl = process.env.NORA_API_URL ?? "http://localhost:8000";
+    const response = await fetch(`${noraApiUrl}/whatsapp/agent`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Nora agent request failed with status ${response.status}`);
+    }
+    return response.json() as Promise<{
+      reply_text: string;
+      case_update: Record<string, unknown> | null;
+      executed_entity: Record<string, unknown> | null;
+    }>;
   }
 
   private async requestNoraRoute(payload: Prisma.InputJsonObject) {

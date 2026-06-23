@@ -33,6 +33,7 @@ class NoraOpenCaseContext(BaseModel):
     extractedData: dict[str, Any] = Field(default_factory=dict)
     missingFields: list[str] = Field(default_factory=list)
     lastQuestion: str | None = None
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class NoraMediaContext(BaseModel):
@@ -118,3 +119,27 @@ class WhatsAppRouteResponse(BaseModel):
     proposed_order: dict[str, Any] | None = None
     order_candidate: NoraOrderCandidate | None = None
     case_transition: NoraCaseTransition | None = None
+
+
+class NoraAgentAttachment(BaseModel):
+    kind: Literal["image", "document"]
+    providerMediaId: str | None = None
+    fileName: str | None = None
+    contentType: str | None = None
+    caption: str | None = None
+
+
+class WhatsAppAgentRequest(BaseModel):
+    current_message: str
+    history: list[NoraMessageContext] = Field(default_factory=list)
+    open_case: NoraOpenCaseContext | None = None
+    attachments: list[NoraAgentAttachment] = Field(default_factory=list)
+    sender: NoraUserContext | None = None
+    conversation_id: str | None = None
+    auth: str
+
+
+class WhatsAppAgentResponse(BaseModel):
+    reply_text: str
+    case_update: dict[str, Any] | None = None
+    executed_entity: dict[str, Any] | None = None
