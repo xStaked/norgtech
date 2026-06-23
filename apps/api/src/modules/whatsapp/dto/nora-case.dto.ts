@@ -29,6 +29,8 @@ export type NoraCaseTransitionInput = {
   lastQuestion?: string | null;
   riskLevel?: NoraCaseRiskLevel;
   createdByUserId?: string | null;
+  executedEntityType?: string | null;
+  executedEntityId?: string | null;
 };
 
 export const openNoraCaseStatuses: NoraConversationCaseStatus[] = [

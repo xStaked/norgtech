@@ -70,6 +70,12 @@ export class NoraCaseService {
             lastQuestion: input.lastQuestion,
           }),
           ...(input.riskLevel && { riskLevel: input.riskLevel }),
+          ...(input.executedEntityType !== undefined && {
+            executedEntityType: input.executedEntityType,
+          }),
+          ...(input.executedEntityId !== undefined && {
+            executedEntityId: input.executedEntityId,
+          }),
         },
       });
     });
