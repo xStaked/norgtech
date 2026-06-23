@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Annotated, Optional
 
 from langchain_core.tools import tool
@@ -6,6 +7,8 @@ from langgraph.prebuilt import InjectedState
 
 from .customers import search_customers
 from .nestjs_client import NestJSClient, NestJSAPIError
+
+logger = logging.getLogger("nora.expenses")
 
 # Reuse the existing customer search as the association lookup tool.
 lookup_customer = search_customers
@@ -69,8 +72,8 @@ async def create_expense(
         if value is not None:
             payload[key] = value
 
+    client = NestJSClient(auth_token)
     try:
-        client = NestJSClient(auth_token)
         result = await client.post("/whatsapp/agent/expenses", payload)
         expense_id = result.get("id", "desconocido")
         if result.get("alreadyExisted"):
@@ -81,6 +84,16 @@ async def create_expense(
             f"Queda en revision. Detalle: {json.dumps(result, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:
-        return f"Error al registrar el gasto: {e.detail}"
+        # The API responded with an error (4xx/5xx) — surface status + detail.
+        msg = f"Error al registrar el gasto [HTTP {e.status_code}]: {e.detail}"
+        logger.error("create_expense API error: %s", msg)
+        return msg
     except Exception as e:
-        return f"Error inesperado al registrar el gasto: {str(e)}"
+        # The request never got a valid response (e.g. wrong NESTJS_API_URL,
+        # connection refused). Include the target so we can diagnose from chat.
+        msg = (
+            f"Error inesperado al registrar el gasto (destino {client.base_url}): "
+            f"{type(e).__name__}: {str(e)}"
+        )
+        logger.error("create_expense unexpected error: %s", msg)
+        return msg
