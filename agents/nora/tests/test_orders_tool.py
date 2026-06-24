@@ -133,6 +133,13 @@ def test_create_order_requires_company_id():
     fake_client.post.assert_not_awaited()
 
 
+def test_order_tools_registered_in_web_agent():
+    from src.agent import ALL_TOOLS
+
+    names = {t.name for t in ALL_TOOLS}
+    assert {"get_companies", "get_customer_zones"} <= names
+
+
 def test_create_order_accepts_zero_unit_price():
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value={"id": "ord_z", "status": "recibido", "total": 0})
