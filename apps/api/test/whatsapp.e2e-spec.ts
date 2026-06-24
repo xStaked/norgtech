@@ -17,6 +17,7 @@ import { AppModule } from "../src/app.module";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { WhatsAppOrderAutomationService } from "../src/modules/whatsapp/whatsapp-order-automation.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 describe("WhatsApp inbox", () => {
   let app: INestApplication;
@@ -3024,5 +3025,44 @@ describe("WhatsApp inbox", () => {
         removeMatching(messages, (item) => item.conversationId === "conversation-fallback-expense");
       }
     });
+  });
+});
+
+describe("WhatsAppService.sendTemplateMessage", () => {
+  it("persists an outbound message and dispatches a template via Kapso", async () => {
+    process.env.NODE_ENV = "test"; // forces the Kapso mock path
+    const created: Record<string, unknown> = {};
+    const prisma = {
+      whatsAppConversation: {
+        findUnique: async () => ({
+          id: "conv_1",
+          waId: "573001000099",
+          account: { phoneNumberId: "pn_1" },
+        }),
+        update: async () => ({}),
+      },
+      whatsAppMessage: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          Object.assign(created, { id: "msg_1", ...data });
+          return created;
+        },
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          Object.assign(created, data);
+          return created;
+        },
+      },
+    } as unknown as PrismaService;
+
+    const service = new WhatsAppService(prisma, {} as never, {} as never);
+    const result = await service.sendTemplateMessage(
+      "conv_1",
+      "correccion_gasto",
+      "es",
+      [{ name: "nombre", text: "Carlos" }],
+      "Tu gasto requiere corrección.",
+    );
+
+    expect(result).toMatchObject({ deliveryStatus: "sent" });
+    expect(created.body).toBe("Tu gasto requiere corrección.");
   });
 });

@@ -163,6 +163,32 @@ export class WhatsAppService {
     body: string,
     authorUserId: string | null,
   ) {
+    return this.persistAndDispatch(conversationId, body, authorUserId, (phoneNumberId, waId) =>
+      this.sendViaKapso(phoneNumberId, waId, body),
+    );
+  }
+
+  async sendTemplateMessage(
+    conversationId: string,
+    templateName: string,
+    languageCode: string,
+    params: Array<{ name: string; text: string }>,
+    previewBody: string,
+  ) {
+    return this.persistAndDispatch(conversationId, previewBody, null, (phoneNumberId, waId) =>
+      this.sendViaKapsoTemplate(phoneNumberId, waId, templateName, languageCode, params),
+    );
+  }
+
+  private async persistAndDispatch(
+    conversationId: string,
+    body: string,
+    authorUserId: string | null,
+    dispatch: (
+      phoneNumberId: string,
+      waId: string,
+    ) => Promise<SendMessageResponse | Record<string, unknown>>,
+  ) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
       include: sendMessageConversationInclude,
@@ -187,45 +213,63 @@ export class WhatsAppService {
 
     await this.prisma.whatsAppConversation.update({
       where: { id: conversationId },
-      data: {
-        lastMessageText: body,
-        lastMessageAt: attemptedAt,
-      },
+      data: { lastMessageText: body, lastMessageAt: attemptedAt },
     });
 
     try {
-      const providerResult = await this.sendViaKapso(
-        conversation.account.phoneNumberId,
-        conversation.waId,
-        body,
-      );
-
+      const providerResult = await dispatch(conversation.account.phoneNumberId, conversation.waId);
       return this.prisma.whatsAppMessage.update({
         where: { id: message.id },
         data: {
           deliveryStatus: "sent",
-          payload: {
-            provider: "kapso",
-            providerResult: providerResult as Prisma.InputJsonValue,
-          },
+          payload: { provider: "kapso", providerResult: providerResult as Prisma.InputJsonValue },
         },
       });
     } catch (error) {
       const safeError = this.getSafeErrorMessage(error);
-      this.logger.error(`Kapso send failed for conversation ${conversation.id} (to: ${conversation.waId}): ${safeError}`);
+      this.logger.error(
+        `Kapso send failed for conversation ${conversation.id} (to: ${conversation.waId}): ${safeError}`,
+      );
       await this.prisma.whatsAppMessage.update({
         where: { id: message.id },
-        data: {
-          deliveryStatus: "failed",
-          payload: {
-            provider: "kapso",
-            error: this.getSafeErrorMessage(error),
-          },
-        },
+        data: { deliveryStatus: "failed", payload: { provider: "kapso", error: safeError } },
       });
-
       throw new BadGatewayException("Could not send WhatsApp message");
     }
+  }
+
+  private async sendViaKapsoTemplate(
+    phoneNumberId: string,
+    to: string,
+    templateName: string,
+    languageCode: string,
+    params: Array<{ name: string; text: string }>,
+  ): Promise<SendMessageResponse | Record<string, unknown>> {
+    const kapsoApiKey = process.env.KAPSO_API_KEY;
+
+    if (!kapsoApiKey || process.env.NODE_ENV === "test") {
+      return { id: "kapso-test-template", status: "queued", phoneNumberId, to, templateName };
+    }
+
+    const client = new WhatsAppClient({
+      baseUrl: process.env.KAPSO_API_BASE_URL ?? "https://api.kapso.ai/meta/whatsapp",
+      kapsoApiKey,
+    });
+
+    return client.messages.sendTemplate({
+      phoneNumberId,
+      to,
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        components: [
+          {
+            type: "body",
+            parameters: params.map((p) => ({ type: "text", parameter_name: p.name, text: p.text })),
+          },
+        ],
+      },
+    });
   }
 
   async createOrderDraft(user: AuthUser, conversationId: string, dto: CreateOrderDto) {
