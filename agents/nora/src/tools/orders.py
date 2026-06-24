@@ -195,37 +195,41 @@ async def get_customer_zones(
 async def create_order(
     customer_id: str,
     items: list[dict],
+    company_id: str,
     auth_token: Annotated[str, InjectedState("auth_token")],
+    customer_zone_id: Optional[str] = None,
     opportunity_id: Optional[str] = None,
     source_quote_id: Optional[str] = None,
     notes: Optional[str] = None,
 ) -> str:
     """
-    Crea un nuevo pedido en el CRM.
+    Crea un nuevo pedido en el CRM. El pedido queda en revisión (en_revision) para
+    que lo valide la persona encargada antes de facturación.
 
     IMPORTANTE: Antes de llamar esta herramienta DEBES:
     1. Identificar el cliente con search_customers
     2. Identificar los productos con search_products
-    3. Asegurarte de que cada item tenga product_id, quantity y unit_price
+    3. Determinar la empresa con get_companies (companyId es obligatorio)
+    4. Determinar la zona de despacho con get_customer_zones (si el cliente tiene zonas)
 
     Args:
         customer_id: ID del cliente (obligatorio)
-        items: Lista de items, cada uno con:
-            - product_id: ID del producto
-            - quantity: Cantidad (número, puede tener decimales)
-            - unit_price: Precio unitario en pesos
-            - notes: Notas del item (opcional)
+        items: Lista de items, cada uno con product_id, quantity, unit_price, notes (opc)
+        company_id: ID de la empresa que factura (obligatorio; usa get_companies)
+        customer_zone_id: ID de la zona de despacho del cliente (opcional; usa get_customer_zones)
         opportunity_id: ID de oportunidad relacionada (opcional)
         source_quote_id: ID de cotización origen (opcional)
         notes: Notas generales del pedido (opcional)
 
     Returns:
-        Datos del pedido creado con su ID, estado y total
+        Datos del pedido creado con su ID, estado y total. El total final lo calcula
+        el servidor según el precio base y el descuento del segmento del cliente.
     """
+    if not company_id:
+        return "Error: Debes indicar la empresa que factura el pedido. Usa get_companies y elige una."
     if not items or len(items) == 0:
         return "Error: Un pedido debe tener al menos un item."
 
-    # Normalizar items al formato esperado por la API NestJS
     normalized_items = []
     for idx, item in enumerate(items):
         product_id = item.get("product_id") or item.get("productId")
@@ -251,8 +255,12 @@ async def create_order(
 
     payload = {
         "customerId": customer_id,
+        "companyId": company_id,
         "items": normalized_items,
+        "approvalStatus": "en_revision",
     }
+    if customer_zone_id:
+        payload["customerZoneId"] = customer_zone_id
     if opportunity_id:
         payload["opportunityId"] = opportunity_id
     if source_quote_id:
@@ -267,7 +275,7 @@ async def create_order(
         total = result.get("total", "desconocido")
         status = result.get("status", "recibido")
         return (
-            f"Pedido creado exitosamente. "
+            f"Pedido creado exitosamente y enviado a revisión. "
             f"ID: {order_id}, Estado: {status}, Total: ${total}. "
             f"Detalle completo: {json.dumps(result, ensure_ascii=False, indent=2)}"
         )
