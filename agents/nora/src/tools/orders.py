@@ -6,6 +6,37 @@ from typing import Annotated, Optional
 
 
 @tool
+async def get_companies(
+    auth_token: Annotated[str, InjectedState("auth_token")],
+) -> str:
+    """
+    Obtiene las empresas que pueden facturar un pedido (ej: Nortech, Nanonutrición).
+    Úsala antes de crear un pedido para determinar el companyId. Si el usuario nombró
+    la empresa, escoge la que coincida; si solo hay una, úsala; si hay varias y no la
+    dijo, pregúntale cuál.
+
+    Returns:
+        Lista de empresas activas en JSON con id, nombre y prefix.
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+        result = await nestjs_client.get("/companies")
+        companies = result if isinstance(result, list) else result.get("data", [])
+        simplified = [
+            {"id": c["id"], "nombre": c.get("name"), "prefix": c.get("prefix")}
+            for c in companies
+            if c.get("isActive", True)
+        ]
+        if not simplified:
+            return "No hay empresas activas configuradas."
+        return f"Empresas disponibles: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+    except NestJSAPIError as e:
+        return f"Error al obtener empresas: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al obtener empresas: {str(e)}"
+
+
+@tool
 async def search_products(
     query: str,
     auth_token: Annotated[str, InjectedState("auth_token")],
