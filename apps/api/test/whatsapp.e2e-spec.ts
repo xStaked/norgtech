@@ -3053,7 +3053,7 @@ describe("WhatsAppService.sendTemplateMessage", () => {
       },
     } as unknown as PrismaService;
 
-    const service = new WhatsAppService(prisma, {} as never, {} as never);
+    const service = new WhatsAppService(prisma, {} as never, {} as never, {} as never);
     const result = await service.sendTemplateMessage(
       "conv_1",
       "correccion_gasto",
@@ -3064,5 +3064,64 @@ describe("WhatsAppService.sendTemplateMessage", () => {
 
     expect(result).toMatchObject({ deliveryStatus: "sent" });
     expect(created.body).toBe("Tu gasto requiere corrección.");
+  });
+});
+
+describe("WhatsAppService.notifyExpenseCorrection", () => {
+  const baseExpense = {
+    id: "exp_1",
+    amount: 50000,
+    category: "alimentacion",
+    expenseDate: new Date("2026-06-20T00:00:00.000Z"),
+    description: "Almuerzo",
+    supplierName: null,
+    supplierNit: null,
+    invoiceNumber: null,
+    paymentMethod: null,
+    reviewNote: "Falta el NIT del proveedor",
+    submittedByUserId: "user_1",
+    submittedBy: { name: "Carlos", phone: "+573001000099" },
+  };
+
+  function build() {
+    const account = { id: "acc_1" };
+    const conversation = { id: "conv_1", account: { phoneNumberId: "pn_1" } };
+    const prisma = {
+      whatsAppAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+      whatsAppConversation: { upsert: jest.fn().mockResolvedValue(conversation) },
+    } as unknown as PrismaService;
+    const noraCaseService = { createCase: jest.fn().mockResolvedValue({ id: "case_1" }) };
+    const service = new WhatsAppService(prisma, {} as never, {} as never, noraCaseService as never);
+    jest.spyOn(service, "sendTemplateMessage").mockResolvedValue({} as never);
+    return { service, prisma, noraCaseService };
+  }
+
+  it("opens a correction case and sends the template", async () => {
+    const { service, noraCaseService } = build();
+    await service.notifyExpenseCorrection(baseExpense as never);
+
+    expect(noraCaseService.createCase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "expense",
+        extractedData: expect.objectContaining({
+          mode: "correction",
+          expenseId: "exp_1",
+          reviewNote: "Falta el NIT del proveedor",
+        }),
+      }),
+    );
+    expect(service.sendTemplateMessage).toHaveBeenCalledWith(
+      "conv_1",
+      "correccion_gasto",
+      "es",
+      expect.arrayContaining([{ name: "motivo", text: "Falta el NIT del proveedor" }]),
+      expect.any(String),
+    );
+  });
+
+  it("skips silently when the comercial has no phone", async () => {
+    const { service, noraCaseService } = build();
+    await service.notifyExpenseCorrection({ ...baseExpense, submittedBy: { name: "Carlos", phone: null } } as never);
+    expect(noraCaseService.createCase).not.toHaveBeenCalled();
   });
 });

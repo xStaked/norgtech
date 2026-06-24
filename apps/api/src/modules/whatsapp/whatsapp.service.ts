@@ -6,7 +6,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
-import { Prisma, UserRole, WhatsAppSenderType } from "@prisma/client";
+import {
+  NoraCaseRiskLevel,
+  NoraConversationCaseStatus,
+  NoraConversationCaseType,
+  Prisma,
+  UserRole,
+  WhatsAppSenderType,
+} from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "../orders/dto/create-order.dto";
@@ -14,6 +21,7 @@ import { OrdersService } from "../orders/orders.service";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
+import { NoraCaseService } from "./nora-case.service";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 
 const conversationSummaryInclude = {
@@ -73,6 +81,21 @@ export type ResolvedWhatsAppSender =
       senderType: typeof WhatsAppSenderType.desconocido;
     };
 
+export type ExpenseCorrectionInput = {
+  id: string;
+  amount: Prisma.Decimal | number;
+  category: string;
+  expenseDate: Date;
+  description: string;
+  supplierName: string | null;
+  supplierNit: string | null;
+  invoiceNumber: string | null;
+  paymentMethod: string | null;
+  reviewNote: string | null;
+  submittedByUserId: string;
+  submittedBy: { name: string; phone: string | null } | null;
+};
+
 @Injectable()
 export class WhatsAppService {
   private readonly logger = new Logger(WhatsAppService.name);
@@ -81,6 +104,7 @@ export class WhatsAppService {
     private readonly prisma: PrismaService,
     private readonly ordersService: OrdersService,
     private readonly orderAutomation: WhatsAppOrderAutomationService,
+    private readonly noraCaseService: NoraCaseService,
   ) {}
 
   listConversations() {
@@ -177,6 +201,74 @@ export class WhatsAppService {
   ) {
     return this.persistAndDispatch(conversationId, previewBody, null, (phoneNumberId, waId) =>
       this.sendViaKapsoTemplate(phoneNumberId, waId, templateName, languageCode, params),
+    );
+  }
+
+  async notifyExpenseCorrection(expense: ExpenseCorrectionInput): Promise<void> {
+    const phone = expense.submittedBy?.phone?.trim();
+    if (!phone) {
+      this.logger.warn(`Expense ${expense.id} correction: submitter has no phone, skipping WhatsApp`);
+      return;
+    }
+
+    const account = await this.prisma.whatsAppAccount.findFirst();
+    if (!account) {
+      this.logger.warn(`Expense ${expense.id} correction: no WhatsAppAccount configured, skipping`);
+      return;
+    }
+
+    const waId = this.normalizePhone(phone);
+    const conversation = await this.prisma.whatsAppConversation.upsert({
+      where: { accountId_waId: { accountId: account.id, waId } },
+      update: {},
+      create: {
+        accountId: account.id,
+        waId,
+        phone,
+        status: "pendiente",
+        senderType: WhatsAppSenderType.comercial,
+      },
+      include: { account: true },
+    });
+
+    await this.noraCaseService.createCase({
+      conversationId: conversation.id,
+      type: NoraConversationCaseType.expense,
+      status: NoraConversationCaseStatus.collecting_info,
+      extractedData: {
+        mode: "correction",
+        expenseId: expense.id,
+        reviewNote: expense.reviewNote ?? "",
+        amount: Number(expense.amount),
+        category: expense.category,
+        expenseDate: expense.expenseDate.toISOString().slice(0, 10),
+        description: expense.description,
+        supplierName: expense.supplierName,
+        supplierNit: expense.supplierNit,
+        invoiceNumber: expense.invoiceNumber,
+        paymentMethod: expense.paymentMethod,
+      },
+      missingFields: [],
+      riskLevel: NoraCaseRiskLevel.medium,
+      createdByUserId: expense.submittedByUserId,
+    });
+
+    const valor = new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      maximumFractionDigits: 0,
+    }).format(Number(expense.amount));
+
+    await this.sendTemplateMessage(
+      conversation.id,
+      "correccion_gasto",
+      "es",
+      [
+        { name: "nombre", text: expense.submittedBy?.name ?? "comercial" },
+        { name: "valor", text: valor },
+        { name: "motivo", text: expense.reviewNote ?? "" },
+      ],
+      `Hola ${expense.submittedBy?.name ?? ""}, tu gasto por ${valor} requiere corrección. Motivo: ${expense.reviewNote ?? ""}. Respóndeme aquí y te ayudo a corregirlo.`,
     );
   }
 
