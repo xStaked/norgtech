@@ -148,3 +148,42 @@ async def get_cartera(
         return f"Error al obtener la cartera: {e.detail}"
     except Exception as e:
         return f"Error inesperado al obtener la cartera: {str(e)}"
+
+
+@tool
+async def get_goal_progress(
+    auth_token: Annotated[str, InjectedState("auth_token")],
+) -> str:
+    """
+    Progreso del comercial actual frente a su meta de ventas del periodo más
+    reciente. Úsala para '¿cuánto llevo de mi meta?', '¿cuánto me falta?'.
+
+    Returns:
+        Meta, vendido, faltante, porcentaje y periodo; o un mensaje claro si no
+        hay meta asignada.
+    """
+    try:
+        client = NestJSClient(auth_token)
+        me = await client.get("/auth/me")
+        user_id = me.get("id")
+        if not user_id:
+            return "No pude identificar tu usuario para consultar la meta."
+        try:
+            prog = await client.get(f"/users/{user_id}/seller-goals/progress")
+        except NestJSAPIError as e:
+            if e.status_code == 404:
+                return "Aún no tienes una meta de ventas asignada para este periodo."
+            raise
+        summary = {
+            "periodo": f"{prog.get('periodType')} {prog.get('periodValue')}",
+            "meta": prog.get("targetAmount"),
+            "vendido": prog.get("soldAmount"),
+            "falta": prog.get("remainingAmount"),
+            "porcentaje": prog.get("percentage"),
+            "pedidos": prog.get("ordersCount"),
+        }
+        return f"Progreso de meta: {json.dumps(summary, ensure_ascii=False)}"
+    except NestJSAPIError as e:
+        return f"Error al obtener el progreso de meta: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al obtener el progreso de meta: {str(e)}"

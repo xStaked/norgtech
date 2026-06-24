@@ -2,7 +2,7 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import json
-from src.tools.analytics import get_sales_summary, get_cartera
+from src.tools.analytics import get_sales_summary, get_cartera, get_goal_progress
 from src.tools.nestjs_client import NestJSAPIError
 
 
@@ -144,3 +144,37 @@ def test_get_cartera_caps_overdue_to_top_5_by_saldo():
     saldos = [v["saldo"] for v in vencidas]
     assert saldos == sorted(saldos, reverse=True)
     assert vencidas[0]["saldo"] >= vencidas[1]["saldo"]
+
+
+def test_get_goal_progress_happy_path():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(side_effect=[
+        {"id": "user_1", "email": "a@b.co", "role": "comercial"},
+        {"periodType": "mensual", "periodValue": "2026-06", "targetAmount": 300000000,
+         "soldAmount": 100000000, "remainingAmount": 200000000, "percentage": 33.33,
+         "ordersCount": 5},
+    ])
+
+    with patch("src.tools.analytics.NestJSClient", return_value=fake_client):
+        result = asyncio.run(get_goal_progress.ainvoke({"auth_token": "Bearer scoped"}))
+
+    assert fake_client.get.await_args_list[0].args[0] == "/auth/me"
+    assert fake_client.get.await_args_list[1].args[0] == "/users/user_1/seller-goals/progress"
+    payload = json.loads(result[result.index("{"):])
+    assert payload["meta"] == 300000000
+    assert payload["vendido"] == 100000000
+    assert payload["porcentaje"] == 33.33
+
+
+def test_get_goal_progress_no_goal_returns_friendly_message():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(side_effect=[
+        {"id": "user_1"},
+        NestJSAPIError(404, "No seller goals found"),
+    ])
+
+    with patch("src.tools.analytics.NestJSClient", return_value=fake_client):
+        result = asyncio.run(get_goal_progress.ainvoke({"auth_token": "Bearer scoped"}))
+
+    assert "meta" in result.lower()
+    assert "{" not in result  # mensaje plano, sin JSON
