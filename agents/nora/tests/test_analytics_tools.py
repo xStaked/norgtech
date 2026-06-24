@@ -178,3 +178,10 @@ def test_get_goal_progress_no_goal_returns_friendly_message():
 
     assert "meta" in result.lower()
     assert "{" not in result  # mensaje plano, sin JSON
+
+
+def test_analytics_tools_registered_in_web_agent():
+    from src.agent import ALL_TOOLS
+
+    names = {t.name for t in ALL_TOOLS}
+    assert {"get_sales_summary", "get_cartera", "get_goal_progress"} <= names
