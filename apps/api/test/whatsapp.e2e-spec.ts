@@ -3026,6 +3026,197 @@ describe("WhatsApp inbox", () => {
       }
     });
   });
+
+  describe("general-agent branch (NORA_WHATSAPP_GENERAL_AGENT)", () => {
+    it("routes a commercial general message to the Nora general agent when the flag is on", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+
+      const account = {
+        id: "account-general-agent",
+        phoneNumberId: "phone-number-general-agent",
+        phoneNumber: "phone-number-general-agent",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-general-agent",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-24T10:00:00.000Z"),
+        lastMessageText: "¿qué tengo hoy?",
+        createdAt: new Date("2026-06-24T09:59:00.000Z"),
+        updatedAt: new Date("2026-06-24T10:00:00.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      // No open case, no media — pure general query
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ reply_text: "Hoy tienes 2 visitas.", case_update: null, executed_entity: null }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-general-agent",
+              message: {
+                id: "kapso-general-agent-msg",
+                from: "+573004445566",
+                text: { body: "¿qué tengo hoy?" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              conversation_id?: string;
+            };
+            return body.conversation_id === "conversation-general-agent";
+          });
+
+        const generalCall = forThisConversation("/whatsapp/agent/general");
+        expect(generalCall).toBeDefined();
+
+        const routeCall = forThisConversation("/whatsapp/route");
+        expect(routeCall).toBeUndefined();
+      } finally {
+        if (prev === undefined) {
+          delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        }
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-general-agent");
+        removeMatching(accounts, (item) => item.id === "account-general-agent");
+        removeMatching(messages, (item) => item.conversationId === "conversation-general-agent");
+      }
+    });
+
+    it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+
+      const account = {
+        id: "account-general-flagoff",
+        phoneNumberId: "phone-number-general-flagoff",
+        phoneNumber: "phone-number-general-flagoff",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-general-flagoff",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-24T11:00:00.000Z"),
+        lastMessageText: "¿qué tengo hoy?",
+        createdAt: new Date("2026-06-24T10:59:00.000Z"),
+        updatedAt: new Date("2026-06-24T11:00:00.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            mode: "comercial",
+            intent: "agenda",
+            summary: "Comercial consulta agenda.",
+            suggested_reply: "Revisaré tu agenda.",
+            requires_human_review: false,
+          }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-general-flagoff",
+              message: {
+                id: "kapso-general-flagoff-msg",
+                from: "+573004445566",
+                text: { body: "¿qué tengo hoy?" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              conversation_id?: string;
+              message?: string;
+            };
+            return body.conversation_id === "conversation-general-flagoff" ||
+              body.message === "¿qué tengo hoy?";
+          });
+
+        const routeCall = forThisConversation("/whatsapp/route");
+        expect(routeCall).toBeDefined();
+
+        const generalCall = forThisConversation("/whatsapp/agent/general");
+        expect(generalCall).toBeUndefined();
+      } finally {
+        if (prev === undefined) {
+          delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        }
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-general-flagoff");
+        removeMatching(accounts, (item) => item.id === "account-general-flagoff");
+        removeMatching(messages, (item) => item.conversationId === "conversation-general-flagoff");
+      }
+    });
+  });
 });
 
 describe("WhatsAppService.sendTemplateMessage", () => {

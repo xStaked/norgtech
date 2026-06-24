@@ -135,6 +135,44 @@ export class NoraRoutingService {
         }
       }
 
+      if (
+        process.env.NORA_WHATSAPP_GENERAL_AGENT === "true" &&
+        "userId" in sender &&
+        sender.userId &&
+        !openCase &&
+        !mediaPayload
+      ) {
+        try {
+          const scopedToken = await this.authService.mintScopedToken(sender.userId);
+          const agentResponse = await this.requestNoraGeneralAgent({
+            current_message: message.body,
+            history: context.recent_messages,
+            conversation_id: conversation.id,
+            auth: `Bearer ${scopedToken}`,
+          });
+
+          await this.prisma.noraActionLog.update({
+            where: { id: actionLog.id },
+            data: {
+              status: agentResponse.executed_entity
+                ? NoraActionStatus.executed
+                : NoraActionStatus.proposed,
+              output: agentResponse as unknown as Prisma.InputJsonObject,
+            },
+          });
+
+          if (agentResponse.reply_text) {
+            await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+          }
+          return;
+        } catch (error) {
+          this.logger.error(
+            `Nora general agent failed, falling back to planner: ${String(error)}`,
+          );
+          // fall through to the planner path below
+        }
+      }
+
       const noraResponse = await this.requestNoraRoute({
         sender_type: sender.senderType,
         message: message.body,
@@ -303,6 +341,23 @@ export class NoraRoutingService {
     });
     if (!response.ok) {
       throw new Error(`Nora agent request failed with status ${response.status}`);
+    }
+    return response.json() as Promise<{
+      reply_text: string;
+      case_update: Record<string, unknown> | null;
+      executed_entity: Record<string, unknown> | null;
+    }>;
+  }
+
+  private async requestNoraGeneralAgent(payload: Record<string, unknown>) {
+    const noraApiUrl = process.env.NORA_API_URL ?? "http://localhost:8000";
+    const response = await fetch(`${noraApiUrl}/whatsapp/agent/general`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Nora general agent request failed with status ${response.status}`);
     }
     return response.json() as Promise<{
       reply_text: string;
