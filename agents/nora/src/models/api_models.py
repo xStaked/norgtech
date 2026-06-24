@@ -54,6 +54,8 @@ class NoraOrderBlock(BaseModel):
     enabled: bool
     action: Literal["create", "update", "delete"] = "create"
     customerId: Optional[str] = None
+    companyId: Optional[str] = None
+    customerZoneId: Optional[str] = None
     opportunityId: Optional[str] = None
     sourceQuoteId: Optional[str] = None
     notes: Optional[str] = None
