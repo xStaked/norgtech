@@ -2,8 +2,11 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import {
   CommercialExpense,
@@ -15,6 +18,7 @@ import { Readable } from "node:stream";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import {
   EXPENSE_SUPPORT_ALLOWED_MIME_TYPES,
   EXPENSE_SUPPORT_MAX_BYTES,
@@ -65,11 +69,15 @@ const commercialExpenseInclude = {
 
 @Injectable()
 export class CommercialExpensesService {
+  private readonly logger = new Logger(CommercialExpensesService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     private readonly storageService: R2StorageService,
     private readonly exportService: CommercialExpensesExportService,
+    @Inject(forwardRef(() => WhatsAppService))
+    private readonly whatsAppService: WhatsAppService,
   ) {}
 
   async create(
@@ -338,7 +346,7 @@ export class CommercialExpensesService {
       throw new ForbiddenException("Commercial expense status cannot be updated");
     }
 
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const expense = await tx.commercialExpense.findUnique({
         where: { id },
         include: commercialExpenseInclude,
@@ -412,6 +420,32 @@ export class CommercialExpensesService {
 
       return updated;
     });
+
+    if (updated.status === CommercialExpenseStatus.requiere_correccion) {
+      try {
+        await this.whatsAppService.notifyExpenseCorrection({
+          id: updated.id,
+          amount: updated.amount,
+          category: updated.category,
+          expenseDate: updated.expenseDate,
+          description: updated.description,
+          supplierName: updated.supplierName,
+          supplierNit: updated.supplierNit,
+          invoiceNumber: updated.invoiceNumber,
+          paymentMethod: updated.paymentMethod,
+          reviewNote: updated.reviewNote,
+          submittedByUserId: updated.submittedByUserId,
+          submittedBy: updated.submittedBy
+            ? { name: updated.submittedBy.name, phone: updated.submittedBy.phone }
+            : null,
+        });
+      } catch (error) {
+        // No bloquea el cambio de estado; el comercial igual lo ve en la app.
+        this.logger.error(`WhatsApp correction notify failed for ${updated.id}: ${String(error)}`);
+      }
+    }
+
+    return updated;
   }
 
   async getSupport(

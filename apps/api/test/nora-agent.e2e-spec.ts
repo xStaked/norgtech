@@ -15,6 +15,7 @@ import { AuthService } from "../src/modules/auth/auth.service";
 import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
 import { NoraExpenseExecutionService } from "../src/modules/whatsapp/nora-expense-execution.service";
 import { NoraAgentController } from "../src/modules/whatsapp/nora-agent.controller";
+import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId
@@ -90,6 +91,7 @@ describe("CommercialExpensesService.createFromBuffer", () => {
         { provide: AuditService, useValue: auditService },
         { provide: R2StorageService, useValue: storageService },
         { provide: CommercialExpensesExportService, useValue: exportService },
+        { provide: WhatsAppService, useValue: { notifyExpenseCorrection: jest.fn() } },
       ],
     }).compile();
 
@@ -294,6 +296,45 @@ describe("NoraExpenseExecutionService.executeFromWhatsApp", () => {
       "case_1",
       expect.objectContaining({ executedEntityType: null }),
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 4 (update path): NoraExpenseExecutionService.updateFromWhatsApp
+// ---------------------------------------------------------------------------
+
+describe("NoraExpenseExecutionService.updateFromWhatsApp", () => {
+  it("updates the expense and closes the open case", async () => {
+    const noraCaseService = {
+      findOpenCase: jest.fn().mockResolvedValue({ id: "case_1" }),
+      updateCase: jest.fn().mockResolvedValue(undefined),
+    };
+    const expensesService = {
+      update: jest.fn().mockResolvedValue({ id: "exp_1", status: "pendiente" }),
+    };
+    const service = new NoraExpenseExecutionService(
+      noraCaseService as never, expensesService as never, {} as never, {} as never,
+    );
+
+    const result = await service.updateFromWhatsApp({
+      user: { id: "user_1" } as never,
+      conversationId: "conv_1",
+      expenseId: "exp_1",
+      dto: { supplierNit: "900123456" } as never,
+    });
+
+    expect(expensesService.update).toHaveBeenCalledWith(
+      { id: "user_1" }, "exp_1", { supplierNit: "900123456" },
+    );
+    expect(noraCaseService.updateCase).toHaveBeenCalledWith(
+      "case_1",
+      expect.objectContaining({
+        status: NoraConversationCaseStatus.executed,
+        executedEntityType: "CommercialExpense",
+        executedEntityId: "exp_1",
+      }),
+    );
+    expect(result).toEqual({ id: "exp_1", status: "pendiente" });
   });
 });
 

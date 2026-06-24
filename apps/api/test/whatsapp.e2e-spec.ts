@@ -17,6 +17,7 @@ import { AppModule } from "../src/app.module";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { WhatsAppOrderAutomationService } from "../src/modules/whatsapp/whatsapp-order-automation.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 describe("WhatsApp inbox", () => {
   let app: INestApplication;
@@ -3024,5 +3025,103 @@ describe("WhatsApp inbox", () => {
         removeMatching(messages, (item) => item.conversationId === "conversation-fallback-expense");
       }
     });
+  });
+});
+
+describe("WhatsAppService.sendTemplateMessage", () => {
+  it("persists an outbound message and dispatches a template via Kapso", async () => {
+    process.env.NODE_ENV = "test"; // forces the Kapso mock path
+    const created: Record<string, unknown> = {};
+    const prisma = {
+      whatsAppConversation: {
+        findUnique: async () => ({
+          id: "conv_1",
+          waId: "573001000099",
+          account: { phoneNumberId: "pn_1" },
+        }),
+        update: async () => ({}),
+      },
+      whatsAppMessage: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          Object.assign(created, { id: "msg_1", ...data });
+          return created;
+        },
+        update: async ({ data }: { data: Record<string, unknown> }) => {
+          Object.assign(created, data);
+          return created;
+        },
+      },
+    } as unknown as PrismaService;
+
+    const service = new WhatsAppService(prisma, {} as never, {} as never, {} as never);
+    const result = await service.sendTemplateMessage(
+      "conv_1",
+      "correccion_gasto",
+      "es",
+      [{ name: "nombre", text: "Carlos" }],
+      "Tu gasto requiere corrección.",
+    );
+
+    expect(result).toMatchObject({ deliveryStatus: "sent" });
+    expect(created.body).toBe("Tu gasto requiere corrección.");
+  });
+});
+
+describe("WhatsAppService.notifyExpenseCorrection", () => {
+  const baseExpense = {
+    id: "exp_1",
+    amount: 50000,
+    category: "alimentacion",
+    expenseDate: new Date("2026-06-20T00:00:00.000Z"),
+    description: "Almuerzo",
+    supplierName: null,
+    supplierNit: null,
+    invoiceNumber: null,
+    paymentMethod: null,
+    reviewNote: "Falta el NIT del proveedor",
+    submittedByUserId: "user_1",
+    submittedBy: { name: "Carlos", phone: "+573001000099" },
+  };
+
+  function build() {
+    const account = { id: "acc_1" };
+    const conversation = { id: "conv_1", account: { phoneNumberId: "pn_1" } };
+    const prisma = {
+      whatsAppAccount: { findFirst: jest.fn().mockResolvedValue(account) },
+      whatsAppConversation: { upsert: jest.fn().mockResolvedValue(conversation) },
+    } as unknown as PrismaService;
+    const noraCaseService = { createCase: jest.fn().mockResolvedValue({ id: "case_1" }) };
+    const service = new WhatsAppService(prisma, {} as never, {} as never, noraCaseService as never);
+    jest.spyOn(service, "sendTemplateMessage").mockResolvedValue({} as never);
+    return { service, prisma, noraCaseService };
+  }
+
+  it("opens a correction case and sends the template", async () => {
+    const { service, noraCaseService } = build();
+    await service.notifyExpenseCorrection(baseExpense as never);
+
+    expect(noraCaseService.createCase).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "expense",
+        extractedData: expect.objectContaining({
+          mode: "correction",
+          expenseId: "exp_1",
+          reviewNote: "Falta el NIT del proveedor",
+        }),
+      }),
+    );
+    expect(service.sendTemplateMessage).toHaveBeenCalledWith(
+      "conv_1",
+      "correccion_gasto",
+      "es",
+      expect.arrayContaining([{ name: "motivo", text: "Falta el NIT del proveedor" }]),
+      expect.any(String),
+    );
+  });
+
+  it("skips silently when the comercial has no phone", async () => {
+    const { service, noraCaseService } = build();
+    await service.notifyExpenseCorrection({ ...baseExpense, submittedBy: { name: "Carlos", phone: null } } as never);
+    expect(noraCaseService.createCase).not.toHaveBeenCalled();
   });
 });

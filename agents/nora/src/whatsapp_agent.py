@@ -15,9 +15,9 @@ from langgraph.prebuilt import ToolNode
 from .agent import create_llm
 from .models.whatsapp_models import WhatsAppAgentRequest, WhatsAppAgentResponse
 from .prompts.expense_agent import EXPENSE_AGENT_PROMPT
-from .tools.expenses import create_expense, lookup_customer
+from .tools.expenses import create_expense, lookup_customer, update_expense
 
-EXPENSE_TOOLS = [lookup_customer, create_expense]
+EXPENSE_TOOLS = [lookup_customer, create_expense, update_expense]
 
 
 class _AgentState(TypedDict):
@@ -61,13 +61,21 @@ def _case_context_block(request: WhatsAppAgentRequest) -> str:
     if not case:
         return "[CASO DE GASTO] No hay caso abierto."
     has_support = bool(case.attachments) or bool(request.attachments)
-    return (
+    data = case.extractedData or {}
+    base = (
         "[CASO DE GASTO]\n"
         f"- estado: {case.status}\n"
-        f"- datos leidos: {json.dumps(case.extractedData, ensure_ascii=False)}\n"
+        f"- datos leidos: {json.dumps(data, ensure_ascii=False)}\n"
         f"- campos faltantes: {json.dumps(case.missingFields, ensure_ascii=False)}\n"
         f"- soporte adjunto: {'si' if has_support else 'no'}"
     )
+    if data.get("mode") == "correction":
+        base += (
+            "\n- MODO: correccion de un gasto YA registrado\n"
+            f"- expense_id: {data.get('expenseId')}\n"
+            f"- motivo de correccion: {data.get('reviewNote')}"
+        )
+    return base
 
 
 def _to_messages(request: WhatsAppAgentRequest) -> list:

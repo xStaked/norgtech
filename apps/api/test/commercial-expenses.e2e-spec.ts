@@ -11,8 +11,10 @@ import { Readable } from "node:stream";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { CommercialExpenseExtractionService } from "../src/modules/commercial-expenses/commercial-expense-extraction.service";
+import { CommercialExpensesService } from "../src/modules/commercial-expenses/commercial-expenses.service";
 import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -631,6 +633,63 @@ describe("CommercialExpenses", () => {
 
     expect(response.body.totalAmount).toBeGreaterThan(0);
     expect(response.body.byCategory.alimentacion).toBeGreaterThan(0);
+  });
+
+  describe("CommercialExpensesService.updateStatus correction notification", () => {
+    function build(currentStatus = "pendiente", postStatus = "requiere_correccion") {
+      const expense = {
+        id: "exp_1",
+        status: currentStatus,
+        submittedByUserId: "user_1",
+        submittedBy: { id: "user_1", name: "Carlos", phone: "+573001000099" },
+        amount: 50000,
+        category: "alimentacion",
+        expenseDate: new Date("2026-06-20"),
+        description: "Almuerzo",
+        supplierName: null, supplierNit: null, invoiceNumber: null, paymentMethod: null,
+        reviewNote: null,
+      };
+      const tx = {
+        commercialExpense: {
+          findUnique: jest.fn().mockResolvedValue(expense),
+          updateMany: jest.fn().mockResolvedValue({ count: 1 }),
+        },
+      };
+      // second findUnique (post-update) returns the updated expense
+      const postExpense = postStatus === "requiere_correccion"
+        ? { ...expense, status: "requiere_correccion", reviewNote: "Falta NIT" }
+        : { ...expense, status: postStatus };
+      tx.commercialExpense.findUnique
+        .mockResolvedValueOnce(expense)
+        .mockResolvedValueOnce(postExpense);
+      const prisma = { $transaction: (fn: (c: typeof tx) => unknown) => fn(tx) } as never;
+      const auditService = { record: jest.fn() };
+      const whatsapp = { notifyExpenseCorrection: jest.fn().mockResolvedValue(undefined) };
+      const service = new CommercialExpensesService(
+        prisma, auditService as never, {} as never, {} as never, whatsapp as never,
+      );
+      (service as any).isControlRole = () => true;
+      (service as any).assertCanRead = () => undefined;
+      return { service, whatsapp };
+    }
+
+    it("notifies WhatsApp when transitioning to requiere_correccion", async () => {
+      const { service, whatsapp } = build();
+      await service.updateStatus({ id: "admin" } as never, "exp_1", {
+        status: "requiere_correccion", reviewNote: "Falta NIT",
+      } as never);
+      expect(whatsapp.notifyExpenseCorrection).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "exp_1", reviewNote: "Falta NIT" }),
+      );
+    });
+
+    it("does not notify on other transitions", async () => {
+      // build() with current status "pendiente"; post-update findUnique returns "aprobado"
+      const { service, whatsapp } = build("pendiente", "aprobado");
+      await service.updateStatus({ id: "admin" } as never, "exp_1", { status: "aprobado" } as never)
+        .catch(() => undefined);
+      expect(whatsapp.notifyExpenseCorrection).not.toHaveBeenCalled();
+    });
   });
 
   it("exports CSV and XLSX with expected content types", async () => {

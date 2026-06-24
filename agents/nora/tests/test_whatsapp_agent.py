@@ -245,6 +245,32 @@ class TestExtractExecutedEntity:
 
 _has_api_key = bool(os.environ.get("OPENAI_API_KEY", "").strip())
 
+def test_case_block_includes_correction_mode():
+    request = WhatsAppAgentRequest(
+        current_message="el NIT es 900123456",
+        history=[],
+        open_case={
+            "id": "case_1",
+            "type": "expense",
+            "status": "collecting_info",
+            "extractedData": {
+                "mode": "correction",
+                "expenseId": "exp_1",
+                "reviewNote": "Falta el NIT del proveedor",
+            },
+            "missingFields": [],
+            "attachments": [],
+            "lastQuestion": None,
+        },
+        conversation_id="conv_1",
+        auth="Bearer x",
+    )
+    block = _case_context_block(request)
+    assert "correccion" in block.lower()
+    assert "exp_1" in block
+    assert "Falta el NIT" in block
+
+
 @pytest.mark.skipif(
     not _has_api_key,
     reason="OPENAI_API_KEY not set — skipping live-LLM tests",

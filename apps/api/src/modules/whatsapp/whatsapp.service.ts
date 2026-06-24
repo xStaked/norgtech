@@ -1,12 +1,22 @@
 import {
   BadGatewayException,
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
-import { Prisma, UserRole, WhatsAppSenderType } from "@prisma/client";
+import {
+  NoraCaseRiskLevel,
+  NoraConversationCaseStatus,
+  NoraConversationCaseType,
+  Prisma,
+  UserRole,
+  WhatsAppConversationStatus,
+  WhatsAppSenderType,
+} from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "../orders/dto/create-order.dto";
@@ -14,6 +24,7 @@ import { OrdersService } from "../orders/orders.service";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
+import { NoraCaseService } from "./nora-case.service";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 
 const conversationSummaryInclude = {
@@ -73,14 +84,31 @@ export type ResolvedWhatsAppSender =
       senderType: typeof WhatsAppSenderType.desconocido;
     };
 
+export type ExpenseCorrectionInput = {
+  id: string;
+  amount: Prisma.Decimal | number;
+  category: string;
+  expenseDate: Date;
+  description: string;
+  supplierName: string | null;
+  supplierNit: string | null;
+  invoiceNumber: string | null;
+  paymentMethod: string | null;
+  reviewNote: string | null;
+  submittedByUserId: string;
+  submittedBy: { name: string; phone: string | null } | null;
+};
+
 @Injectable()
 export class WhatsAppService {
   private readonly logger = new Logger(WhatsAppService.name);
 
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
     private readonly orderAutomation: WhatsAppOrderAutomationService,
+    private readonly noraCaseService: NoraCaseService,
   ) {}
 
   listConversations() {
@@ -163,6 +191,100 @@ export class WhatsAppService {
     body: string,
     authorUserId: string | null,
   ) {
+    return this.persistAndDispatch(conversationId, body, authorUserId, (phoneNumberId, waId) =>
+      this.sendViaKapso(phoneNumberId, waId, body),
+    );
+  }
+
+  async sendTemplateMessage(
+    conversationId: string,
+    templateName: string,
+    languageCode: string,
+    params: Array<{ name: string; text: string }>,
+    previewBody: string,
+  ) {
+    return this.persistAndDispatch(conversationId, previewBody, null, (phoneNumberId, waId) =>
+      this.sendViaKapsoTemplate(phoneNumberId, waId, templateName, languageCode, params),
+    );
+  }
+
+  async notifyExpenseCorrection(expense: ExpenseCorrectionInput): Promise<void> {
+    const phone = expense.submittedBy?.phone?.trim();
+    if (!phone) {
+      this.logger.warn(`Expense ${expense.id} correction: submitter has no phone, skipping WhatsApp`);
+      return;
+    }
+
+    const account = await this.prisma.whatsAppAccount.findFirst();
+    if (!account) {
+      this.logger.warn(`Expense ${expense.id} correction: no WhatsAppAccount configured, skipping`);
+      return;
+    }
+
+    const waId = this.normalizePhone(phone);
+    const conversation = await this.prisma.whatsAppConversation.upsert({
+      where: { accountId_waId: { accountId: account.id, waId } },
+      update: {},
+      create: {
+        accountId: account.id,
+        waId,
+        phone,
+        status: WhatsAppConversationStatus.pendiente,
+        senderType: WhatsAppSenderType.comercial,
+      },
+      include: { account: true },
+    });
+
+    await this.noraCaseService.createCase({
+      conversationId: conversation.id,
+      type: NoraConversationCaseType.expense,
+      status: NoraConversationCaseStatus.collecting_info,
+      extractedData: {
+        mode: "correction",
+        expenseId: expense.id,
+        reviewNote: expense.reviewNote ?? "",
+        amount: Number(expense.amount),
+        category: expense.category,
+        expenseDate: expense.expenseDate.toISOString().slice(0, 10),
+        description: expense.description,
+        supplierName: expense.supplierName,
+        supplierNit: expense.supplierNit,
+        invoiceNumber: expense.invoiceNumber,
+        paymentMethod: expense.paymentMethod,
+      },
+      missingFields: [],
+      riskLevel: NoraCaseRiskLevel.medium,
+      createdByUserId: expense.submittedByUserId,
+    });
+
+    const valor = new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      maximumFractionDigits: 0,
+    }).format(Number(expense.amount));
+
+    await this.sendTemplateMessage(
+      conversation.id,
+      "correccion_gasto",
+      "es",
+      [
+        { name: "nombre", text: expense.submittedBy?.name ?? "comercial" },
+        { name: "valor", text: valor },
+        { name: "motivo", text: expense.reviewNote ?? "" },
+      ],
+      `Hola ${expense.submittedBy?.name ?? ""}, tu gasto por ${valor} requiere corrección. Motivo: ${expense.reviewNote ?? ""}. Respóndeme aquí y te ayudo a corregirlo.`,
+    );
+  }
+
+  private async persistAndDispatch(
+    conversationId: string,
+    body: string,
+    authorUserId: string | null,
+    dispatch: (
+      phoneNumberId: string,
+      waId: string,
+    ) => Promise<SendMessageResponse | Record<string, unknown>>,
+  ) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
       include: sendMessageConversationInclude,
@@ -187,45 +309,63 @@ export class WhatsAppService {
 
     await this.prisma.whatsAppConversation.update({
       where: { id: conversationId },
-      data: {
-        lastMessageText: body,
-        lastMessageAt: attemptedAt,
-      },
+      data: { lastMessageText: body, lastMessageAt: attemptedAt },
     });
 
     try {
-      const providerResult = await this.sendViaKapso(
-        conversation.account.phoneNumberId,
-        conversation.waId,
-        body,
-      );
-
+      const providerResult = await dispatch(conversation.account.phoneNumberId, conversation.waId);
       return this.prisma.whatsAppMessage.update({
         where: { id: message.id },
         data: {
           deliveryStatus: "sent",
-          payload: {
-            provider: "kapso",
-            providerResult: providerResult as Prisma.InputJsonValue,
-          },
+          payload: { provider: "kapso", providerResult: providerResult as Prisma.InputJsonValue },
         },
       });
     } catch (error) {
       const safeError = this.getSafeErrorMessage(error);
-      this.logger.error(`Kapso send failed for conversation ${conversation.id} (to: ${conversation.waId}): ${safeError}`);
+      this.logger.error(
+        `Kapso send failed for conversation ${conversation.id} (to: ${conversation.waId}): ${safeError}`,
+      );
       await this.prisma.whatsAppMessage.update({
         where: { id: message.id },
-        data: {
-          deliveryStatus: "failed",
-          payload: {
-            provider: "kapso",
-            error: this.getSafeErrorMessage(error),
-          },
-        },
+        data: { deliveryStatus: "failed", payload: { provider: "kapso", error: safeError } },
       });
-
       throw new BadGatewayException("Could not send WhatsApp message");
     }
+  }
+
+  private async sendViaKapsoTemplate(
+    phoneNumberId: string,
+    to: string,
+    templateName: string,
+    languageCode: string,
+    params: Array<{ name: string; text: string }>,
+  ): Promise<SendMessageResponse | Record<string, unknown>> {
+    const kapsoApiKey = process.env.KAPSO_API_KEY;
+
+    if (!kapsoApiKey || process.env.NODE_ENV === "test") {
+      return { id: "kapso-test-template", status: "queued", phoneNumberId, to, templateName };
+    }
+
+    const client = new WhatsAppClient({
+      baseUrl: process.env.KAPSO_API_BASE_URL ?? "https://api.kapso.ai/meta/whatsapp",
+      kapsoApiKey,
+    });
+
+    return client.messages.sendTemplate({
+      phoneNumberId,
+      to,
+      template: {
+        name: templateName,
+        language: { code: languageCode },
+        components: [
+          {
+            type: "body",
+            parameters: params.map((p) => ({ type: "text", parameter_name: p.name, text: p.text })),
+          },
+        ],
+      },
+    });
   }
 
   async createOrderDraft(user: AuthUser, conversationId: string, dto: CreateOrderDto) {

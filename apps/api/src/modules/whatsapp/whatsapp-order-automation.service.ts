@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { Inject, Injectable, NotFoundException, forwardRef } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -38,6 +38,7 @@ type ActiveProduct = {
 export class WhatsAppOrderAutomationService {
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
   ) {}
 

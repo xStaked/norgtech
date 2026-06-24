@@ -97,3 +97,63 @@ async def create_expense(
         )
         logger.error("create_expense unexpected error: %s", msg)
         return msg
+
+
+@tool
+async def update_expense(
+    expense_id: str,
+    conversation_id: Annotated[str, InjectedState("conversation_id")],
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    expense_date: Optional[str] = None,
+    category: Optional[str] = None,
+    amount: Optional[float] = None,
+    description: Optional[str] = None,
+    supplier_name: Optional[str] = None,
+    supplier_nit: Optional[str] = None,
+    invoice_number: Optional[str] = None,
+    payment_method: Optional[str] = None,
+    customer_id: Optional[str] = None,
+    visit_id: Optional[str] = None,
+) -> str:
+    """
+    Corrige un gasto existente que está en estado 'requiere_correccion' y lo
+    reenvía a revisión. Llama esta herramienta UNA sola vez, cuando el comercial
+    haya confirmado todos los cambios. Pasa SOLO los campos que cambian.
+
+    Args:
+        expense_id: ID del gasto a corregir (viene en el [CASO DE GASTO]).
+        Resto de campos: mismos valores válidos que create_expense; opcionales.
+    """
+    payload: dict = {"conversationId": conversation_id}
+    optional = {
+        "expenseDate": expense_date,
+        "category": category,
+        "amount": amount,
+        "description": description,
+        "supplierName": supplier_name,
+        "supplierNit": supplier_nit,
+        "invoiceNumber": invoice_number,
+        "paymentMethod": payment_method,
+        "customerId": customer_id,
+        "visitId": visit_id,
+    }
+    for key, value in optional.items():
+        if value is not None:
+            payload[key] = value
+
+    client = NestJSClient(auth_token)
+    try:
+        result = await client.patch(f"/whatsapp/agent/expenses/{expense_id}", payload)
+        status = result.get("status", "pendiente")
+        return f"Gasto corregido y reenviado a revisión. Estado: {status}."
+    except NestJSAPIError as e:
+        msg = f"Error al corregir el gasto [HTTP {e.status_code}]: {e.detail}"
+        logger.error("update_expense API error: %s", msg)
+        return msg
+    except Exception as e:
+        msg = (
+            f"Error inesperado al corregir el gasto (destino {client.base_url}): "
+            f"{type(e).__name__}: {str(e)}"
+        )
+        logger.error("update_expense unexpected error: %s", msg)
+        return msg
