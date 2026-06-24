@@ -433,23 +433,73 @@ export class DashboardService {
       );
     }
 
+    // Devoluciones en la ventana: restan de la venta neta (ponytail: no se filtra por
+    // companyId porque una devolución puede no tener pedido asociado).
+    const returns = await this.prisma.return.findMany({
+      where: {
+        returnDate: { gte: from, lte: to },
+        ...(isSellerScoped ? { customer: { assignedToUserId: user.id } } : {}),
+      },
+      select: {
+        amount: true,
+        customerId: true,
+        customer: { select: { assignedToUserId: true } },
+      },
+    });
+    const returnsByCustomer = new Map<string, number>();
+    const returnsBySeller = new Map<string, number>();
+    let returnsTotal = 0;
+    for (const ret of returns) {
+      const amount = this.toNumber(ret.amount);
+      returnsTotal += amount;
+      returnsByCustomer.set(
+        ret.customerId,
+        (returnsByCustomer.get(ret.customerId) ?? 0) + amount,
+      );
+      const sellerKey = ret.customer?.assignedToUserId ?? "unassigned";
+      returnsBySeller.set(sellerKey, (returnsBySeller.get(sellerKey) ?? 0) + amount);
+    }
+
     const bySeller = [...bySellerMap.values()]
-      .map((bucket) => ({
-        sellerId: bucket.sellerId,
-        sellerName: bucket.sellerName,
-        orders: bucket.orders,
-        revenue: this.roundMoney(bucket.revenue),
-        customers: bucket.customerIds.size,
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
+      .map((bucket) => {
+        const returnsAmount = returnsBySeller.get(bucket.sellerId ?? "unassigned") ?? 0;
+        return {
+          sellerId: bucket.sellerId,
+          sellerName: bucket.sellerName,
+          orders: bucket.orders,
+          revenue: this.roundMoney(bucket.revenue),
+          returns: this.roundMoney(returnsAmount),
+          netRevenue: this.roundMoney(bucket.revenue - returnsAmount),
+          customers: bucket.customerIds.size,
+        };
+      })
+      .sort((a, b) => b.netRevenue - a.netRevenue);
 
     const byCustomer = [...byCustomerMap.values()]
-      .map((bucket) => ({
-        ...bucket,
-        revenue: this.roundMoney(bucket.revenue),
-        lastOrderDate: bucket.lastOrderDate?.toISOString() ?? null,
-      }))
-      .sort((a, b) => b.revenue - a.revenue);
+      .map((bucket) => {
+        const returnsAmount = returnsByCustomer.get(bucket.customerId) ?? 0;
+        return {
+          ...bucket,
+          revenue: this.roundMoney(bucket.revenue),
+          returns: this.roundMoney(returnsAmount),
+          netRevenue: this.roundMoney(bucket.revenue - returnsAmount),
+          lastOrderDate: bucket.lastOrderDate?.toISOString() ?? null,
+        };
+      })
+      .sort((a, b) => b.netRevenue - a.netRevenue);
+
+    // Recompra: clientes con >=2 pedidos en la ventana recompraron; los de 1 solo pedido, no.
+    const repeatCustomers = byCustomer.filter((customer) => customer.orders >= 2);
+    const noRepurchaseCustomers = byCustomer.filter((customer) => customer.orders === 1);
+    const repurchase = {
+      repeatCount: repeatCustomers.length,
+      noRepurchaseCount: noRepurchaseCustomers.length,
+      repurchaseRate: byCustomer.length
+        ? this.roundMoney((repeatCustomers.length / byCustomer.length) * 100)
+        : 0,
+      repeatCustomers,
+      noRepurchaseCustomers,
+    };
 
     const byProduct = [...windowProductMap.values()]
       .map((bucket) => this.serializeProductBucket(bucket))
@@ -475,6 +525,10 @@ export class DashboardService {
         revenue: this.roundMoney(
           orders.reduce((sum, order) => sum + this.toNumber(order.total), 0),
         ),
+        returns: this.roundMoney(returnsTotal),
+        netRevenue: this.roundMoney(
+          orders.reduce((sum, order) => sum + this.toNumber(order.total), 0) - returnsTotal,
+        ),
         units: this.roundQuantity(
           windowItems.reduce((sum, item) => sum + this.toNumber(item.quantity), 0),
         ),
@@ -485,6 +539,7 @@ export class DashboardService {
       byCustomer,
       byProduct,
       byZone,
+      repurchase,
       customerRanking: byCustomer.map((customer, index) => ({ rank: index + 1, ...customer })),
       lowRotationProducts: [...productCatalog.values()]
         .map((bucket) => this.serializeProductBucket(bucket))

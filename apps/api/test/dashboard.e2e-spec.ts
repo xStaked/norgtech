@@ -234,6 +234,9 @@ describe("Dashboard advanced commercial summary", () => {
       auditLog: {
         findMany: async () => [],
       },
+      return: {
+        findMany: async () => [],
+      },
     };
 
     moduleRef = await Test.createTestingModule({

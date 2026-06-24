@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { AlertCircle, MapPinned, Package, Trophy, Users } from "lucide-react";
+import { AlertCircle, MapPinned, Package, Repeat, Trophy, Users } from "lucide-react";
 import type { ReactNode } from "react";
 
 type Money = number;
@@ -16,6 +16,8 @@ interface CommercialTotals {
   units: number;
   customers: number;
   products: number;
+  returns: Money;
+  netRevenue: Money;
 }
 
 interface SellerBreakdown {
@@ -24,6 +26,22 @@ interface SellerBreakdown {
   orders: number;
   revenue: Money;
   customers: number;
+  returns: Money;
+  netRevenue: Money;
+}
+
+interface RepurchaseCustomer {
+  customerId: string;
+  customerName: string;
+  orders: number;
+}
+
+interface RepurchaseSummary {
+  repeatCount: number;
+  noRepurchaseCount: number;
+  repurchaseRate: number;
+  repeatCustomers: RepurchaseCustomer[];
+  noRepurchaseCustomers: RepurchaseCustomer[];
 }
 
 interface CustomerRankingItem {
@@ -71,6 +89,7 @@ export interface CommercialAdvancedSummary {
   customerRanking: CustomerRankingItem[];
   lowRotationProducts: ProductBreakdown[];
   dormantCustomers: DormantCustomer[];
+  repurchase: RepurchaseSummary;
 }
 
 interface CommercialAdvancedDashboardProps {
@@ -131,12 +150,20 @@ export function CommercialAdvancedDashboard({ summary }: CommercialAdvancedDashb
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Ingresos" value={formatCurrency(totals.revenue)} />
+          <Metric label="Devoluciones" value={formatCurrency(totals.returns ?? 0)} />
+          <Metric label="Ingreso neto" value={formatCurrency(totals.netRevenue ?? totals.revenue)} />
           <Metric label="Pedidos" value={totals.orders.toLocaleString("es-CO")} />
           <Metric label="Clientes" value={totals.customers.toLocaleString("es-CO")} />
           <Metric label="Unidades" value={formatNumber(totals.units)} />
           <Metric label="Productos" value={totals.products.toLocaleString("es-CO")} />
+          {summary.repurchase && (
+            <Metric
+              label="Recompra"
+              value={`${formatNumber(summary.repurchase.repurchaseRate)}%`}
+            />
+          )}
         </div>
 
         <div className="grid gap-4 xl:grid-cols-2">
@@ -146,8 +173,9 @@ export function CommercialAdvancedDashboard({ summary }: CommercialAdvancedDashb
                 <tr>
                   <Th>Vendedor</Th>
                   <Th align="right">Ingresos</Th>
+                  <Th align="right">Devol.</Th>
+                  <Th align="right">Neto</Th>
                   <Th align="right">Pedidos</Th>
-                  <Th align="right">Clientes</Th>
                 </tr>
               </thead>
               <tbody>
@@ -155,8 +183,9 @@ export function CommercialAdvancedDashboard({ summary }: CommercialAdvancedDashb
                   <tr key={seller.sellerId ?? "unassigned"} className="border-t border-border/60">
                     <Td>{seller.sellerName}</Td>
                     <Td align="right">{formatCurrency(seller.revenue)}</Td>
+                    <Td align="right">{formatCurrency(seller.returns ?? 0)}</Td>
+                    <Td align="right">{formatCurrency(seller.netRevenue ?? seller.revenue)}</Td>
                     <Td align="right">{seller.orders}</Td>
-                    <Td align="right">{seller.customers}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -239,6 +268,47 @@ export function CommercialAdvancedDashboard({ summary }: CommercialAdvancedDashb
             </Table>
           </Panel>
         </div>
+
+        {summary.repurchase && (
+          <Panel icon={<Repeat className="h-4 w-4" />} title="Recompra de clientes">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+                <div className="text-xs font-medium uppercase text-muted-foreground">Tasa recompra</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {formatNumber(summary.repurchase.repurchaseRate)}%
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+                <div className="text-xs font-medium uppercase text-muted-foreground">Recompraron</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {summary.repurchase.repeatCount.toLocaleString("es-CO")}
+                </div>
+              </div>
+              <div className="rounded-lg border border-border/60 bg-background/40 p-3">
+                <div className="text-xs font-medium uppercase text-muted-foreground">Una sola compra</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {summary.repurchase.noRepurchaseCount.toLocaleString("es-CO")}
+                </div>
+              </div>
+            </div>
+            <Table>
+              <thead>
+                <tr>
+                  <Th>Cliente sin recompra</Th>
+                  <Th align="right">Pedidos</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {topItems(summary.repurchase.noRepurchaseCustomers).map((customer) => (
+                  <tr key={customer.customerId} className="border-t border-border/60">
+                    <Td>{customer.customerName}</Td>
+                    <Td align="right">{customer.orders}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Panel>
+        )}
 
         <Panel icon={<MapPinned className="h-4 w-4" />} title="Cobertura por zona">
           <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
