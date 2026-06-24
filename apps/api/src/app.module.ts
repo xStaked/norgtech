@@ -25,6 +25,7 @@ import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.mod
 import { SellerGoalsModule } from "./modules/seller-goals/seller-goals.module";
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
 import { InvoicesModule } from "./modules/invoices/invoices.module";
+import { ReturnsModule } from "./modules/returns/returns.module";
 import { UsersModule } from "./modules/users/users.module";
 import { ZonesModule } from "./modules/zones/zones.module";
 import { PrismaModule } from "./prisma/prisma.module";
@@ -57,6 +58,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     SellerGoalsModule,
     WhatsAppModule,
     InvoicesModule,
+    ReturnsModule,
     ZonesModule,
   ],
   controllers: [HealthController],

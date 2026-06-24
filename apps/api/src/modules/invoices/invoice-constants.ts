@@ -1,4 +1,34 @@
-import { InvoiceStatus, PaymentMethod } from "@prisma/client";
+import { InvoiceStatus, PaymentMethod, Prisma } from "@prisma/client";
+
+type Decimalish = Prisma.Decimal | number | string;
+
+/** Outstanding cartera balance: total minus payments and credit notes. */
+export function invoiceBalance(
+  totalAmount: Decimalish,
+  totalPaid: Decimalish,
+  creditNoteTotal: Decimalish = 0,
+): Prisma.Decimal {
+  return new Prisma.Decimal(totalAmount)
+    .minus(new Prisma.Decimal(totalPaid))
+    .minus(new Prisma.Decimal(creditNoteTotal));
+}
+
+/**
+ * Recompute invoice status from settled amount (payments + credit notes).
+ * Never overrides a terminal anulada; keeps current when nothing is settled.
+ */
+export function computeInvoiceStatus(
+  current: InvoiceStatus,
+  totalAmount: Decimalish,
+  totalPaid: Decimalish,
+  creditNoteTotal: Decimalish = 0,
+): InvoiceStatus {
+  if (current === "anulada") return "anulada";
+  const settled = new Prisma.Decimal(totalPaid).plus(new Prisma.Decimal(creditNoteTotal));
+  if (settled.gte(new Prisma.Decimal(totalAmount))) return "pagada";
+  if (settled.gt(0)) return "parcialmente_pagada";
+  return current;
+}
 
 export const invoiceStatusTransitions: Record<
   InvoiceStatus,

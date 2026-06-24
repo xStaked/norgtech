@@ -4,12 +4,16 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { InvoiceStatus, Prisma, UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { R2StorageService } from "../../shared/r2-storage.service";
-import { invoiceStatusTransitions } from "./invoice-constants";
+import {
+  computeInvoiceStatus,
+  invoiceBalance,
+  invoiceStatusTransitions,
+} from "./invoice-constants";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
 import { ListInvoicesDto } from "./dto/list-invoices.dto";
 import { UpdateInvoiceStatusDto } from "./dto/update-invoice-status.dto";
@@ -204,12 +208,12 @@ export class InvoicesService {
     const amount = new Prisma.Decimal(dto.amount);
     const newTotalPaid = new Prisma.Decimal(invoice.totalPaid).plus(amount);
 
-    let newStatus: InvoiceStatus = invoice.status;
-    if (newTotalPaid.gte(invoice.totalAmount)) {
-      newStatus = "pagada";
-    } else if (newTotalPaid.gt(0)) {
-      newStatus = "parcialmente_pagada";
-    }
+    const newStatus = computeInvoiceStatus(
+      invoice.status,
+      invoice.totalAmount,
+      newTotalPaid,
+      invoice.creditNoteTotal,
+    );
 
     let uploaded: { bucket: string; objectKey: string } | undefined;
     if (file) {
@@ -340,7 +344,11 @@ export class InvoicesService {
     for (const invoice of invoices) {
       const total = Number(invoice.totalAmount);
       const paid = Number(invoice.totalPaid);
-      const balance = total - paid;
+      const balance = invoiceBalance(
+        invoice.totalAmount,
+        invoice.totalPaid,
+        invoice.creditNoteTotal,
+      ).toNumber();
 
       byStatus[invoice.status] = (byStatus[invoice.status] ?? 0) + balance;
 
@@ -378,7 +386,12 @@ export class InvoicesService {
       totalInvoices: invoices.length,
       totalAmount: invoices.reduce((sum, i) => sum + Number(i.totalAmount), 0),
       totalPaid: invoices.reduce((sum, i) => sum + Number(i.totalPaid), 0),
-      totalBalance: invoices.reduce((sum, i) => sum + Number(i.totalAmount) - Number(i.totalPaid), 0),
+      totalCreditNotes: invoices.reduce((sum, i) => sum + Number(i.creditNoteTotal ?? 0), 0),
+      totalBalance: invoices.reduce(
+        (sum, i) =>
+          sum + invoiceBalance(i.totalAmount, i.totalPaid, i.creditNoteTotal).toNumber(),
+        0,
+      ),
       byStatus,
       byCustomer: Object.values(byCustomer),
       aging,

@@ -229,14 +229,14 @@ model CustomerZone {
 }
 
 model Company {
-  id         String   @id @default(cuid())
-  name       String
-  legalName  String
-  nit        String
-  prefix     String   @unique
-  isActive   Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String   @id @default(cuid())
+  name      String
+  legalName String
+  nit       String
+  prefix    String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   orders          Order[]
   billingRequests BillingRequest[]
@@ -267,7 +267,7 @@ model User {
   reviewedCommercialExpenses    CommercialExpense[]        @relation("CommercialExpenseReviewer")
   uploadedExpenseSupports       CommercialExpenseSupport[] @relation("CommercialExpenseSupportUploader")
   uploadedPaymentSupports       PaymentSupport[]
-  assignedCustomerZones         CustomerZone[]           @relation("CustomerZoneAssignedUser")
+  assignedCustomerZones         CustomerZone[]             @relation("CustomerZoneAssignedUser")
   sellerGoals                   SellerGoal[]
 }
 
@@ -433,11 +433,11 @@ model NoraConversationCase {
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
 
-  conversation       WhatsAppConversation       @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  parentCase         NoraConversationCase?      @relation("NoraCaseChildren", fields: [parentCaseId], references: [id])
-  childCases         NoraConversationCase[]     @relation("NoraCaseChildren")
-  createdByUser      User?                      @relation("NoraCaseCreatedBy", fields: [createdByUserId], references: [id])
-  approvedByUser     User?                      @relation("NoraCaseApprovedBy", fields: [approvedByUserId], references: [id])
+  conversation   WhatsAppConversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  parentCase     NoraConversationCase?  @relation("NoraCaseChildren", fields: [parentCaseId], references: [id])
+  childCases     NoraConversationCase[] @relation("NoraCaseChildren")
+  createdByUser  User?                  @relation("NoraCaseCreatedBy", fields: [createdByUserId], references: [id])
+  approvedByUser User?                  @relation("NoraCaseApprovedBy", fields: [approvedByUserId], references: [id])
 
   @@index([conversationId, status, updatedAt])
   @@index([parentCaseId])
@@ -504,6 +504,7 @@ model Customer {
   commercialExpenses    CommercialExpense[]
   customerZones         CustomerZone[]
   invoices              Invoice[]
+  returns               Return[]
   customerType          CustomerType?          @default(cliente_directo)
   creditLimit           Decimal?               @db.Decimal(14, 2)
   paymentCondition      PaymentCondition?      @default(contado)
@@ -698,19 +699,20 @@ model Order {
   createdBy                  String
   updatedBy                  String
   companyId                  String
-  company                    Company                @relation(fields: [companyId], references: [id])
+  company                    Company               @relation(fields: [companyId], references: [id])
   createdAt                  DateTime              @default(now())
   updatedAt                  DateTime              @updatedAt
   customer                   Customer              @relation(fields: [customerId], references: [id])
   opportunity                Opportunity?          @relation(fields: [opportunityId], references: [id])
   sourceQuote                Quote?                @relation(fields: [sourceQuoteId], references: [id])
   assignedLogisticsUser      User?                 @relation(fields: [assignedLogisticsUserId], references: [id])
-  sourceConversation   WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
-  customerZoneId       String?
-  customerZone         CustomerZone?         @relation(fields: [customerZoneId], references: [id])
+  sourceConversation         WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
+  customerZoneId             String?
+  customerZone               CustomerZone?         @relation(fields: [customerZoneId], references: [id])
   items                      OrderItem[]
   billingRequests            BillingRequest[]
   invoices                   Invoice[]
+  returns                    Return[]
 
   @@index([orderDate])
   @@index([sourceConversationId])
@@ -801,7 +803,7 @@ model BillingRequest {
   createdBy         String
   updatedBy         String
   companyId         String
-  company           Company               @relation(fields: [companyId], references: [id])
+  company           Company              @relation(fields: [companyId], references: [id])
   createdAt         DateTime             @default(now())
   updatedAt         DateTime             @updatedAt
   customer          Customer             @relation(fields: [customerId], references: [id])
@@ -811,36 +813,36 @@ model BillingRequest {
 }
 
 model CommercialExpense {
-  id                String                     @id @default(cuid())
-  expenseDate       DateTime
-  category          CommercialExpenseCategory
-  amount            Decimal                    @db.Decimal(14, 2)
-  currency          String                     @default("COP")
-  description       String
+  id                   String                     @id @default(cuid())
+  expenseDate          DateTime
+  category             CommercialExpenseCategory
+  amount               Decimal                    @db.Decimal(14, 2)
+  currency             String                     @default("COP")
+  description          String
   supplierName         String?
   supplierNit          String?
   invoiceNumber        String?
   paymentMethod        String?
-  extractionConfidence Decimal?                 @db.Decimal(5, 4)
+  extractionConfidence Decimal?                   @db.Decimal(5, 4)
   extractionModel      String?
   extractionReviewedAt DateTime?
-  status            CommercialExpenseStatus    @default(pendiente)
-  reviewNote        String?
-  reviewedAt        DateTime?
-  reviewedByUserId  String?
-  submittedByUserId String
-  customerId        String?
+  status               CommercialExpenseStatus    @default(pendiente)
+  reviewNote           String?
+  reviewedAt           DateTime?
+  reviewedByUserId     String?
+  submittedByUserId    String
+  customerId           String?
   /// Service must validate that the selected visit belongs to the selected customer when both are provided.
-  visitId           String?
-  createdBy         String
-  updatedBy         String
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
-  submittedBy       User                       @relation("CommercialExpenseSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
-  reviewedBy        User?                      @relation("CommercialExpenseReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
-  customer          Customer?                  @relation(fields: [customerId], references: [id])
-  visit             Visit?                     @relation(fields: [visitId], references: [id])
-  supports          CommercialExpenseSupport[]
+  visitId              String?
+  createdBy            String
+  updatedBy            String
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  submittedBy          User                       @relation("CommercialExpenseSubmitter", fields: [submittedByUserId], references: [id], onDelete: Restrict)
+  reviewedBy           User?                      @relation("CommercialExpenseReviewer", fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  customer             Customer?                  @relation(fields: [customerId], references: [id])
+  visit                Visit?                     @relation(fields: [visitId], references: [id])
+  supports             CommercialExpenseSupport[]
 
   @@index([submittedByUserId, expenseDate])
   @@index([status, expenseDate])
@@ -869,31 +871,54 @@ model CommercialExpenseSupport {
 }
 
 model Invoice {
-  id            String           @id @default(cuid())
-  invoiceNumber String           @unique
-  customerId    String
-  orderId       String?
-  issueDate     DateTime         @default(now())
-  dueDate       DateTime
-  subtotal      Decimal          @db.Decimal(14, 2)
-  taxAmount     Decimal          @db.Decimal(14, 2)
-  totalAmount   Decimal          @db.Decimal(14, 2)
-  totalPaid     Decimal          @default(0) @db.Decimal(14, 2)
-  status        InvoiceStatus    @default(emitida)
-  notes         String?
-  createdBy     String
-  updatedBy     String
-  companyId     String
-  company       Company           @relation(fields: [companyId], references: [id])
-  createdAt     DateTime         @default(now())
-  updatedAt     DateTime         @updatedAt
-  customer      Customer         @relation(fields: [customerId], references: [id])
-  order         Order?           @relation(fields: [orderId], references: [id])
-  payments      InvoicePayment[]
+  id              String           @id @default(cuid())
+  invoiceNumber   String           @unique
+  customerId      String
+  orderId         String?
+  issueDate       DateTime         @default(now())
+  dueDate         DateTime
+  subtotal        Decimal          @db.Decimal(14, 2)
+  taxAmount       Decimal          @db.Decimal(14, 2)
+  totalAmount     Decimal          @db.Decimal(14, 2)
+  totalPaid       Decimal          @default(0) @db.Decimal(14, 2)
+  creditNoteTotal Decimal          @default(0) @db.Decimal(14, 2)
+  status          InvoiceStatus    @default(emitida)
+  notes           String?
+  createdBy       String
+  updatedBy       String
+  companyId       String
+  company         Company          @relation(fields: [companyId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  customer        Customer         @relation(fields: [customerId], references: [id])
+  order           Order?           @relation(fields: [orderId], references: [id])
+  payments        InvoicePayment[]
+  returns         Return[]
 
   @@index([customerId, status])
   @@index([dueDate, status])
   @@index([orderId])
+}
+
+model Return {
+  id         String   @id @default(cuid())
+  customerId String
+  orderId    String?
+  invoiceId  String?
+  returnDate DateTime @default(now())
+  amount     Decimal  @db.Decimal(14, 2)
+  reason     String
+  notes      String?
+  createdBy  String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  customer   Customer @relation(fields: [customerId], references: [id])
+  order      Order?   @relation(fields: [orderId], references: [id])
+  invoice    Invoice? @relation(fields: [invoiceId], references: [id])
+
+  @@index([customerId])
+  @@index([returnDate])
+  @@index([invoiceId])
 }
 
 model InvoicePayment {
