@@ -14,6 +14,7 @@ import {
   NoraConversationCaseType,
   Prisma,
   UserRole,
+  WhatsAppConversationStatus,
   WhatsAppSenderType,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -228,7 +229,7 @@ export class WhatsAppService {
         accountId: account.id,
         waId,
         phone,
-        status: "pendiente",
+        status: WhatsAppConversationStatus.pendiente,
         senderType: WhatsAppSenderType.comercial,
       },
       include: { account: true },

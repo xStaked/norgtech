@@ -112,20 +112,28 @@ export class NoraExpenseExecutionService {
     expenseId: string;
     dto: UpdateCommercialExpenseDto;
   }): Promise<{ id: string; status: string }> {
-    // `update` already validates submitter permission and auto-transitions
-    // requiere_correccion → pendiente. One call = one resubmit.
-    const updated = await this.expensesService.update(input.user, input.expenseId, input.dto);
+    try {
+      // `update` already validates submitter permission and auto-transitions
+      // requiere_correccion → pendiente. One call = one resubmit.
+      const updated = await this.expensesService.update(input.user, input.expenseId, input.dto);
 
-    const openCase = await this.noraCaseService.findOpenCase(input.conversationId);
-    if (openCase) {
-      await this.noraCaseService.updateCase(openCase.id, {
-        status: NoraConversationCaseStatus.executed,
-        executedEntityType: "CommercialExpense",
-        executedEntityId: updated.id,
-      });
+      const openCase = await this.noraCaseService.findOpenCase(input.conversationId);
+      if (openCase) {
+        await this.noraCaseService.updateCase(openCase.id, {
+          status: NoraConversationCaseStatus.executed,
+          executedEntityType: "CommercialExpense",
+          executedEntityId: updated.id,
+        });
+      }
+
+      return { id: updated.id, status: updated.status };
+    } catch (error) {
+      const detail = error instanceof Error ? error.stack ?? error.message : String(error);
+      this.logger.error(
+        `Expense correction update failed for conversation ${input.conversationId} (expense ${input.expenseId}): ${detail}`,
+      );
+      throw error;
     }
-
-    return { id: updated.id, status: updated.status };
   }
 
   private firstImageAttachment(value: unknown): NoraCaseAttachment | undefined {

@@ -28,6 +28,9 @@ export class NoraAgentController {
     });
   }
 
+  // The broad @Roles list is safe here: the routing service always mints a token
+  // scoped to the expense's submitter before calling this endpoint, and
+  // CommercialExpensesService.update enforces submitter-or-control-role ownership.
   @Roles("administrador", "director_comercial", "comercial", "facturacion")
   @Patch("expenses/:id")
   async updateExpense(
