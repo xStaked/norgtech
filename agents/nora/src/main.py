@@ -136,6 +136,8 @@ def build_proposal_from_tool_outputs(messages: list, tool_names: list[str]) -> N
             enabled=True,
             action="create",
             customerId=order_data.get("customerId"),
+            companyId=order_data.get("companyId"),
+            customerZoneId=order_data.get("customerZoneId"),
             opportunityId=order_data.get("opportunityId"),
             sourceQuoteId=order_data.get("sourceQuoteId"),
             notes=order_data.get("notes"),
@@ -166,6 +168,8 @@ def _extract_order_data_from_messages(messages: list) -> dict:
                     return {
                         "id": data.get("id"),
                         "customerId": data.get("customerId"),
+                        "companyId": data.get("companyId"),
+                        "customerZoneId": data.get("customerZoneId"),
                         "opportunityId": data.get("opportunityId"),
                         "sourceQuoteId": data.get("sourceQuoteId"),
                         "notes": data.get("notes"),
