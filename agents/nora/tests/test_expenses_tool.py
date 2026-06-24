@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.tools.expenses import create_expense
+from src.tools.expenses import create_expense, update_expense
 from src.tools.nestjs_client import NestJSAPIError, NestJSClient
 
 
@@ -130,3 +130,49 @@ def test_nestjs_client_empty_body_404_yields_nonempty_detail():
     assert "(empty body)" in detail
     assert "/whatsapp/agent/expenses" in detail
     assert "http://api:3001" in detail
+
+
+def test_update_expense_patches_agent_endpoint():
+    fake_client = AsyncMock()
+    fake_client.patch = AsyncMock(return_value={"id": "exp_1", "status": "pendiente"})
+
+    with patch("src.tools.expenses.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            update_expense.ainvoke(
+                {
+                    "expense_id": "exp_1",
+                    "supplier_nit": "900123456",
+                    "conversation_id": "conv_1",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+
+    fake_client.patch.assert_awaited_once()
+    path, payload = fake_client.patch.await_args.args
+    assert path == "/whatsapp/agent/expenses/exp_1"
+    assert payload["supplierNit"] == "900123456"
+    assert payload["conversationId"] == "conv_1"
+    assert "pendiente" in result
+
+
+def test_update_expense_surfaces_api_error_detail():
+    fake_client = AsyncMock()
+    fake_client.base_url = "http://api:3001"
+    fake_client.patch = AsyncMock(side_effect=NestJSAPIError(400, "amount must not be less than 1"))
+
+    with patch("src.tools.expenses.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            update_expense.ainvoke(
+                {
+                    "expense_id": "exp_1",
+                    "amount": 0,
+                    "conversation_id": "conv_1",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+
+    assert result.startswith("Error")
+    assert "400" in result
+    assert "amount must not be less than 1" in result
