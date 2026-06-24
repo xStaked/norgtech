@@ -61,6 +61,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/orders": ["administrador", "director_comercial", "comercial", "facturacion", "logistica"],
     "/billing-requests": ["administrador", "director_comercial", "facturacion"],
     "/invoices": ["administrador", "director_comercial", "facturacion", "comercial"],
+    "/returns": ["administrador", "director_comercial", "facturacion", "comercial"],
     "/products": ["administrador", "director_comercial", "comercial"],
     "/segments": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
@@ -72,7 +73,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
   return allowedRoles.includes(role);
 }
 
-export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "invoice" | "report"): boolean {
+export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "invoice" | "returns" | "report"): boolean {
   if (!role) return false;
 
   const createAccess: Record<typeof entity, readonly UserRole[]> = {
@@ -85,6 +86,7 @@ export function canCreate(role: UserRole | null, entity: "customer" | "opportuni
     order: ["administrador", "director_comercial", "comercial", "logistica"],
     billingRequest: ["administrador", "director_comercial", "facturacion"],
     invoice: ["administrador", "director_comercial", "facturacion"],
+    returns: ["administrador", "director_comercial", "facturacion", "comercial"],
     report: ["administrador", "director_comercial", "tecnico"],
   };
 

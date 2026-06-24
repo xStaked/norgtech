@@ -137,6 +137,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "facturacion", "comercial"] as const,
   },
   {
+    href: "/returns",
+    label: "Devoluciones",
+    shortLabel: "DV",
+    description: "Devoluciones y notas credito de clientes",
+    group: "Comercial",
+    requiredRoles: ["administrador", "director_comercial", "facturacion", "comercial"] as const,
+  },
+  {
     href: "/products",
     label: "Productos",
     shortLabel: "PR",
