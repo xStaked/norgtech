@@ -17,7 +17,7 @@ import { WhatsAppController, WhatsAppWebhookController } from "./whatsapp.contro
 import { WhatsAppService } from "./whatsapp.service";
 
 @Module({
-  imports: [AuthModule, CommercialExpensesModule, forwardRef(() => OrdersModule)],
+  imports: [AuthModule, forwardRef(() => CommercialExpensesModule), forwardRef(() => OrdersModule)],
   controllers: [WhatsAppController, WhatsAppWebhookController, NoraAgentController],
   providers: [
     WhatsAppService,

@@ -1,9 +1,11 @@
 import {
   BadGatewayException,
   BadRequestException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
+  forwardRef,
 } from "@nestjs/common";
 import { SendMessageResponse, WhatsAppClient } from "@kapso/whatsapp-cloud-api";
 import {
@@ -102,6 +104,7 @@ export class WhatsAppService {
 
   constructor(
     private readonly prisma: PrismaService,
+    @Inject(forwardRef(() => OrdersService))
     private readonly ordersService: OrdersService,
     private readonly orderAutomation: WhatsAppOrderAutomationService,
     private readonly noraCaseService: NoraCaseService,
