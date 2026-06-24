@@ -3,6 +3,7 @@ import { NoraConversationCaseStatus } from "@prisma/client";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreateCommercialExpenseDto } from "../commercial-expenses/dto/create-commercial-expense.dto";
+import { UpdateCommercialExpenseDto } from "../commercial-expenses/dto/update-commercial-expense.dto";
 import { CommercialExpensesService } from "../commercial-expenses/commercial-expenses.service";
 import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
@@ -103,6 +104,28 @@ export class NoraExpenseExecutionService {
         .catch(() => undefined);
       throw error;
     }
+  }
+
+  async updateFromWhatsApp(input: {
+    user: AuthUser;
+    conversationId: string;
+    expenseId: string;
+    dto: UpdateCommercialExpenseDto;
+  }): Promise<{ id: string; status: string }> {
+    // `update` already validates submitter permission and auto-transitions
+    // requiere_correccion → pendiente. One call = one resubmit.
+    const updated = await this.expensesService.update(input.user, input.expenseId, input.dto);
+
+    const openCase = await this.noraCaseService.findOpenCase(input.conversationId);
+    if (openCase) {
+      await this.noraCaseService.updateCase(openCase.id, {
+        status: NoraConversationCaseStatus.executed,
+        executedEntityType: "CommercialExpense",
+        executedEntityId: updated.id,
+      });
+    }
+
+    return { id: updated.id, status: updated.status };
   }
 
   private firstImageAttachment(value: unknown): NoraCaseAttachment | undefined {

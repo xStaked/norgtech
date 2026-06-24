@@ -300,6 +300,45 @@ describe("NoraExpenseExecutionService.executeFromWhatsApp", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Task 4 (update path): NoraExpenseExecutionService.updateFromWhatsApp
+// ---------------------------------------------------------------------------
+
+describe("NoraExpenseExecutionService.updateFromWhatsApp", () => {
+  it("updates the expense and closes the open case", async () => {
+    const noraCaseService = {
+      findOpenCase: jest.fn().mockResolvedValue({ id: "case_1" }),
+      updateCase: jest.fn().mockResolvedValue(undefined),
+    };
+    const expensesService = {
+      update: jest.fn().mockResolvedValue({ id: "exp_1", status: "pendiente" }),
+    };
+    const service = new NoraExpenseExecutionService(
+      noraCaseService as never, expensesService as never, {} as never, {} as never,
+    );
+
+    const result = await service.updateFromWhatsApp({
+      user: { id: "user_1" } as never,
+      conversationId: "conv_1",
+      expenseId: "exp_1",
+      dto: { supplierNit: "900123456" } as never,
+    });
+
+    expect(expensesService.update).toHaveBeenCalledWith(
+      { id: "user_1" }, "exp_1", { supplierNit: "900123456" },
+    );
+    expect(noraCaseService.updateCase).toHaveBeenCalledWith(
+      "case_1",
+      expect.objectContaining({
+        status: NoraConversationCaseStatus.executed,
+        executedEntityType: "CommercialExpense",
+        executedEntityId: "exp_1",
+      }),
+    );
+    expect(result).toEqual({ id: "exp_1", status: "pendiente" });
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Task 5: NoraAgentController delegates to NoraExpenseExecutionService
 // ---------------------------------------------------------------------------
 
