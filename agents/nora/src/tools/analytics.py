@@ -81,3 +81,68 @@ async def get_sales_summary(
         return f"Error al obtener el resumen de ventas: {e.detail}"
     except Exception as e:
         return f"Error inesperado al obtener el resumen de ventas: {str(e)}"
+
+
+@tool
+async def get_cartera(
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    customer_id: Optional[str] = None,
+) -> str:
+    """
+    Estado de la cartera (cuentas por cobrar): saldo total, aging por antigüedad
+    y mayores deudores. Úsala para '¿cómo está la cartera?', '¿quién me debe?',
+    'facturas vencidas'. Si pasas customer_id, se enfoca en ese cliente e incluye
+    sus facturas vencidas. Datos filtrados al usuario actual.
+
+    Args:
+        customer_id: ID del cliente para enfocar la cartera (opcional).
+    """
+    try:
+        client = NestJSClient(auth_token)
+        params = {"customerId": customer_id} if customer_id else None
+        data = await client.get("/invoices/summary", params=params)
+        aging = data.get("aging", {}) or {}
+        deudores = sorted(
+            (
+                {
+                    "cliente": c.get("name"),
+                    "facturado": c.get("total"),
+                    "pagado": c.get("paid"),
+                    "saldo": (c.get("total") or 0) - (c.get("paid") or 0),
+                }
+                for c in (data.get("byCustomer") or [])
+            ),
+            key=lambda x: x["saldo"],
+            reverse=True,
+        )
+        summary = {
+            "saldo_total": data.get("totalBalance"),
+            "facturado_total": data.get("totalAmount"),
+            "pagado_total": data.get("totalPaid"),
+            "notas_credito": data.get("totalCreditNotes"),
+            "aging": {
+                "corriente": aging.get("current"),
+                "1_30": aging.get("days1to30"),
+                "31_60": aging.get("days31to60"),
+                "61_90": aging.get("days61to90"),
+                "mas_90": aging.get("over90"),
+            },
+            "top_deudores": deudores[:5],
+        }
+        if customer_id:
+            overdue = await client.get("/invoices/overdue")
+            overdue_list = overdue if isinstance(overdue, list) else overdue.get("data", [])
+            summary["facturas_vencidas"] = [
+                {
+                    "factura": i.get("invoiceNumber"),
+                    "vence": i.get("dueDate"),
+                    "saldo": (i.get("totalAmount") or 0) - (i.get("totalPaid") or 0),
+                }
+                for i in overdue_list
+                if (i.get("customer") or {}).get("id") == customer_id
+            ]
+        return f"Estado de cartera: {json.dumps(summary, ensure_ascii=False)}"
+    except NestJSAPIError as e:
+        return f"Error al obtener la cartera: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al obtener la cartera: {str(e)}"
