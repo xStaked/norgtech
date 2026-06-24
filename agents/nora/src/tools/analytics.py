@@ -132,7 +132,7 @@ async def get_cartera(
         if customer_id:
             overdue = await client.get("/invoices/overdue")
             overdue_list = overdue if isinstance(overdue, list) else overdue.get("data", [])
-            summary["facturas_vencidas"] = [
+            vencidas = [
                 {
                     "factura": i.get("invoiceNumber"),
                     "vence": i.get("dueDate"),
@@ -141,6 +141,8 @@ async def get_cartera(
                 for i in overdue_list
                 if (i.get("customer") or {}).get("id") == customer_id
             ]
+            vencidas.sort(key=lambda x: x["saldo"], reverse=True)
+            summary["facturas_vencidas"] = vencidas[:5]
         return f"Estado de cartera: {json.dumps(summary, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al obtener la cartera: {e.detail}"

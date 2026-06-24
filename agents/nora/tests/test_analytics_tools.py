@@ -119,3 +119,28 @@ def test_get_cartera_with_customer_includes_overdue_filtered():
     assert len(vencidas) == 1
     assert vencidas[0]["factura"] == "F-1"
     assert vencidas[0]["saldo"] == 200000
+
+
+def test_get_cartera_caps_overdue_to_top_5_by_saldo():
+    # create 7 overdue invoices for cus_1 with varying saldos
+    overdue_with_7_invoices = [
+        {"invoiceNumber": f"F-{i}", "dueDate": f"2026-05-{i+1:02d}", "totalAmount": 1000 * (i+1),
+         "totalPaid": 100 * (i+1), "customer": {"id": "cus_1"}}
+        for i in range(7)
+    ]
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(side_effect=[SUMMARY_PAYLOAD, overdue_with_7_invoices])
+
+    with patch("src.tools.analytics.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            get_cartera.ainvoke({"customer_id": "cus_1", "auth_token": "Bearer scoped"})
+        )
+
+    payload = json.loads(result[result.index("{"):])
+    vencidas = payload["facturas_vencidas"]
+    # must cap to top 5
+    assert len(vencidas) == 5
+    # must be sorted by saldo descending
+    saldos = [v["saldo"] for v in vencidas]
+    assert saldos == sorted(saldos, reverse=True)
+    assert vencidas[0]["saldo"] >= vencidas[1]["saldo"]
