@@ -153,6 +153,45 @@ async def get_customer_quotes(
 
 
 @tool
+async def get_customer_zones(
+    customer_id: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+) -> str:
+    """
+    Obtiene las zonas de despacho registradas para un cliente. Úsala al crear un
+    pedido: si el cliente tiene más de una zona, pregunta a cuál se despacha; si
+    tiene una sola, úsala; si no tiene, omite la zona.
+
+    Args:
+        customer_id: ID del cliente.
+
+    Returns:
+        Lista de zonas en JSON con customerZoneId (úsalo en create_order), zona,
+        departamento y direccion.
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+        result = await nestjs_client.get(f"/customers/{customer_id}/zones")
+        zones = result if isinstance(result, list) else result.get("data", [])
+        if not zones:
+            return "Este cliente no tiene zonas de despacho registradas."
+        simplified = [
+            {
+                "customerZoneId": z["id"],
+                "zona": (z.get("zone") or {}).get("name"),
+                "departamento": (z.get("zone") or {}).get("department"),
+                "direccion": z.get("address"),
+            }
+            for z in zones
+        ]
+        return f"Zonas del cliente: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+    except NestJSAPIError as e:
+        return f"Error al obtener zonas del cliente: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al obtener zonas del cliente: {str(e)}"
+
+
+@tool
 async def create_order(
     customer_id: str,
     items: list[dict],
