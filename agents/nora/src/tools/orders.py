@@ -234,7 +234,9 @@ async def create_order(
     for idx, item in enumerate(items):
         product_id = item.get("product_id") or item.get("productId")
         quantity = item.get("quantity")
-        unit_price = item.get("unit_price") or item.get("unitPrice")
+        unit_price = item.get("unit_price")
+        if unit_price is None:
+            unit_price = item.get("unitPrice")
         item_notes = item.get("notes")
 
         if not product_id:

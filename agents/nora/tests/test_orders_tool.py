@@ -131,3 +131,23 @@ def test_create_order_requires_company_id():
     assert result.startswith("Error")
     assert "empresa" in result.lower()
     fake_client.post.assert_not_awaited()
+
+
+def test_create_order_accepts_zero_unit_price():
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value={"id": "ord_z", "status": "recibido", "total": 0})
+
+    with patch("src.tools.orders.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            create_order.ainvoke({
+                "customer_id": "cus_1",
+                "items": [{"product_id": "p_free", "quantity": 5, "unit_price": 0}],
+                "company_id": "co_1",
+                "auth_token": "Bearer scoped",
+            })
+        )
+
+    path, payload = fake_client.post.await_args.args
+    assert path == "/orders"
+    assert payload["items"][0]["unitPrice"] == 0.0
+    assert "ord_z" in result
