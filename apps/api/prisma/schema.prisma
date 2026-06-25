@@ -146,9 +146,9 @@ enum LauraProposalStatus {
 
 enum WhatsAppConversationStatus {
   nuevo
-  abierto
   pendiente
-  cerrado
+  en_gestion
+  resuelto
 }
 
 enum WhatsAppSenderType {

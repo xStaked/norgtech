@@ -1197,6 +1197,24 @@ describe("WhatsApp inbox", () => {
     expect(response.body.status).toBe("pendiente");
   });
 
+  it("updates a WhatsApp conversation to unichannel states", async () => {
+    const response = await request(app.getHttpServer())
+      .patch("/whatsapp/conversations/conversation-1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "en_gestion" })
+      .expect(200);
+
+    expect(response.body.status).toBe("en_gestion");
+
+    const resolved = await request(app.getHttpServer())
+      .patch("/whatsapp/conversations/conversation-1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "resuelto" })
+      .expect(200);
+
+    expect(resolved.body.status).toBe("resuelto");
+  });
+
   it("clears nullable relationship fields", async () => {
     const response = await request(app.getHttpServer())
       .patch("/whatsapp/conversations/conversation-1")
