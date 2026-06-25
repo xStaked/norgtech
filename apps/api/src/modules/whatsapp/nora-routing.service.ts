@@ -508,19 +508,45 @@ export class NoraRoutingService {
     conversationId: string,
     noraResponse: Record<string, unknown>,
   ) {
-    const intent = this.stringValue(noraResponse.intent);
-    const allowed = new Set(["pedido", "cartera", "logistica", "gasto", "reclamo", "otro"]);
-    const label = intent && allowed.has(intent) ? intent : intent ? "otro" : null;
+    try {
+      const label = this.intentTagLabel(noraResponse.intent);
 
-    if (!label) {
-      return;
+      if (!label) {
+        return;
+      }
+
+      await this.prisma.whatsAppConversationTag.upsert({
+        where: { conversationId_label: { conversationId, label } },
+        update: {},
+        create: { conversationId, label },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to persist Nora intent tag for conversation ${conversationId}: ${this.safeErrorMessage(error)}`,
+      );
+    }
+  }
+
+  private intentTagLabel(intentValue: unknown) {
+    const intent = this.stringValue(intentValue);
+
+    if (!intent) {
+      return null;
     }
 
-    await this.prisma.whatsAppConversationTag.upsert({
-      where: { conversationId_label: { conversationId, label } },
-      update: {},
-      create: { conversationId, label },
-    });
+    const labelsByIntent: Record<string, string> = {
+      pedido: "pedido",
+      consulta_pedidos: "pedido",
+      consulta_cartera: "cartera",
+      soporte_pago: "cartera",
+      guia_logistica: "logistica",
+      gasto: "gasto",
+      reclamo: "reclamo",
+      resumen_conversacion: "otro",
+      clasificacion: "otro",
+    };
+
+    return labelsByIntent[intent] ?? "otro";
   }
 
   private async processCaseTransition(

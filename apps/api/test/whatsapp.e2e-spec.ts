@@ -1688,6 +1688,72 @@ describe("WhatsApp inbox", () => {
     }
   });
 
+  it("maps Nora cartera intents to the cartera conversation tag", async () => {
+    const originalTags = tags.slice();
+    const originalAccounts = accounts.slice();
+    const previousFetch = globalThis.fetch;
+    tags.splice(
+      0,
+      tags.length,
+      ...tags.filter(
+        (tag) => !(tag.conversationId === "conversation-1" && tag.label === "cartera"),
+      ),
+    );
+    accounts.push({
+      id: "account-1",
+      phoneNumberId: "phone-cartera",
+      phoneNumber: "phone-cartera",
+      displayName: "WhatsApp",
+      active: true,
+    });
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "consulta_cartera",
+        summary: "Cliente consulta cartera",
+        suggested_reply: "Recibido. Voy a revisar el estado de cartera.",
+        requires_human_review: true,
+        risk_level: "medium",
+        missing_fields: [],
+        proposals: [],
+        case_transition: null,
+      }),
+    } as Response);
+
+    try {
+      await request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .send({
+          type: "whatsapp.message.received",
+          data: [
+            {
+              phone_number_id: "phone-cartera",
+              message: {
+                id: "wamid-intent-cartera",
+                from: "573001112233",
+                text: { body: "Quiero saber mi saldo pendiente" },
+              },
+            },
+          ],
+        })
+        .expect(201);
+
+      const detail = await request(app.getHttpServer())
+        .get("/whatsapp/conversations/conversation-1")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(detail.body.tags).toEqual(
+        expect.arrayContaining([expect.objectContaining({ label: "cartera" })]),
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+      tags.splice(0, tags.length, ...originalTags);
+      accounts.splice(0, accounts.length, ...originalAccounts);
+    }
+  });
+
   it("webhook creates a clear order candidate and sends summary reply", async () => {
     const orderCountBefore = orders.length;
 
