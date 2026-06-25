@@ -29,6 +29,7 @@ from .sessions import session_store
 from .whatsapp_router import route_whatsapp_message
 from .whatsapp_agent import run_whatsapp_agent
 from .whatsapp_general_agent import run_whatsapp_general_agent
+from .whatsapp_customer_agent import run_whatsapp_customer_agent
 
 app = FastAPI(title="Nora Agent", version="0.1.0")
 
@@ -212,6 +213,11 @@ async def whatsapp_agent(payload: WhatsAppAgentRequest) -> WhatsAppAgentResponse
 @app.post("/whatsapp/agent/general", response_model=WhatsAppAgentResponse)
 async def whatsapp_general_agent(payload: WhatsAppAgentRequest) -> WhatsAppAgentResponse:
     return await run_whatsapp_general_agent(payload)
+
+
+@app.post("/whatsapp/agent/customer", response_model=WhatsAppAgentResponse)
+async def whatsapp_customer_agent(payload: WhatsAppAgentRequest) -> WhatsAppAgentResponse:
+    return await run_whatsapp_customer_agent(payload)
 
 
 @app.post("/messages")
