@@ -27,6 +27,8 @@ describe("WhatsApp inbox", () => {
   let noraCaseService: NoraCaseService;
   let originalFetch: typeof globalThis.fetch;
   let originalNoraAutomationUserId: string | undefined;
+  let conversationUpdateMock: jest.Mock;
+  let internalNoteCreateMock: jest.Mock;
 
   const users = [
     {
@@ -544,8 +546,16 @@ describe("WhatsApp inbox", () => {
           }).map((user) => (select ? applySelect(user, select) : user)),
       },
       customer: {
-        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-          customers.find((customer) => customer.id === id) ?? null,
+        findUnique: async ({
+          where: { id },
+          select,
+        }: {
+          where: { id: string };
+          select?: Record<string, unknown>;
+        }) => {
+          const customer = customers.find((customer) => customer.id === id) ?? null;
+          return customer && select ? applySelect(customer, select) : customer;
+        },
       },
       company: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -658,7 +668,7 @@ describe("WhatsApp inbox", () => {
             (id === conversationCustomer1Fixture.id ? conversationCustomer1Fixture : undefined);
           return conversation ? buildConversation(conversation, include, select) : null;
         },
-        update: async ({
+        update: (conversationUpdateMock = jest.fn(async ({
           where: { id },
           data,
           include,
@@ -677,7 +687,7 @@ describe("WhatsApp inbox", () => {
             updatedAt: new Date("2026-05-22T11:00:00.000Z"),
           };
           return buildConversation(conversations[index], include);
-        },
+        })),
         upsert: async ({
           where: {
             accountId_waId: { accountId, waId },
@@ -777,7 +787,7 @@ describe("WhatsApp inbox", () => {
         },
       },
       whatsAppInternalNote: {
-        create: async ({
+        create: (internalNoteCreateMock = jest.fn(async ({
           data,
         }: {
           data: { conversationId: string; authorUserId: string; body: string };
@@ -789,7 +799,7 @@ describe("WhatsApp inbox", () => {
           };
           notes.push(note);
           return note;
-        },
+        })),
         findMany: async ({ where }: { where?: { conversationId?: string } } = {}) =>
           where?.conversationId
             ? notes.filter((note) => note.conversationId === where.conversationId)
@@ -849,6 +859,26 @@ describe("WhatsApp inbox", () => {
       },
       order: {
         count: async () => orders.length,
+        findMany: async ({
+          where,
+          orderBy,
+          take,
+          select,
+        }: {
+          where?: { customerId?: string; sourceConversationId?: string };
+          orderBy?: Record<string, unknown>;
+          take?: number;
+          select?: Record<string, unknown>;
+        } = {}) => {
+          let result = orders.slice();
+          if (where?.customerId) {
+            result = result.filter((order) => order.customerId === where.customerId);
+          }
+          if (take !== undefined) {
+            result = result.slice(0, take);
+          }
+          return result.map((order) => (select ? applySelect(order, select) : order));
+        },
         findFirst: async ({
           where,
         }: {
@@ -874,6 +904,18 @@ describe("WhatsApp inbox", () => {
         },
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           orders.find((order) => order.id === id) ?? null,
+      },
+      invoice: {
+        findMany: async ({
+          where,
+          select,
+        }: {
+          where?: { customerId?: string };
+          select?: Record<string, unknown>;
+        } = {}) => {
+          // No invoices in the test fixtures; return empty array
+          return [];
+        },
       },
       auditLog: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -3214,6 +3256,159 @@ describe("WhatsApp inbox", () => {
         removeMatching(conversations, (item) => item.id === "conversation-general-flagoff");
         removeMatching(accounts, (item) => item.id === "account-general-flagoff");
         removeMatching(messages, (item) => item.conversationId === "conversation-general-flagoff");
+      }
+    });
+  });
+
+  describe("customer-agent branch (NORA_WHATSAPP_CUSTOMER_AGENT)", () => {
+    // Dedicated fixtures: a customer contact on a separate account with NO open case
+    const customerAgentAccount = {
+      id: "account-customer-agent",
+      phoneNumberId: "phone-number-customer-agent",
+      phoneNumber: "phone-number-customer-agent",
+      displayName: "WhatsApp",
+      active: true,
+    };
+    const customerAgentContact = {
+      id: "contact-customer-agent",
+      customerId: "customer-2",
+      fullName: "Carlos Cliente",
+      phone: "+573009998877",
+    };
+    const customerAgentConversation = {
+      id: "conversation-customer-agent",
+      accountId: customerAgentAccount.id,
+      waId: "573009998877",
+      phone: "+573009998877",
+      senderName: "Carlos Cliente",
+      senderType: WhatsAppSenderType.cliente,
+      status: WhatsAppConversationStatus.nuevo,
+      assignedToUserId: null,
+      customerId: "customer-2",
+      contactId: "contact-customer-agent",
+      lastMessageAt: new Date("2026-06-24T10:00:00.000Z"),
+      lastMessageText: "",
+      createdAt: new Date("2026-06-24T09:59:00.000Z"),
+      updatedAt: new Date("2026-06-24T10:00:00.000Z"),
+    };
+
+    const postCustomerWebhookText = (body: string) =>
+      request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .send({
+          type: "whatsapp.message.received",
+          data: {
+            phone_number_id: "phone-number-customer-agent",
+            message: {
+              id: `wamid-customer-agent-${Date.now()}`,
+              from: "573009998877",
+              timestamp: new Date().toISOString(),
+              text: { body },
+              profile: { name: "Carlos Cliente" },
+            },
+          },
+        })
+        .expect(201);
+
+    const removeMatching = (
+      collection: Array<Record<string, unknown>>,
+      predicate: (item: Record<string, unknown>) => boolean,
+    ) => {
+      let index = collection.findIndex(predicate);
+      while (index !== -1) {
+        collection.splice(index, 1);
+        index = collection.findIndex(predicate);
+      }
+    };
+
+    beforeEach(() => {
+      accounts.push(customerAgentAccount);
+      conversations.push(customerAgentConversation as unknown as (typeof conversations)[number]);
+      contacts.push(customerAgentContact);
+      (globalThis.fetch as jest.Mock).mockClear();
+      conversationUpdateMock.mockClear();
+      internalNoteCreateMock.mockClear();
+    });
+
+    afterEach(() => {
+      removeMatching(accounts, (item) => item.id === "account-customer-agent");
+      removeMatching(conversations, (item) => item.id === "conversation-customer-agent");
+      removeMatching(contacts, (item) => item.id === "contact-customer-agent");
+      removeMatching(messages, (item) => item.conversationId === "conversation-customer-agent");
+    });
+
+    it("routes a customer message to the customer agent and hands off to the unicanal inbox", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      const prevUnicanal = process.env.NORA_UNICANAL_USER_ID;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      process.env.NORA_UNICANAL_USER_ID = "user-magali";
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "Ya un asesor te contacta.",
+            case_update: null,
+            executed_entity: null,
+            handoff: { needed: true, intent: "pedido", reason: "quiere pedir" },
+          }),
+        });
+
+        await postCustomerWebhookText("quiero hacer un pedido");
+
+        const customerCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+        );
+        expect(customerCall).toBeDefined();
+
+        const routeCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/route"),
+        );
+        expect(routeCall).toBeUndefined();
+
+        // handoff assigns the conversation to the unicanal user and writes a note
+        expect(conversationUpdateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali" }) }),
+        );
+        expect(internalNoteCreateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+        );
+      } finally {
+        if (prevFlag === undefined) {
+          delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+        }
+        if (prevUnicanal === undefined) {
+          delete process.env.NORA_UNICANAL_USER_ID;
+        } else {
+          process.env.NORA_UNICANAL_USER_ID = prevUnicanal;
+        }
+      }
+    });
+
+    it("falls back to the planner for a customer message when the flag is off", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ mode: "cliente", intent: "consulta", summary: "", suggested_reply: "Hola", requires_human_review: false, risk_level: "low", missing_fields: [], proposals: [] }),
+        });
+        await postCustomerWebhookText("hola");
+        const routeCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/route"),
+        );
+        expect(routeCall).toBeDefined();
+        const customerCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+        );
+        expect(customerCall).toBeUndefined();
+      } finally {
+        if (prevFlag === undefined) {
+          delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+        }
       }
     });
   });

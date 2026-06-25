@@ -129,6 +129,18 @@ class NoraAgentAttachment(BaseModel):
     caption: str | None = None
 
 
+class NoraCustomerSnapshot(BaseModel):
+    customerName: str | None = None
+    recentOrders: list[dict] = Field(default_factory=list)
+    cartera: dict = Field(default_factory=dict)
+
+
+class NoraHandoff(BaseModel):
+    needed: bool = False
+    reason: str | None = None
+    intent: str | None = None
+
+
 class WhatsAppAgentRequest(BaseModel):
     current_message: str
     history: list[NoraMessageContext] = Field(default_factory=list)
@@ -137,9 +149,11 @@ class WhatsAppAgentRequest(BaseModel):
     sender: NoraUserContext | None = None
     conversation_id: str | None = None
     auth: str
+    customer_snapshot: "NoraCustomerSnapshot | None" = None
 
 
 class WhatsAppAgentResponse(BaseModel):
     reply_text: str
     case_update: dict[str, Any] | None = None
     executed_entity: dict[str, Any] | None = None
+    handoff: "NoraHandoff | None" = None

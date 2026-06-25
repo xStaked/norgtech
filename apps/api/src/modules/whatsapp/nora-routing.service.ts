@@ -173,6 +173,65 @@ export class NoraRoutingService {
         }
       }
 
+      if (
+        process.env.NORA_WHATSAPP_CUSTOMER_AGENT === "true" &&
+        sender.senderType === WhatsAppSenderType.cliente &&
+        "customerId" in sender &&
+        sender.customerId &&
+        !openCase &&
+        !mediaPayload
+      ) {
+        try {
+          const customerSnapshot = await this.buildCustomerSnapshot(sender.customerId);
+          const agentResponse = await this.requestNoraCustomerAgent({
+            current_message: message.body,
+            history: context.recent_messages,
+            conversation_id: conversation.id,
+            auth: "",
+            customer_snapshot: customerSnapshot,
+          });
+
+          if (agentResponse.handoff?.needed) {
+            const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
+            if (unicanalUserId) {
+              await this.prisma.whatsAppConversation.update({
+                where: { id: conversation.id },
+                data: { assignedToUserId: unicanalUserId, status: "pendiente" },
+              });
+              await this.prisma.whatsAppInternalNote.create({
+                data: {
+                  conversationId: conversation.id,
+                  authorUserId: unicanalUserId,
+                  body: `Derivación Nora — intent: ${agentResponse.handoff.intent ?? "n/d"}. Motivo: ${agentResponse.handoff.reason ?? "n/d"}`,
+                },
+              });
+            } else {
+              this.logger.warn("Customer handoff requested but NORA_UNICANAL_USER_ID is not set");
+            }
+          }
+
+          await this.prisma.noraActionLog.update({
+            where: { id: actionLog.id },
+            data: {
+              status: agentResponse.handoff?.needed
+                ? NoraActionStatus.proposed
+                : NoraActionStatus.executed,
+              output: agentResponse as unknown as Prisma.InputJsonObject,
+            },
+          });
+
+          if (agentResponse.reply_text) {
+            await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+          }
+          return;
+        } catch (error) {
+          this.logger.error(
+            `Nora customer agent failed, falling back to planner: ${String(error)}`,
+          );
+          // fall through to the planner path below
+        }
+      }
+
       const noraResponse = await this.requestNoraRoute({
         sender_type: sender.senderType,
         message: message.body,
@@ -363,6 +422,68 @@ export class NoraRoutingService {
       reply_text: string;
       case_update: Record<string, unknown> | null;
       executed_entity: Record<string, unknown> | null;
+    }>;
+  }
+
+  private async buildCustomerSnapshot(customerId: string) {
+    const [customer, orders, invoices] = await Promise.all([
+      this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { displayName: true },
+      }),
+      this.prisma.order.findMany({
+        where: { customerId },
+        orderBy: { orderDate: "desc" },
+        take: 5,
+        select: { orderNumber: true, status: true, orderDate: true, total: true },
+      }),
+      this.prisma.invoice.findMany({
+        where: { customerId },
+        select: { dueDate: true, totalAmount: true, totalPaid: true, creditNoteTotal: true },
+      }),
+    ]);
+
+    const now = new Date();
+    let saldo = 0;
+    let vencidasCount = 0;
+    for (const inv of invoices) {
+      const balance =
+        Number(inv.totalAmount) - Number(inv.totalPaid) - Number(inv.creditNoteTotal ?? 0);
+      if (balance > 0) {
+        saldo += balance;
+        if (inv.dueDate < now) {
+          vencidasCount += 1;
+        }
+      }
+    }
+
+    return {
+      customerName: customer?.displayName ?? null,
+      recentOrders: orders.map((o) => ({
+        orderNumber: o.orderNumber,
+        status: o.status,
+        orderDate: o.orderDate.toISOString(),
+        total: Number(o.total),
+      })),
+      cartera: { saldo, vencidasCount },
+    };
+  }
+
+  private async requestNoraCustomerAgent(payload: Record<string, unknown>) {
+    const noraApiUrl = process.env.NORA_API_URL ?? "http://localhost:8000";
+    const response = await fetch(`${noraApiUrl}/whatsapp/agent/customer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`Nora customer agent request failed with status ${response.status}`);
+    }
+    return response.json() as Promise<{
+      reply_text: string;
+      case_update: Record<string, unknown> | null;
+      executed_entity: Record<string, unknown> | null;
+      handoff: { needed: boolean; reason: string | null; intent: string | null } | null;
     }>;
   }
 
