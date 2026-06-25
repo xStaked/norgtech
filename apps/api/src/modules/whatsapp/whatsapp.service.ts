@@ -392,6 +392,75 @@ export class WhatsAppService {
     return this.orderAutomation.process(user, conversationId, dto);
   }
 
+  async createOrderFromCase(user: AuthUser, conversationId: string, caseId: string) {
+    const noraCase = await this.prisma.noraConversationCase.findFirst({
+      where: { id: caseId, conversationId },
+    });
+
+    if (!noraCase) {
+      throw new NotFoundException("Nora case not found");
+    }
+
+    if (
+      noraCase.type !== NoraConversationCaseType.order ||
+      noraCase.status !== NoraConversationCaseStatus.ready_for_review
+    ) {
+      throw new BadRequestException("Nora case is not ready for order creation");
+    }
+
+    const extractedData = this.jsonObjectValue(noraCase.extractedData);
+    const customerId = this.stringValue(extractedData.customerId);
+
+    if (customerId) {
+      await this.prisma.whatsAppConversation.update({
+        where: { id: conversationId },
+        data: { customerId },
+      });
+    }
+
+    const dto: ProcessOrderAutomationDto = {
+      customerRef: this.stringValue(extractedData.customerRef),
+      companyRef: this.stringValue(extractedData.companyRef),
+      customerZoneId: this.stringValue(extractedData.customerZoneId),
+      zoneRef: this.stringValue(extractedData.zoneRef),
+      deliveryInstructions: this.stringValue(extractedData.deliveryInstructions),
+      notes: this.stringValue(extractedData.notes),
+      items: this.orderItemsFromCaseData(extractedData.items),
+    };
+
+    const result = await this.orderAutomation.process(user, conversationId, dto);
+
+    if (result.decision !== "created") {
+      return { ...result, case: noraCase };
+    }
+
+    const createdResult = result as Record<string, unknown>;
+    const order = this.jsonObjectValue(createdResult.order as Prisma.JsonValue);
+    const orderId = this.stringValue(order.id);
+    let updatedCase = await this.noraCaseService.updateCase(caseId, {
+      status: NoraConversationCaseStatus.executed,
+      approvedByUserId: user.id,
+      executedEntityType: "Order",
+      executedEntityId: orderId,
+    } as Parameters<NoraCaseService["updateCase"]>[1] & {
+      approvedByUserId: string;
+    });
+
+    if (updatedCase.approvedByUserId !== user.id) {
+      updatedCase = await this.prisma.noraConversationCase.update({
+        where: { id: caseId },
+        data: { approvedByUserId: user.id },
+      });
+    }
+
+    await this.sendAgentReply(
+      conversationId,
+      this.stringValue(createdResult.reply) ?? "Pedido creado y enviado a revision.",
+    );
+
+    return { ...result, case: updatedCase };
+  }
+
   async getNoraConversationContext(conversationId: string) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
@@ -566,6 +635,55 @@ export class WhatsAppService {
     return error instanceof Error && error.message
       ? error.message
       : "WhatsApp provider send failed";
+  }
+
+  private jsonObjectValue(value: Prisma.JsonValue): Record<string, unknown> {
+    return value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : {};
+  }
+
+  private stringValue(value: unknown) {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  }
+
+  private orderItemsFromCaseData(value: unknown): ProcessOrderAutomationDto["items"] {
+    if (!Array.isArray(value)) {
+      return [];
+    }
+
+    const items: ProcessOrderAutomationDto["items"] = [];
+
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item)) {
+        continue;
+      }
+
+      const candidate = item as Record<string, unknown>;
+      const productRef =
+        this.stringValue(candidate.productRef) ?? this.stringValue(candidate.product_ref);
+      const quantity =
+        typeof candidate.quantity === "number"
+          ? candidate.quantity
+          : Number(candidate.quantity);
+
+      if (!productRef || !Number.isFinite(quantity)) {
+        continue;
+      }
+
+      items.push({
+        productRef,
+        quantity,
+        ...(this.stringValue(candidate.presentation) && {
+          presentation: this.stringValue(candidate.presentation),
+        }),
+        ...(this.stringValue(candidate.notes) && {
+          notes: this.stringValue(candidate.notes),
+        }),
+      });
+    }
+
+    return items;
   }
 
   private normalizePhone(phone: string) {

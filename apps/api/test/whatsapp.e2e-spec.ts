@@ -258,6 +258,31 @@ describe("WhatsApp inbox", () => {
       createdAt: new Date("2026-06-21T16:10:00.000Z"),
       updatedAt: new Date("2026-06-21T16:10:00.000Z"),
     },
+    {
+      id: "case-order-ready",
+      conversationId: "conversation-1",
+      parentCaseId: null,
+      type: "order",
+      status: "ready_for_review",
+      extractedData: {
+        customerId: "customer-1",
+        companyRef: "Norgtech",
+        customerZoneId: "customer-zone-1",
+        items: [{ productRef: "FERT-001", quantity: 5, presentation: "bultos" }],
+        notes: "Pedido desde WhatsApp",
+      },
+      missingFields: [],
+      attachments: [],
+      proposal: null,
+      lastQuestion: null,
+      riskLevel: "high",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:20:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:20:00.000Z"),
+    },
   ];
   const accounts: Array<Record<string, unknown>> = [];
   const openCaseStatuses = ["collecting_info", "ready_for_review", "blocked"];
@@ -1079,15 +1104,17 @@ describe("WhatsApp inbox", () => {
       .set("Authorization", `Bearer ${adminToken}`)
       .expect(200);
 
-    expect(response.body.noraCases).toEqual([
-      expect.objectContaining({
-        id: "case-order-1",
-        type: "order",
-        status: "collecting_info",
-        missingFields: ["customerId"],
-        lastQuestion: "Necesito identificar el cliente antes de continuar.",
-      }),
-    ]);
+    expect(response.body.noraCases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "case-order-1",
+          type: "order",
+          status: "collecting_info",
+          missingFields: ["customerId"],
+          lastQuestion: "Necesito identificar el cliente antes de continuar.",
+        }),
+      ]),
+    );
   });
 
   it("serializes overlapping new-customer subcase creation for the same order case", async () => {
@@ -1338,6 +1365,19 @@ describe("WhatsApp inbox", () => {
     ]);
     expect(response.body.reply).toContain("Recibimos tu pedido");
     expect(response.body.reply).toContain("Fertilizante");
+  });
+
+  it("creates a review order from a ready Nora order case", async () => {
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/conversation-1/cases/case-order-ready/create-order")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({})
+      .expect(201);
+
+    expect(response.body.decision).toBe("created");
+    expect(response.body.order).toEqual(expect.objectContaining({ approvalStatus: "en_revision" }));
+    expect(response.body.case.status).toBe("executed");
+    expect(response.body.case.executedEntityType).toBe("Order");
   });
 
   it("creates an order with an unresolved item when a short SKU appears inside an unrelated product ref", async () => {

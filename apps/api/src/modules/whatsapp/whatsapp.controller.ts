@@ -129,4 +129,13 @@ export class WhatsAppController {
   ) {
     return this.whatsAppService.processOrderAutomation(user, id, dto);
   }
+
+  @Post("conversations/:id/cases/:caseId/create-order")
+  createOrderFromCase(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Param("caseId") caseId: string,
+  ) {
+    return this.whatsAppService.createOrderFromCase(user, id, caseId);
+  }
 }
