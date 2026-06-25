@@ -810,6 +810,32 @@ describe("WhatsApp inbox", () => {
           where?.conversationId
             ? tags.filter((tag) => tag.conversationId === where.conversationId)
             : tags,
+        upsert: async ({
+          where: {
+            conversationId_label: { conversationId, label },
+          },
+          create,
+        }: {
+          where: { conversationId_label: { conversationId: string; label: string } };
+          update: Record<string, unknown>;
+          create: { conversationId: string; label: string };
+        }) => {
+          const existing = tags.find(
+            (tag) => tag.conversationId === conversationId && tag.label === label,
+          );
+
+          if (existing) {
+            return existing;
+          }
+
+          const tag = {
+            id: `tag-${tags.length + 1}`,
+            createdAt: new Date("2026-05-22T11:17:00.000Z"),
+            ...create,
+          };
+          tags.push(tag);
+          return tag;
+        },
       },
       noraActionLog: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -1594,6 +1620,72 @@ describe("WhatsApp inbox", () => {
         }),
       ],
     });
+  });
+
+  it("stores Nora intent as a conversation tag", async () => {
+    const originalTags = tags.slice();
+    const originalAccounts = accounts.slice();
+    const previousFetch = globalThis.fetch;
+    tags.splice(
+      0,
+      tags.length,
+      ...tags.filter(
+        (tag) => !(tag.conversationId === "conversation-1" && tag.label === "pedido"),
+      ),
+    );
+    accounts.push({
+      id: "account-1",
+      phoneNumberId: "phone-1",
+      phoneNumber: "phone-1",
+      displayName: "WhatsApp",
+      active: true,
+    });
+    globalThis.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        mode: "cliente",
+        intent: "pedido",
+        summary: "Cliente solicita pedido",
+        suggested_reply: "Recibido. Voy a validar los datos del pedido.",
+        requires_human_review: true,
+        risk_level: "high",
+        missing_fields: [],
+        proposals: [],
+        case_transition: null,
+      }),
+    } as Response);
+
+    try {
+      await request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .send({
+          type: "whatsapp.message.received",
+          data: [
+            {
+              phone_number_id: "phone-1",
+              message: {
+                id: "wamid-intent-1",
+                from: "573001112233",
+                text: { body: "Necesito 5 bultos de FERT-001" },
+              },
+            },
+          ],
+        })
+        .expect(201);
+
+      const detail = await request(app.getHttpServer())
+        .get("/whatsapp/conversations/conversation-1")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .expect(200);
+
+      expect(detail.body.tags).toEqual(
+        expect.arrayContaining([expect.objectContaining({ label: "pedido" })]),
+      );
+    } finally {
+      globalThis.fetch = previousFetch;
+      tags.splice(0, tags.length, ...originalTags);
+      accounts.splice(0, accounts.length, ...originalAccounts);
+    }
   });
 
   it("webhook creates a clear order candidate and sends summary reply", async () => {

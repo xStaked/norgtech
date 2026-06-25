@@ -288,6 +288,8 @@ export class NoraRoutingService {
         ...(caseResult && { case_transition_result: this.toJsonSafeValue(caseResult) }),
       };
 
+      await this.persistIntentTag(conversation.id, noraResponse);
+
       const updatedLog = await this.prisma.noraActionLog.update({
         where: { id: actionLog.id },
         data: {
@@ -500,6 +502,25 @@ export class NoraRoutingService {
     }
 
     return response.json() as Promise<Record<string, unknown>>;
+  }
+
+  private async persistIntentTag(
+    conversationId: string,
+    noraResponse: Record<string, unknown>,
+  ) {
+    const intent = this.stringValue(noraResponse.intent);
+    const allowed = new Set(["pedido", "cartera", "logistica", "gasto", "reclamo", "otro"]);
+    const label = intent && allowed.has(intent) ? intent : intent ? "otro" : null;
+
+    if (!label) {
+      return;
+    }
+
+    await this.prisma.whatsAppConversationTag.upsert({
+      where: { conversationId_label: { conversationId, label } },
+      update: {},
+      create: { conversationId, label },
+    });
   }
 
   private async processCaseTransition(
