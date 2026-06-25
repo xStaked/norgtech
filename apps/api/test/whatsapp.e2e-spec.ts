@@ -364,6 +364,30 @@ describe("WhatsApp inbox", () => {
         return noraCases[index];
       },
     ),
+    updateMany: jest.fn(
+      async ({
+        where,
+        data,
+      }: {
+        where: { id?: string; executedEntityType?: string | null };
+        data: Record<string, unknown>;
+      }) => {
+        const matching = noraCases.filter(
+          (item) =>
+            (!where.id || item.id === where.id) &&
+            (where.executedEntityType === undefined ||
+              item.executedEntityType === where.executedEntityType),
+        );
+
+        for (const item of matching) {
+          Object.assign(item, data, {
+            updatedAt: new Date("2026-06-21T16:12:00.000Z"),
+          });
+        }
+
+        return { count: matching.length };
+      },
+    ),
   };
 
   const applySelect = (
@@ -1368,6 +1392,10 @@ describe("WhatsApp inbox", () => {
   });
 
   it("creates a review order from a ready Nora order case", async () => {
+    const outboundCountBefore = messages.filter(
+      (message) => String(message.direction) === WhatsAppMessageDirection.outbound,
+    ).length;
+
     const response = await request(app.getHttpServer())
       .post("/whatsapp/conversations/conversation-1/cases/case-order-ready/create-order")
       .set("Authorization", `Bearer ${adminToken}`)
@@ -1375,9 +1403,137 @@ describe("WhatsApp inbox", () => {
       .expect(201);
 
     expect(response.body.decision).toBe("created");
-    expect(response.body.order).toEqual(expect.objectContaining({ approvalStatus: "en_revision" }));
+    expect(response.body.order).toEqual(
+      expect.objectContaining({ approvalStatus: "en_revision" }),
+    );
     expect(response.body.case.status).toBe("executed");
     expect(response.body.case.executedEntityType).toBe("Order");
+    expect(response.body.case.executedEntityId).toBe(response.body.order.id);
+    expect(
+      messages.filter((message) => String(message.direction) === WhatsAppMessageDirection.outbound),
+    ).toHaveLength(outboundCountBefore + 1);
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        conversationId: "conversation-1",
+        direction: WhatsAppMessageDirection.outbound,
+        body: expect.stringContaining("Recibimos tu pedido"),
+        deliveryStatus: "sent",
+      }),
+    );
+  });
+
+  it("does not create a duplicate order from an already executed Nora order case", async () => {
+    const orderCountBefore = orders.length;
+    const response = await request(app.getHttpServer())
+      .post("/whatsapp/conversations/conversation-1/cases/case-order-ready/create-order")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({})
+      .expect(201);
+
+    expect(response.body.decision).toBe("human_review");
+    expect(response.body.reason).toContain("already executed");
+    expect(orders).toHaveLength(orderCountBefore);
+  });
+
+  it("rejects invalid Nora order case item data before creating an order", async () => {
+    const invalidCase = {
+      id: "case-order-invalid-items",
+      conversationId: "conversation-1",
+      parentCaseId: null,
+      type: "order",
+      status: "ready_for_review",
+      extractedData: {
+        customerId: "customer-1",
+        companyRef: "Norgtech",
+        customerZoneId: "customer-zone-1",
+        items: [{ productRef: "FERT-001", quantity: -1 }],
+      },
+      missingFields: [],
+      attachments: [],
+      proposal: null,
+      lastQuestion: null,
+      riskLevel: "high",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:25:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:25:00.000Z"),
+    };
+    noraCases.unshift(invalidCase);
+    const orderCountBefore = orders.length;
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/conversations/conversation-1/cases/case-order-invalid-items/create-order")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({})
+        .expect(400);
+
+      expect(response.body.message).toContain("quantity greater than 0");
+      expect(orders).toHaveLength(orderCountBefore);
+      expect(invalidCase.executedEntityType).toBeNull();
+    } finally {
+      const index = noraCases.findIndex((item) => item.id === invalidCase.id);
+      if (index !== -1) {
+        noraCases.splice(index, 1);
+      }
+    }
+  });
+
+  it("returns the created order when the post-execution reply send fails", async () => {
+    const replyFailureCase = {
+      id: "case-order-reply-failure",
+      conversationId: "conversation-1",
+      parentCaseId: null,
+      type: "order",
+      status: "ready_for_review",
+      extractedData: {
+        customerId: "customer-1",
+        companyRef: "Norgtech",
+        customerZoneId: "customer-zone-1",
+        items: [{ product_ref: "FERT-001", quantity: 2 }],
+      },
+      missingFields: [],
+      attachments: [],
+      proposal: null,
+      lastQuestion: null,
+      riskLevel: "high",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:30:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:30:00.000Z"),
+    };
+    noraCases.unshift(replyFailureCase);
+    process.env.KAPSO_TEST_SEND_FAILURE = "1";
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/conversations/conversation-1/cases/case-order-reply-failure/create-order")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({})
+        .expect(201);
+
+      expect(response.body.decision).toBe("created");
+      expect(response.body.order).toEqual(
+        expect.objectContaining({ approvalStatus: "en_revision" }),
+      );
+      expect(response.body.case.status).toBe("executed");
+      expect(response.body.replyDelivery).toEqual(
+        expect.objectContaining({
+          sent: false,
+          warning: expect.stringContaining("Could not send"),
+        }),
+      );
+    } finally {
+      delete process.env.KAPSO_TEST_SEND_FAILURE;
+      const index = noraCases.findIndex((item) => item.id === replyFailureCase.id);
+      if (index !== -1) {
+        noraCases.splice(index, 1);
+      }
+    }
   });
 
   it("creates an order with an unresolved item when a short SKU appears inside an unrelated product ref", async () => {

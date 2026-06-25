@@ -401,6 +401,18 @@ export class WhatsAppService {
       throw new NotFoundException("Nora case not found");
     }
 
+    if (noraCase.executedEntityType || noraCase.executedEntityId) {
+      return {
+        decision: "human_review",
+        reason: "Nora case already executed",
+        existing: {
+          entityType: noraCase.executedEntityType,
+          entityId: noraCase.executedEntityId,
+        },
+        case: noraCase,
+      };
+    }
+
     if (
       noraCase.type !== NoraConversationCaseType.order ||
       noraCase.status !== NoraConversationCaseStatus.ready_for_review
@@ -425,13 +437,36 @@ export class WhatsAppService {
       zoneRef: this.stringValue(extractedData.zoneRef),
       deliveryInstructions: this.stringValue(extractedData.deliveryInstructions),
       notes: this.stringValue(extractedData.notes),
-      items: this.orderItemsFromCaseData(extractedData.items),
+      items: this.validateOrderItemsFromCaseData(extractedData.items),
     };
+
+    const claimed = await this.noraCaseService.claimForExecution(caseId, "Order");
+    if (!claimed) {
+      const existingCase = await this.prisma.noraConversationCase.findFirst({
+        where: { id: caseId, conversationId },
+      });
+
+      return {
+        decision: "human_review",
+        reason: "Nora case already executed or execution is in progress",
+        existing: existingCase
+          ? {
+              entityType: existingCase.executedEntityType,
+              entityId: existingCase.executedEntityId,
+            }
+          : null,
+        case: existingCase ?? noraCase,
+      };
+    }
 
     const result = await this.orderAutomation.process(user, conversationId, dto);
 
     if (result.decision !== "created") {
-      return { ...result, case: noraCase };
+      const resetCase = await this.noraCaseService.updateCase(caseId, {
+        executedEntityType: null,
+        executedEntityId: null,
+      });
+      return { ...result, case: resetCase };
     }
 
     const createdResult = result as Record<string, unknown>;
@@ -453,12 +488,23 @@ export class WhatsAppService {
       });
     }
 
-    await this.sendAgentReply(
-      conversationId,
-      this.stringValue(createdResult.reply) ?? "Pedido creado y enviado a revision.",
-    );
+    let replyDelivery:
+      | { sent: true }
+      | { sent: false; warning: string } = { sent: true };
 
-    return { ...result, case: updatedCase };
+    try {
+      await this.sendAgentReply(
+        conversationId,
+        this.stringValue(createdResult.reply) ?? "Pedido creado y enviado a revision.",
+      );
+    } catch (error) {
+      replyDelivery = {
+        sent: false,
+        warning: this.getSafeErrorMessage(error),
+      };
+    }
+
+    return { ...result, case: updatedCase, replyDelivery };
   }
 
   async getNoraConversationContext(conversationId: string) {
@@ -647,16 +693,18 @@ export class WhatsAppService {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
   }
 
-  private orderItemsFromCaseData(value: unknown): ProcessOrderAutomationDto["items"] {
-    if (!Array.isArray(value)) {
-      return [];
+  private validateOrderItemsFromCaseData(value: unknown): ProcessOrderAutomationDto["items"] {
+    if (!Array.isArray(value) || value.length === 0) {
+      throw new BadRequestException("Nora order case requires at least one valid item");
     }
 
     const items: ProcessOrderAutomationDto["items"] = [];
 
     for (const item of value) {
       if (!item || typeof item !== "object" || Array.isArray(item)) {
-        continue;
+        throw new BadRequestException(
+          "Nora order case items require productRef and quantity greater than 0",
+        );
       }
 
       const candidate = item as Record<string, unknown>;
@@ -667,8 +715,10 @@ export class WhatsAppService {
           ? candidate.quantity
           : Number(candidate.quantity);
 
-      if (!productRef || !Number.isFinite(quantity)) {
-        continue;
+      if (!productRef || !Number.isFinite(quantity) || quantity <= 0) {
+        throw new BadRequestException(
+          "Nora order case items require productRef and quantity greater than 0",
+        );
       }
 
       items.push({
@@ -681,6 +731,10 @@ export class WhatsAppService {
           notes: this.stringValue(candidate.notes),
         }),
       });
+    }
+
+    if (items.length === 0) {
+      throw new BadRequestException("Nora order case requires at least one valid item");
     }
 
     return items;
