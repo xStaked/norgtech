@@ -1423,16 +1423,57 @@ describe("WhatsApp inbox", () => {
   });
 
   it("does not create a duplicate order from an already executed Nora order case", async () => {
-    const orderCountBefore = orders.length;
-    const response = await request(app.getHttpServer())
-      .post("/whatsapp/conversations/conversation-1/cases/case-order-ready/create-order")
-      .set("Authorization", `Bearer ${adminToken}`)
-      .send({})
-      .expect(201);
+    const duplicateCase = {
+      id: "case-order-duplicate",
+      conversationId: "conversation-1",
+      parentCaseId: null,
+      type: "order",
+      status: "ready_for_review",
+      extractedData: {
+        customerId: "customer-1",
+        companyRef: "Norgtech",
+        customerZoneId: "customer-zone-1",
+        items: [{ productRef: "FERT-001", quantity: 5, presentation: "bultos" }],
+        notes: "Pedido duplicado desde WhatsApp",
+      },
+      missingFields: [],
+      attachments: [],
+      proposal: null,
+      lastQuestion: null,
+      riskLevel: "high",
+      createdByUserId: "sales-user-id",
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:22:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:22:00.000Z"),
+    };
+    noraCases.unshift(duplicateCase);
 
-    expect(response.body.decision).toBe("human_review");
-    expect(response.body.reason).toContain("already executed");
-    expect(orders).toHaveLength(orderCountBefore);
+    try {
+      await request(app.getHttpServer())
+        .post("/whatsapp/conversations/conversation-1/cases/case-order-duplicate/create-order")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({})
+        .expect(201);
+
+      const orderCountAfterFirstExecution = orders.length;
+
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/conversations/conversation-1/cases/case-order-duplicate/create-order")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({})
+        .expect(201);
+
+      expect(response.body.decision).toBe("human_review");
+      expect(response.body.reason).toContain("already executed");
+      expect(orders).toHaveLength(orderCountAfterFirstExecution);
+    } finally {
+      const index = noraCases.findIndex((item) => item.id === duplicateCase.id);
+      if (index !== -1) {
+        noraCases.splice(index, 1);
+      }
+    }
   });
 
   it("rejects invalid Nora order case item data before creating an order", async () => {
