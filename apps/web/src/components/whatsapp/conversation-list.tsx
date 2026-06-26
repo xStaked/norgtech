@@ -6,10 +6,12 @@ import type { WhatsAppConversation } from "./whatsapp-types";
 
 const statusLabels: Record<string, string> = {
   nuevo: "Nuevo",
-  abierto: "Abierto",
   pendiente: "Pendiente",
-  cerrado: "Cerrado",
+  en_gestion: "En gestion",
+  resuelto: "Resuelto",
 };
+
+const intentLabels = new Set(["pedido", "cartera", "logistica", "gasto", "reclamo", "otro"]);
 
 export function ConversationList({
   conversations,
@@ -48,6 +50,16 @@ export function ConversationList({
             <div className="truncate text-xs text-muted-foreground">
               {conversation.lastMessageText || "Sin mensajes"}
             </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {latestIntent(conversation) ? (
+                <Badge variant="outline">{latestIntent(conversation)}</Badge>
+              ) : null}
+              {conversation.assignedToUser ? (
+                <Badge variant="secondary">{conversation.assignedToUser.name}</Badge>
+              ) : (
+                <Badge variant="outline">Sin asignar</Badge>
+              )}
+            </div>
             <div className="flex min-w-0 items-center justify-between gap-2 text-[11px] text-muted-foreground">
               <span className="truncate">{conversation.customer?.displayName ?? conversation.phone}</span>
               <span className="shrink-0">{conversation.senderType}</span>
@@ -57,4 +69,8 @@ export function ConversationList({
       </div>
     </div>
   );
+}
+
+function latestIntent(conversation: WhatsAppConversation) {
+  return conversation.tags?.find((tag) => intentLabels.has(tag.label))?.label;
 }
