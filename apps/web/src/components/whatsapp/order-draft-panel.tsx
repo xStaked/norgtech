@@ -18,6 +18,10 @@ export function OrderDraftPanel({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const latestOrder = conversation?.orders?.[0] ?? null;
+  const readyOrderCase =
+    conversation?.noraCases?.find(
+      (noraCase) => noraCase.type === "order" && noraCase.status === "ready_for_review",
+    ) ?? null;
   const latestProposal =
     conversation?.noraActions
       ?.flatMap((action) => action.output?.proposals ?? [])
@@ -25,6 +29,7 @@ export function OrderDraftPanel({
     conversation?.noraActions?.find((action) => action.output?.proposed_order)?.output
       ?.proposed_order;
   const proposalItems = Array.isArray(latestProposal?.items) ? latestProposal.items : [];
+  const canCreateFromCase = Boolean(readyOrderCase && !latestOrder);
   const canCreateDraft = Boolean(
     conversation?.customer?.id &&
       latestProposal &&
@@ -57,6 +62,27 @@ export function OrderDraftPanel({
     }
   }
 
+  async function createFromCase() {
+    if (!conversation?.id || !readyOrderCase || creating) return;
+    setCreating(true);
+    setError(null);
+    try {
+      const response = await apiFetchClient(
+        `/whatsapp/conversations/${conversation.id}/cases/${readyOrderCase.id}/create-order`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+
+      if (!response.ok) {
+        setError("No se pudo crear el pedido desde el caso");
+        return;
+      }
+
+      onCreated?.();
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <div className="p-3">
       <div className="mb-2 text-sm font-semibold text-foreground">Pedido</div>
@@ -71,6 +97,23 @@ export function OrderDraftPanel({
           {latestOrder.total ? (
             <div className="text-xs text-muted-foreground">Total registrado: {latestOrder.total}</div>
           ) : null}
+        </div>
+      ) : readyOrderCase ? (
+        <div className="space-y-2 rounded-md border border-border p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-sm font-semibold">Caso listo para revisión</div>
+            <Badge variant="secondary">ready_for_review</Badge>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={createFromCase}
+            disabled={!canCreateFromCase || creating}
+          >
+            <FilePlus2 />
+            Crear pedido en revisión
+          </Button>
+          {error ? <div className="text-xs text-destructive">{error}</div> : null}
         </div>
       ) : latestProposal ? (
         <div className="space-y-2">
