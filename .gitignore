@@ -10,3 +10,6 @@ test-results
 .worktrees
 .env
 .superpowers
+.claude
+**/.claude
+**/CLAUDE.md
