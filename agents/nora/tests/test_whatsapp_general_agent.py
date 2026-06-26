@@ -4,7 +4,7 @@ import json
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from src.models.whatsapp_models import NoraMessageContext, WhatsAppAgentRequest
-from src.whatsapp_general_agent import _extract_customer_entity, _to_messages
+from src.whatsapp_general_agent import _extract_customer_entity, _extract_executed_entity, _to_messages
 
 
 def _req(**kwargs) -> WhatsAppAgentRequest:
@@ -102,3 +102,61 @@ def test_extract_customer_entity_from_create_customer_tool_message():
     )
 
     assert _extract_customer_entity([msg]) == {"type": "Customer", "id": "customer-1"}
+
+
+def test_visit_pending_context_is_injected_for_short_confirmation_turn():
+    req = _req(
+        history=[
+            NoraMessageContext(
+                role="assistant",
+                body='El cliente "Porcicultura Caribe SAS" ha sido creado exitosamente.',
+            ),
+            NoraMessageContext(
+                role="user",
+                body="listo necesito crear una visita para ese cliente",
+            ),
+            NoraMessageContext(
+                role="assistant",
+                body='Para crear una visita para "Porcicultura Caribe SAS", necesito fecha y descripción.',
+            ),
+            NoraMessageContext(
+                role="user",
+                body=(
+                    "los voy a visitar el 29 de junio a las 12:00 PM, "
+                    "es una visita de seguimiento con el producto no mas algo breve"
+                ),
+            ),
+            NoraMessageContext(
+                role="assistant",
+                body=(
+                    "Procederé a crear la visita para \"Porcicultura Caribe SAS\" "
+                    "el 29 de junio a las 12:00 PM."
+                ),
+            ),
+        ],
+        current_message="ok",
+    )
+
+    msgs = _to_messages(req)
+    visit_blocks = [
+        msg.content
+        for msg in msgs
+        if isinstance(msg, SystemMessage) and msg.content.startswith("[VISITA PENDIENTE]")
+    ]
+
+    assert len(visit_blocks) == 1
+    assert "Porcicultura Caribe SAS" in visit_blocks[0]
+    assert "-06-29T12:00:00" in visit_blocks[0]
+    assert "seguimiento con el producto no mas algo breve" in visit_blocks[0]
+    assert '"currentMessageConfirms": true' in visit_blocks[0]
+
+
+def test_extract_executed_entity_from_create_visit_tool_message():
+    payload = {"id": "visit-1", "summary": "Visita seguimiento"}
+    msg = ToolMessage(
+        content=f"Visita registrada exitosamente: {json.dumps(payload)}",
+        tool_call_id="tc_1",
+        name="create_visit",
+    )
+
+    assert _extract_executed_entity([msg]) == {"type": "Visit", "id": "visit-1"}

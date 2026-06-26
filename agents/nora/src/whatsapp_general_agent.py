@@ -5,6 +5,7 @@ Runs Nora's full toolset (ALL_TOOLS) over WhatsApp in agentic mode, mirroring
 whatsapp_agent.py but with every CRM tool instead of only the expense tools.
 NestJS passes the full conversation history on every turn (no checkpointer).
 """
+from datetime import date
 from typing import Annotated, TypedDict
 
 import json
@@ -37,6 +38,19 @@ NEW_CUSTOMER_CASE_PROMPT = (
     "pregúntalos de forma breve. Cuando ya estén nombre, NIT, ciudad y teléfono, "
     "llama get_customer_segments, elige Bronce si existe, llama create_customer "
     "y confirma el resultado."
+)
+
+VISIT_FLOW_PROMPT = (
+    "\n\n## Flujo de visitas por WhatsApp\n"
+    "Sí tienes capacidad para crear visitas usando la herramienta create_visit. "
+    "Nunca digas que no puedes crear visitas si estás hablando con un comercial. "
+    "Cuando el usuario pida crear una visita para 'ese cliente', toma como "
+    "referencia el cliente creado o mencionado más recientemente en el historial. "
+    "Si recibes un bloque [VISITA PENDIENTE] y el mensaje actual es una "
+    "confirmación como 'ok', 'listo', 'dale' o 'sí', busca primero el cliente "
+    "con search_customers y luego llama create_visit con el customer_id correcto. "
+    "Si ya tienes cliente, fecha/hora y resumen, crea la visita; no vuelvas a "
+    "pedir confirmación."
 )
 
 
@@ -87,6 +101,18 @@ def _case_context_block(request: WhatsAppAgentRequest) -> str:
     )
 
 
+def _visit_context_block(request: WhatsAppAgentRequest) -> str:
+    pending = _detected_pending_visit(request)
+    if not pending:
+        return ""
+    return (
+        "[VISITA PENDIENTE]\n"
+        f"- datos detectados: {json.dumps(pending, ensure_ascii=False)}\n"
+        "- accion requerida: si el mensaje actual confirma, usa search_customers "
+        "con customerRef y luego create_visit."
+    )
+
+
 def _detected_new_customer_fields(request: WhatsAppAgentRequest) -> dict:
     combined = "\n".join([item.body for item in request.history] + [request.current_message])
     fields: dict[str, str] = {}
@@ -127,6 +153,124 @@ def _detected_new_customer_fields(request: WhatsAppAgentRequest) -> dict:
     return fields
 
 
+def _detected_pending_visit(request: WhatsAppAgentRequest) -> dict | None:
+    history_text = "\n".join(item.body for item in request.history)
+    combined = "\n".join([history_text, request.current_message])
+    if "visita" not in combined.lower():
+        return None
+
+    customer_ref = _latest_customer_ref(combined)
+    scheduled_at = _latest_visit_datetime(combined)
+    summary = _latest_visit_summary(combined)
+    current_is_confirmation = _is_confirmation(request.current_message)
+
+    if not customer_ref or not scheduled_at or not summary:
+        return None
+
+    # ponytail: this stateless agent needs an explicit bridge for the short
+    # "ok" turn, otherwise the LLM can lose the visit it proposed one turn ago.
+    return {
+        "customerRef": customer_ref,
+        "scheduledAt": scheduled_at,
+        "summary": summary,
+        "currentMessageConfirms": current_is_confirmation,
+    }
+
+
+def _latest_customer_ref(text: str) -> str | None:
+    patterns = (
+        r'cliente\s+"([^"]+)"',
+        r'para\s+"([^"]+)"',
+        r'cliente\s+([A-ZÁÉÍÓÚÜÑ][\wÁÉÍÓÚÜÑáéíóúüñ .&-]+?)(?:,|\n|$)',
+        r'para\s+([A-ZÁÉÍÓÚÜÑ][\wÁÉÍÓÚÜÑáéíóúüñ .&-]+?)(?:,|\n|$)',
+    )
+    matches: list[str] = []
+    for pattern in patterns:
+        matches.extend(match.strip() for match in re.findall(pattern, text, flags=re.IGNORECASE))
+    matches = [
+        match
+        for match in matches
+        if _normalize_text(match) not in {"ese cliente", "este cliente", "el cliente"}
+    ]
+    return matches[-1] if matches else None
+
+
+def _latest_visit_datetime(text: str) -> str | None:
+    month_names = {
+        "enero": 1,
+        "febrero": 2,
+        "marzo": 3,
+        "abril": 4,
+        "mayo": 5,
+        "junio": 6,
+        "julio": 7,
+        "agosto": 8,
+        "septiembre": 9,
+        "setiembre": 9,
+        "octubre": 10,
+        "noviembre": 11,
+        "diciembre": 12,
+    }
+    pattern = (
+        r"\b(?:el\s+)?(?P<day>\d{1,2})\s+de\s+"
+        r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+        r"septiembre|setiembre|octubre|noviembre|diciembre)"
+        r"(?:\s+(?:de\s+)?(?P<year>\d{4}))?"
+        r"(?:\s+a\s+las\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm|a\.m\.|p\.m\.)?)?"
+    )
+    matches = list(re.finditer(pattern, text, flags=re.IGNORECASE))
+    if not matches:
+        return None
+    match = matches[-1]
+    day = int(match.group("day"))
+    month = month_names[match.group("month").lower()]
+    year = int(match.group("year") or date.today().year)
+    hour = int(match.group("hour") or 9)
+    minute = int(match.group("minute") or 0)
+    ampm = (match.group("ampm") or "").lower().replace(".", "")
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+
+
+def _latest_visit_summary(text: str) -> str | None:
+    matches = re.findall(
+        r"(?:es una|ser[aá] una|visita de)\s+(.+?)(?:\n|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if matches:
+        summary = re.sub(r"\s+", " ", matches[-1]).strip(" .")
+        if summary.lower().startswith("visita "):
+            return summary
+        return f"Visita {summary}"
+    if "visita" in text.lower():
+        return "Visita comercial"
+    return None
+
+
+def _is_confirmation(message: str) -> bool:
+    normalized = _normalize_text(message)
+    return normalized in {
+        "ok",
+        "okay",
+        "okey",
+        "listo",
+        "dale",
+        "si",
+        "sí",
+        "confirmo",
+        "perfecto",
+        "de acuerdo",
+    }
+
+
+def _normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
 def _field_value(text: str, labels: tuple[str, ...]) -> str | None:
     for label in labels:
         match = re.search(rf"(?im)^\s*{label}\s*:\s*(.+?)\s*$", text)
@@ -137,7 +281,7 @@ def _field_value(text: str, labels: tuple[str, ...]) -> str | None:
 
 def _to_messages(request: WhatsAppAgentRequest) -> list:
     """System prompt (+WhatsApp addendum) + history + current message (no dup)."""
-    system_prompt = NORA_SYSTEM_PROMPT + WHATSAPP_ADDENDUM
+    system_prompt = NORA_SYSTEM_PROMPT + WHATSAPP_ADDENDUM + VISIT_FLOW_PROMPT
     if request.open_case and request.open_case.type == "new_customer":
         system_prompt += NEW_CUSTOMER_CASE_PROMPT
 
@@ -145,6 +289,9 @@ def _to_messages(request: WhatsAppAgentRequest) -> list:
     case_context = _case_context_block(request)
     if case_context:
         messages.append(SystemMessage(content=case_context))
+    visit_context = _visit_context_block(request)
+    if visit_context:
+        messages.append(SystemMessage(content=visit_context))
     for item in request.history:
         if item.role == "assistant":
             messages.append(AIMessage(content=item.body))
@@ -155,18 +302,32 @@ def _to_messages(request: WhatsAppAgentRequest) -> list:
     return messages
 
 
-def _extract_customer_entity(messages: list) -> dict | None:
+def _extract_executed_entity(messages: list) -> dict | None:
     for msg in reversed(messages):
-        if isinstance(msg, ToolMessage) and msg.name == "create_customer":
-            content = msg.content or ""
-            try:
-                start = content.index("{")
-                data = json.loads(content[start:])
-            except (ValueError, json.JSONDecodeError):
-                continue
-            if data.get("id"):
-                return {"type": "Customer", "id": data["id"]}
+        if not isinstance(msg, ToolMessage):
+            continue
+        data = _json_payload_from_tool_message(msg)
+        if not data or not data.get("id"):
+            continue
+        if msg.name == "create_customer":
+            return {"type": "Customer", "id": data["id"]}
+        if msg.name == "create_visit":
+            return {"type": "Visit", "id": data["id"]}
     return None
+
+
+def _extract_customer_entity(messages: list) -> dict | None:
+    entity = _extract_executed_entity(messages)
+    return entity if entity and entity["type"] == "Customer" else None
+
+
+def _json_payload_from_tool_message(msg: ToolMessage) -> dict | None:
+    content = msg.content or ""
+    try:
+        start = content.index("{")
+        return json.loads(content[start:])
+    except (ValueError, json.JSONDecodeError):
+        return None
 
 
 async def run_whatsapp_general_agent(request: WhatsAppAgentRequest) -> WhatsAppAgentResponse:
@@ -186,7 +347,7 @@ async def run_whatsapp_general_agent(request: WhatsAppAgentRequest) -> WhatsAppA
     if not reply_text:
         reply_text = "¿En qué más te ayudo?"
 
-    executed_entity = _extract_customer_entity(result["messages"])
+    executed_entity = _extract_executed_entity(result["messages"])
     case_update = (
         {
             "status": "executed",
