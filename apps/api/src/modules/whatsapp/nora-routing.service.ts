@@ -139,7 +139,8 @@ export class NoraRoutingService {
         process.env.NORA_WHATSAPP_GENERAL_AGENT === "true" &&
         "userId" in sender &&
         sender.userId &&
-        !openCase &&
+        (!openCase || openCase.type === NoraConversationCaseType.new_customer) &&
+        !this.isNewCustomerStartMessage(message.body) &&
         !mediaPayload
       ) {
         try {
@@ -147,9 +148,26 @@ export class NoraRoutingService {
           const agentResponse = await this.requestNoraGeneralAgent({
             current_message: message.body,
             history: context.recent_messages,
+            open_case: openCase
+              ? {
+                  id: openCase.id,
+                  type: openCase.type,
+                  status: openCase.status,
+                  extractedData: openCase.extractedData,
+                  missingFields: Array.isArray(openCase.missingFields)
+                    ? openCase.missingFields
+                    : [],
+                  lastQuestion: openCase.lastQuestion,
+                  attachments: openCase.attachments,
+                }
+              : null,
             conversation_id: conversation.id,
             auth: `Bearer ${scopedToken}`,
           });
+
+          if (agentResponse.case_update && openCase) {
+            await this.noraCaseService.updateCase(openCase.id, agentResponse.case_update);
+          }
 
           await this.prisma.noraActionLog.update({
             where: { id: actionLog.id },
@@ -541,6 +559,7 @@ export class NoraRoutingService {
       soporte_pago: "cartera",
       guia_logistica: "logistica",
       gasto: "gasto",
+      crear_cliente: "cliente",
       reclamo: "reclamo",
       resumen_conversacion: "otro",
       clasificacion: "otro",
@@ -580,6 +599,28 @@ export class NoraRoutingService {
 
     if (action === "start_case") {
       const type = this.stringValue(source.type);
+
+      if (type === NoraConversationCaseType.new_customer) {
+        const missingFields = this.stringArrayValue(source.missingFields);
+        return this.noraCaseService.createCase({
+          conversationId,
+          type: NoraConversationCaseType.new_customer,
+          status:
+            missingFields.length === 0
+              ? NoraConversationCaseStatus.ready_for_review
+              : NoraConversationCaseStatus.collecting_info,
+          extractedData: this.objectValue(source.extractedData) ?? {},
+          missingFields,
+          proposal: {
+            type: "new_customer",
+            title: "Cliente nuevo",
+            payload: this.objectValue(source.extractedData) ?? {},
+          },
+          lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+          riskLevel: "high",
+          createdByUserId: actorUserId,
+        });
+      }
       if (type === NoraConversationCaseType.expense) {
         const attachment = this.caseAttachmentFromMessage(message);
         return this.noraCaseService.createCase({
@@ -629,6 +670,10 @@ export class NoraRoutingService {
         missingFields: nextMissing,
         lastQuestion: this.stringValue(source.lastQuestion) ?? null,
         ...(existingCase.type === NoraConversationCaseType.order &&
+          nextMissing.length === 0 && {
+            status: NoraConversationCaseStatus.ready_for_review,
+          }),
+        ...(existingCase.type === NoraConversationCaseType.new_customer &&
           nextMissing.length === 0 && {
             status: NoraConversationCaseStatus.ready_for_review,
           }),
@@ -848,6 +893,23 @@ export class NoraRoutingService {
     }
 
     return noraResponse.requires_human_review !== true;
+  }
+
+  private isNewCustomerStartMessage(message: string): boolean {
+    const normalized = message
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+    return [
+      "crear cliente",
+      "crear un cliente",
+      "agregar cliente",
+      "agregar un cliente",
+      "nuevo cliente",
+      "cliente nuevo",
+      "registrar cliente",
+      "registrar un cliente",
+    ].some((phrase) => normalized.includes(phrase));
   }
 
   private stringValue(value: unknown) {

@@ -1,3 +1,4 @@
+import re
 from typing import Any
 
 from .models.whatsapp_models import (
@@ -214,6 +215,19 @@ def _case_transition_for(
     request: WhatsAppRouteRequest,
     plan: Any,
 ) -> NoraCaseTransition | None:
+    if request.open_case and request.open_case.type == "new_customer":
+        extracted = _extract_new_customer_fields(request.message)
+        merged = {**(request.open_case.extractedData or {}), **extracted}
+        missing = _new_customer_missing_fields(merged)
+        return NoraCaseTransition(
+            action="update_case",
+            caseId=request.open_case.id,
+            type="new_customer",
+            extractedData=extracted,
+            missingFields=missing,
+            lastQuestion=_new_customer_question(missing),
+        )
+
     if (
         request.open_case
         and request.open_case.type == "order"
@@ -283,6 +297,17 @@ def _case_transition_for(
             lastQuestion="Listo. Dime el valor del gasto y el cliente o visita a asociar.",
         )
 
+    if plan.intent == "crear_cliente" and not request.open_case:
+        extracted = _extract_new_customer_fields(request.message)
+        missing = _new_customer_missing_fields(extracted)
+        return NoraCaseTransition(
+            action="start_case",
+            type="new_customer",
+            extractedData=extracted,
+            missingFields=missing,
+            lastQuestion=_new_customer_question(missing),
+        )
+
     if (
         plan.intent == "pedido"
         and not (request.open_case and request.open_case.type == "order")
@@ -349,6 +374,12 @@ def _suggested_reply_for(
     request: WhatsAppRouteRequest | None = None,
 ) -> str:
     if intent == "continuar_caso":
+        if request and request.open_case and request.open_case.type == "new_customer":
+            extracted = {
+                **(request.open_case.extractedData or {}),
+                **_extract_new_customer_fields(request.message),
+            }
+            return _new_customer_question(_new_customer_missing_fields(extracted))
         if (
             request
             and request.open_case
@@ -365,6 +396,9 @@ def _suggested_reply_for(
             "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social "
             "o nombre comercial."
         )
+    if intent == "crear_cliente":
+        extracted = _extract_new_customer_fields(request.message) if request else {}
+        return _new_customer_question(_new_customer_missing_fields(extracted))
     if intent == "pedido":
         return "Recibido. Voy a validar los datos del pedido y te confirmamos en breve."
     if intent == "consulta_pedidos":
@@ -522,3 +556,76 @@ def _order_confirmation_question(action: PlannedAction) -> str:
         lines.append(f"- {qty} x {ref}")
     detail = "\n".join(lines)
     return f"Voy a registrar este pedido:\n{detail}\n¿Confirmas el pedido? (responde 'sí' para crearlo)"
+
+
+def _extract_new_customer_fields(message: str) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    name = _field_value(message, ("nombre", "razon social", "razón social", "cliente"))
+    tax_id = _field_value(message, ("nit", "tax id"))
+    city = _field_value(message, ("ciudad",))
+    phone = _field_value(message, ("telefono", "teléfono", "celular"))
+
+    if not phone and not re.search(r"(?im)^\s*(?:nit|tax id)\s*:", message):
+        phone_match = re.search(r"\b(?:\+?\d[\d\s().-]{6,}\d)\b", message)
+        if phone_match:
+            phone = re.sub(r"\D+", "", phone_match.group(0))
+    if not city and phone:
+        without_phone = re.sub(re.escape(phone), " ", message)
+        without_phone = re.sub(r"\b(?:telefono|teléfono|celular|ciudad)\b\s*:?", " ", without_phone, flags=re.IGNORECASE)
+        without_phone = re.sub(r"\b(?:y|e)\b", " ", without_phone, flags=re.IGNORECASE)
+        candidate = re.sub(r"[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s.-]", " ", without_phone)
+        candidate = re.sub(r"\s+", " ", candidate).strip(" .-")
+        if candidate and not re.search(r"\b(?:nombre|nit|crear|cliente)\b", candidate, flags=re.IGNORECASE):
+            city = candidate
+
+    if name:
+        fields["legalName"] = name
+        fields["displayName"] = name
+    if tax_id:
+        fields["taxId"] = tax_id
+    if city:
+        fields["city"] = city
+    if phone:
+        fields["phone"] = phone
+
+    return fields
+
+
+def _field_value(message: str, labels: tuple[str, ...]) -> str | None:
+    for label in labels:
+        pattern = rf"(?im)^\s*{label}\s*:\s*(.+?)\s*$"
+        match = re.search(pattern, message)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _new_customer_missing_fields(extracted: dict[str, Any]) -> list[str]:
+    missing = []
+    if not (extracted.get("legalName") or extracted.get("displayName")):
+        missing.append("displayName")
+    if not extracted.get("taxId"):
+        missing.append("taxId")
+    if not extracted.get("city"):
+        missing.append("city")
+    if not extracted.get("phone"):
+        missing.append("phone")
+    return missing
+
+
+def _new_customer_question(missing: list[str]) -> str:
+    if not missing:
+        return "Listo, ya tengo los datos. Voy a crear el cliente y te confirmo."
+    if "displayName" in missing and "taxId" in missing:
+        return "Claro. Envíame el nombre o razón social y el NIT del cliente."
+    if "displayName" in missing:
+        return "Me falta el nombre o razón social del cliente."
+    if "taxId" in missing:
+        return "Me falta el NIT del cliente."
+    if "city" in missing and "phone" in missing:
+        return "Perfecto. Ahora envíame la ciudad y el teléfono de contacto."
+    if "city" in missing:
+        return "Me falta la ciudad del cliente."
+    if "phone" in missing:
+        return "Me falta el teléfono de contacto del cliente."
+    return "Me falta un dato del cliente para continuar."

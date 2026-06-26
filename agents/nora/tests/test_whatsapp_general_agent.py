@@ -1,8 +1,10 @@
 """Deterministic tests for whatsapp_general_agent (no LLM, no network)."""
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+import json
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from src.models.whatsapp_models import NoraMessageContext, WhatsAppAgentRequest
-from src.whatsapp_general_agent import _to_messages
+from src.whatsapp_general_agent import _extract_customer_entity, _to_messages
 
 
 def _req(**kwargs) -> WhatsAppAgentRequest:
@@ -37,3 +39,66 @@ def test_current_message_appended_when_not_last_history():
     req = _req(history=[NoraMessageContext(role="assistant", body="¿algo más?")], current_message="sí")
     msgs = _to_messages(req)
     assert isinstance(msgs[-1], HumanMessage) and msgs[-1].content == "sí"
+
+
+def test_new_customer_open_case_injects_case_context_block():
+    req = _req(
+        current_message="ciudad: Monteria\ntelefono: 329768969",
+        open_case={
+            "id": "case-customer-1",
+            "type": "new_customer",
+            "status": "collecting_info",
+            "extractedData": {
+                "legalName": "Porcicultura Caribe SAS",
+                "displayName": "Porcicultura Caribe SAS",
+                "taxId": "3948192-0",
+            },
+            "missingFields": ["city", "phone"],
+            "lastQuestion": "Perfecto. Ahora envíame la ciudad y el teléfono de contacto.",
+        },
+    )
+
+    msgs = _to_messages(req)
+
+    assert isinstance(msgs[0], SystemMessage)
+    assert "Caso abierto: cliente nuevo" in msgs[0].content
+    assert isinstance(msgs[1], SystemMessage)
+    assert "CASO DE CLIENTE NUEVO" in msgs[1].content
+    assert "Porcicultura Caribe SAS" in msgs[1].content
+    assert "datos detectados" in msgs[1].content
+    assert isinstance(msgs[-1], HumanMessage)
+
+
+def test_new_customer_case_context_detects_unlabeled_city_phone_from_current_message():
+    req = _req(
+        history=[
+            NoraMessageContext(role="user", body="Nombre: Porcicultura Caribe SAS\nNIT: 3948192-0"),
+            NoraMessageContext(role="assistant", body="Perfecto. Ahora envíame la ciudad y el teléfono de contacto."),
+        ],
+        current_message="Monteria y 329768969",
+        open_case={
+            "id": "case-customer-1",
+            "type": "new_customer",
+            "status": "collecting_info",
+            "extractedData": {},
+            "missingFields": ["city", "phone"],
+        },
+    )
+
+    msgs = _to_messages(req)
+
+    assert "Porcicultura Caribe SAS" in msgs[1].content
+    assert "3948192-0" in msgs[1].content
+    assert "Monteria" in msgs[1].content
+    assert "329768969" in msgs[1].content
+
+
+def test_extract_customer_entity_from_create_customer_tool_message():
+    payload = {"id": "customer-1", "displayName": "Porcicultura Caribe SAS"}
+    msg = ToolMessage(
+        content=f"Cliente creado exitosamente: {json.dumps(payload)}",
+        tool_call_id="tc_1",
+        name="create_customer",
+    )
+
+    assert _extract_customer_entity([msg]) == {"type": "Customer", "id": "customer-1"}

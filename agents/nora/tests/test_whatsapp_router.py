@@ -102,6 +102,118 @@ def test_comercial_greeting_auto_replies_without_human_review():
     assert result["suggested_reply"]
 
 
+def test_comercial_new_customer_request_starts_case_instead_of_general_classification():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "necesito crear un cliente",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+        }
+    )
+
+    assert result["intent"] == "crear_cliente"
+    assert result["requires_human_review"] is False
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "new_customer"
+    assert result["case_transition"]["missingFields"] == [
+        "displayName",
+        "taxId",
+        "city",
+        "phone",
+    ]
+    assert "nombre" in result["suggested_reply"].lower()
+    assert "nit" in result["suggested_reply"].lower()
+
+
+def test_new_customer_case_collects_name_and_tax_id_then_asks_city_phone():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Nombre: Porcicultura Caribe SAS\nNIT: 3948192-0",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-customer-1",
+                "type": "new_customer",
+                "status": "collecting_info",
+                "extractedData": {},
+                "missingFields": ["displayName", "taxId", "city", "phone"],
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    assert result["case_transition"]["action"] == "update_case"
+    assert result["case_transition"]["caseId"] == "case-customer-1"
+    assert result["case_transition"]["extractedData"]["legalName"] == "Porcicultura Caribe SAS"
+    assert result["case_transition"]["extractedData"]["taxId"] == "3948192-0"
+    assert result["case_transition"]["missingFields"] == ["city", "phone"]
+    assert "ciudad" in result["suggested_reply"].lower()
+    assert "tel" in result["suggested_reply"].lower()
+
+
+def test_new_customer_case_collects_city_and_phone_without_switching_to_expense():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "ciudad: Monteria\ntelefono: 329768969",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-customer-1",
+                "type": "new_customer",
+                "status": "collecting_info",
+                "extractedData": {
+                    "legalName": "Porcicultura Caribe SAS",
+                    "displayName": "Porcicultura Caribe SAS",
+                    "taxId": "3948192-0",
+                },
+                "missingFields": ["city", "phone"],
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    assert result["case_transition"]["action"] == "update_case"
+    assert result["case_transition"]["extractedData"]["city"] == "Monteria"
+    assert result["case_transition"]["extractedData"]["phone"] == "329768969"
+    assert result["case_transition"]["missingFields"] == []
+    assert "crear el cliente" in result["suggested_reply"].lower()
+    assert not result["proposals"]
+
+
+def test_new_customer_case_accepts_unlabeled_city_and_phone():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Monteria y 329768969",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-customer-1",
+                "type": "new_customer",
+                "status": "collecting_info",
+                "extractedData": {
+                    "legalName": "Porcicultura Caribe SAS",
+                    "displayName": "Porcicultura Caribe SAS",
+                    "taxId": "3948192-0",
+                },
+                "missingFields": ["city", "phone"],
+            },
+        }
+    )
+
+    assert result["case_transition"]["extractedData"]["city"] == "Monteria"
+    assert result["case_transition"]["extractedData"]["phone"] == "329768969"
+    assert result["case_transition"]["missingFields"] == []
+
+
 def test_cliente_order_response_includes_structured_proposal_list():
     result = route_whatsapp_message(
         {
