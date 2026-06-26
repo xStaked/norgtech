@@ -85,7 +85,7 @@ export class NoraRoutingService {
       if (
         "userId" in sender &&
         sender.userId &&
-        this.isExpenseFlowTurn(openCase?.type)
+        this.isExpenseFlowTurn(openCase?.type, message.body)
       ) {
         try {
           const scopedToken = await this.authService.mintScopedToken(sender.userId);
@@ -402,14 +402,17 @@ export class NoraRoutingService {
     return Promise.resolve(null);
   }
 
-  private isExpenseFlowTurn(openCaseType?: string): boolean {
+  private isExpenseFlowTurn(openCaseType: string | undefined, message: string): boolean {
     if (process.env.NORA_WHATSAPP_AGENT_EXPENSES !== "true") {
       return false;
     }
     // Only an EXISTING expense case routes to the agent. The first media turn
     // must go through the planner, which creates the case + queues OCR; the
     // agent has no data to register until that has happened.
-    return openCaseType === "expense";
+    return (
+      openCaseType === "expense" &&
+      !this.isExplicitNonExpenseStartMessage(message)
+    );
   }
 
   private async requestNoraAgent(payload: Record<string, unknown>) {
@@ -930,7 +933,19 @@ export class NoraRoutingService {
       "agendar visita",
       "agendar una visita",
       "vamos a crear una visita",
+      "create visit",
+      "create a visit",
+      "register visit",
+      "register a visit",
+      "schedule visit",
+      "schedule a visit",
+      "log visit",
+      "log a visit",
     ].some((phrase) => normalized.includes(phrase));
+  }
+
+  private isExplicitNonExpenseStartMessage(message: string): boolean {
+    return this.isNewCustomerStartMessage(message) || this.isVisitStartMessage(message);
   }
 
   private stringValue(value: unknown) {

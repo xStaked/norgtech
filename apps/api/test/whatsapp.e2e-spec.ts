@@ -3270,6 +3270,131 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("lets an explicit visit request escape an open expense case", async () => {
+      process.env.NORA_WHATSAPP_AGENT_EXPENSES = "true";
+
+      const account = {
+        id: "account-expense-visit-escape",
+        phoneNumberId: "phone-number-expense-visit-escape",
+        phoneNumber: "phone-number-expense-visit-escape",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-expense-visit-escape",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-26T17:25:02.000Z"),
+        lastMessageText:
+          "Hola Sergio, tu gasto por 25.000 requiere corrección. Respóndeme aquí y te ayudo a corregirlo.",
+        createdAt: new Date("2026-06-26T17:23:15.000Z"),
+        updatedAt: new Date("2026-06-26T17:25:02.000Z"),
+      };
+      const expenseCase = {
+        id: "case-expense-visit-escape",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "expense",
+        status: "collecting_info",
+        extractedData: {
+          mode: "correction",
+          expenseId: "expense-1",
+          amount: 25000,
+          reviewNote: "Anexa la factura",
+        },
+        missingFields: [],
+        attachments: [],
+        proposal: null,
+        lastQuestion:
+          "Hola Sergio, tu gasto por 25.000 requiere corrección. Respóndeme aquí y te ayudo a corregirlo.",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-26T17:23:15.000Z"),
+        updatedAt: new Date("2026-06-26T17:25:02.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(expenseCase);
+
+      (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          mode: "comercial",
+          intent: "crear_visita",
+          summary: "Inicio conversacional de visita comercial: registrar visita",
+          suggested_reply:
+            "Claro. Para crear la visita, dime el cliente, la fecha y hora, y una breve descripción.",
+          requires_human_review: false,
+          risk_level: "medium",
+          missing_fields: [],
+          proposals: [],
+          case_transition: null,
+        }),
+      });
+
+      try {
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-expense-visit-escape",
+              message: {
+                id: "kapso-expense-visit-escape",
+                from: "+573004445566",
+                text: { body: "registrar visita" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (url: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(url)) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              conversation_id?: string;
+              conversationId?: string;
+            };
+            return (
+              body.conversation_id === conversation.id ||
+              body.conversationId === conversation.id
+            );
+          });
+        expect(forThisConversation("/whatsapp/route")).toBeDefined();
+        expect(forThisConversation("/whatsapp/agent")).toBeUndefined();
+      } finally {
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(noraCases, (item) => item.id === "case-expense-visit-escape");
+        removeMatching(conversations, (item) => item.id === "conversation-expense-visit-escape");
+        removeMatching(accounts, (item) => item.id === "account-expense-visit-escape");
+        removeMatching(
+          messages,
+          (item) => item.conversationId === "conversation-expense-visit-escape",
+        );
+      }
+    });
+
     it("routes the first media turn (no expense case yet) to the planner, not the agent", async () => {
       process.env.NORA_WHATSAPP_AGENT_EXPENSES = "true";
 
