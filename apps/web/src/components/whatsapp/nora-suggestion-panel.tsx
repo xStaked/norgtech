@@ -172,9 +172,13 @@ function NoraCasePreview({ activeCase }: { activeCase: NoraConversationCase }) {
           Adjuntos: {activeCase.attachments.length}
         </div>
       ) : null}
-      <pre className="max-h-40 overflow-auto rounded bg-muted p-2 text-xs text-muted-foreground">
-        {JSON.stringify(activeCase.extractedData, null, 2)}
-      </pre>
+      {activeCase.type === "order" ? (
+        <OrderCaseFields activeCase={activeCase} />
+      ) : (
+        <pre className="max-h-40 overflow-auto rounded bg-muted p-2 text-xs text-muted-foreground">
+          {JSON.stringify(activeCase.extractedData, null, 2)}
+        </pre>
+      )}
       {activeCase.proposal ? (
         <pre className="mt-2 max-h-40 overflow-auto rounded bg-muted p-2 text-xs text-muted-foreground">
           {JSON.stringify(activeCase.proposal, null, 2)}
@@ -182,6 +186,54 @@ function NoraCasePreview({ activeCase }: { activeCase: NoraConversationCase }) {
       ) : null}
     </div>
   );
+}
+
+function OrderCaseFields({ activeCase }: { activeCase: NoraConversationCase }) {
+  const data = activeCase.extractedData as Record<string, unknown>;
+  const items = Array.isArray(data.items) ? data.items : [];
+
+  return (
+    <div className="space-y-2">
+      <FieldRow label="Cliente" value={text(data.customerRef) ?? text(data.customerId)} />
+      <FieldRow label="Empresa" value={text(data.companyRef) ?? text(data.companyId)} />
+      <FieldRow label="Zona/Sede" value={text(data.zoneRef) ?? text(data.customerZoneId)} />
+      <FieldRow label="Notas" value={text(data.notes)} />
+      <div>
+        <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">Items</div>
+        {items.length > 0 ? (
+          <div className="space-y-1">
+            {items.map((item, index) => {
+              const source = item as Record<string, unknown>;
+              const product = text(source.productRef) ?? text(source.product_ref) ?? "Producto sin resolver";
+              return (
+                <div key={index} className="rounded border border-border p-2 text-xs">
+                  <span className="font-medium">{product}</span>
+                  <span className="text-muted-foreground">
+                    {" "}x {String(source.quantity ?? "sin cantidad")}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="text-xs text-muted-foreground">Sin items extraídos</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function FieldRow({ label, value }: { label: string; value?: string }) {
+  return (
+    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 text-xs">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="font-medium text-foreground">{value ?? "Pendiente"}</span>
+    </div>
+  );
+}
+
+function text(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function ProposalPreview({ proposal }: { proposal: NoraProposal }) {
