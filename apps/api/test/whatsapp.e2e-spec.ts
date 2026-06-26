@@ -3699,6 +3699,213 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("keeps visit start messages on the deterministic route when the flag is on", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+
+      const account = {
+        id: "account-general-visit-start",
+        phoneNumberId: "phone-number-general-visit-start",
+        phoneNumber: "phone-number-general-visit-start",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-general-visit-start",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-26T17:57:13.000Z"),
+        lastMessageText: "necesito una visita",
+        createdAt: new Date("2026-06-26T17:57:00.000Z"),
+        updatedAt: new Date("2026-06-26T17:57:13.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            mode: "comercial",
+            intent: "crear_visita",
+            summary: "Inicio conversacional de visita comercial.",
+            suggested_reply:
+              "Claro. Para crear la visita, dime el cliente, la fecha y hora, y una breve descripción.",
+            requires_human_review: false,
+            risk_level: "medium",
+            missing_fields: [],
+            proposals: [],
+            case_transition: {
+              action: "start_case",
+              type: "visit",
+              extractedData: {},
+              missingFields: ["customerRef", "scheduledAt", "summary"],
+              lastQuestion:
+                "Claro. Para crear la visita, dime el cliente, la fecha y hora, y una breve descripción.",
+            },
+          }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-general-visit-start",
+              message: {
+                id: "kapso-general-visit-start-msg",
+                from: "+573004445566",
+                text: { body: "necesito una visita" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              conversation_id?: string;
+              message?: string;
+            };
+            return (
+              body.conversation_id === "conversation-general-visit-start" ||
+              body.message === "necesito una visita"
+            );
+          });
+
+        const generalCall = forThisConversation("/whatsapp/agent/general");
+        expect(generalCall).toBeUndefined();
+
+        const routeCall = forThisConversation("/whatsapp/route");
+        expect(routeCall).toBeDefined();
+      } finally {
+        if (prev === undefined) {
+          delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        }
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-general-visit-start");
+        removeMatching(accounts, (item) => item.id === "account-general-visit-start");
+        removeMatching(messages, (item) => item.conversationId === "conversation-general-visit-start");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-general-visit-start");
+      }
+    });
+
+    it("starts a new-customer subflow from an open visit case when the customer does not exist", async () => {
+      const account = {
+        id: "account-visit-create-customer",
+        phoneNumberId: "phone-number-visit-create-customer",
+        phoneNumber: "phone-number-visit-create-customer",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-visit-create-customer",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-26T18:07:11.000Z"),
+        lastMessageText: "no existe por lo que veo, vamos a crearlo",
+        createdAt: new Date("2026-06-26T17:57:00.000Z"),
+        updatedAt: new Date("2026-06-26T18:07:11.000Z"),
+      };
+      const visitCase = {
+        id: "case-visit-create-customer",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "visit",
+        status: "collecting_info",
+        extractedData: {
+          customerRef: "Porcicultura Caribe SAS",
+          scheduledAt: "2026-06-29T12:00:00",
+          summary: "Visita de seguimiento con el producto",
+        },
+        missingFields: ["customerRef"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "No encontré un cliente con ese nombre.",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-26T17:58:00.000Z"),
+        updatedAt: new Date("2026-06-26T17:58:00.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(visitCase);
+
+      try {
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-visit-create-customer",
+              message: {
+                id: "kapso-visit-create-customer-msg",
+                from: "+573004445566",
+                text: { body: "no existe por lo que veo, vamos a crearlo" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const childCase = noraCases.find(
+          (item) =>
+            item.conversationId === conversation.id &&
+            item.parentCaseId === "case-visit-create-customer" &&
+            item.type === "new_customer",
+        );
+        expect(childCase).toBeDefined();
+        expect(childCase?.missingFields).toEqual(["displayName", "taxId", "city", "phone"]);
+      } finally {
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-visit-create-customer");
+        removeMatching(accounts, (item) => item.id === "account-visit-create-customer");
+        removeMatching(messages, (item) => item.conversationId === "conversation-visit-create-customer");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-visit-create-customer");
+      }
+    });
+
     it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
       const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
       delete process.env.NORA_WHATSAPP_GENERAL_AGENT;

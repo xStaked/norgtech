@@ -1298,12 +1298,16 @@ export class NoraRoutingService {
     return [
       "crear cliente",
       "crear un cliente",
+      "crear el cliente",
       "agregar cliente",
       "agregar un cliente",
       "nuevo cliente",
       "cliente nuevo",
       "registrar cliente",
       "registrar un cliente",
+      "vamos a crearlo",
+      "vamos a crear el cliente",
+      "crearlo",
     ].some((phrase) => normalized.includes(phrase));
   }
 
@@ -1322,6 +1326,10 @@ export class NoraRoutingService {
       "programar una visita",
       "agendar visita",
       "agendar una visita",
+      "necesito visita",
+      "necesito una visita",
+      "quiero visita",
+      "quiero una visita",
       "vamos a crear una visita",
       "create visit",
       "create a visit",

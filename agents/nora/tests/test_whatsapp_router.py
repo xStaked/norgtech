@@ -161,6 +161,27 @@ def test_comercial_visit_creation_start_does_not_route_to_expense():
     assert "gasto" not in result["suggested_reply"].lower()
 
 
+def test_comercial_necesito_una_visita_starts_visit_case():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "necesito una visita",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+        }
+    )
+
+    assert result["intent"] == "crear_visita"
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "visit"
+    assert "gasto" not in result["suggested_reply"].lower()
+
+
 def test_visit_case_collects_customer_date_and_summary_before_confirmation():
     result = route_whatsapp_message(
         {

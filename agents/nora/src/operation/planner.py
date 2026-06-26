@@ -506,6 +506,10 @@ def _starts_visit_flow(normalized_message: str) -> bool:
             "programar una visita",
             "agendar visita",
             "agendar una visita",
+            "necesito visita",
+            "necesito una visita",
+            "quiero visita",
+            "quiero una visita",
             "vamos a crear una visita",
         )
     )
