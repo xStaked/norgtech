@@ -64,6 +64,19 @@ export function WhatsAppInbox({
     await Promise.all([refreshList(), loadConversation(selectedId)]);
   }
 
+  async function updateConversationStatus(
+    status: "nuevo" | "pendiente" | "en_gestion" | "resuelto",
+  ) {
+    if (!selectedId) return;
+    const response = await apiFetchClient(`/whatsapp/conversations/${selectedId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ status }),
+    });
+    if (response.ok) {
+      await refreshSelected();
+    }
+  }
+
   return (
     <div className="grid min-h-[680px] overflow-hidden rounded-lg border border-border bg-background lg:grid-cols-[320px_minmax(0,1fr)_320px]">
       <ConversationList
@@ -76,6 +89,22 @@ export function WhatsAppInbox({
         <ConversationComposer conversationId={selectedId} onSent={refreshSelected} />
       </div>
       <div className="min-h-0 border-l border-border bg-background">
+        <div className="border-b border-border p-3">
+          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Estado</div>
+          <div className="grid grid-cols-2 gap-2">
+            {(["pendiente", "en_gestion", "resuelto"] as const).map((status) => (
+              <button
+                key={status}
+                type="button"
+                onClick={() => updateConversationStatus(status)}
+                disabled={!selectedId}
+                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {status}
+              </button>
+            ))}
+          </div>
+        </div>
         <NoraSuggestionPanel conversation={selectedConversation} />
         <OrderDraftPanel conversation={selectedConversation} onCreated={refreshSelected} />
       </div>
