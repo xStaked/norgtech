@@ -12,6 +12,7 @@ import {
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthService } from "../auth/auth.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { VisitsService } from "../visits/visits.service";
 import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
 import { NoraExpenseExtractionService } from "./nora-expense-extraction.service";
@@ -31,6 +32,8 @@ type AutomationRoutingResult = {
   [key: string]: unknown;
 };
 
+const VISIT_CASE_TYPE = "visit" as NoraConversationCaseType;
+
 @Injectable()
 export class NoraRoutingService {
   private readonly logger = new Logger(NoraRoutingService.name);
@@ -42,6 +45,7 @@ export class NoraRoutingService {
     private readonly noraCaseService: NoraCaseService,
     private readonly expenseExtraction: NoraExpenseExtractionService,
     private readonly authService: AuthService,
+    private readonly visitsService: VisitsService,
   ) {}
 
   async routeInboundMessage({ conversation, message }: RouteInboundMessageInput) {
@@ -81,6 +85,23 @@ export class NoraRoutingService {
       const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
       const openCase = await this.noraCaseService.findOpenCase(conversation.id);
       const mediaPayload = this.mediaPayloadFromMessage(message);
+
+      if (
+        "userId" in sender &&
+        sender.userId &&
+        openCase?.type === VISIT_CASE_TYPE
+      ) {
+        const handledVisit = await this.handleVisitCaseTurn({
+          openCase,
+          conversationId: conversation.id,
+          messageBody: message.body,
+          sender,
+          actionLogId: actionLog.id,
+        });
+        if (handledVisit) {
+          return handledVisit;
+        }
+      }
 
       if (
         "userId" in sender &&
@@ -301,10 +322,14 @@ export class NoraRoutingService {
         message,
         sender,
       );
+      const visitCaseReply = caseResult
+        ? await this.prepareVisitCaseReply(caseResult)
+        : undefined;
       const output = {
         ...noraResponse,
         ...(automationResult && { order_automation: this.toJsonSafeValue(automationResult) }),
         ...(caseResult && { case_transition_result: this.toJsonSafeValue(caseResult) }),
+        ...(visitCaseReply && { visit_case_reply: visitCaseReply }),
       };
 
       await this.persistIntentTag(conversation.id, noraResponse);
@@ -320,7 +345,8 @@ export class NoraRoutingService {
         },
       });
 
-      const suggestedReply = this.extractSuggestedReply(noraResponse, automationResult);
+      const suggestedReply =
+        visitCaseReply?.reply ?? this.extractSuggestedReply(noraResponse, automationResult);
       if (suggestedReply && this.shouldAutoReply(noraResponse, automationResult)) {
         try {
           await this.whatsAppService.sendAgentReply(conversation.id, suggestedReply);
@@ -356,6 +382,349 @@ export class NoraRoutingService {
         },
       });
     }
+  }
+
+  private async handleVisitCaseTurn(input: {
+    openCase: NoraConversationCase;
+    conversationId: string;
+    messageBody: string;
+    sender: ResolvedWhatsAppSender;
+    actionLogId: string;
+  }) {
+    const data = this.objectValue(input.openCase.extractedData) ?? {};
+
+    if (this.isNewCustomerStartMessage(input.messageBody)) {
+      const reply =
+        "Listo. Para crear el cliente nuevo y luego retomar la visita, dime la razón social o nombre comercial y el NIT.";
+      const customerCase = await this.noraCaseService.createCase({
+        conversationId: input.conversationId,
+        parentCaseId: input.openCase.id,
+        type: NoraConversationCaseType.new_customer,
+        status: NoraConversationCaseStatus.collecting_info,
+        extractedData: {},
+        missingFields: ["displayName", "taxId", "city", "phone"],
+        proposal: {
+          type: "new_customer",
+          title: "Cliente nuevo para visita",
+          payload: {},
+        },
+        lastQuestion: reply,
+        riskLevel: "high",
+        createdByUserId: "userId" in input.sender ? input.sender.userId : null,
+      });
+      await this.whatsAppService.sendAgentReply(input.conversationId, reply);
+      return this.prisma.noraActionLog.update({
+        where: { id: input.actionLogId },
+        data: {
+          status: NoraActionStatus.proposed,
+          output: { reply, case_transition_result: this.toJsonSafeValue(customerCase) },
+        },
+      });
+    }
+
+    if (this.isNegativeVisitSelection(input.messageBody)) {
+      const reply =
+        "Listo. Dime otro nombre o NIT del cliente. Si toca crearlo, escribe 'crear cliente' y te pido los datos.";
+      await this.noraCaseService.updateCase(input.openCase.id, {
+        extractedData: { customerId: "", customerLabel: "" },
+        missingFields: ["customerRef"],
+        lastQuestion: reply,
+      });
+      await this.whatsAppService.sendAgentReply(input.conversationId, reply);
+      return this.prisma.noraActionLog.update({
+        where: { id: input.actionLogId },
+        data: { status: NoraActionStatus.proposed, output: { reply } },
+      });
+    }
+
+    const selectedFromList = this.visitSelectionNumber(input.messageBody);
+    if (selectedFromList) {
+      const match = this.visitMatchByNumber(input.openCase, selectedFromList);
+      if (match) {
+        const nextData = {
+          customerId: match.id,
+          customerLabel: this.customerDisplay(match),
+          customerRef: this.customerDisplay(match),
+        };
+        const merged = { ...data, ...nextData };
+        const reply = this.visitConfirmationQuestion(merged);
+        await this.noraCaseService.updateCase(input.openCase.id, {
+          extractedData: nextData,
+          missingFields: [],
+          lastQuestion: reply,
+        });
+        await this.whatsAppService.sendAgentReply(input.conversationId, reply);
+        return this.prisma.noraActionLog.update({
+          where: { id: input.actionLogId },
+          data: { status: NoraActionStatus.proposed, output: { selectedCustomer: match, reply } },
+        });
+      }
+    }
+
+    if (!this.isConfirmationMessage(input.messageBody)) {
+      return undefined;
+    }
+
+    const customerId = this.stringValue(data.customerId);
+    const scheduledAt = this.stringValue(data.scheduledAt);
+    const summary = this.stringValue(data.summary);
+    if (!customerId || !scheduledAt || !summary) {
+      return undefined;
+    }
+
+    const actor = this.authUserFor(input.sender);
+    if (!actor) {
+      return undefined;
+    }
+
+    const visit = await this.visitsService.create(actor, {
+      customerId,
+      scheduledAt,
+      summary,
+      notes: this.stringValue(data.rawMessage) ?? undefined,
+      assignedToUserId: actor.id,
+    });
+
+    await this.noraCaseService.updateCase(input.openCase.id, {
+      status: NoraConversationCaseStatus.executed,
+      executedEntityType: "Visit",
+      executedEntityId: visit.id,
+    });
+
+    const reply = `Listo. Registré la visita para ${this.stringValue(data.customerLabel) ?? "el cliente"} el ${this.formatVisitDate(scheduledAt)}.`;
+    await this.whatsAppService.sendAgentReply(input.conversationId, reply);
+    return this.prisma.noraActionLog.update({
+      where: { id: input.actionLogId },
+      data: {
+        status: NoraActionStatus.executed,
+        output: {
+          reply,
+          executed_entity: { type: "Visit", id: visit.id },
+        },
+      },
+    });
+  }
+
+  private async prepareVisitCaseReply(caseResult: NoraConversationCase) {
+    if (caseResult.type !== VISIT_CASE_TYPE) {
+      return undefined;
+    }
+
+    const data = this.objectValue(caseResult.extractedData) ?? {};
+    const missing = Array.isArray(caseResult.missingFields)
+      ? caseResult.missingFields.filter((item): item is string => typeof item === "string")
+      : [];
+
+    if (missing.length > 0) {
+      return { reply: caseResult.lastQuestion ?? "Me falta un dato para crear la visita." };
+    }
+
+    if (this.stringValue(data.customerId)) {
+      const reply = this.visitConfirmationQuestion(data);
+      await this.noraCaseService.updateCase(caseResult.id, { lastQuestion: reply });
+      return { reply };
+    }
+
+    const customerRef = this.stringValue(data.customerRef);
+    if (!customerRef) {
+      return { reply: "Me falta el cliente de la visita. Puedes decirme el nombre o NIT." };
+    }
+
+    const matches = await this.findVisitCustomerMatches(customerRef);
+    if (matches.length === 0) {
+      const reply =
+        `No encontré un cliente con el nombre "${customerRef}". ` +
+        "Verifica el nombre o pásame el NIT. Si es cliente nuevo, responde 'crear cliente'.";
+      await this.noraCaseService.updateCase(caseResult.id, {
+        missingFields: ["customerRef"],
+        lastQuestion: reply,
+      });
+      return { reply };
+    }
+
+    if (matches.length === 1) {
+      const match = matches[0];
+      const nextData = {
+        customerId: match.id,
+        customerLabel: this.customerDisplay(match),
+        customerRef: this.customerDisplay(match),
+      };
+      const reply = this.visitConfirmationQuestion({ ...data, ...nextData });
+      await this.noraCaseService.updateCase(caseResult.id, {
+        extractedData: nextData,
+        missingFields: [],
+        proposal: {
+          type: "visit",
+          title: "Visita por confirmar",
+          payload: { customerMatches: matches },
+        },
+        lastQuestion: reply,
+      });
+      return { reply, matches };
+    }
+
+    const reply =
+      "Encontré varios clientes parecidos:\n" +
+      matches.map((match, index) => `${index + 1}. ${this.customerDisplay(match)}${match.taxId ? ` - NIT ${match.taxId}` : ""}`).join("\n") +
+      "\nResponde con el número correcto, otro nombre/NIT o 'crear cliente'.";
+    await this.noraCaseService.updateCase(caseResult.id, {
+      missingFields: ["customerId"],
+      proposal: {
+        type: "visit_customer_matches",
+        title: "Coincidencias de cliente para visita",
+        payload: { customerMatches: matches },
+      },
+      lastQuestion: reply,
+    });
+    return { reply, matches };
+  }
+
+  private async findVisitCustomerMatches(query: string) {
+    const normalizedQuery = this.normalizeText(query);
+    const directMatches = await this.prisma.customer.findMany({
+      where: {
+        active: true,
+        OR: [
+          { displayName: { contains: query, mode: "insensitive" } },
+          { legalName: { contains: query, mode: "insensitive" } },
+          { taxId: { contains: query, mode: "insensitive" } },
+        ],
+      },
+      select: { id: true, displayName: true, legalName: true, taxId: true, city: true },
+      orderBy: { displayName: "asc" },
+      take: 5,
+    });
+
+    if (directMatches.length > 0) {
+      return directMatches;
+    }
+
+    const customers = await this.prisma.customer.findMany({
+      where: { active: true },
+      select: { id: true, displayName: true, legalName: true, taxId: true, city: true },
+      orderBy: { displayName: "asc" },
+      take: 100,
+    });
+
+    return customers
+      .map((customer) => ({
+        customer,
+        score: Math.max(
+          this.similarity(normalizedQuery, this.normalizeText(customer.displayName)),
+          this.similarity(normalizedQuery, this.normalizeText(customer.legalName)),
+          this.similarity(normalizedQuery, this.normalizeText(customer.taxId)),
+        ),
+      }))
+      .filter((item) => item.score >= 0.72)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 5)
+      .map((item) => item.customer);
+  }
+
+  private visitConfirmationQuestion(data: Record<string, unknown>) {
+    const customer = this.stringValue(data.customerLabel) ?? this.stringValue(data.customerRef) ?? "el cliente";
+    const scheduledAt = this.stringValue(data.scheduledAt);
+    const summary = this.stringValue(data.summary) ?? "Visita comercial";
+    return (
+      `Encontré este cliente: ${customer}. ` +
+      `¿Confirmas la visita para ${scheduledAt ? this.formatVisitDate(scheduledAt) : "la fecha indicada"} ` +
+      `con resumen "${summary}"? Responde sí para crearla, otro nombre/NIT para cambiar cliente o 'crear cliente'.`
+    );
+  }
+
+  private visitMatchByNumber(caseRecord: NoraConversationCase, number: number) {
+    const proposal = this.objectValue(caseRecord.proposal);
+    const payload = this.objectValue(proposal?.payload);
+    const matches = Array.isArray(payload?.customerMatches) ? payload.customerMatches : [];
+    const match = matches[number - 1];
+    return match && typeof match === "object" && !Array.isArray(match)
+      ? (match as { id: string; displayName?: string | null; legalName?: string | null; taxId?: string | null; city?: string | null })
+      : undefined;
+  }
+
+  private customerDisplay(customer: { displayName?: string | null; legalName?: string | null }) {
+    return customer.displayName || customer.legalName || "Cliente sin nombre";
+  }
+
+  private authUserFor(sender: ResolvedWhatsAppSender): AuthUser | undefined {
+    if (!("userId" in sender) || !sender.userId || !sender.userRole) {
+      return undefined;
+    }
+    return {
+      id: sender.userId,
+      role: sender.userRole,
+      email: sender.userEmail ?? "",
+    };
+  }
+
+  private visitSelectionNumber(message: string) {
+    const match = message.trim().match(/^\d+$/);
+    if (!match) {
+      return undefined;
+    }
+    const value = Number(match[0]);
+    return Number.isInteger(value) && value > 0 ? value : undefined;
+  }
+
+  private isNegativeVisitSelection(message: string) {
+    const normalized = this.normalizeText(message);
+    return normalized === "ninguno" || normalized === "ninguna" || normalized === "no es ninguno";
+  }
+
+  private isConfirmationMessage(message: string) {
+    return [
+      "si",
+      "sí",
+      "ok",
+      "okay",
+      "okey",
+      "dale",
+      "listo",
+      "confirmo",
+      "correcto",
+      "perfecto",
+      "de acuerdo",
+    ].includes(this.normalizeText(message));
+  }
+
+  private formatVisitDate(value: string) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      return value;
+    }
+    return new Intl.DateTimeFormat("es-CO", {
+      dateStyle: "medium",
+      timeStyle: "short",
+      timeZone: "America/Bogota",
+    }).format(date);
+  }
+
+  private normalizeText(value: unknown) {
+    return typeof value === "string"
+      ? value
+          .normalize("NFD")
+          .replace(/\p{Diacritic}/gu, "")
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, " ")
+          .trim()
+      : "";
+  }
+
+  private similarity(a: string, b: string) {
+    if (!a || !b) {
+      return 0;
+    }
+    if (a === b) {
+      return 1;
+    }
+    if (a.includes(b) || b.includes(a)) {
+      return 0.9;
+    }
+    const aTokens = new Set(a.split(" ").filter(Boolean));
+    const bTokens = new Set(b.split(" ").filter(Boolean));
+    const intersection = [...aTokens].filter((token) => bTokens.has(token)).length;
+    const union = new Set([...aTokens, ...bTokens]).size;
+    return union === 0 ? 0 : intersection / union;
   }
 
   private modeFor(senderType: WhatsAppSenderType) {
@@ -655,6 +1024,24 @@ export class NoraRoutingService {
           createdByUserId: actorUserId,
         });
       }
+      if (type === VISIT_CASE_TYPE) {
+        const missingFields = this.stringArrayValue(source.missingFields);
+        return this.noraCaseService.createCase({
+          conversationId,
+          type: VISIT_CASE_TYPE,
+          status: NoraConversationCaseStatus.collecting_info,
+          extractedData: this.objectValue(source.extractedData) ?? {},
+          missingFields,
+          proposal: {
+            type: "visit",
+            title: "Visita por confirmar",
+            payload: this.objectValue(source.extractedData) ?? {},
+          },
+          lastQuestion: this.stringValue(source.lastQuestion) ?? null,
+          riskLevel: "medium",
+          createdByUserId: actorUserId,
+        });
+      }
       return undefined;
     }
 
@@ -682,6 +1069,9 @@ export class NoraRoutingService {
           nextMissing.length === 0 && {
             status: NoraConversationCaseStatus.ready_for_review,
           }),
+        ...(existingCase.type === VISIT_CASE_TYPE && {
+          status: NoraConversationCaseStatus.collecting_info,
+        }),
       });
     }
 

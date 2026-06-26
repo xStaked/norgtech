@@ -28,7 +28,7 @@ class NoraUserContext(BaseModel):
 
 class NoraOpenCaseContext(BaseModel):
     id: str
-    type: Literal["order", "new_customer", "expense"]
+    type: Literal["order", "new_customer", "expense", "visit"]
     status: str
     extractedData: dict[str, Any] = Field(default_factory=dict)
     missingFields: list[str] = Field(default_factory=list)
@@ -100,7 +100,7 @@ class NoraCaseTransition(BaseModel):
         "cancel_case",
     ] = "none"
     caseId: str | None = None
-    type: Literal["order", "new_customer", "expense"] | None = None
+    type: Literal["order", "new_customer", "expense", "visit"] | None = None
     extractedData: dict[str, Any] = Field(default_factory=dict)
     missingFields: list[str] = Field(default_factory=list)
     lastQuestion: str | None = None

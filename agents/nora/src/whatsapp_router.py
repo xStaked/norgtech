@@ -1,4 +1,5 @@
 import re
+from datetime import date
 from typing import Any
 
 from .models.whatsapp_models import (
@@ -215,6 +216,19 @@ def _case_transition_for(
     request: WhatsAppRouteRequest,
     plan: Any,
 ) -> NoraCaseTransition | None:
+    if request.open_case and request.open_case.type == "visit":
+        extracted = _extract_visit_fields(request.message)
+        merged = {**(request.open_case.extractedData or {}), **extracted}
+        missing = _visit_missing_fields(merged)
+        return NoraCaseTransition(
+            action="update_case",
+            caseId=request.open_case.id,
+            type="visit",
+            extractedData=extracted,
+            missingFields=missing,
+            lastQuestion=_visit_question(missing, merged),
+        )
+
     if request.open_case and request.open_case.type == "new_customer":
         extracted = _extract_new_customer_fields(request.message)
         merged = {**(request.open_case.extractedData or {}), **extracted}
@@ -308,6 +322,17 @@ def _case_transition_for(
             lastQuestion=_new_customer_question(missing),
         )
 
+    if plan.intent == "crear_visita" and not request.open_case:
+        extracted = _extract_visit_fields(request.message)
+        missing = _visit_missing_fields(extracted)
+        return NoraCaseTransition(
+            action="start_case",
+            type="visit",
+            extractedData=extracted,
+            missingFields=missing,
+            lastQuestion=_visit_question(missing, extracted),
+        )
+
     if (
         plan.intent == "pedido"
         and not (request.open_case and request.open_case.type == "order")
@@ -392,6 +417,12 @@ def _suggested_reply_for(
             )
         if request and request.open_case and request.open_case.type == "expense":
             return _expense_continuation_reply(request.open_case)
+        if request and request.open_case and request.open_case.type == "visit":
+            extracted = {
+                **(request.open_case.extractedData or {}),
+                **_extract_visit_fields(request.message),
+            }
+            return _visit_question(_visit_missing_fields(extracted), extracted)
         return (
             "Listo. Para dejar la propuesta de cliente nuevo, dime la razon social "
             "o nombre comercial."
@@ -400,10 +431,8 @@ def _suggested_reply_for(
         extracted = _extract_new_customer_fields(request.message) if request else {}
         return _new_customer_question(_new_customer_missing_fields(extracted))
     if intent == "crear_visita":
-        return (
-            "Claro. Para crear la visita, dime el cliente, la fecha y hora, "
-            "y una breve descripción."
-        )
+        extracted = _extract_visit_fields(request.message) if request else {}
+        return _visit_question(_visit_missing_fields(extracted), extracted)
     if intent == "pedido":
         return "Recibido. Voy a validar los datos del pedido y te confirmamos en breve."
     if intent == "consulta_pedidos":
@@ -634,3 +663,162 @@ def _new_customer_question(missing: list[str]) -> str:
     if "phone" in missing:
         return "Me falta el teléfono de contacto del cliente."
     return "Me falta un dato del cliente para continuar."
+
+
+_VISIT_MONTHS = {
+    "enero": 1,
+    "febrero": 2,
+    "marzo": 3,
+    "abril": 4,
+    "mayo": 5,
+    "junio": 6,
+    "julio": 7,
+    "agosto": 8,
+    "septiembre": 9,
+    "setiembre": 9,
+    "octubre": 10,
+    "noviembre": 11,
+    "diciembre": 12,
+}
+
+
+def _extract_visit_fields(message: str) -> dict[str, Any]:
+    fields: dict[str, Any] = {}
+    customer_ref = _visit_customer_ref(message)
+    scheduled_at = _visit_datetime(message)
+    summary = _visit_summary(message)
+
+    if customer_ref:
+        fields["customerRef"] = customer_ref
+        fields.pop("customerId", None)
+    if scheduled_at:
+        fields["scheduledAt"] = scheduled_at
+    if summary:
+        fields["summary"] = summary
+
+    return fields
+
+
+def _visit_customer_ref(message: str) -> str | None:
+    patterns = (
+        r"\bpara\s+(.+?)\s+(?:los\s+voy\s+a\s+visitar|voy\s+a\s+visitarlos|el\s+\d{1,2}\s+de\s+)",
+        r"\bcliente\s*:?\s*(.+?)(?:\n|,|$)",
+        r"\b(?:con|a)\s+([A-ZÁÉÍÓÚÜÑ][\wÁÉÍÓÚÜÑáéíóúüñ .&-]+?)(?:\s+el\s+\d{1,2}\s+de\s+|\n|,|$)",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, message, flags=re.IGNORECASE)
+        if match:
+            candidate = re.sub(r"\s+", " ", match.group(1)).strip(" .,-")
+            if candidate and not _is_visit_generic_customer_ref(candidate) and not _looks_like_visit_command(candidate):
+                return candidate
+
+    stripped = re.sub(r"\s+", " ", message).strip(" .,-")
+    if (
+        2 <= len(stripped.split()) <= 6
+        and not re.search(r"\b(?:visita|visitar|fecha|hora|seguimiento|producto|crear|registrar)\b", stripped, flags=re.IGNORECASE)
+        and not _is_confirmation_message(stripped)
+    ):
+        return stripped
+    return None
+
+
+def _is_visit_generic_customer_ref(value: str) -> bool:
+    return _normalize_for_visit(value) in {"ese cliente", "este cliente", "el cliente", "la empresa"}
+
+
+def _looks_like_visit_command(value: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:crear|registrar|programar|agendar|visita|visitarlos|visitar)\b",
+            value,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _visit_datetime(message: str) -> str | None:
+    pattern = (
+        r"\b(?:el\s+)?(?P<day>\d{1,2})\s+de\s+"
+        r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+        r"septiembre|setiembre|octubre|noviembre|diciembre)"
+        r"(?:\s+(?:de\s+)?(?P<year>\d{4}))?"
+        r"(?:\s+a\s+las\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm|a\.m\.|p\.m\.)?)?"
+    )
+    matches = list(re.finditer(pattern, message, flags=re.IGNORECASE))
+    if not matches:
+        return None
+    match = matches[-1]
+    day = int(match.group("day"))
+    month = _VISIT_MONTHS[match.group("month").lower()]
+    year = int(match.group("year") or date.today().year)
+    hour = int(match.group("hour") or 9)
+    minute = int(match.group("minute") or 0)
+    ampm = (match.group("ampm") or "").lower().replace(".", "")
+    if ampm == "pm" and hour < 12:
+        hour += 12
+    if ampm == "am" and hour == 12:
+        hour = 0
+    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+
+
+def _visit_summary(message: str) -> str | None:
+    matches = re.findall(
+        r"(?:es una|sera una|será una|visita de)\s+(.+?)(?:\n|$)",
+        message,
+        flags=re.IGNORECASE,
+    )
+    if matches:
+        summary = re.sub(r"\s+", " ", matches[-1]).strip(" .")
+        if summary.lower().startswith("visita"):
+            return summary[:1].upper() + summary[1:]
+        return f"Visita {summary}"
+    if "seguimiento" in message.lower():
+        return "Visita de seguimiento"
+    return None
+
+
+def _visit_missing_fields(extracted: dict[str, Any]) -> list[str]:
+    missing = []
+    if not (extracted.get("customerId") or extracted.get("customerRef")):
+        missing.append("customerRef")
+    if not extracted.get("scheduledAt"):
+        missing.append("scheduledAt")
+    if not extracted.get("summary"):
+        missing.append("summary")
+    return missing
+
+
+def _visit_question(missing: list[str], extracted: dict[str, Any]) -> str:
+    if missing == ["customerRef", "scheduledAt", "summary"]:
+        return "Claro. Para crear la visita, dime el cliente, la fecha y hora, y una breve descripción."
+    if "customerRef" in missing:
+        return "Me falta el cliente de la visita. Puedes decirme el nombre o NIT."
+    if "scheduledAt" in missing:
+        return "Me falta la fecha y hora de la visita."
+    if "summary" in missing:
+        return "Me falta una breve descripción de la visita."
+    customer_ref = extracted.get("customerRef") or "ese cliente"
+    return (
+        f"Voy a validar coincidencias para {customer_ref}. "
+        "Antes de crear la visita te pido confirmación del cliente y los datos."
+    )
+
+
+def _is_confirmation_message(message: str) -> bool:
+    return _normalize_for_visit(message) in {
+        "si",
+        "sí",
+        "ok",
+        "okay",
+        "okey",
+        "dale",
+        "listo",
+        "confirmo",
+        "correcto",
+        "perfecto",
+        "de acuerdo",
+    }
+
+
+def _normalize_for_visit(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())

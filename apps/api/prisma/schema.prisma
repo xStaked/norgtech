@@ -182,6 +182,7 @@ enum NoraConversationCaseType {
   order
   new_customer
   expense
+  visit
 }
 
 enum NoraConversationCaseStatus {

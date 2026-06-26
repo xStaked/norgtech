@@ -149,10 +149,79 @@ def test_comercial_visit_creation_start_does_not_route_to_expense():
     assert result["intent"] == "crear_visita"
     assert result["requires_human_review"] is False
     assert result["proposals"] == []
-    assert result["case_transition"] is None
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "visit"
+    assert result["case_transition"]["missingFields"] == [
+        "customerRef",
+        "scheduledAt",
+        "summary",
+    ]
     assert "cliente" in result["suggested_reply"].lower()
     assert "fecha" in result["suggested_reply"].lower()
     assert "gasto" not in result["suggested_reply"].lower()
+
+
+def test_visit_case_collects_customer_date_and_summary_before_confirmation():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": (
+                "para porcicola caribe sas los voy a visitar el 29 de junio a las 12:00 PM, "
+                "es una visita de seguimiento con el producto no mas algo breve"
+            ),
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+            "open_case": {
+                "id": "case-visit-1",
+                "type": "visit",
+                "status": "collecting_info",
+                "extractedData": {},
+                "missingFields": ["customerRef", "scheduledAt", "summary"],
+            },
+        }
+    )
+
+    assert result["intent"] == "continuar_caso"
+    assert result["case_transition"]["action"] == "update_case"
+    assert result["case_transition"]["type"] == "visit"
+    assert result["case_transition"]["extractedData"]["customerRef"] == "porcicola caribe sas"
+    assert result["case_transition"]["extractedData"]["scheduledAt"].endswith("-06-29T12:00:00")
+    assert result["case_transition"]["extractedData"]["summary"] == (
+        "Visita de seguimiento con el producto no mas algo breve"
+    )
+    assert result["case_transition"]["missingFields"] == []
+    assert "confirmación" in result["suggested_reply"].lower()
+
+
+def test_visit_case_accepts_corrected_customer_name():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "Porcicultura Caribe SAS",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-visit-1",
+                "type": "visit",
+                "status": "collecting_info",
+                "extractedData": {
+                    "customerRef": "porcicola caribe sas",
+                    "scheduledAt": "2026-06-29T12:00:00",
+                    "summary": "Visita de seguimiento con el producto no mas algo breve",
+                },
+                "missingFields": ["customerRef"],
+            },
+        }
+    )
+
+    assert result["case_transition"]["extractedData"]["customerRef"] == "Porcicultura Caribe SAS"
+    assert result["case_transition"]["missingFields"] == []
+    assert "confirmación" in result["suggested_reply"].lower()
 
 
 def test_new_customer_case_collects_name_and_tax_id_then_asks_city_phone():

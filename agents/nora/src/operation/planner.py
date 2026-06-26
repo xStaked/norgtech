@@ -131,6 +131,13 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
             summary="El usuario continua la creacion de un cliente nuevo.",
         )
 
+    if request.open_case and request.open_case.type == "visit":
+        return NoraPlan(
+            intent="continuar_caso",
+            actions=[],
+            summary="El usuario continua la creacion de una visita comercial.",
+        )
+
     if (
         request.sender_type == "comercial"
         and request.open_case

@@ -6,6 +6,7 @@ import {
 } from "../commercial-expenses/commercial-expense-extraction.provider";
 import { CommercialExpensesModule } from "../commercial-expenses/commercial-expenses.module";
 import { OrdersModule } from "../orders/orders.module";
+import { VisitsModule } from "../visits/visits.module";
 import { KapsoWebhookService } from "./kapso-webhook.service";
 import { NoraCaseService } from "./nora-case.service";
 import { NoraAgentController } from "./nora-agent.controller";
@@ -17,7 +18,12 @@ import { WhatsAppController, WhatsAppWebhookController } from "./whatsapp.contro
 import { WhatsAppService } from "./whatsapp.service";
 
 @Module({
-  imports: [AuthModule, forwardRef(() => CommercialExpensesModule), forwardRef(() => OrdersModule)],
+  imports: [
+    AuthModule,
+    forwardRef(() => CommercialExpensesModule),
+    forwardRef(() => OrdersModule),
+    VisitsModule,
+  ],
   controllers: [WhatsAppController, WhatsAppWebhookController, NoraAgentController],
   providers: [
     WhatsAppService,
