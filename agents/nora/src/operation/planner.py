@@ -17,6 +17,7 @@ PlannedIntent = Literal[
     "agenda",
     "resumen_conversacion",
     "crear_cliente",
+    "crear_visita",
     "continuar_caso",
     "clasificacion",
 ]
@@ -232,6 +233,13 @@ def plan_message(request: WhatsAppRouteRequest) -> NoraPlan:
             intent="crear_cliente",
             actions=[],
             summary=f"Inicio conversacional de cliente nuevo: {message}",
+        )
+
+    if request.sender_type in ("comercial", "admin") and _starts_visit_flow(normalized):
+        return NoraPlan(
+            intent="crear_visita",
+            actions=[],
+            summary=f"Inicio conversacional de visita comercial: {message}",
         )
 
     if any(word in normalized for word in EXPENSE_WORDS) or (
@@ -473,6 +481,25 @@ def _starts_new_customer_flow(normalized_message: str) -> bool:
             "cliente nuevo",
             "registrar cliente",
             "registrar un cliente",
+        )
+    )
+
+
+def _starts_visit_flow(normalized_message: str) -> bool:
+    normalized = _normalize_phrase(normalized_message)
+    return any(
+        phrase in normalized
+        for phrase in (
+            "crear visita",
+            "crear una visita",
+            "crear la visita",
+            "registrar visita",
+            "registrar una visita",
+            "programar visita",
+            "programar una visita",
+            "agendar visita",
+            "agendar una visita",
+            "vamos a crear una visita",
         )
     )
 

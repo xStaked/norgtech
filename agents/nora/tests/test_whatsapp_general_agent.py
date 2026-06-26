@@ -18,6 +18,7 @@ def test_first_message_is_system_prompt_with_whatsapp_addendum():
     assert isinstance(msgs[0], SystemMessage)
     assert "Nora" in msgs[0].content          # NORA_SYSTEM_PROMPT marker
     assert "WhatsApp" in msgs[0].content       # addendum marker
+    assert "Una solicitud de visita no es un gasto" in msgs[0].content
 
 
 def test_history_converted_in_order_and_roles():

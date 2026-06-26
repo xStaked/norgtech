@@ -50,7 +50,8 @@ VISIT_FLOW_PROMPT = (
     "confirmación como 'ok', 'listo', 'dale' o 'sí', busca primero el cliente "
     "con search_customers y luego llama create_visit con el customer_id correcto. "
     "Si ya tienes cliente, fecha/hora y resumen, crea la visita; no vuelvas a "
-    "pedir confirmación."
+    "pedir confirmación. Una solicitud de visita no es un gasto y no debe "
+    "activar el flujo de gastos."
 )
 
 

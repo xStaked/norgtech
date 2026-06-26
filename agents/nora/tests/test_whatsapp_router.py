@@ -131,6 +131,30 @@ def test_comercial_new_customer_request_starts_case_instead_of_general_classific
     assert "nit" in result["suggested_reply"].lower()
 
 
+def test_comercial_visit_creation_start_does_not_route_to_expense():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "vamos a crear una visita",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+        }
+    )
+
+    assert result["intent"] == "crear_visita"
+    assert result["requires_human_review"] is False
+    assert result["proposals"] == []
+    assert result["case_transition"] is None
+    assert "cliente" in result["suggested_reply"].lower()
+    assert "fecha" in result["suggested_reply"].lower()
+    assert "gasto" not in result["suggested_reply"].lower()
+
+
 def test_new_customer_case_collects_name_and_tax_id_then_asks_city_phone():
     result = route_whatsapp_message(
         {

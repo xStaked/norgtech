@@ -399,6 +399,11 @@ def _suggested_reply_for(
     if intent == "crear_cliente":
         extracted = _extract_new_customer_fields(request.message) if request else {}
         return _new_customer_question(_new_customer_missing_fields(extracted))
+    if intent == "crear_visita":
+        return (
+            "Claro. Para crear la visita, dime el cliente, la fecha y hora, "
+            "y una breve descripción."
+        )
     if intent == "pedido":
         return "Recibido. Voy a validar los datos del pedido y te confirmamos en breve."
     if intent == "consulta_pedidos":

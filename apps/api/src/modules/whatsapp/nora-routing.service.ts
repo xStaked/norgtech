@@ -141,6 +141,7 @@ export class NoraRoutingService {
         sender.userId &&
         (!openCase || openCase.type === NoraConversationCaseType.new_customer) &&
         !this.isNewCustomerStartMessage(message.body) &&
+        !this.isVisitStartMessage(message.body) &&
         !mediaPayload
       ) {
         try {
@@ -560,6 +561,7 @@ export class NoraRoutingService {
       guia_logistica: "logistica",
       gasto: "gasto",
       crear_cliente: "cliente",
+      crear_visita: "agenda",
       reclamo: "reclamo",
       resumen_conversacion: "otro",
       clasificacion: "otro",
@@ -909,6 +911,25 @@ export class NoraRoutingService {
       "cliente nuevo",
       "registrar cliente",
       "registrar un cliente",
+    ].some((phrase) => normalized.includes(phrase));
+  }
+
+  private isVisitStartMessage(message: string): boolean {
+    const normalized = message
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+    return [
+      "crear visita",
+      "crear una visita",
+      "crear la visita",
+      "registrar visita",
+      "registrar una visita",
+      "programar visita",
+      "programar una visita",
+      "agendar visita",
+      "agendar una visita",
+      "vamos a crear una visita",
     ].some((phrase) => normalized.includes(phrase));
   }
 
