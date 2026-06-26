@@ -1,4 +1,4 @@
-export type WhatsAppConversationStatus = "nuevo" | "abierto" | "pendiente" | "cerrado";
+export type WhatsAppConversationStatus = "nuevo" | "pendiente" | "en_gestion" | "resuelto";
 
 export type WhatsAppSenderType = "cliente" | "comercial" | "admin" | "desconocido";
 
@@ -43,12 +43,30 @@ export type NoraConversationCaseStatus =
   | "cancelled"
   | "blocked";
 
+export type NoraOrderCaseData = {
+  customerId?: string;
+  customerRef?: string;
+  companyId?: string;
+  companyRef?: string;
+  customerZoneId?: string;
+  zoneRef?: string;
+  deliveryInstructions?: string;
+  notes?: string;
+  items?: Array<{
+    productRef?: string;
+    product_ref?: string;
+    quantity?: number;
+    presentation?: string;
+    notes?: string;
+  }>;
+};
+
 export type NoraConversationCase = {
   id: string;
   parentCaseId?: string | null;
   type: NoraConversationCaseType;
   status: NoraConversationCaseStatus;
-  extractedData: Record<string, unknown>;
+  extractedData: Record<string, unknown> | NoraOrderCaseData;
   missingFields: string[];
   attachments: Array<Record<string, unknown>>;
   proposal?: Record<string, unknown> | null;
