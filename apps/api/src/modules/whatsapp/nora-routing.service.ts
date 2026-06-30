@@ -191,6 +191,14 @@ export class NoraRoutingService {
             await this.noraCaseService.updateCase(openCase.id, agentResponse.case_update);
           }
 
+          const bridgeReply = openCase
+            ? await this.bridgeNewCustomerToParentVisit({
+                customerCase: openCase,
+                executedEntity: agentResponse.executed_entity,
+                conversationId: conversation.id,
+              })
+            : undefined;
+
           await this.prisma.noraActionLog.update({
             where: { id: actionLog.id },
             data: {
@@ -201,8 +209,9 @@ export class NoraRoutingService {
             },
           });
 
-          if (agentResponse.reply_text) {
-            await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+          const replyToSend = bridgeReply ?? agentResponse.reply_text;
+          if (replyToSend) {
+            await this.whatsAppService.sendAgentReply(conversation.id, replyToSend);
           }
           return;
         } catch (error) {
@@ -503,6 +512,51 @@ export class NoraRoutingService {
         },
       },
     });
+  }
+
+  /**
+   * After the general agent creates a new customer that was opened to unblock a
+   * visit (new_customer subcase with a parent visit case), link the fresh
+   * customer to the parent visit and return the confirmation question so the
+   * flow resumes automatically instead of stalling on the stale customerRef.
+   */
+  private async bridgeNewCustomerToParentVisit(input: {
+    customerCase: NoraConversationCase;
+    executedEntity: Record<string, unknown> | null;
+    conversationId: string;
+  }): Promise<string | undefined> {
+    const entity = this.objectValue(input.executedEntity);
+    const customerId = this.stringValue(entity?.id);
+    if (
+      input.customerCase.type !== NoraConversationCaseType.new_customer ||
+      entity?.type !== "Customer" ||
+      !customerId ||
+      !input.customerCase.parentCaseId
+    ) {
+      return undefined;
+    }
+
+    const parent = await this.prisma.noraConversationCase.findFirst({
+      where: { id: input.customerCase.parentCaseId, conversationId: input.conversationId },
+    });
+    if (!parent || parent.type !== VISIT_CASE_TYPE) {
+      return undefined;
+    }
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { displayName: true, legalName: true },
+    });
+    const label = this.customerDisplay(customer ?? {});
+    const parentData = this.objectValue(parent.extractedData) ?? {};
+    const nextData = { customerId, customerLabel: label, customerRef: label };
+    const reply = this.visitConfirmationQuestion({ ...parentData, ...nextData });
+    await this.noraCaseService.updateCase(parent.id, {
+      extractedData: nextData,
+      missingFields: [],
+      lastQuestion: reply,
+    });
+    return reply;
   }
 
   private async prepareVisitCaseReply(caseResult: NoraConversationCase) {

@@ -3906,6 +3906,145 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("links a freshly created customer back to the parent visit and asks to confirm", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+
+      const account = {
+        id: "account-bridge-visit",
+        phoneNumberId: "phone-number-bridge-visit",
+        phoneNumber: "phone-number-bridge-visit",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-bridge-visit",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-30T11:27:45.000Z"),
+        lastMessageText: "Nombre: Porcicultura caribe SAS",
+        createdAt: new Date("2026-06-30T11:25:00.000Z"),
+        updatedAt: new Date("2026-06-30T11:27:45.000Z"),
+      };
+      const visitCase = {
+        id: "case-bridge-visit",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "visit",
+        status: "collecting_info",
+        extractedData: {
+          customerRef: "porcicola caribe sas",
+          scheduledAt: "2026-06-29T12:00:00",
+          summary: "Visita de seguimiento con el producto",
+        },
+        missingFields: ["customerRef"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "No encontré un cliente con ese nombre.",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-30T11:26:00.000Z"),
+        updatedAt: new Date("2026-06-30T11:26:00.000Z"),
+      };
+      const customerSubcase = {
+        id: "case-bridge-newcustomer",
+        conversationId: conversation.id,
+        parentCaseId: visitCase.id,
+        type: "new_customer",
+        status: "collecting_info",
+        extractedData: { displayName: "Porcicultura caribe SAS" },
+        missingFields: ["taxId", "city", "phone"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "Dime la razón social o nombre comercial y el NIT.",
+        riskLevel: "high",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-30T11:27:00.000Z"),
+        updatedAt: new Date("2026-06-30T11:27:30.000Z"),
+      };
+      const createdCustomer = {
+        id: "customer-porci",
+        displayName: "Porcicultura caribe SAS",
+        legalName: "Porcicultura caribe SAS",
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(visitCase, customerSubcase);
+      customers.push(createdCustomer);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "El cliente fue creado exitosamente. ¿Algo más?",
+            case_update: { status: "executed", missingFields: [] },
+            executed_entity: { type: "Customer", id: "customer-porci" },
+          }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-bridge-visit",
+              message: {
+                id: "kapso-bridge-visit-msg",
+                from: "+573004445566",
+                text: { body: "Nombre: Porcicultura caribe SAS\nNIT: 3948192-0" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const parent = noraCases.find((item) => item.id === "case-bridge-visit");
+        expect((parent?.extractedData as Record<string, unknown>)?.customerId).toBe("customer-porci");
+        expect(parent?.missingFields).toEqual([]);
+
+        const outbound = messages.find(
+          (item) =>
+            item.conversationId === conversation.id &&
+            String(item.direction) === WhatsAppMessageDirection.outbound,
+        );
+        expect(String(outbound?.body)).toContain("Confirmas la visita");
+      } finally {
+        if (prev === undefined) {
+          delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        }
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-bridge-visit");
+        removeMatching(accounts, (item) => item.id === "account-bridge-visit");
+        removeMatching(messages, (item) => item.conversationId === "conversation-bridge-visit");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-bridge-visit");
+        removeMatching(customers, (item) => item.id === "customer-porci");
+      }
+    });
+
     it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
       const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
       delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
