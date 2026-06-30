@@ -18,6 +18,8 @@ describe("Visits", () => {
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const visits: Array<Record<string, unknown>> = [];
   const auditLogs: Array<Record<string, unknown>> = [];
+  const executiveReports: Array<Record<string, unknown>> = [];
+  const commercialExpenses: Array<Record<string, unknown>> = [];
 
   beforeAll(async () => {
     const user = {
@@ -95,6 +97,8 @@ describe("Visits", () => {
         visit: {
           create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
         };
+        executiveReport: { count: (args: { where: { visitId: string } }) => Promise<number> };
+        commercialExpense: { count: (args: { where: { visitId: string } }) => Promise<number> };
         auditLog: {
           create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
         };
@@ -131,10 +135,25 @@ describe("Visits", () => {
             }
             return { count: 0 };
           },
+          delete: async ({ where }: { where: { id: string } }) => {
+            const idx = visits.findIndex((v) => v.id === where.id);
+            if (idx === -1) {
+              throw new Error("Record to delete does not exist");
+            }
+            return visits.splice(idx, 1)[0];
+          },
         };
 
         const result = await callback({
           visit: txVisit,
+          executiveReport: {
+            count: async ({ where }: { where: { visitId: string } }) =>
+              executiveReports.filter((r) => r.visitId === where.visitId).length,
+          },
+          commercialExpense: {
+            count: async ({ where }: { where: { visitId: string } }) =>
+              commercialExpenses.filter((e) => e.visitId === where.visitId).length,
+          },
           auditLog: {
             create: async ({ data }: { data: Record<string, unknown> }) => {
               const entry = {
@@ -255,5 +274,51 @@ describe("Visits", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({ status: VisitStatus.programada })
       .expect(400);
+  });
+
+  it("deletes a visit without dependents", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ customerId: "customer-1", scheduledAt: "2026-05-03T10:00:00.000Z" })
+      .expect(201);
+
+    const visitId = createResponse.body.id;
+
+    const response = await request(globalThis.__APP__)
+      .delete(`/visits/${visitId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(response.body).toEqual({ id: visitId, deleted: true });
+    expect(visits.find((v) => v.id === visitId)).toBeUndefined();
+  });
+
+  it("returns 404 when deleting a missing visit", async () => {
+    await request(globalThis.__APP__)
+      .delete("/visits/visit-does-not-exist")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(404);
+  });
+
+  it("blocks deleting a visit that has reports or expenses", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ customerId: "customer-1", scheduledAt: "2026-05-04T10:00:00.000Z" })
+      .expect(201);
+
+    const visitId = createResponse.body.id;
+    executiveReports.push({ id: "report-1", visitId });
+
+    try {
+      await request(globalThis.__APP__)
+        .delete(`/visits/${visitId}`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .expect(409);
+      expect(visits.find((v) => v.id === visitId)).toBeDefined();
+    } finally {
+      executiveReports.length = 0;
+    }
   });
 });

@@ -11,7 +11,7 @@ from .prompts.system import NORA_SYSTEM_PROMPT
 from .tools.customers import search_customers, create_customer
 from .tools.segments import get_customer_segments
 from .tools.agenda import get_agenda
-from .tools.visits import create_visit
+from .tools.visits import create_visit, delete_visit
 from .tools.opportunities import get_customer_opportunities, create_opportunity, update_opportunity_stage
 from .tools.follow_ups import create_follow_up
 from .tools.orders import search_products, get_customer_quotes, create_order, get_companies, get_customer_zones
@@ -25,6 +25,7 @@ ALL_TOOLS = [
     get_customer_segments,
     get_agenda,
     create_visit,
+    delete_visit,
     get_customer_opportunities,
     create_opportunity,
     update_opportunity_stage,

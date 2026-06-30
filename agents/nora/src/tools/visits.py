@@ -1,7 +1,7 @@
 import json
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
-from .nestjs_client import NestJSClient
+from .nestjs_client import NestJSClient, NestJSAPIError
 from typing import Annotated, Optional
 
 @tool
@@ -42,3 +42,30 @@ async def create_visit(
         return f"Visita registrada exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
     except Exception as e:
         return f"Error al registrar visita: {str(e)}"
+
+
+@tool
+async def delete_visit(
+    visit_id: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+) -> str:
+    """
+    Elimina (borra) una visita del CRM de forma permanente.
+
+    Usa esta herramienta cuando el usuario pida eliminar/borrar/cancelar
+    definitivamente una visita. SIEMPRE confirma con el usuario cuál visita
+    antes de eliminarla. Si no sabes el ID, usa get_agenda para encontrarlo.
+
+    No se puede eliminar una visita que ya tiene reportes o gastos asociados.
+
+    Args:
+        visit_id: ID de la visita a eliminar
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+        await nestjs_client.delete(f"/visits/{visit_id}")
+        return "Visita eliminada exitosamente."
+    except NestJSAPIError as e:
+        return f"Error al eliminar visita: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al eliminar visita: {str(e)}"

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -104,5 +105,12 @@ export class VisitsController {
     dto: CompleteVisitDto,
   ) {
     return this.visitsService.complete(user, id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Delete(":id")
+  remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.visitsService.remove(user, id);
   }
 }

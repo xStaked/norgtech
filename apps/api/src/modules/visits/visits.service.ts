@@ -203,6 +203,42 @@ export class VisitsService {
     });
   }
 
+  async remove(user: AuthUser, visitId: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const visit = await tx.visit.findUnique({ where: { id: visitId } });
+
+      if (!visit) {
+        throw new NotFoundException("Visit not found");
+      }
+
+      const [reportCount, expenseCount] = await Promise.all([
+        tx.executiveReport.count({ where: { visitId } }),
+        tx.commercialExpense.count({ where: { visitId } }),
+      ]);
+
+      if (reportCount > 0 || expenseCount > 0) {
+        throw new ConflictException(
+          "No se puede eliminar la visita porque tiene reportes o gastos asociados.",
+        );
+      }
+
+      await tx.visit.delete({ where: { id: visitId } });
+
+      await this.auditService.record(
+        {
+          entityType: "Visit",
+          entityId: visit.id,
+          action: "visit.deleted",
+          actorUserId: user.id,
+          previousState: JSON.parse(JSON.stringify(visit)),
+        },
+        tx,
+      );
+
+      return { id: visit.id, deleted: true };
+    });
+  }
+
   findWithFilters(filters: VisitFilters) {
     const where: Record<string, unknown> = {};
 

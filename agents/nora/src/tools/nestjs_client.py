@@ -61,3 +61,6 @@ class NestJSClient:
 
     async def patch(self, path: str, json: dict) -> dict:
         return await self._request("PATCH", path, json=json)
+
+    async def delete(self, path: str) -> dict:
+        return await self._request("DELETE", path)
