@@ -404,6 +404,30 @@ export class NoraRoutingService {
   }) {
     const data = this.objectValue(input.openCase.extractedData) ?? {};
 
+    // Escape hatch: a fresh "crear/registrar visita" while a visit case is open
+    // restarts collection, so a bad customerRef (e.g. mis-parsed "las 7am") can
+    // never trap the user in a loop with no way out.
+    if (this.isVisitStartMessage(input.messageBody)) {
+      const reply =
+        "Listo, empecemos de nuevo. Dime el cliente, la fecha y hora, y una breve descripción de la visita.";
+      await this.noraCaseService.updateCase(input.openCase.id, {
+        extractedData: {
+          customerId: "",
+          customerLabel: "",
+          customerRef: "",
+          scheduledAt: "",
+          summary: "",
+        },
+        missingFields: ["customerRef", "scheduledAt", "summary"],
+        lastQuestion: reply,
+      });
+      await this.whatsAppService.sendAgentReply(input.conversationId, reply);
+      return this.prisma.noraActionLog.update({
+        where: { id: input.actionLogId },
+        data: { status: NoraActionStatus.proposed, output: { reply } },
+      });
+    }
+
     if (this.isNewCustomerStartMessage(input.messageBody)) {
       const reply =
         "Listo. Para crear el cliente nuevo y luego retomar la visita, dime la razón social o nombre comercial y el NIT.";

@@ -4158,6 +4158,109 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("restarts an open visit case stuck on a bad customerRef when the user says crear visita", async () => {
+      const account = {
+        id: "account-visit-reset",
+        phoneNumberId: "phone-number-visit-reset",
+        phoneNumber: "phone-number-visit-reset",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-visit-reset",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-30T16:43:00.000Z"),
+        lastMessageText: "quiero crear una visita",
+        createdAt: new Date("2026-06-30T16:42:00.000Z"),
+        updatedAt: new Date("2026-06-30T16:43:00.000Z"),
+      };
+      const stuckVisitCase = {
+        id: "case-visit-reset",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "visit",
+        status: "collecting_info",
+        extractedData: {
+          customerRef: "las 7am",
+          scheduledAt: "2026-06-29T07:00:00",
+          summary: "Visita Porcicultura caribe SAS",
+        },
+        missingFields: ["customerRef"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "No encontré un cliente con el nombre \"las 7am\".",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-30T16:40:00.000Z"),
+        updatedAt: new Date("2026-06-30T16:42:30.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(stuckVisitCase);
+
+      try {
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-visit-reset",
+              message: {
+                id: "kapso-visit-reset-msg",
+                from: "+573004445566",
+                text: { body: "quiero crear una visita" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const updated = noraCases.find((item) => item.id === "case-visit-reset");
+        expect((updated?.extractedData as Record<string, unknown>)?.customerRef).toBe("");
+        expect(updated?.missingFields).toEqual(["customerRef", "scheduledAt", "summary"]);
+
+        const calledRoute = (globalThis.fetch as jest.Mock).mock.calls.some(([callUrl, options]) => {
+          if (!String(callUrl).endsWith("/whatsapp/route")) return false;
+          const body = JSON.parse(String(options?.body ?? "{}")) as { conversation_id?: string };
+          return body.conversation_id === conversation.id;
+        });
+        expect(calledRoute).toBe(false);
+
+        const outbound = messages.find(
+          (item) =>
+            item.conversationId === conversation.id &&
+            String(item.direction) === WhatsAppMessageDirection.outbound,
+        );
+        expect(String(outbound?.body)).toContain("empecemos de nuevo");
+      } finally {
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-visit-reset");
+        removeMatching(accounts, (item) => item.id === "account-visit-reset");
+        removeMatching(messages, (item) => item.conversationId === "conversation-visit-reset");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-visit-reset");
+      }
+    });
+
     it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
       const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
       delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
