@@ -208,22 +208,24 @@ export default async function AgendaPage({
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="Operacion diaria"
-        title="Agenda operativa"
+        eyebrow="OPERACIÓN"
+        title="Agenda"
         description="Semana comercial consolidada con visitas, seguimientos y foco inmediato del equipo."
         actions={
           <>
-            {canCreate(userRole, "visit") && <ButtonLink href="/visits/new">Nueva visita</ButtonLink>}
-            {canCreate(userRole, "followUp") && (
-              <ButtonLink href="/follow-ups/new" variant="secondary">
-                Nuevo seguimiento
+            {canCreate(userRole, "visit") && (
+              <ButtonLink href="/visits/new" variant="secondary">
+                Nueva visita
               </ButtonLink>
+            )}
+            {canCreate(userRole, "followUp") && (
+              <ButtonLink href="/follow-ups/new">Nuevo seguimiento</ButtonLink>
             )}
           </>
         }
       />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Compromisos de hoy"
           value={counts.hoy.toLocaleString("es-CO")}

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { MapPin, Clock } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
-import { crmTheme } from "@/components/ui/theme";
 import { computeUrgency, UrgencyBadge } from "./urgency-badge";
 
 interface Customer {
@@ -58,78 +58,50 @@ export function AgendaQueue({ items, emptyTitle, emptyDescription }: AgendaQueue
   }
 
   return (
-    <div style={{ display: "grid", gap: 12 }}>
+    <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
       {items.map((item) => {
         const urgency = computeUrgency(item.scheduledAt, item.status, item.kind);
         const href = item.kind === "visit" ? `/visits/${item.id}` : `/follow-ups/${item.id}`;
-        const meta = item.kind === "task" ? typeLabels[item.type ?? ""] ?? item.type : kindLabels[item.kind];
+        const meta =
+          item.kind === "task"
+            ? typeLabels[item.type ?? ""] ?? item.type ?? "Seguimiento"
+            : kindLabels[item.kind];
+        const isVisit = item.kind === "visit";
 
         return (
           <Link
             key={`${item.kind}-${item.id}`}
             href={href}
-            style={{
-              display: "grid",
-              gap: 10,
-              padding: "14px 16px",
-              borderRadius: crmTheme.radius.lg,
-              background: crmTheme.colors.surface,
-              border: `1px solid ${crmTheme.colors.border}`,
-              textDecoration: "none",
-              color: "inherit",
-              transition: "box-shadow 160ms ease",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.boxShadow = crmTheme.shadow.card;
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.boxShadow = "none";
-            }}
+            className="flex items-start gap-3 rounded-[11px] border border-border bg-card p-4 text-inherit no-underline transition-colors hover:border-[#c7d3df]"
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                gap: 10,
-                flexWrap: "wrap",
-              }}
+            <span
+              aria-hidden="true"
+              className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] text-white"
+              style={{ backgroundColor: isVisit ? "#0f5c8a" : "#6d4ff0" }}
             >
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: "0.06em",
-                  textTransform: "uppercase",
-                  color: item.kind === "visit" ? crmTheme.colors.info : crmTheme.colors.textMuted,
-                }}
-              >
-                {meta}
-              </span>
-              <UrgencyBadge level={urgency} />
-            </div>
+              {isVisit ? <MapPin className="h-[18px] w-[18px]" /> : <Clock className="h-[18px] w-[18px]" />}
+            </span>
 
-            <div style={{ display: "grid", gap: 4 }}>
-              <strong style={{ fontSize: 15, lineHeight: 1.25, color: crmTheme.colors.text }}>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-[0.06em] text-muted-foreground">
+                  {meta}
+                </span>
+                <UrgencyBadge level={urgency} />
+              </div>
+
+              <div className="mt-1 truncate text-[13.5px] font-bold text-foreground">
                 {item.title}
-              </strong>
-              <span style={{ fontSize: 14, color: crmTheme.colors.textMuted }}>
-                {item.customer?.displayName ?? "Sin cliente"}
-              </span>
-            </div>
+              </div>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 10,
-                flexWrap: "wrap",
-                fontSize: 13,
-                color: crmTheme.colors.textSubtle,
-              }}
-            >
-              <span>{dateTimeFormatter.format(new Date(item.scheduledAt))}</span>
-              <span style={{ textTransform: "capitalize" }}>{item.status.replace(/_/g, " ")}</span>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <span className="min-w-0 truncate text-[12px] text-muted-foreground">
+                  {item.customer?.displayName ?? "Sin cliente"}
+                </span>
+                <span className="shrink-0 text-[12px] font-semibold tabular-nums text-[#3a4658]">
+                  {dateTimeFormatter.format(new Date(item.scheduledAt))}
+                </span>
+              </div>
             </div>
           </Link>
         );

@@ -78,7 +78,7 @@ const quoteItemColumns: readonly DataTableColumn<QuoteItem>[] = [
       <div style={{ display: "grid", gap: 6 }}>
         <span style={{ fontWeight: 700 }}>{item.productSnapshotName}</span>
         {item.notes ? (
-          <span style={{ fontSize: 13, color: "#52637a" }}>{item.notes}</span>
+          <span style={{ fontSize: 13, color: "#44556e" }}>{item.notes}</span>
         ) : null}
       </div>
     ),
@@ -185,7 +185,7 @@ export default async function QuoteDetailPage({
             style={{
               margin: 0,
               lineHeight: 1.6,
-              color: "#10233f",
+              color: "#0c2c44",
             }}
           >
             {quote.notes}
@@ -220,13 +220,13 @@ export default async function QuoteDetailPage({
             style={{
               fontSize: 13,
               fontWeight: 700,
-              color: "#6b7c93",
+              color: "#6b7787",
               textTransform: "uppercase",
             }}
           >
             Total cotizado
           </span>
-          <strong style={{ fontSize: 28, lineHeight: 1, color: "#10233f" }}>
+          <strong style={{ fontSize: 28, lineHeight: 1, color: "#0c2c44" }}>
             {formatCurrency(quote.total)}
           </strong>
         </div>

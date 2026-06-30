@@ -14,6 +14,7 @@ export async function isAuthenticated() {
 
 export interface CurrentUser {
   id: string;
+  name: string;
   email: string;
   role: UserRole;
 }
@@ -31,7 +32,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
 
     if (!response.ok) return null;
 
-    const data = (await response.json()) as { id?: string; email?: string; role?: string };
+    const data = (await response.json()) as {
+      id?: string;
+      name?: string;
+      email?: string;
+      role?: string;
+    };
 
     if (
       typeof data.id === "string" &&
@@ -41,6 +47,7 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     ) {
       return {
         id: data.id,
+        name: typeof data.name === "string" ? data.name : data.email,
         email: data.email,
         role: data.role as UserRole,
       };

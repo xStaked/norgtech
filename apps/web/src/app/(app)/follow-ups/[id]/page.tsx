@@ -59,7 +59,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 const linkStyle = {
-  color: "#10233f",
+  color: "#0c2c44",
   fontWeight: 700,
   textDecoration: "none",
 } as const;
@@ -158,7 +158,7 @@ export default async function FollowUpDetailPage({
           title="Notas"
           description="Observaciones y contexto operativo registrados para resolver la tarea."
         >
-          <p style={{ margin: 0, color: "#10233f", lineHeight: 1.7 }}>{task.notes}</p>
+          <p style={{ margin: 0, color: "#0c2c44", lineHeight: 1.7 }}>{task.notes}</p>
         </SectionCard>
       ) : null}
 

@@ -1,13 +1,17 @@
 "use client";
 
+import { MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetchClient } from "@/lib/api.client";
 import { ConversationComposer } from "./conversation-composer";
 import { ConversationList } from "./conversation-list";
 import { ConversationThread } from "./conversation-thread";
-import { NoraSuggestionPanel } from "./nora-suggestion-panel";
-import { OrderDraftPanel } from "./order-draft-panel";
-import type { WhatsAppConversation, WhatsAppConversationDetail } from "./whatsapp-types";
+import { CustomerInfoPanel } from "./customer-info-panel";
+import type {
+  WhatsAppConversation,
+  WhatsAppConversationDetail,
+  WhatsAppConversationStatus,
+} from "./whatsapp-types";
 
 export function WhatsAppInbox({
   initialConversations,
@@ -64,9 +68,7 @@ export function WhatsAppInbox({
     await Promise.all([refreshList(), loadConversation(selectedId)]);
   }
 
-  async function updateConversationStatus(
-    status: "nuevo" | "pendiente" | "en_gestion" | "resuelto",
-  ) {
+  async function updateConversationStatus(status: WhatsAppConversationStatus) {
     if (!selectedId) return;
     const response = await apiFetchClient(`/whatsapp/conversations/${selectedId}`, {
       method: "PATCH",
@@ -77,36 +79,48 @@ export function WhatsAppInbox({
     }
   }
 
+  const activeConversation = selectedConversation ?? fallbackConversation;
+  const suggestedReply =
+    selectedConversation?.noraActions?.find((action) => action.output?.suggested_reply)?.output
+      ?.suggested_reply ?? null;
+
   return (
-    <div className="grid min-h-[680px] overflow-hidden rounded-lg border border-border bg-background lg:grid-cols-[320px_minmax(0,1fr)_320px]">
-      <ConversationList
-        conversations={conversations}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
-      <div className="flex min-h-0 flex-col">
-        <ConversationThread conversation={selectedConversation ?? fallbackConversation} />
-        <ConversationComposer conversationId={selectedId} onSent={refreshSelected} />
-      </div>
-      <div className="min-h-0 border-l border-border bg-background">
-        <div className="border-b border-border p-3">
-          <div className="mb-2 text-xs font-semibold uppercase text-muted-foreground">Estado</div>
-          <div className="grid grid-cols-2 gap-2">
-            {(["pendiente", "en_gestion", "resuelto"] as const).map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => updateConversationStatus(status)}
-                disabled={!selectedId}
-                className="rounded-md border border-border px-2 py-1 text-xs text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {status}
-              </button>
-            ))}
+    <div className="flex h-[calc(100vh-5rem)] flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="flex size-[30px] items-center justify-center rounded-md bg-[#25d366] text-white">
+            <MessageCircle className="size-4" />
+          </div>
+          <div>
+            <div className="text-base font-bold leading-tight text-[#0c2c44]">WhatsApp</div>
+            <div className="text-xs text-[#6b7787]">Inbox operativo asistido por Nora</div>
           </div>
         </div>
-        <NoraSuggestionPanel conversation={selectedConversation} />
-        <OrderDraftPanel conversation={selectedConversation} onCreated={refreshSelected} />
+        <span className="flex items-center gap-1.5 rounded-md bg-[#e6f4ec] px-2.5 py-1 text-xs font-semibold text-[#167c4a]">
+          <span className="size-2 rounded-full bg-[#25d366]" />
+          Conectado
+        </span>
+      </div>
+
+      <div className="grid min-h-0 flex-1 overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[312px_minmax(0,1fr)_288px]">
+        <ConversationList
+          conversations={conversations}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+        />
+        <div className="flex min-h-0 flex-col">
+          <ConversationThread conversation={activeConversation} />
+          <ConversationComposer
+            conversationId={selectedId}
+            suggestedReply={suggestedReply}
+            onSent={refreshSelected}
+          />
+        </div>
+        <CustomerInfoPanel
+          conversation={activeConversation}
+          onStatusChange={updateConversationStatus}
+          onCreated={refreshSelected}
+        />
       </div>
     </div>
   );

@@ -91,7 +91,7 @@ const dateFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 const linkStyle = {
-  color: "#2d6cdf",
+  color: "#0f5c8a",
   textDecoration: "none",
   fontWeight: 700,
 } as const;
@@ -136,7 +136,7 @@ const columns: readonly DataTableColumn<ExpenseRow>[] = [
   {
     key: "commercial",
     header: "Comercial",
-    render: (row) => <strong style={{ color: "#10233f" }}>{row.submittedByName}</strong>,
+    render: (row) => <strong style={{ color: "#0c2c44" }}>{row.submittedByName}</strong>,
   },
   {
     key: "category",
@@ -159,14 +159,14 @@ const columns: readonly DataTableColumn<ExpenseRow>[] = [
             {row.customerName}
           </Link>
         ) : (
-          <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+          <span style={{ color: "#6b7787" }}>Sin cliente</span>
         )}
         {row.visitId ? (
           <Link href={`/visits/${row.visitId}`} style={{ ...linkStyle, fontSize: 13 }}>
             Visita #{row.visitId.slice(-6)}
           </Link>
         ) : (
-          <span style={{ fontSize: 13, color: "#6b7c93" }}>Sin visita</span>
+          <span style={{ fontSize: 13, color: "#6b7787" }}>Sin visita</span>
         )}
       </div>
     ),

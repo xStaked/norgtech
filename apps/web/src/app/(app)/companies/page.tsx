@@ -32,10 +32,10 @@ const columns: readonly DataTableColumn<CompanyRow>[] = [
     header: "Nombre",
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
-        <Link href={`/companies/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+        <Link href={`/companies/${row.id}`} style={{ fontWeight: 700, color: "#0c2c44", textDecoration: "none" }}>
           {row.name}
         </Link>
-        <span style={{ fontSize: 13, color: "#52637a" }}>{row.legalName}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>{row.legalName}</span>
       </div>
     ),
   },

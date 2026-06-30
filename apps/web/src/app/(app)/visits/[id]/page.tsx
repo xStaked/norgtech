@@ -55,7 +55,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 const linkStyle = {
-  color: "#10233f",
+  color: "#0c2c44",
   fontWeight: 700,
   textDecoration: "none",
 } as const;
@@ -155,7 +155,7 @@ export default async function VisitDetailPage({
           title="Notas"
           description="Registro cualitativo capturado durante la preparacion o ejecucion de la visita."
         >
-          <p style={{ margin: 0, color: "#10233f", lineHeight: 1.7 }}>{visit.notes}</p>
+          <p style={{ margin: 0, color: "#0c2c44", lineHeight: 1.7 }}>{visit.notes}</p>
         </SectionCard>
       ) : null}
 

@@ -142,14 +142,14 @@ export default async function InvoiceDetailPage({
           <div className="grid gap-2 text-sm">
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cliente</span>
-              <Link href={`/customers/${invoice.customer.id}`} className="font-medium text-[#2d6cdf]">
+              <Link href={`/customers/${invoice.customer.id}`} className="font-medium text-[#0f5c8a]">
                 {invoice.customer.displayName}
               </Link>
             </div>
             {invoice.order && (
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Pedido</span>
-                <Link href={`/orders/${invoice.order.id}`} className="font-medium text-[#2d6cdf]">
+                <Link href={`/orders/${invoice.order.id}`} className="font-medium text-[#0f5c8a]">
                   {invoice.order.orderNumber ?? invoice.order.id}
                 </Link>
               </div>
@@ -274,7 +274,7 @@ export default async function InvoiceDetailPage({
                         href={`${process.env.NEXT_PUBLIC_API_URL}/invoices/payments/${payment.id}/supports/${support.id}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center rounded-md bg-background px-2 py-1 text-xs font-medium text-[#2d6cdf] ring-1 ring-border"
+                        className="inline-flex items-center rounded-md bg-background px-2 py-1 text-xs font-medium text-[#0f5c8a] ring-1 ring-border"
                       >
                         {support.fileName}
                       </a>

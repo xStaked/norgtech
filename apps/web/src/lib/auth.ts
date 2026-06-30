@@ -17,6 +17,15 @@ export const USER_ROLES: readonly UserRole[] = [
   "logistica",
 ];
 
+export const ROLE_LABELS: Record<UserRole, string> = {
+  administrador: "Administrador",
+  director_comercial: "Director comercial",
+  comercial: "Comercial",
+  tecnico: "Técnico",
+  facturacion: "Facturación",
+  logistica: "Logística",
+};
+
 export function getSessionTokenClient(): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp(`(?:^|; )${SESSION_COOKIE_NAME}=([^;]*)`));

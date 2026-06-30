@@ -77,17 +77,17 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     header: "Cliente",
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
-        <Link href={`/customers/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+        <Link href={`/customers/${row.id}`} style={{ fontWeight: 700, color: "#0c2c44", textDecoration: "none" }}>
           {row.displayName}
         </Link>
-        <span style={{ fontSize: 13, color: "#52637a" }}>{row.legalName}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>{row.legalName}</span>
       </div>
     ),
   },
   {
     key: "segment",
     header: "Segmento",
-    render: (row) => row.segment ?? <span style={{ color: "#6b7c93" }}>Sin segmento</span>,
+    render: (row) => row.segment ?? <span style={{ color: "#6b7787" }}>Sin segmento</span>,
   },
   {
     key: "location",
@@ -101,7 +101,7 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
       row.creditLimit ? (
         <span style={{ fontWeight: 600 }}>{row.creditLimit}</span>
       ) : (
-        <span style={{ color: "#6b7c93" }}>—</span>
+        <span style={{ color: "#6b7787" }}>—</span>
       ),
   },
   {
@@ -112,11 +112,11 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
         <div style={{ display: "grid", gap: 4 }}>
           <span>{row.primaryContact}</span>
           {row.primaryContactMeta ? (
-            <span style={{ fontSize: 13, color: "#6b7c93" }}>{row.primaryContactMeta}</span>
+            <span style={{ fontSize: 13, color: "#6b7787" }}>{row.primaryContactMeta}</span>
           ) : null}
         </div>
       ) : (
-        <span style={{ color: "#6b7c93" }}>Sin contacto principal</span>
+        <span style={{ color: "#6b7787" }}>Sin contacto principal</span>
       ),
   },
   {
@@ -124,7 +124,7 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     header: "Detalle",
     align: "right",
     render: (row) => (
-      <Link href={`/customers/${row.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 700 }}>
+      <Link href={`/customers/${row.id}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 700 }}>
         Ver ficha
       </Link>
     ),

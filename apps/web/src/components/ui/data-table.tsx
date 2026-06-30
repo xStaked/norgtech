@@ -37,10 +37,10 @@ export function DataTable<T>({
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-sm">
+    <div className="overflow-x-auto rounded-[10px] border border-border bg-card">
       <table className="w-full min-w-[720px] border-separate border-spacing-0">
         {caption ? (
-          <caption className="px-5 pt-4 text-left text-sm text-muted-foreground">
+          <caption className="px-4 pt-3.5 text-left text-sm text-muted-foreground">
             {caption}
           </caption>
         ) : null}
@@ -49,7 +49,7 @@ export function DataTable<T>({
             {columns.map((column) => (
               <th
                 key={column.key}
-                className={`whitespace-nowrap bg-card/80 px-4 py-3.5 text-left text-xs font-extrabold uppercase tracking-wider text-muted-foreground border-b border-border/40 ${toCellAlign(column.align)}`}
+                className={`whitespace-nowrap border-b border-border bg-muted px-4 py-2.5 text-left text-[10.5px] font-bold uppercase tracking-[0.05em] text-[#7a8696] ${toCellAlign(column.align)}`}
                 style={{ width: column.width }}
               >
                 {column.header}
@@ -61,13 +61,13 @@ export function DataTable<T>({
           {rows.map((row, index) => (
             <tr
               key={getRowKey(row, index)}
-              className="transition-colors hover:bg-muted/30"
+              className="bg-card transition-colors odd:bg-[#fafbfc] hover:bg-[#eff4fb]"
               style={rowStyle?.(row, index)}
             >
               {columns.map((column) => (
                 <td
                   key={column.key}
-                  className={`px-4 py-3.5 text-sm text-foreground align-top border-b border-border/20 last:border-b-0 ${toCellAlign(column.align)}`}
+                  className={`border-b border-[#eef1f6] px-4 py-3 align-middle text-[12.5px] text-foreground ${toCellAlign(column.align)}`}
                 >
                   {column.render(row)}
                 </td>

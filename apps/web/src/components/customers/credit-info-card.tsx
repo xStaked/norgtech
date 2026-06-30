@@ -21,7 +21,7 @@ function fmt(value: number): string {
 }
 
 function utilizationColor(pct: number | null): string {
-  if (pct == null) return "#6b7c93";
+  if (pct == null) return "#6b7787";
   if (pct >= 100) return "#d92d20";
   if (pct >= 80) return "#dc6803";
   return "#17b26a";
@@ -43,7 +43,7 @@ function BudgetProgressBar({ percent }: { percent: number | null }) {
           height: "100%",
           width: `${pct}%`,
           borderRadius: 4,
-          background: "#2d6cdf",
+          background: "#0f5c8a",
           transition: "width 0.3s ease",
         }}
       />
@@ -85,7 +85,7 @@ export async function CreditInfoCard({ customerId }: CreditInfoCardProps) {
   if (!res.ok) {
     return (
       <SectionCard title="Credito y cupo">
-        <div style={{ fontSize: "0.9375rem", color: "#6b7c93" }}>
+        <div style={{ fontSize: "0.9375rem", color: "#6b7787" }}>
           Sin informacion de credito disponible
         </div>
       </SectionCard>
@@ -147,7 +147,7 @@ export async function CreditInfoCard({ customerId }: CreditInfoCardProps) {
 
         <div>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-            <span style={{ fontSize: "0.8125rem", color: "#52637a" }}>Uso de credito</span>
+            <span style={{ fontSize: "0.8125rem", color: "#44556e" }}>Uso de credito</span>
             <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: utilizationColor(data.utilizationPercent) }}>
               {data.utilizationPercent != null ? `${data.utilizationPercent.toFixed(0)}%` : "\u2014"}
             </span>
@@ -166,8 +166,8 @@ export async function CreditInfoCard({ customerId }: CreditInfoCardProps) {
             </div>
             <div style={{ marginTop: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                <span style={{ fontSize: "0.8125rem", color: "#52637a" }}>Progreso</span>
-                <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#2d6cdf" }}>
+                <span style={{ fontSize: "0.8125rem", color: "#44556e" }}>Progreso</span>
+                <span style={{ fontSize: "0.8125rem", fontWeight: 600, color: "#0f5c8a" }}>
                   {data.purchaseProgress.percent != null ? `${data.purchaseProgress.percent.toFixed(0)}%` : "\u2014"}
                 </span>
               </div>
@@ -198,7 +198,7 @@ function CreditKpi({
         background: crmTheme.colors.surfaceMuted,
       }}
     >
-      <div style={{ fontSize: "0.75rem", color: "#6b7c93", marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: "0.75rem", color: "#6b7787", marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: "1.25rem", fontWeight: 700, color: color ?? crmTheme.colors.text }}>
         {value}
       </div>

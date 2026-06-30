@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Plus, Sparkles } from "lucide-react";
 import {  NoraAgendaCard } from "@/components/nora/nora-agenda-card";
 
 import { apiFetchClient } from "@/lib/api.client";
@@ -28,6 +29,28 @@ interface NoraChatInitialContext {
   contextType: "customer" | "opportunity";
   contextEntityId: string;
   contextLabel?: string | null;
+}
+
+const NORA_FONT = "'Hanken Grotesk', system-ui, sans-serif";
+
+const SUGGESTIONS = [
+  "Visité a Acme, confirmaron interés y piden nueva visita",
+  "Tengo pendiente llamar a Pérez sobre la propuesta",
+  "¿Qué tengo pendiente hoy?",
+  "El cliente Lago quiere cotización para el próximo viernes",
+];
+
+function formatRelativeTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.round(diffMs / 60000);
+  if (diffMin < 1) return "ahora";
+  if (diffMin < 60) return `hace ${diffMin}m`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `hace ${diffHr}h`;
+  const diffDay = Math.round(diffHr / 24);
+  return `hace ${diffDay}d`;
 }
 
 function createClientMessage(content: string): NoraMessageItem {
@@ -331,102 +354,203 @@ export function NoraChat({
     void handleSend(content);
   }
 
+  function handleNewConversation() {
+    setMessages([]);
+    setSessionId(null);
+    setDraftProposal(null);
+    setAgendaItems([]);
+    setConfirmation(null);
+    setClarificationOptions(null);
+    setQueryData(null);
+    setNotice(null);
+    setError(null);
+  }
+
+  const firstUserMessage = messages.find((message) => message.role === "user");
+  const conversationTitle = firstUserMessage?.content ?? "Conversación con Nora";
+  const conversationTime = firstUserMessage
+    ? formatRelativeTime(firstUserMessage.createdAt)
+    : "";
+
+  const hasConversation = messages.length > 0;
+
   return (
-    <div className="relative flex h-full flex-col">
-      {/* Scrollable Messages Area */}
-      <div className="mx-auto w-full max-w-3xl flex-1 min-h-0 space-y-4 overflow-y-auto px-1 pb-4">
-        {/* Context Banner */}
-        {initialContext && (
-          <div className="mb-4 flex items-center gap-2 rounded-lg border border-nora-500/20 bg-nora-500/10 px-3.5 py-2.5 text-sm text-nora-300">
-            <span className="text-muted-foreground">Contexto:</span>
-            <strong>{initialContext.contextLabel ?? initialContext.contextEntityId}</strong>
+    <div className="flex h-full min-h-0" style={{ fontFamily: NORA_FONT }}>
+      {/* Left rail */}
+      <aside className="flex w-[262px] shrink-0 flex-col gap-4 overflow-y-auto border-r border-[#ece8f8] bg-card p-4">
+        {/* Brand header */}
+        <div className="flex items-center gap-2.5">
+          <div
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px]"
+            style={{ background: "linear-gradient(135deg,#6d4ff0,#9b5cf0)" }}
+          >
+            <Sparkles className="h-[18px] w-[18px] text-white" strokeWidth={2.2} />
           </div>
-        )}
-
-        {/* Notice Banner */}
-        {notice && (
-          <div className="mb-4 rounded-lg border-l-3 border-emerald-500 bg-emerald-500/10 px-3.5 py-2.5 text-sm font-semibold text-emerald-400">
-            {notice}
-          </div>
-        )}
-
-        {/* Error Banner */}
-        {error && (
-          <div className="mb-4 rounded-lg border-l-3 border-destructive bg-destructive/10 px-3.5 py-2.5 text-sm font-semibold text-destructive">
-            {error}
-          </div>
-        )}
-
-        {/* Message List */}
-        <NoraMessageList
-          messages={messages}
-          busy={busy}
-          onRetry={handleRetry}
-          onSend={handleSend}
-        />
-
-        {/* Clarification Options */}
-        {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
-          <div className="space-y-2 py-2">
-            <p className="text-sm font-semibold text-muted-foreground">
-              Selecciona una opción:
+          <div className="min-w-0">
+            <p className="text-[16px] font-extrabold leading-tight text-[#2a1f6e]">
+              Nora
             </p>
-            <div className="flex flex-wrap gap-2">
-              {clarificationOptions.options.map((option) => (
-                <button
-                  key={option.id}
-                  type="button"
-                  disabled={busy}
-                  onClick={() => handleSend(option.label)}
-                  className="rounded-lg border border-nora-500/30 bg-nora-500/10 px-4 py-2 text-sm font-semibold text-nora-300 transition-all hover:border-nora-500/60 hover:bg-nora-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {option.label}
-                </button>
-              ))}
+            <p className="truncate text-[11px] text-[#9a8fd0]">
+              Asistente comercial IA
+            </p>
+          </div>
+        </div>
+
+        {/* New conversation */}
+        <button
+          type="button"
+          onClick={handleNewConversation}
+          className="flex h-9 w-full items-center justify-center gap-1.5 rounded-[10px] text-[13px] font-bold text-white transition-opacity hover:opacity-90"
+          style={{ background: "linear-gradient(135deg,#6d4ff0,#9b5cf0)" }}
+        >
+          <Plus className="h-4 w-4" strokeWidth={2.5} />
+          Nueva conversación
+        </button>
+
+        {/* Conversations */}
+        <div className="space-y-1.5">
+          <p className="px-1 text-[10.5px] font-bold uppercase tracking-wider text-[#b3add0]">
+            Conversaciones
+          </p>
+          {hasConversation ? (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-[#f3f0ff] p-2 text-[#3a2a8c]">
+              <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold">
+                {conversationTitle}
+              </span>
+              {conversationTime && (
+                <span className="shrink-0 text-[11px] text-[#b3add0]">
+                  {conversationTime}
+                </span>
+              )}
             </div>
-          </div>
-        )}
+          ) : (
+            <p className="px-1 text-[12px] text-[#b3add0]">
+              Aún no hay conversaciones.
+            </p>
+          )}
+        </div>
 
-        {/* Agenda */}
-        {agendaItems.length > 0 && (
-          <div className="py-2">
-            <NoraAgendaCard items={agendaItems} />
+        {/* Suggestions */}
+        <div className="space-y-1.5">
+          <p className="px-1 text-[10.5px] font-bold uppercase tracking-wider text-[#b3add0]">
+            Sugerencias
+          </p>
+          <div className="space-y-1.5">
+            {SUGGESTIONS.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                disabled={busy || confirming}
+                onClick={() => handleSend(suggestion)}
+                className="flex w-full items-center gap-2 rounded-lg border border-[#ece8f8] p-2 text-left text-[12px] text-[#4a4470] transition-colors hover:bg-[#f6f4ff] disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#9b5cf0]" />
+                <span className="min-w-0 flex-1">{suggestion}</span>
+              </button>
+            ))}
           </div>
-        )}
+        </div>
+      </aside>
 
-        {/* Query Data Card */}
-        {queryData && (
-          <div className="py-2">
-            <NoraDataCard
-              entityType={queryData.entityType}
-              action={queryData.action}
-              data={queryData.data}
-              summary={queryData.summary}
-            />
-          </div>
-        )}
+      {/* Right chat area */}
+      <div className="flex min-w-0 flex-1 flex-col bg-[#faf9ff]">
+        {/* Thread header */}
+        <div className="flex h-14 shrink-0 flex-col justify-center border-b border-[#ece8f8] bg-card px-5">
+          <p className="truncate text-[15px] font-extrabold text-[#2a2540]">
+            {hasConversation ? conversationTitle : "Nueva conversación"}
+          </p>
+          <p className="truncate text-[12px] text-[#9a8fd0]">
+            {initialContext
+              ? `Contexto: ${initialContext.contextLabel ?? initialContext.contextEntityId}`
+              : "Asistente comercial IA"}
+          </p>
+        </div>
 
-        {/* Inline Proposal Card */}
-        {draftProposal && (
-          <div className="py-3">
-            <NoraProposalCard
-              proposal={draftProposal.proposal}
-              confirming={confirming}
-              confirmation={confirmation}
-              onChange={(proposal) =>
-                setDraftProposal((current) =>
-                  current ? { ...current, proposal } : current
-                )
-              }
-              onConfirm={handleConfirm}
-            />
-          </div>
-        )}
-      </div>
+        {/* Scrollable messages */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-6">
+          {/* Notice Banner */}
+          {notice && (
+            <div className="rounded-[11px] border-l-[3px] border-[#167c4a] bg-[#167c4a]/10 px-3.5 py-2.5 text-[13px] font-semibold text-[#167c4a]">
+              {notice}
+            </div>
+          )}
 
-      {/* Sticky Composer */}
-      <div className="shrink-0 bg-gradient-to-t from-background via-background to-transparent pt-4 pb-2">
-        <div className="mx-auto w-full max-w-3xl">
+          {/* Error Banner */}
+          {error && (
+            <div className="rounded-[11px] border-l-[3px] border-[#b42318] bg-[#b42318]/10 px-3.5 py-2.5 text-[13px] font-semibold text-[#b42318]">
+              {error}
+            </div>
+          )}
+
+          {/* Message List */}
+          <NoraMessageList
+            messages={messages}
+            busy={busy}
+            onRetry={handleRetry}
+            onSend={handleSend}
+          />
+
+          {/* Clarification Options */}
+          {clarificationOptions && clarificationOptions.options && clarificationOptions.options.length > 0 && (
+            <div className="space-y-2 py-2">
+              <p className="text-[13px] font-semibold text-[#4a4470]">
+                Selecciona una opción:
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {clarificationOptions.options.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    disabled={busy}
+                    onClick={() => handleSend(option.label)}
+                    className="rounded-full border border-[#ddd6f7] bg-card px-4 py-2 text-[13px] font-semibold text-[#5a4bc4] transition-colors hover:bg-[#f6f4ff] disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Agenda */}
+          {agendaItems.length > 0 && (
+            <div className="py-2">
+              <NoraAgendaCard items={agendaItems} />
+            </div>
+          )}
+
+          {/* Query Data Card */}
+          {queryData && (
+            <div className="py-2">
+              <NoraDataCard
+                entityType={queryData.entityType}
+                action={queryData.action}
+                data={queryData.data}
+                summary={queryData.summary}
+              />
+            </div>
+          )}
+
+          {/* Inline Proposal Card */}
+          {draftProposal && (
+            <div className="py-3">
+              <NoraProposalCard
+                proposal={draftProposal.proposal}
+                confirming={confirming}
+                confirmation={confirmation}
+                onChange={(proposal) =>
+                  setDraftProposal((current) =>
+                    current ? { ...current, proposal } : current
+                  )
+                }
+                onConfirm={handleConfirm}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Composer */}
+        <div className="shrink-0 px-6 pb-5">
           <NoraComposer disabled={busy || confirming} onSubmit={handleSend} />
         </div>
       </div>

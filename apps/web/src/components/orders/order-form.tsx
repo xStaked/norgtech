@@ -52,7 +52,7 @@ interface OrderFormProps {
 }
 
 const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+  "h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const emptyItem = (): OrderItem => ({
   productId: "",
@@ -538,8 +538,8 @@ function FormSection({
   children: ReactNode;
 }) {
   return (
-    <section className="grid gap-4">
-      <h3 className="text-base font-semibold text-foreground">{title}</h3>
+    <section className="grid gap-4 rounded-[11px] border border-border bg-card p-[18px]">
+      <h3 className="m-0 text-[14.5px] font-extrabold text-foreground">{title}</h3>
       <div className="grid gap-4">{children}</div>
     </section>
   );

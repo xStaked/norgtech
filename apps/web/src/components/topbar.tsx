@@ -1,38 +1,27 @@
 "use client";
 
 import { startTransition } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import {
-  buildBreadcrumbs,
-  findActiveNavItem,
-  getPageTitle,
-} from "@/lib/theme";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
-import { ThemeToggle } from "@/components/theme-toggle";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, ChevronRight } from "lucide-react";
-
-function formatToday() {
-  return new Intl.DateTimeFormat("es-CO", {
-    weekday: "long",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(new Date());
-}
+import {
+  Bell,
+  ChevronDown,
+  LogOut,
+  MapPin,
+  Search,
+  Sparkles,
+  User,
+} from "lucide-react";
 
 export function Topbar() {
-  const pathname = usePathname();
   const router = useRouter();
-
-  const breadcrumbs = buildBreadcrumbs(pathname);
-  const activeItem = findActiveNavItem(pathname);
-  const title = getPageTitle(pathname);
 
   function handleLogout() {
     document.cookie = `${SESSION_COOKIE_NAME}=;path=/;max-age=0`;
@@ -43,60 +32,57 @@ export function Topbar() {
   }
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border/40 bg-background/70 backdrop-blur-xl">
-      <div className="flex flex-col gap-4 px-4 py-4 md:px-6">
-        {/* Breadcrumbs */}
-        <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          {breadcrumbs.map((crumb, index) => (
-            <span key={`${crumb.label}-${index}`} className="flex items-center gap-1.5">
-              {index > 0 && <ChevronRight className="h-3 w-3 opacity-50" />}
-              <span>{crumb.label}</span>
-            </span>
-          ))}
-        </nav>
+    <header className="sticky top-0 z-20 flex h-[60px] items-center gap-3.5 border-b border-border bg-card px-4 md:px-6">
+      {/* Company switcher */}
+      <button className="flex h-9 items-center gap-2 rounded-lg border border-input bg-card px-2.5 text-[12.5px] font-semibold text-secondary-foreground">
+        <MapPin className="h-4 w-4 text-muted-foreground" />
+        <span>Norgtech (NT)</span>
+        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+      </button>
 
-        {/* Title row */}
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-extrabold tracking-tight text-foreground md:text-[28px]">
-              {title}
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              <span>{activeItem?.description ?? "Operacion diaria del CRM"}</span>
-              <span className="text-border">•</span>
-              <span className="capitalize">{formatToday()}</span>
-            </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-
-            <div className="hidden items-center gap-2 rounded-lg border border-border/50 bg-card px-3 py-2 shadow-sm sm:flex">
-              <div className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Sesion
-                </div>
-                <div className="text-sm font-bold text-foreground">Activa</div>
-              </div>
-            </div>
-
-            <DropdownMenu>
-              <DropdownMenuTrigger className="inline-flex h-9 w-9 items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50">
-                <User className="h-5 w-5" />
-                <span className="sr-only">Menu de usuario</span>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleLogout} className="gap-2 text-destructive focus:text-destructive">
-                  <LogOut className="h-4 w-4" />
-                  Cerrar sesion
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
+      {/* Search */}
+      <div className="hidden h-9 max-w-[340px] flex-1 items-center gap-2.5 rounded-lg border border-input bg-muted px-3 text-muted-foreground sm:flex">
+        <Search className="h-4 w-4" />
+        <span className="text-[13px]">Buscar en Norgtech…</span>
+        <span className="ml-auto rounded border border-border px-1.5 py-px text-[11px] text-muted-foreground/70">
+          ⌘K
+        </span>
       </div>
+
+      <div className="flex-1" />
+
+      {/* Nora */}
+      <Link
+        href="/nora"
+        className="flex h-9 items-center gap-2 rounded-lg px-3.5 text-[13px] font-bold text-white"
+        style={{ background: "var(--nora-accent)" }}
+      >
+        <Sparkles className="h-4 w-4" />
+        <span className="hidden sm:inline">Pregúntale a Nora</span>
+      </Link>
+
+      {/* Bell */}
+      <button className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground">
+        <Bell className="h-[18px] w-[18px]" />
+        <span className="absolute right-2 top-1.5 h-[7px] w-[7px] rounded-full border-2 border-card bg-destructive" />
+      </button>
+
+      {/* User */}
+      <DropdownMenu>
+        <DropdownMenuTrigger className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+          <User className="h-[18px] w-[18px]" />
+          <span className="sr-only">Menú de usuario</span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={handleLogout}
+            className="gap-2 text-destructive focus:text-destructive"
+          >
+            <LogOut className="h-4 w-4" />
+            Cerrar sesión
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </header>
   );
 }

@@ -99,7 +99,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 const linkStyle = {
-  color: "#10233f",
+  color: "#0c2c44",
   fontWeight: 700,
   textDecoration: "none",
 } as const;

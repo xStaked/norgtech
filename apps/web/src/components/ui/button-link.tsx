@@ -17,8 +17,8 @@ interface ButtonLinkProps {
 }
 
 const variantClasses: Record<ButtonLinkVariant, string> = {
-  primary: "bg-primary text-primary-foreground border-primary shadow-sm hover:bg-primary/90",
-  secondary: "bg-secondary text-secondary-foreground border-border hover:bg-secondary/80",
+  primary: "bg-primary text-primary-foreground border-primary hover:bg-primary/90",
+  secondary: "bg-card text-secondary-foreground border-input hover:bg-muted",
   ghost: "bg-transparent text-primary border-primary/20 hover:bg-primary/5",
   danger: "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/20",
 };

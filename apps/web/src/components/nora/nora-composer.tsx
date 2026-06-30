@@ -6,12 +6,11 @@ import { cn } from "@/lib/utils";
 
 const MIN_LENGTH = 5;
 
-const placeholderExamples = [
-  "Visité a Acme, confirmaron interés y piden nueva visita…",
-  "Tengo pendiente llamar a Pérez sobre la propuesta…",
+const QUICK_ACTIONS = [
   "¿Qué tengo pendiente hoy?",
-  "El cliente Lago quiere cotización para el próximo viernes…",
-  "Reunión con Distribuidora Norte, quieren cerrar esta semana…",
+  "Registrar una visita",
+  "Crear una cotización",
+  "Resumen del cliente",
 ];
 
 export function NoraComposer({
@@ -22,12 +21,7 @@ export function NoraComposer({
   onSubmit: (value: string) => Promise<void>;
 }) {
   const [value, setValue] = useState("");
-  const [placeholder, setPlaceholder] = useState(placeholderExamples[0]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    setPlaceholder(placeholderExamples[Math.floor(Math.random() * placeholderExamples.length)]);
-  }, []);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -65,46 +59,60 @@ export function NoraComposer({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="relative">
-      <div
-        className={cn(
-          "group flex items-end gap-2 rounded-[1.25rem] border px-4 py-3 shadow-sm transition-all",
-          disabled
-            ? "border-border/20 bg-muted/30 opacity-60"
-            : "border-border/40 bg-card/80 shadow-black/5 backdrop-blur-xl focus-within:border-nora-500/40 focus-within:bg-background focus-within:shadow-md focus-within:shadow-nora-500/10 focus-within:ring-1 focus-within:ring-nora-500/15"
-        )}
-      >
-        <textarea
-          ref={textareaRef}
-          id="nora-message"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          rows={1}
-          placeholder={disabled ? "Nora está pensando…" : placeholder}
-          disabled={disabled}
-          className="flex-1 resize-none bg-transparent py-1.5 text-[15px] leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/40"
-          style={{ minHeight: 48, maxHeight: 200 }}
-          onKeyDown={handleKeyDown}
-        />
-        <button
-          type="submit"
-          disabled={!canSend}
-          className={cn(
-            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-all duration-200",
-            canSend
-              ? "bg-gradient-to-br from-nora-500 to-nora-600 text-white shadow-lg shadow-nora-500/30 hover:scale-110 hover:shadow-nora-500/50"
-              : "cursor-not-allowed text-muted-foreground/20"
-          )}
-          aria-label="Enviar mensaje"
-        >
-          <Send className="h-[18px] w-[18px]" />
-        </button>
+    <div className="space-y-2.5">
+      {/* Quick-action pills */}
+      <div className="flex flex-wrap gap-2">
+        {QUICK_ACTIONS.map((action) => (
+          <button
+            key={action}
+            type="button"
+            disabled={disabled}
+            onClick={() => void onSubmit(action)}
+            className="rounded-full border border-[#ece8f8] bg-card px-3 py-1.5 text-[12px] text-[#5a4bc4] transition-colors hover:bg-[#f6f4ff] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {action}
+          </button>
+        ))}
       </div>
-      {showLengthHint && (
-        <p className="mt-1.5 px-2 text-xs text-destructive">
-          Escribe al menos {MIN_LENGTH} caracteres
-        </p>
-      )}
-    </form>
+
+      <form onSubmit={handleSubmit} className="relative">
+        <div
+          className={cn(
+            "flex items-center gap-2 rounded-[24px] border border-[#ddd6f7] bg-card px-4 shadow-[0_4px_16px_rgba(109,79,240,.10)] transition-all",
+            disabled && "opacity-60",
+          )}
+        >
+          <textarea
+            ref={textareaRef}
+            id="nora-message"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            rows={1}
+            placeholder={disabled ? "Nora está pensando…" : "Escríbele a Nora…"}
+            disabled={disabled}
+            className="flex-1 resize-none bg-transparent py-3 text-[13.5px] leading-relaxed text-[#2a2540] outline-none placeholder:text-[#9a8fd0]"
+            style={{ minHeight: 48, maxHeight: 200 }}
+            onKeyDown={handleKeyDown}
+          />
+          <button
+            type="submit"
+            disabled={!canSend}
+            className={cn(
+              "flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full text-white transition-all duration-200",
+              canSend ? "hover:opacity-90" : "cursor-not-allowed opacity-40",
+            )}
+            style={{ background: "linear-gradient(135deg,#6d4ff0,#9b5cf0)" }}
+            aria-label="Enviar mensaje"
+          >
+            <Send className="h-[17px] w-[17px]" />
+          </button>
+        </div>
+        {showLengthHint && (
+          <p className="mt-1.5 px-2 text-xs text-[#b42318]">
+            Escribe al menos {MIN_LENGTH} caracteres
+          </p>
+        )}
+      </form>
+    </div>
   );
 }

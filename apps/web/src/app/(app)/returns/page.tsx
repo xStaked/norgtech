@@ -60,7 +60,7 @@ const columns: readonly DataTableColumn<ReturnRow>[] = [
     render: (row) => (
       <Link
         href={`/customers/${row.customerId}`}
-        style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}
+        style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}
       >
         {row.customerName}
       </Link>
@@ -73,7 +73,7 @@ const columns: readonly DataTableColumn<ReturnRow>[] = [
       row.invoiceId ? (
         <Link
           href={`/invoices/${row.invoiceId}`}
-          style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}
+          style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}
         >
           {row.invoiceNumber}
         </Link>

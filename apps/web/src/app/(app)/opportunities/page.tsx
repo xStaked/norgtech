@@ -76,10 +76,10 @@ const columns: readonly DataTableColumn<OpportunityRow>[] = [
     header: "Oportunidad",
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
-        <Link href={`/opportunities/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+        <Link href={`/opportunities/${row.id}`} style={{ fontWeight: 700, color: "#0c2c44", textDecoration: "none" }}>
           {row.title}
         </Link>
-        <span style={{ fontSize: 13, color: "#52637a" }}>ID {row.id.slice(-8)}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>ID {row.id.slice(-8)}</span>
       </div>
     ),
   },
@@ -97,11 +97,11 @@ const columns: readonly DataTableColumn<OpportunityRow>[] = [
     header: "Cliente",
     render: (row) =>
       row.customerId ? (
-        <Link href={`/customers/${row.customerId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+        <Link href={`/customers/${row.customerId}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}>
           {row.customerName}
         </Link>
       ) : (
-        <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+        <span style={{ color: "#6b7787" }}>Sin cliente</span>
       ),
   },
   {
@@ -110,7 +110,7 @@ const columns: readonly DataTableColumn<OpportunityRow>[] = [
     align: "right",
     render: (row) =>
       row.estimatedValue !== null ? currencyFormatter.format(row.estimatedValue) : (
-        <span style={{ color: "#6b7c93" }}>Sin estimación</span>
+        <span style={{ color: "#6b7787" }}>Sin estimación</span>
       ),
   },
   {
@@ -123,7 +123,7 @@ const columns: readonly DataTableColumn<OpportunityRow>[] = [
     header: "Detalle",
     align: "right",
     render: (row) => (
-      <Link href={`/opportunities/${row.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 700 }}>
+      <Link href={`/opportunities/${row.id}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 700 }}>
         Abrir
       </Link>
     ),

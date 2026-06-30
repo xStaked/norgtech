@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { NoraChat } from "@/components/nora/nora-chat";
-import { PageHeader } from "@/components/ui/page-header";
 import { canAccess } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth.server";
 
@@ -39,29 +38,8 @@ export default async function LauraPage({
       : null;
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      <div className="mx-auto w-full max-w-3xl shrink-0">
-        <PageHeader
-          eyebrow="Asistente comercial"
-          title="Nora"
-          description="Conversá en lenguaje natural y Nora arma los registros por vos."
-        />
-      </div>
-
-      <div className="min-h-0 flex-1">
-        <NoraChat initialContext={initialContext} />
-      </div>
-
-      <style>{`
-        @keyframes noraBounce {
-          0%, 80%, 100% { transform: translateY(0); }
-          40% { transform: translateY(-6px); }
-        }
-        @keyframes noraPulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-      `}</style>
+    <div className="h-full min-h-0">
+      <NoraChat initialContext={initialContext} />
     </div>
   );
 }

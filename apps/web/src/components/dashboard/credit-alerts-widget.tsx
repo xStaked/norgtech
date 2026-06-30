@@ -37,7 +37,7 @@ export function CreditAlertsWidget({ companyId }: CreditAlertsWidgetProps) {
 
     apiFetchClient(query)
       .then((r) => r.json())
-      .then(setAlerts)
+      .then((data) => setAlerts(Array.isArray(data) ? data : null))
       .catch(() => setAlerts(null));
   }, [companyId]);
 
@@ -65,7 +65,7 @@ export function CreditAlertsWidget({ companyId }: CreditAlertsWidgetProps) {
               style={{ textDecoration: "none" }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "#10233f" }}>
+                <span style={{ fontWeight: 600, fontSize: "0.875rem", color: "#0c2c44" }}>
                   {alert.displayName}
                 </span>
                 <span
@@ -101,7 +101,7 @@ export function CreditAlertsWidget({ companyId }: CreditAlertsWidgetProps) {
                   justifyContent: "space-between",
                   marginTop: 6,
                   fontSize: "0.75rem",
-                  color: "#6b7c93",
+                  color: "#6b7787",
                 }}
               >
                 <span>Usado: {fmt(alert.currentBalance)}</span>

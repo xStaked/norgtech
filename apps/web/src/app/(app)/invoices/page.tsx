@@ -108,7 +108,7 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
     render: (row) => (
       <Link
         href={`/invoices/${row.id}`}
-        style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 700 }}
+        style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 700 }}
       >
         {row.invoiceNumber}
       </Link>
@@ -121,7 +121,7 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
       row.companyPrefix ? (
         <span style={{ fontSize: 13, fontWeight: 600 }}>{row.companyPrefix}</span>
       ) : (
-        <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
+        <span style={{ fontSize: 13, color: "#6b7787" }}>—</span>
       ),
   },
   {
@@ -130,7 +130,7 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
     render: (row) => (
       <Link
         href={`/customers/${row.customerId}`}
-        style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}
+        style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}
       >
         {row.customerName}
       </Link>

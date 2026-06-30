@@ -1,6 +1,5 @@
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageHeader } from "@/components/ui/page-header";
-import { SectionCard } from "@/components/ui/section-card";
 import { apiFetch } from "@/lib/api.server";
 import { OrderForm } from "@/components/orders/order-form";
 
@@ -51,14 +50,12 @@ export default async function NewOrderPage() {
           </ButtonLink>
         }
       />
-      <SectionCard>
-        <OrderForm
-          customers={customers}
-          opportunities={opportunities}
-          products={products}
-          quotes={quotes}
-        />
-      </SectionCard>
+      <OrderForm
+        customers={customers}
+        opportunities={opportunities}
+        products={products}
+        quotes={quotes}
+      />
     </div>
   );
 }

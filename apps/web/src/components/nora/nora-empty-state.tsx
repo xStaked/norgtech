@@ -1,6 +1,6 @@
 "use client";
 
-import { MessageSquare } from "lucide-react";
+import { Sparkles } from "lucide-react";
 
 const exampleMessages = [
   "Visité a Acme, confirmaron interés y piden nueva visita",
@@ -15,23 +15,22 @@ interface NoraEmptyStateProps {
 export function NoraEmptyState({ onSend }: NoraEmptyStateProps) {
   return (
     <div className="flex flex-col items-center gap-6 px-6 py-10">
-      {/* Icon with glow */}
-      <div className="relative">
-        <div className="absolute inset-0 rounded-2xl bg-nora-500/20 blur-xl animate-pulse" />
-        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-nora-500 to-nora-600 shadow-lg shadow-nora-500/25">
-          <MessageSquare className="h-8 w-8 text-white" strokeWidth={2} />
-        </div>
+      <div
+        className="flex h-16 w-16 items-center justify-center rounded-2xl shadow-[0_8px_24px_rgba(109,79,240,.25)]"
+        style={{ background: "linear-gradient(135deg,#6d4ff0,#9b5cf0)" }}
+      >
+        <Sparkles className="h-8 w-8 text-white" strokeWidth={2} />
       </div>
 
       <div className="text-center">
-        <h3 className="text-xl font-bold text-foreground">Hola, soy Nora</h3>
-        <p className="mt-1.5 max-w-[280px] text-sm leading-relaxed text-muted-foreground">
+        <h3 className="text-xl font-extrabold text-[#2a1f6e]">Hola, soy Nora</h3>
+        <p className="mt-1.5 max-w-[280px] text-sm leading-relaxed text-[#9a8fd0]">
           Tu asistente comercial. Contame qué pasó con un cliente y yo armo el registro por vos.
         </p>
       </div>
 
       <div className="w-full max-w-sm space-y-2.5">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-[#b3add0]">
           Probá con un ejemplo:
         </span>
         {exampleMessages.map((example) => (
@@ -39,9 +38,10 @@ export function NoraEmptyState({ onSend }: NoraEmptyStateProps) {
             key={example}
             type="button"
             onClick={() => onSend(example)}
-            className="w-full rounded-xl border border-border/50 bg-card px-4 py-3 text-left text-sm text-muted-foreground transition-all hover:border-nora-500/40 hover:bg-nora-500/5 hover:text-foreground focus:border-nora-500/40 focus:ring-2 focus:ring-nora-500/20 focus:outline-none"
+            className="flex w-full items-center gap-2 rounded-xl border border-[#ece8f8] bg-card px-4 py-3 text-left text-sm text-[#4a4470] transition-colors hover:bg-[#f6f4ff] focus:outline-none focus:ring-2 focus:ring-[#ddd6f7]"
           >
-            {example}
+            <Sparkles className="h-4 w-4 shrink-0 text-[#9b5cf0]" />
+            <span className="min-w-0 flex-1">{example}</span>
           </button>
         ))}
       </div>

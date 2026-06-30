@@ -54,7 +54,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 const linkStyle = {
-  color: "#2d6cdf",
+  color: "#0f5c8a",
   textDecoration: "none",
   fontWeight: 700,
 } as const;
@@ -66,13 +66,13 @@ const columns: readonly DataTableColumn<VisitRow>[] = [
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
         {row.customerId ? (
-          <Link href={`/customers/${row.customerId}`} style={{ ...linkStyle, color: "#10233f" }}>
+          <Link href={`/customers/${row.customerId}`} style={{ ...linkStyle, color: "#0c2c44" }}>
             {row.customerName}
           </Link>
         ) : (
-          <span style={{ fontWeight: 700, color: "#10233f" }}>Sin cliente</span>
+          <span style={{ fontWeight: 700, color: "#0c2c44" }}>Sin cliente</span>
         )}
-        <span style={{ fontSize: 13, color: "#52637a" }}>Visita #{row.id.slice(-6)}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>Visita #{row.id.slice(-6)}</span>
       </div>
     ),
   },
@@ -94,7 +94,7 @@ const columns: readonly DataTableColumn<VisitRow>[] = [
     key: "summary",
     header: "Resumen",
     render: (row) => (
-      <span style={{ color: "#52637a" }}>
+      <span style={{ color: "#44556e" }}>
         {row.summary || "Sin resumen registrado"}
       </span>
     ),

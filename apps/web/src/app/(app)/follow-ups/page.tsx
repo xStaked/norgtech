@@ -63,7 +63,7 @@ const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
 });
 
 const linkStyle = {
-  color: "#2d6cdf",
+  color: "#0f5c8a",
   textDecoration: "none",
   fontWeight: 700,
 } as const;
@@ -74,10 +74,10 @@ const columns: readonly DataTableColumn<FollowUpRow>[] = [
     header: "Tarea",
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
-        <Link href={`/follow-ups/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+        <Link href={`/follow-ups/${row.id}`} style={{ fontWeight: 700, color: "#0c2c44", textDecoration: "none" }}>
           {row.title}
         </Link>
-        <span style={{ fontSize: 13, color: "#52637a" }}>{typeLabels[row.type] ?? row.type}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>{typeLabels[row.type] ?? row.type}</span>
       </div>
     ),
   },
@@ -99,7 +99,7 @@ const columns: readonly DataTableColumn<FollowUpRow>[] = [
           {row.customerName}
         </Link>
       ) : (
-        <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+        <span style={{ color: "#6b7787" }}>Sin cliente</span>
       ),
   },
   {

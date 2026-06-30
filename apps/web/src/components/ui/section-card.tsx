@@ -21,7 +21,7 @@ export function SectionCard({
 }: SectionCardProps) {
   return (
     <section
-      className={`rounded-xl border border-border/40 bg-card/60 shadow-sm backdrop-blur-sm ${className ?? ""}`}
+      className={`rounded-[11px] border border-border bg-card ${className ?? ""}`}
       style={{ padding, ...style }}
     >
       {title || description || actions ? (

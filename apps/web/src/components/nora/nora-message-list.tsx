@@ -28,7 +28,7 @@ export function NoraMessageList({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-4">
       {messages.map((message) => (
         <NoraEntryCard key={message.id} message={message} />
       ))}
@@ -39,7 +39,7 @@ export function NoraMessageList({
             key={`retry-${message.id}`}
             type="button"
             onClick={() => onRetry!(message.content)}
-            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs font-bold text-destructive transition-colors hover:bg-destructive/20"
+            className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-[#b42318]/40 bg-[#b42318]/10 px-3 py-1.5 text-xs font-bold text-[#b42318] transition-colors hover:bg-[#b42318]/20"
           >
             Reintentar
           </button>

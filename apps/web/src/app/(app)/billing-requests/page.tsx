@@ -122,7 +122,7 @@ export default async function BillingRequestsPage() {
       render: (row) => (
         <div style={{ display: "grid", gap: 4 }}>
           <strong>Solicitud #{row.id.slice(-6)}</strong>
-          <span style={{ fontSize: 13, color: "#52637a" }}>{row.notes || "Sin notas registradas"}</span>
+          <span style={{ fontSize: 13, color: "#44556e" }}>{row.notes || "Sin notas registradas"}</span>
         </div>
       ),
     },
@@ -131,11 +131,11 @@ export default async function BillingRequestsPage() {
       header: "Cliente",
       render: (row) =>
         row.customerId ? (
-          <Link href={`/customers/${row.customerId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+          <Link href={`/customers/${row.customerId}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}>
             {row.customerName}
           </Link>
         ) : (
-          <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+          <span style={{ color: "#6b7787" }}>Sin cliente</span>
         ),
     },
     {
@@ -145,7 +145,7 @@ export default async function BillingRequestsPage() {
         row.companyPrefix ? (
           <span style={{ fontSize: 13, fontWeight: 600 }}>{row.companyPrefix}</span>
         ) : (
-          <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
+          <span style={{ fontSize: 13, color: "#6b7787" }}>—</span>
         ),
     },
     {
@@ -154,19 +154,19 @@ export default async function BillingRequestsPage() {
       render: (row) => {
         if (row.quoteId) {
           return (
-            <Link href={`/quotes/${row.quoteId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+            <Link href={`/quotes/${row.quoteId}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}>
               {sourceTypeLabels[row.sourceType] ?? row.sourceType} #{row.quoteId.slice(-6)}
             </Link>
           );
         }
         if (row.orderId) {
           return (
-            <Link href={`/orders/${row.orderId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+            <Link href={`/orders/${row.orderId}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}>
               {sourceTypeLabels[row.sourceType] ?? row.sourceType} #{row.orderId.slice(-6)}
             </Link>
           );
         }
-        return <span style={{ color: "#6b7c93" }}>{sourceTypeLabels[row.sourceType] ?? row.sourceType}</span>;
+        return <span style={{ color: "#6b7787" }}>{sourceTypeLabels[row.sourceType] ?? row.sourceType}</span>;
       },
     },
     {
@@ -174,11 +174,11 @@ export default async function BillingRequestsPage() {
       header: "Oportunidad",
       render: (row) =>
         row.opportunityId ? (
-          <Link href={`/opportunities/${row.opportunityId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+          <Link href={`/opportunities/${row.opportunityId}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}>
             {row.opportunityTitle}
           </Link>
         ) : (
-          <span style={{ color: "#6b7c93" }}>Sin oportunidad</span>
+          <span style={{ color: "#6b7787" }}>Sin oportunidad</span>
         ),
     },
     {

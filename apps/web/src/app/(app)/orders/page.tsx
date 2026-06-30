@@ -77,10 +77,10 @@ const columns: readonly DataTableColumn<OrderRow>[] = [
     header: "Pedido",
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
-        <Link href={`/orders/${row.id}`} style={{ fontWeight: 700, color: "#10233f", textDecoration: "none" }}>
+        <Link href={`/orders/${row.id}`} style={{ fontWeight: 700, color: "#0c2c44", textDecoration: "none" }}>
           Pedido #{row.id.slice(-6)}
         </Link>
-        <span style={{ fontSize: 13, color: "#52637a" }}>{dateFormatter.format(new Date(row.createdAt))}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>{dateFormatter.format(new Date(row.createdAt))}</span>
       </div>
     ),
   },
@@ -98,11 +98,11 @@ const columns: readonly DataTableColumn<OrderRow>[] = [
     header: "Cliente",
     render: (row) =>
       row.customerId ? (
-        <Link href={`/customers/${row.customerId}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 600 }}>
+        <Link href={`/customers/${row.customerId}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 600 }}>
           {row.customerName}
         </Link>
       ) : (
-        <span style={{ color: "#6b7c93" }}>Sin cliente</span>
+        <span style={{ color: "#6b7787" }}>Sin cliente</span>
       ),
   },
   {
@@ -110,11 +110,11 @@ const columns: readonly DataTableColumn<OrderRow>[] = [
     header: "Fecha comprometida",
     render: (row) =>
       row.committedDeliveryDate ? (
-        <span style={{ fontSize: 13, color: "#10233f" }}>
+        <span style={{ fontSize: 13, color: "#0c2c44" }}>
           {dateFormatter.format(new Date(row.committedDeliveryDate))}
         </span>
       ) : (
-        <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
+        <span style={{ fontSize: 13, color: "#6b7787" }}>—</span>
       ),
   },
   {
@@ -136,7 +136,7 @@ const columns: readonly DataTableColumn<OrderRow>[] = [
       row.companyPrefix ? (
         <span style={{ fontSize: 13, fontWeight: 600 }}>{row.companyPrefix}</span>
       ) : (
-        <span style={{ fontSize: 13, color: "#6b7c93" }}>—</span>
+        <span style={{ fontSize: 13, color: "#6b7787" }}>—</span>
       ),
   },
   {
@@ -144,7 +144,7 @@ const columns: readonly DataTableColumn<OrderRow>[] = [
     header: "Detalle",
     align: "right",
     render: (row) => (
-      <Link href={`/orders/${row.id}`} style={{ color: "#2d6cdf", textDecoration: "none", fontWeight: 700 }}>
+      <Link href={`/orders/${row.id}`} style={{ color: "#0f5c8a", textDecoration: "none", fontWeight: 700 }}>
         Abrir
       </Link>
     ),
@@ -262,9 +262,9 @@ function FilterLink({ label, active, href }: { label: string; active: boolean; h
         fontSize: 13,
         fontWeight: 600,
         textDecoration: "none",
-        backgroundColor: active ? "#10233f" : "#eef3f8",
-        color: active ? "#ffffff" : "#52637a",
-        border: `1px solid ${active ? "#10233f" : "#dbe4ef"}`,
+        backgroundColor: active ? "#0c2c44" : "#eef3f8",
+        color: active ? "#ffffff" : "#44556e",
+        border: `1px solid ${active ? "#0c2c44" : "#dbe4ef"}`,
       }}
     >
       {label}

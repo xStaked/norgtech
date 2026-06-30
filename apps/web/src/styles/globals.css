@@ -5,7 +5,7 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  --font-sans: "Poppins", "Segoe UI", "Helvetica Neue", sans-serif;
+  --font-sans: "Hanken Grotesk", "Segoe UI", "Helvetica Neue", sans-serif;
   --font-mono: "SFMono-Regular", "SF Mono", Consolas, monospace;
 
   /* Nora brand colors */
@@ -51,11 +51,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
 button,
 input,
 select,
@@ -65,7 +60,7 @@ textarea {
 
 /* Selection styling */
 ::selection {
-  background: rgba(99, 102, 241, 0.3);
+  background: rgba(46, 163, 218, 0.25);
 }
 
 @theme inline {
@@ -110,76 +105,44 @@ textarea {
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ── Dark Mode (Default) ── Norgtech Theme */
-:root {
-  --background: #0b0f19;
-  --foreground: #f1f5f9;
-  --card: #111827;
-  --card-foreground: #f1f5f9;
-  --popover: #111827;
-  --popover-foreground: #f1f5f9;
-  --primary: #2d6cdf;
-  --primary-foreground: #ffffff;
-  --secondary: #1e293b;
-  --secondary-foreground: #e2e8f0;
-  --muted: #1e293b;
-  --muted-foreground: #94a3b8;
-  --accent: #6366f1;
-  --accent-foreground: #ffffff;
-  --destructive: #ef4444;
-  --border: rgba(255, 255, 255, 0.08);
-  --input: rgba(255, 255, 255, 0.08);
-  --ring: #2d6cdf;
-  --chart-1: #2d6cdf;
-  --chart-2: #6366f1;
-  --chart-3: #8b5cf6;
-  --chart-4: #a78bfa;
-  --chart-5: #c4b5fd;
-  --radius: 0.625rem;
-  --sidebar: #0f172a;
-  --sidebar-foreground: #e2e8f0;
-  --sidebar-primary: #2d6cdf;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #1e293b;
-  --sidebar-accent-foreground: #e2e8f0;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #2d6cdf;
-}
-
-/* ── Light Mode ── */
+/* ── Norgtech Enterprise theme (light-only) ── */
+:root,
 .light,
 :root.light {
-  --background: #f4f7fb;
-  --foreground: #10233f;
+  --background: #f4f6f8;
+  --foreground: #0c2c44;
   --card: #ffffff;
-  --card-foreground: #10233f;
+  --card-foreground: #0c2c44;
   --popover: #ffffff;
-  --popover-foreground: #10233f;
-  --primary: #10233f;
+  --popover-foreground: #0c2c44;
+  --primary: #0f5c8a;
   --primary-foreground: #ffffff;
-  --secondary: #eef3f8;
-  --secondary-foreground: #10233f;
-  --muted: #eef3f8;
-  --muted-foreground: #52637a;
-  --accent: #2d6cdf;
+  --secondary: #eef1f6;
+  --secondary-foreground: #44556e;
+  --muted: #f4f6f9;
+  --muted-foreground: #6b7787;
+  --accent: #2ea3da;
   --accent-foreground: #ffffff;
-  --destructive: #ba3a2f;
-  --border: #dbe4ef;
-  --input: #dbe4ef;
-  --ring: #2d6cdf;
-  --chart-1: #2d6cdf;
-  --chart-2: #6366f1;
-  --chart-3: #8b5cf6;
-  --chart-4: #a78bfa;
-  --chart-5: #c4b5fd;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #10233f;
-  --sidebar-primary: #10233f;
+  --destructive: #b42318;
+  --border: #e4e7ec;
+  --input: #dfe3ea;
+  --ring: #2ea3da;
+  --chart-1: #0f5c8a;
+  --chart-2: #2ea3da;
+  --chart-3: #167c4a;
+  --chart-4: #f58221;
+  --chart-5: #6d4ff0;
+  --radius: 0.625rem;
+  --sidebar: #0c2c44;
+  --sidebar-foreground: #a7bdce;
+  --sidebar-primary: #2ea3da;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eef3f8;
-  --sidebar-accent-foreground: #10233f;
-  --sidebar-border: #dbe4ef;
-  --sidebar-ring: #2d6cdf;
+  --sidebar-accent: rgba(255, 255, 255, 0.1);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #2ea3da;
+  /* Nora assistant accent (WhatsApp/Nora surfaces) */
+  --nora-accent: #6d4ff0;
 }
 
 @layer base {
@@ -190,6 +153,6 @@ textarea {
     @apply bg-background text-foreground;
   }
   html {
-    font-family: "Poppins", "Segoe UI", "Helvetica Neue", sans-serif;
+    font-family: "Hanken Grotesk", "Segoe UI", "Helvetica Neue", sans-serif;
   }
 }

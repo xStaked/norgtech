@@ -9,28 +9,33 @@ interface StatusBadgeProps {
 }
 
 const toneClasses: Record<CrmStatusTone, string> = {
-  neutral: "bg-muted text-muted-foreground",
-  info: "bg-blue-500/15 text-blue-400",
-  success: "bg-emerald-500/15 text-emerald-400",
-  warning: "bg-amber-500/15 text-amber-400",
-  danger: "bg-red-500/15 text-red-400",
+  neutral: "bg-[#eef1f5] text-[#6b7787]",
+  info: "bg-[#e6f0f6] text-[#0f5c8a]",
+  success: "bg-[#e7f6ee] text-[#167c4a]",
+  warning: "bg-[#fef1e3] text-[#b8690f]",
+  danger: "bg-[#fcebe9] text-[#b42318]",
 };
 
 const dotClasses: Record<CrmStatusTone, string> = {
-  neutral: "bg-muted-foreground",
-  info: "bg-blue-400",
-  success: "bg-emerald-400",
-  warning: "bg-amber-400",
-  danger: "bg-red-400",
+  neutral: "bg-[#94a3b8]",
+  info: "bg-[#0288c4]",
+  success: "bg-[#00a651]",
+  warning: "bg-[#f58221]",
+  danger: "bg-[#ee1c25]",
 };
 
 export function StatusBadge({ children, tone = "neutral" }: StatusBadgeProps) {
   return (
-    <span className={cn(
-      "inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-bold tracking-wide",
-      toneClasses[tone]
-    )}>
-      <span aria-hidden="true" className={cn("h-2 w-2 rounded-full", dotClasses[tone])} />
+    <span
+      className={cn(
+        "inline-flex items-center gap-[5px] rounded-[5px] px-2 py-0.5 text-[11px] font-bold",
+        toneClasses[tone],
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn("h-[5px] w-[5px] rounded-full", dotClasses[tone])}
+      />
       {children}
     </span>
   );

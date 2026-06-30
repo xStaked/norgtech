@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { KpiCard } from "@/components/dashboard/kpi-card";
-import { ShiftKpiCard } from "@/components/dashboard/shift-kpi-card";
+import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/ui/page-header";
+import { ButtonLink } from "@/components/ui/button-link";
+import { StatCard } from "@/components/ui/stat-card";
+import { SectionCard } from "@/components/ui/section-card";
 import { ActivityList } from "@/components/dashboard/activity-list";
 import { QueueList } from "@/components/dashboard/queue-list";
 import { FeedbackWidget } from "@/components/dashboard/feedback-widget";
@@ -134,22 +135,42 @@ export default async function DashboardPage({
   const sellerGoalsSummary: SellerGoalsSummary | null =
     sellerGoalsResponse?.ok ? await sellerGoalsResponse.json() : null;
 
+  const emailLocal = user?.email?.split("@")[0]?.split(/[._-]/)[0] ?? "";
+  const greetingName = emailLocal
+    ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1)
+    : "Daniel";
+  const today = new Date().toLocaleDateString("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
+
   return (
     <div className="space-y-6">
+      {/* Greeting header */}
+      <PageHeader
+        title={`Buenos días, ${greetingName}`}
+        description={`Resumen comercial · ${today}`}
+        actions={
+          <>
+            <ButtonLink href="/orders" variant="secondary">
+              Exportar
+            </ButtonLink>
+            <ButtonLink href="/orders/new">Nuevo pedido</ButtonLink>
+          </>
+        }
+      />
+
       {/* Company Filter */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      <div className="flex flex-wrap gap-2">
         <Link
           href="/dashboard"
-          style={{
-            padding: "6px 12px",
-            borderRadius: 8,
-            fontSize: 13,
-            fontWeight: 600,
-            textDecoration: "none",
-            backgroundColor: !companyId ? "#10233f" : "#eef3f8",
-            color: !companyId ? "#ffffff" : "#52637a",
-            border: `1px solid ${!companyId ? "#10233f" : "#dbe4ef"}`,
-          }}
+          className={[
+            "rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-colors",
+            !companyId
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-card text-muted-foreground hover:bg-muted",
+          ].join(" ")}
         >
           Todas las empresas
         </Link>
@@ -157,61 +178,44 @@ export default async function DashboardPage({
           <Link
             key={c.id}
             href={`/dashboard?companyId=${c.id}`}
-            style={{
-              padding: "6px 12px",
-              borderRadius: 8,
-              fontSize: 13,
-              fontWeight: 600,
-              textDecoration: "none",
-              backgroundColor: companyId === c.id ? "#10233f" : "#eef3f8",
-              color: companyId === c.id ? "#ffffff" : "#52637a",
-              border: `1px solid ${companyId === c.id ? "#10233f" : "#dbe4ef"}`,
-            }}
+            className={[
+              "rounded-lg border px-3 py-1.5 text-[13px] font-semibold transition-colors",
+              companyId === c.id
+                ? "border-primary bg-primary text-primary-foreground"
+                : "border-border bg-card text-muted-foreground hover:bg-muted",
+            ].join(" ")}
           >
             {c.name} ({c.prefix})
           </Link>
         ))}
       </div>
 
-      {/* Featured KPIs with ShiftCard (Cult UI) */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <ShiftKpiCard
+      {/* KPIs */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
           label="Valor pipeline"
           value={formatKpiValue(summary, "pipelineValue")}
           tone="success"
-          detail="Valor total estimado de oportunidades en todas las etapas del pipeline comercial."
+          meta="Total estimado de oportunidades en pipeline"
         />
-        <ShiftKpiCard
+        <StatCard
           label="Ventas cerradas 30d"
           value={formatKpiValue(summary, "closedDeals")}
           tone="success"
-          detail="Número de oportunidades cerradas como ganadas en los últimos 30 días."
+          meta="Oportunidades ganadas en los últimos 30 días"
         />
-        <ShiftKpiCard
+        <StatCard
+          label="Cotizaciones abiertas"
+          value={formatKpiValue(summary, "openQuotes")}
+          tone="info"
+          meta="Propuestas comerciales vigentes"
+        />
+        <StatCard
           label="Seguimientos pendientes"
           value={formatKpiValue(summary, "pendingFollowUps")}
           tone="danger"
-          detail="Tareas y seguimientos que requieren acción inmediata del equipo comercial."
+          meta="Tareas que requieren acción inmediata"
         />
-      </div>
-
-      {/* Secondary KPIs */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[
-          { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const, icon: <FileText className="h-5 w-5" /> },
-          { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const, icon: <Package className="h-5 w-5" /> },
-          { key: "weeklyVisits" as const, label: "Visitas esta semana", tone: "info" as const, icon: <CalendarDays className="h-5 w-5" /> },
-          { key: "pendingFollowUps" as const, label: "Seguimientos pendientes", tone: "danger" as const, icon: <AlertCircle className="h-5 w-5" /> },
-        ].map((card, index) => (
-          <KpiCard
-            key={card.key}
-            label={card.label}
-            value={formatKpiValue(summary, card.key)}
-            tone={card.tone}
-            icon={card.icon}
-            index={index}
-          />
-        ))}
       </div>
 
       {/* Goals Progress Section */}
@@ -226,90 +230,71 @@ export default async function DashboardPage({
       {/* Main Content Grid */}
       <div className="grid gap-6 lg:grid-cols-[1.5fr_380px]">
         {/* Activity Section */}
-        <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-          <CardHeader className="pb-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg font-bold">Actividad reciente</CardTitle>
-                <CardDescription>
-                  Eventos relevantes generados por cotizaciones, pedidos, visitas y seguimiento.
-                </CardDescription>
-              </div>
-              <Zap className="h-5 w-5 text-muted-foreground/40" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <ActivityList items={summary?.recentActivity ?? []} />
-          </CardContent>
-        </Card>
+        <SectionCard
+          title="Actividad reciente"
+          description="Eventos relevantes generados por cotizaciones, pedidos, visitas y seguimiento."
+          actions={<Zap className="h-5 w-5 text-muted-foreground/40" />}
+        >
+          <ActivityList items={summary?.recentActivity ?? []} />
+        </SectionCard>
 
         {/* Right Column */}
         <div className="space-y-6">
           {/* Queue */}
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg font-bold">Mi cola de trabajo</CardTitle>
-                  <CardDescription>
-                    Próximas visitas y tareas asignadas a ti.
-                  </CardDescription>
-                </div>
-                <Link
-                  href="/agenda"
-                  className="inline-flex h-7 items-center justify-center gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] font-medium whitespace-nowrap transition-all hover:bg-muted hover:text-foreground"
-                >
-                  Ver agenda
-                </Link>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <QueueList items={summary?.myQueue ?? []} />
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="Mi cola de trabajo"
+            description="Próximas visitas y tareas asignadas a ti."
+            actions={
+              <Link
+                href="/agenda"
+                className="inline-flex h-7 items-center justify-center gap-1 rounded-lg px-2.5 text-[0.8rem] font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              >
+                Ver agenda
+              </Link>
+            }
+          >
+            <QueueList items={summary?.myQueue ?? []} />
+          </SectionCard>
 
           {/* Quick Actions */}
-          <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
-            <CardHeader className="pb-4">
-              <CardTitle className="text-lg font-bold">Acciones rápidas</CardTitle>
-              <CardDescription>Atajos a los flujos más frecuentes.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {quickLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="group inline-flex h-8 w-full items-center justify-between gap-1.5 rounded-lg border border-transparent bg-secondary px-2.5 text-sm font-medium whitespace-nowrap text-secondary-foreground transition-all hover:bg-secondary/80"
-                  >
-                    <span className="flex items-center gap-2">
-                      {link.icon}
-                      {link.label}
-                    </span>
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <SectionCard
+            title="Acciones rápidas"
+            description="Atajos a los flujos más frecuentes."
+          >
+            <div className="space-y-2">
+              {quickLinks.map((link) => (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  className="group inline-flex h-9 w-full items-center justify-between gap-1.5 rounded-lg border border-border bg-muted px-2.5 text-sm font-semibold whitespace-nowrap text-foreground transition-colors hover:bg-[#e6f0f6] hover:text-[#0f5c8a]"
+                >
+                  <span className="flex items-center gap-2">
+                    {link.icon}
+                    {link.label}
+                  </span>
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              ))}
+            </div>
+          </SectionCard>
 
           {/* Nora Widget */}
-          <Card className="relative overflow-hidden border-nora-500/20 bg-gradient-to-br from-nora-500/10 to-nora-600/5">
+          <Card className="relative overflow-hidden rounded-[11px] border-border bg-[#f8f6ff]">
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-nora-300">Nora</h3>
+                  <h3 className="text-sm font-bold text-[#4f46e5]">Nora</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Tu asistente comercial inteligente.
                   </p>
                 </div>
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-nora-500/20">
-                  <Zap className="h-4 w-4 text-nora-400" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#ece9ff]">
+                  <Zap className="h-4 w-4 text-[#6366f1]" />
                 </div>
               </div>
               <Link
                 href="/nora"
-                className="mt-4 inline-flex h-8 w-full items-center justify-center gap-1.5 rounded-lg border border-transparent bg-nora-600 px-2.5 text-sm font-medium whitespace-nowrap text-white transition-all hover:bg-nora-500"
+                className="mt-4 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-lg bg-[#6366f1] px-2.5 text-sm font-semibold whitespace-nowrap text-white transition-colors hover:bg-[#4f46e5]"
               >
                 Abrir conversación
               </Link>

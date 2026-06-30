@@ -48,6 +48,14 @@ export class AuthService {
     };
   }
 
+  async me(userId: string) {
+    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !user.active) {
+      throw new UnauthorizedException("User not found");
+    }
+    return { id: user.id, name: user.name, email: user.email, role: user.role };
+  }
+
   async mintScopedToken(userId: string): Promise<string> {
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
     if (!user || !user.active) {

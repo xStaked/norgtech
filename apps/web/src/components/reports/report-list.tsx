@@ -28,8 +28,8 @@ const columns: readonly DataTableColumn<ReportListItem>[] = [
     header: "Reporte",
     render: (row) => (
       <div style={{ display: "grid", gap: 4 }}>
-        <span style={{ fontWeight: 700, color: "#10233f" }}>{row.title}</span>
-        <span style={{ fontSize: 13, color: "#52637a" }}>ID #{row.id.slice(-6)}</span>
+        <span style={{ fontWeight: 700, color: "#0c2c44" }}>{row.title}</span>
+        <span style={{ fontSize: 13, color: "#44556e" }}>ID #{row.id.slice(-6)}</span>
       </div>
     ),
   },
@@ -40,30 +40,30 @@ const columns: readonly DataTableColumn<ReportListItem>[] = [
       row.customerId ? (
         <Link
           href={`/customers/${row.customerId}`}
-          style={{ color: "#2d6cdf", fontWeight: 700, textDecoration: "none" }}
+          style={{ color: "#0f5c8a", fontWeight: 700, textDecoration: "none" }}
         >
           {row.customerName}
         </Link>
       ) : (
-        <span style={{ color: "#52637a" }}>Sin cliente</span>
+        <span style={{ color: "#44556e" }}>Sin cliente</span>
       ),
   },
   {
     key: "creator",
     header: "Generado por",
-    render: (row) => <span style={{ color: "#52637a" }}>{row.creatorName ?? "—"}</span>,
+    render: (row) => <span style={{ color: "#44556e" }}>{row.creatorName ?? "—"}</span>,
   },
   {
     key: "createdAt",
     header: "Fecha",
-    render: (row) => <span style={{ color: "#52637a" }}>{dateFormatter.format(new Date(row.createdAt))}</span>,
+    render: (row) => <span style={{ color: "#44556e" }}>{dateFormatter.format(new Date(row.createdAt))}</span>,
   },
   {
     key: "detail",
     header: "Detalle",
     align: "right",
     render: (row) => (
-      <Link href={`/reports/${row.id}`} style={{ color: "#2d6cdf", fontWeight: 700, textDecoration: "none" }}>
+      <Link href={`/reports/${row.id}`} style={{ color: "#0f5c8a", fontWeight: 700, textDecoration: "none" }}>
         Abrir
       </Link>
     ),

@@ -35,7 +35,7 @@ const stageLabels: Record<string, string> = {
 };
 
 const stageColors: Record<string, string> = {
-  prospecto: "#6b7c93",
+  prospecto: "#6b7787",
   contacto: "#3498db",
   visita: "#9b59b6",
   cotizacion: "#f39c12",
@@ -75,7 +75,7 @@ export default async function OpportunityDetailPage({
           <span
             className="inline-flex items-center rounded-md px-3 py-1 text-sm font-semibold text-white"
             style={{
-              backgroundColor: stageColors[opportunity.stage] || "#6b7c93",
+              backgroundColor: stageColors[opportunity.stage] || "#6b7787",
             }}
           >
             {stageLabels[opportunity.stage] || opportunity.stage}

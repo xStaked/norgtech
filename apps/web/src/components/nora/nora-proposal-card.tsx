@@ -625,7 +625,7 @@ export function NoraProposalCard({
             <TextField label="Nombre para mostrar" value={proposal.blocks.customer.displayName ?? ""} onChange={(displayName) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, displayName } : undefined } }))} disabled={confirming} />
             <TextField label="Telefono" value={proposal.blocks.customer.phone ?? ""} onChange={(phone) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, phone } : undefined } }))} disabled={confirming} />
             <TextField label="Email" value={proposal.blocks.customer.email ?? ""} onChange={(email) => updateProposal((draft) => ({ ...draft, blocks: { ...draft.blocks, customer: draft.blocks.customer ? { ...draft.blocks.customer, email } : undefined } }))} disabled={confirming} />
-            {proposal.blocks.customer.id && <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>ID: {proposal.blocks.customer.id}</p>}
+            {proposal.blocks.customer.id && <p style={{ fontSize: 12, color: "#6b7787", margin: 0 }}>ID: {proposal.blocks.customer.id}</p>}
           </NoraProposalBlock>
         )}
 
@@ -655,7 +655,7 @@ export function NoraProposalCard({
           >
             {proposal.blocks.quote.items && proposal.blocks.quote.items.length > 0 && (
               <div style={{ display: "grid", gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Items ({proposal.blocks.quote.items.length})</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7787" }}>Items ({proposal.blocks.quote.items.length})</span>
                 {proposal.blocks.quote.items.map((item, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "4px 0", borderBottom: "1px solid #eee" }}>
                     Producto: {item.productId} — Cant: {item.quantity} — ${item.unitPrice?.toLocaleString("es-AR") ?? "0"}
@@ -678,7 +678,7 @@ export function NoraProposalCard({
           >
             {proposal.blocks.order.items && proposal.blocks.order.items.length > 0 && (
               <div style={{ display: "grid", gap: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7280" }}>Items ({proposal.blocks.order.items.length})</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#6b7787" }}>Items ({proposal.blocks.order.items.length})</span>
                 {proposal.blocks.order.items.map((item, i) => (
                   <div key={i} style={{ fontSize: 13, padding: "4px 0" }}>Producto: {item.productId} — Cant: {item.quantity} — ${item.unitPrice?.toLocaleString("es-AR") ?? "0"}</div>
                 ))}

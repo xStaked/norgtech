@@ -8,7 +8,14 @@ import {
   type NavGroup,
   type UserRole,
 } from "@/lib/theme";
-import { Separator } from "@/components/ui/separator";
+import { ROLE_LABELS } from "@/lib/auth";
+
+function getInitials(name: string) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 const noraNavItem: NavItem = {
   href: "/nora",
@@ -19,66 +26,54 @@ const noraNavItem: NavItem = {
   requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"],
 };
 
+const groupTitles: Record<NavGroup["label"], string> = {
+  Operacion: "Operación",
+  Comercial: "Comercial",
+  Catalogo: "Catálogo",
+  Admin: "Administración",
+};
+
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavSection({
-  group,
-  pathname,
-}: {
-  group: NavGroup;
-  pathname: string;
-}) {
+function NavSection({ group, pathname }: { group: NavGroup; pathname: string }) {
   return (
-    <div className="space-y-2.5">
-      <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/50">
-        {group.label}
+    <div>
+      <div className="px-2.5 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-[0.09em] text-[#5f7d96]">
+        {groupTitles[group.label] ?? group.label}
       </div>
-      <div className="space-y-0.5">
-        {group.items.map((item) => (
-          <SidebarNavItem
-            key={item.href}
-            item={item}
-            active={isActive(pathname, item.href)}
-          />
-        ))}
-      </div>
+      {group.items.map((item) => (
+        <SidebarNavItem
+          key={item.href}
+          item={item}
+          active={isActive(pathname, item.href)}
+        />
+      ))}
     </div>
   );
 }
 
-function SidebarNavItem({
-  item,
-  active,
-}: {
-  item: NavItem;
-  active: boolean;
-}) {
+function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
       href={item.href}
-      className={`group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+      className={
         active
-          ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
-          : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
-      }`}
+          ? "mb-0.5 flex items-center gap-3 rounded-r-md border-l-[3px] border-[#2ea3da] bg-white/10 py-2 pl-2 pr-2.5 text-[13px] font-bold text-white"
+          : "mb-0.5 flex items-center gap-3 rounded-md py-2 pl-3 pr-2.5 text-[13px] font-medium text-[#a7bdce] transition-colors hover:bg-white/[0.06] hover:text-white"
+      }
     >
       <span
-        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-xs font-bold tracking-wide ${
+        className={
           active
-            ? "bg-sidebar-primary text-sidebar-primary-foreground"
-            : "bg-sidebar-accent/50 text-sidebar-foreground/70 group-hover:bg-sidebar-accent group-hover:text-sidebar-accent-foreground"
-        }`}
+            ? "flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[#2ea3da] text-[10px] font-bold text-white"
+            : "flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-white/[0.06] text-[10px] font-bold text-[#7fa9c4]"
+        }
       >
         {item.shortLabel}
       </span>
-      <div className="flex min-w-0 flex-col">
-        <span className="truncate text-sm font-semibold">{item.label}</span>
-        <span className="truncate text-[11px] text-sidebar-foreground/50">
-          {item.description}
-        </span>
-      </div>
+      <span className="truncate">{item.label}</span>
     </Link>
   );
 }
@@ -98,46 +93,69 @@ function filterNavGroups(role: UserRole) {
     .filter((group) => group.items.length > 0);
 }
 
-export function SidebarNav({ userRole }: { userRole: UserRole | null }) {
+export function SidebarNav({
+  userRole,
+  userName,
+}: {
+  userRole: UserRole | null;
+  userName: string | null;
+}) {
   const pathname = usePathname();
   const visibleGroups = userRole ? filterNavGroups(userRole) : [];
+  const displayName = userName ?? "Usuario";
+  const roleLabel = userRole ? ROLE_LABELS[userRole] : "";
 
   return (
-    <div className="flex h-full flex-col gap-5 p-4">
+    <div className="flex h-full flex-col pb-3.5">
       {/* Brand */}
-      <div className="flex items-center gap-3 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/50 p-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-400 to-yellow-300 text-lg font-extrabold text-brand-800">
-          NT
-        </div>
-        <div className="min-w-0">
-          <div className="text-sm font-bold text-sidebar-foreground">
-            Norgtech CRM
+      <div className="px-[18px] pt-4">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-white p-1">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/norgtech-flame.png"
+              alt="Norgtech"
+              className="h-full w-full object-contain"
+            />
           </div>
-          <div className="text-xs text-sidebar-foreground/60">
-            Operacion comercial
+          <div>
+            <div className="text-[17px] font-extrabold leading-none tracking-[-0.03em] text-white">
+              norgtech
+            </div>
+            <div className="mt-0.5 text-[9.5px] font-semibold tracking-[0.04em] text-[#7fa9c4]">
+              ERP COMERCIAL
+            </div>
           </div>
         </div>
+        <div
+          className="mt-3.5 h-[3px] rounded-sm"
+          style={{
+            background:
+              "linear-gradient(90deg,#00a651,#a7ce39,#0288c4,#ffcb06,#f58221,#ee1c25)",
+          }}
+        />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 space-y-6 overflow-auto pr-1" aria-label="Navegacion principal">
-        {visibleGroups.map((group, index) => (
-          <div key={group.label}>
-            {index > 0 && (
-              <Separator className="mb-6 bg-sidebar-border/50" />
-            )}
-            <NavSection group={group} pathname={pathname} />
-          </div>
+      <nav
+        className="flex-1 overflow-auto px-3 pt-3.5"
+        aria-label="Navegación principal"
+      >
+        {visibleGroups.map((group) => (
+          <NavSection key={group.label} group={group} pathname={pathname} />
         ))}
       </nav>
 
-      {/* Footer */}
-      <div className="space-y-1 rounded-xl border border-sidebar-border/50 bg-sidebar-accent/30 p-3">
-        <div className="text-xs font-semibold text-sidebar-foreground">
-          Base compartida
+      {/* User card */}
+      <div className="mx-3 mt-1.5 flex items-center gap-2.5 border-t border-white/10 px-2.5 pt-2.5">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[7px] bg-[#2ea3da] text-xs font-bold text-white">
+          {getInitials(displayName)}
         </div>
-        <div className="text-xs text-sidebar-foreground/50">
-          Shell, tokens y primitives listos para el resto del CRM.
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[13px] font-bold leading-tight text-white">
+            {displayName}
+          </div>
+          <div className="truncate text-[11px] text-[#7fa9c4]">{roleLabel}</div>
         </div>
       </div>
     </div>
