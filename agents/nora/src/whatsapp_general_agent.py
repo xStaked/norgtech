@@ -36,8 +36,8 @@ NEW_CUSTOMER_CASE_PROMPT = (
     "o razón social; usa el mismo valor como display_name si no hay nombre "
     "comercial distinto. NIT, ciudad y teléfono son datos deseables: si faltan, "
     "pregúntalos de forma breve. Cuando ya estén nombre, NIT, ciudad y teléfono, "
-    "llama get_customer_segments, elige Bronce si existe, llama create_customer "
-    "y confirma el resultado."
+    "llama create_customer directamente (el segmento se asigna solo, no pases "
+    "segment_id) y confirma el resultado."
 )
 
 VISIT_FLOW_PROMPT = (

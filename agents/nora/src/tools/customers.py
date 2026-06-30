@@ -47,12 +47,36 @@ async def search_customers(
         return f"Error inesperado al buscar clientes: {str(e)}"
 
 
+async def _resolve_segment_id(nestjs_client: NestJSClient, segment_id: Optional[str]) -> str:
+    """Resolve a valid customer segment id.
+
+    The LLM is unreliable at fetching and passing a real segment_id (it tends to
+    hallucinate one, which the API rejects with "Customer segment not found"). So
+    we resolve it here: keep the LLM's id only if it actually exists, otherwise
+    default to "Bronce" (the segment for new customers) or the first available.
+    """
+    result = await nestjs_client.get("/customer-segments")
+    segments = result if isinstance(result, list) else result.get("data", [])
+    if not segments:
+        raise NestJSAPIError(
+            status_code=404,
+            detail="No hay segmentos de cliente configurados en el CRM.",
+        )
+
+    ids = {s["id"] for s in segments}
+    if segment_id and segment_id in ids:
+        return segment_id
+
+    bronce = next((s for s in segments if (s.get("name") or "").strip().lower() == "bronce"), None)
+    return (bronce or segments[0])["id"]
+
+
 @tool
 async def create_customer(
     legal_name: str,
     display_name: str,
-    segment_id: str,
     auth_token: Annotated[str, InjectedState("auth_token")],
+    segment_id: Optional[str] = None,
     tax_id: Optional[str] = None,
     phone: Optional[str] = None,
     email: Optional[str] = None,
@@ -71,13 +95,14 @@ async def create_customer(
     Un CONTACTO es una persona que trabaja en ese cliente.
     NO crees un cliente para una persona individual a menos que sea un negocio unipersonal.
 
-    ANTES de llamar esta herramienta, DEBES obtener el segment_id usando get_customer_segments.
-    El segmento "Bronce" es el apropiado para clientes nuevos.
+    El segmento se resuelve automáticamente (por defecto "Bronce" para clientes
+    nuevos), así que NO necesitas llamar get_customer_segments antes: deja
+    segment_id vacío salvo que el usuario pida un segmento específico.
 
     Args:
         legal_name: Razón social o nombre legal de la empresa
         display_name: Nombre comercial o de display (cómo se conoce la empresa)
-        segment_id: ID del segmento (usa get_customer_segments para obtenerlo)
+        segment_id: ID del segmento (opcional; si se omite se usa "Bronce")
         tax_id: NIT o identificador tributario (opcional)
         phone: Teléfono de la empresa (opcional)
         email: Email corporativo (opcional)
@@ -94,6 +119,7 @@ async def create_customer(
     """
     try:
         nestjs_client = NestJSClient(auth_token)
+        resolved_segment_id = await _resolve_segment_id(nestjs_client, segment_id)
 
         # Auto-generar contacto primario
         primary_contact_name = contact_name or "Contacto Principal"
@@ -116,7 +142,7 @@ async def create_customer(
         payload = {
             "legalName": legal_name,
             "displayName": display_name,
-            "segmentId": segment_id,
+            "segmentId": resolved_segment_id,
             "contacts": [contact_payload],
         }
         if normalized_tax_id:
