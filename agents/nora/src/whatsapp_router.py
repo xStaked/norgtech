@@ -311,7 +311,13 @@ def _case_transition_for(
             lastQuestion="Listo. Dime el valor del gasto y el cliente o visita a asociar.",
         )
 
-    if plan.intent == "crear_cliente" and not request.open_case:
+    # An explicit "crear cliente" starts a new-customer case even if an unrelated
+    # case (e.g. a stale expense) is still open. plan_message only emits
+    # crear_cliente when not continuing a new_customer case, so this never
+    # collides with one in progress.
+    if plan.intent == "crear_cliente" and not (
+        request.open_case and request.open_case.type == "new_customer"
+    ):
         extracted = _extract_new_customer_fields(request.message)
         missing = _new_customer_missing_fields(extracted)
         return NoraCaseTransition(
@@ -322,7 +328,12 @@ def _case_transition_for(
             lastQuestion=_new_customer_question(missing),
         )
 
-    if plan.intent == "crear_visita" and not request.open_case:
+    # Same rule for visits: an explicit "crear/registrar visita" starts a fresh
+    # visit case regardless of an unrelated open case (crear_visita is never
+    # emitted while a visit case is already in progress).
+    if plan.intent == "crear_visita" and not (
+        request.open_case and request.open_case.type == "visit"
+    ):
         extracted = _extract_visit_fields(request.message)
         missing = _visit_missing_fields(extracted)
         return NoraCaseTransition(

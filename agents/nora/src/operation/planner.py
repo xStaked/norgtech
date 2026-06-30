@@ -511,6 +511,12 @@ def _starts_visit_flow(normalized_message: str) -> bool:
             "quiero visita",
             "quiero una visita",
             "vamos a crear una visita",
+            # Natural phrasing that describes scheduling a visit, so it does not
+            # fall through to the broad AGENDA_WORDS match below.
+            "voy a visitar",
+            "vamos a visitar",
+            "los voy a visitar",
+            "visitar a",
         )
     )
 

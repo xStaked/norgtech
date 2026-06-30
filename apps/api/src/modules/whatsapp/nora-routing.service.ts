@@ -1331,6 +1331,11 @@ export class NoraRoutingService {
       "quiero visita",
       "quiero una visita",
       "vamos a crear una visita",
+      // Natural phrasing that describes scheduling a visit (mirrors planner._starts_visit_flow).
+      "voy a visitar",
+      "vamos a visitar",
+      "los voy a visitar",
+      "visitar a",
       "create visit",
       "create a visit",
       "register visit",

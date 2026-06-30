@@ -161,6 +161,80 @@ def test_comercial_visit_creation_start_does_not_route_to_expense():
     assert "gasto" not in result["suggested_reply"].lower()
 
 
+def test_visit_start_overrides_unrelated_open_expense_case():
+    # Regression: a leftover expense case must not block starting a new visit.
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "registrar una visita",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+            "open_case": {
+                "id": "case-expense-1",
+                "type": "expense",
+                "status": "collecting_info",
+                "extractedData": {"amount": 25000},
+                "missingFields": [],
+            },
+        }
+    )
+
+    assert result["intent"] == "crear_visita"
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "visit"
+
+
+def test_customer_start_overrides_unrelated_open_expense_case():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "crear cliente",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+            "open_case": {
+                "id": "case-expense-1",
+                "type": "expense",
+                "status": "collecting_info",
+                "extractedData": {"amount": 25000},
+                "missingFields": [],
+            },
+        }
+    )
+
+    assert result["intent"] == "crear_cliente"
+    assert result["case_transition"]["action"] == "start_case"
+    assert result["case_transition"]["type"] == "new_customer"
+
+
+def test_natural_visit_phrasing_starts_visit_instead_of_agenda():
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "voy a visitar a porcicola el 29 de junio, es una visita de seguimiento",
+            "conversation_id": "conversation-sergio",
+            "user": {
+                "id": "sales-user-id",
+                "role": "comercial",
+                "name": "Sergio",
+                "email": "sergio@norgtech.local",
+            },
+        }
+    )
+
+    assert result["intent"] == "crear_visita"
+    assert result["case_transition"]["type"] == "visit"
+
+
 def test_comercial_necesito_una_visita_starts_visit_case():
     result = route_whatsapp_message(
         {
