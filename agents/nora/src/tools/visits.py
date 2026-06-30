@@ -45,6 +45,43 @@ async def create_visit(
 
 
 @tool
+async def get_customer_visits(
+    customer_id: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+) -> str:
+    """
+    Lista las visitas de un cliente (incluye pasadas y futuras) con su ID,
+    fecha, resumen y estado.
+
+    Úsala para encontrar la visita que el usuario quiere eliminar o consultar.
+    Primero resuelve el customer_id con search_customers.
+
+    Args:
+        customer_id: ID del cliente
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+        result = await nestjs_client.get("/visits", params={"customerId": customer_id})
+        visits = result if isinstance(result, list) else result.get("data", [])
+        if not visits:
+            return "Ese cliente no tiene visitas registradas."
+        simplified = [
+            {
+                "id": v["id"],
+                "fecha": v.get("scheduledAt"),
+                "resumen": v.get("summary"),
+                "estado": v.get("status"),
+            }
+            for v in visits[:15]
+        ]
+        return f"Visitas del cliente: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+    except NestJSAPIError as e:
+        return f"Error al obtener visitas: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al obtener visitas: {str(e)}"
+
+
+@tool
 async def delete_visit(
     visit_id: str,
     auth_token: Annotated[str, InjectedState("auth_token")],

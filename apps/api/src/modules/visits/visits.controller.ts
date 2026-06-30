@@ -50,8 +50,9 @@ export class VisitsController {
     @Query("today") today?: string,
     @Query("thisWeek") thisWeek?: string,
     @Query("assignedToMe") assignedToMe?: string,
+    @Query("customerId") customerId?: string,
   ) {
-    const hasFilters = status || today || thisWeek || assignedToMe;
+    const hasFilters = status || today || thisWeek || assignedToMe || customerId;
 
     if (hasFilters) {
       return this.visitsService.findWithFilters({
@@ -60,6 +61,7 @@ export class VisitsController {
         thisWeek: thisWeek === "true",
         assignedToMe: assignedToMe === "true",
         userId: user.id,
+        customerId,
       });
     }
 

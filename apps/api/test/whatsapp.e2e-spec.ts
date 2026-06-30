@@ -4045,6 +4045,119 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("routes a delete-visit request to the general agent even with an open visit case", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+
+      const account = {
+        id: "account-delete-visit",
+        phoneNumberId: "phone-number-delete-visit",
+        phoneNumber: "phone-number-delete-visit",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-delete-visit",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-30T14:33:00.000Z"),
+        lastMessageText: "quiero eliminar la visita de Porcicultura",
+        createdAt: new Date("2026-06-30T14:30:00.000Z"),
+        updatedAt: new Date("2026-06-30T14:33:00.000Z"),
+      };
+      // A half-open create-visit case must NOT trap the delete request.
+      const visitCase = {
+        id: "case-delete-visit-open",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "visit",
+        status: "collecting_info",
+        extractedData: {},
+        missingFields: ["customerRef", "scheduledAt", "summary"],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "Me falta el cliente de la visita.",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-30T14:30:30.000Z"),
+        updatedAt: new Date("2026-06-30T14:30:30.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(visitCase);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "¿Cuál visita quieres eliminar?",
+            case_update: null,
+            executed_entity: null,
+          }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-delete-visit",
+              message: {
+                id: "kapso-delete-visit-msg",
+                from: "+573004445566",
+                text: { body: "quiero eliminar la visita de Porcicultura caribe SAS" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) {
+              return false;
+            }
+            const body = JSON.parse(String(options?.body ?? "{}")) as {
+              conversation_id?: string;
+            };
+            return body.conversation_id === conversation.id;
+          });
+
+        expect(forThisConversation("/whatsapp/agent/general")).toBeDefined();
+        expect(forThisConversation("/whatsapp/route")).toBeUndefined();
+      } finally {
+        if (prev === undefined) {
+          delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        } else {
+          process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        }
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-delete-visit");
+        removeMatching(accounts, (item) => item.id === "account-delete-visit");
+        removeMatching(messages, (item) => item.conversationId === "conversation-delete-visit");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-delete-visit");
+      }
+    });
+
     it("falls back to /whatsapp/route (planner) when the flag is off", async () => {
       const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
       delete process.env.NORA_WHATSAPP_GENERAL_AGENT;

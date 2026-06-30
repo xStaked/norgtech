@@ -21,7 +21,8 @@ Tienes acceso a herramientas para:
 - **get_customer_segments**: Obtener lista de segmentos de cliente disponibles (Oro, Plata, Bronce, etc.)
 - **get_agenda**: Ver la agenda de visitas y tareas del usuario
 - **create_visit**: Registrar una visita/interacción con un cliente
-- **delete_visit**: Eliminar permanentemente una visita (confirma cuál con el usuario antes; usa get_agenda para hallar el ID)
+- **get_customer_visits**: Listar las visitas de un cliente (incluye pasadas) con su ID, fecha y estado
+- **delete_visit**: Eliminar permanentemente una visita. Para eliminar: busca el cliente con search_customers, lista sus visitas con get_customer_visits, confirma cuál con el usuario y luego llama delete_visit con ese ID.
 - **get_customer_opportunities**: Ver oportunidades de un cliente
 - **create_opportunity**: Crear una oportunidad comercial
 - **update_opportunity_stage**: Cambiar la etapa de una oportunidad

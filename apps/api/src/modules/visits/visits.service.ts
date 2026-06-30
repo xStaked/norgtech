@@ -18,6 +18,7 @@ export interface VisitFilters {
   thisWeek?: boolean;
   assignedToMe?: boolean;
   userId?: string;
+  customerId?: string;
 }
 
 const allowedStatusTransitions: Record<VisitStatus, VisitStatus[]> = {
@@ -248,6 +249,10 @@ export class VisitsService {
 
     if (filters.assignedToMe && filters.userId) {
       where.assignedToUserId = filters.userId;
+    }
+
+    if (filters.customerId) {
+      where.customerId = filters.customerId;
     }
 
     if (filters.today) {

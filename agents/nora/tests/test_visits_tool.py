@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from src.tools.visits import delete_visit
+from src.tools.visits import delete_visit, get_customer_visits
 from src.tools.nestjs_client import NestJSAPIError
 
 
@@ -16,6 +16,33 @@ def test_delete_visit_calls_delete_endpoint():
 
     fake_client.delete.assert_awaited_once_with("/visits/visit-1")
     assert "eliminada" in result.lower()
+
+
+def test_get_customer_visits_lists_with_ids():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(
+        return_value=[
+            {"id": "visit-9", "scheduledAt": "2026-06-29T12:00:00", "summary": "Seguimiento", "status": "programada"},
+        ]
+    )
+
+    with patch("src.tools.visits.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            get_customer_visits.ainvoke({"customer_id": "cust-1", "auth_token": "Bearer scoped"})
+        )
+
+    fake_client.get.assert_awaited_once_with("/visits", params={"customerId": "cust-1"})
+    assert "visit-9" in result
+
+
+def test_get_customer_visits_handles_empty():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[])
+    with patch("src.tools.visits.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            get_customer_visits.ainvoke({"customer_id": "cust-1", "auth_token": "Bearer scoped"})
+        )
+    assert "no tiene visitas" in result.lower()
 
 
 def test_delete_visit_reports_api_error():

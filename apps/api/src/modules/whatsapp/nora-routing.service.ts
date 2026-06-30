@@ -160,7 +160,9 @@ export class NoraRoutingService {
         process.env.NORA_WHATSAPP_GENERAL_AGENT === "true" &&
         "userId" in sender &&
         sender.userId &&
-        (!openCase || openCase.type === NoraConversationCaseType.new_customer) &&
+        (!openCase ||
+          openCase.type === NoraConversationCaseType.new_customer ||
+          this.isVisitDeleteMessage(message.body)) &&
         !this.isNewCustomerStartMessage(message.body) &&
         !this.isVisitStartMessage(message.body) &&
         !mediaPayload
@@ -1401,8 +1403,34 @@ export class NoraRoutingService {
     ].some((phrase) => normalized.includes(phrase));
   }
 
+  private isVisitDeleteMessage(message: string): boolean {
+    const normalized = message
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+    return [
+      "eliminar visita",
+      "eliminar una visita",
+      "eliminar la visita",
+      "borrar visita",
+      "borrar una visita",
+      "borrar la visita",
+      "elimina la visita",
+      "elimina visita",
+      "borra la visita",
+      "borra visita",
+      "delete visit",
+      "delete a visit",
+      "remove visit",
+    ].some((phrase) => normalized.includes(phrase));
+  }
+
   private isExplicitNonExpenseStartMessage(message: string): boolean {
-    return this.isNewCustomerStartMessage(message) || this.isVisitStartMessage(message);
+    return (
+      this.isNewCustomerStartMessage(message) ||
+      this.isVisitStartMessage(message) ||
+      this.isVisitDeleteMessage(message)
+    );
   }
 
   private stringValue(value: unknown) {
