@@ -4158,6 +4158,112 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("routes an edit request to the general agent even with an open expense case", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      const prevExp = process.env.NORA_WHATSAPP_AGENT_EXPENSES;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+      process.env.NORA_WHATSAPP_AGENT_EXPENSES = "true";
+
+      const account = {
+        id: "account-edit-escape",
+        phoneNumberId: "phone-number-edit-escape",
+        phoneNumber: "phone-number-edit-escape",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-edit-escape",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-06-30T18:00:00.000Z"),
+        lastMessageText: "quiero editar la visita de Porcicultura",
+        createdAt: new Date("2026-06-30T17:59:00.000Z"),
+        updatedAt: new Date("2026-06-30T18:00:00.000Z"),
+      };
+      const expenseCase = {
+        id: "case-edit-escape-expense",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "expense",
+        status: "collecting_info",
+        extractedData: { amount: 10000 },
+        missingFields: [],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "¿Cuál es el valor del gasto?",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-06-30T17:58:00.000Z"),
+        updatedAt: new Date("2026-06-30T17:58:30.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(expenseCase);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ reply_text: "¿Qué quieres cambiar de la visita?", case_update: null, executed_entity: null }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-edit-escape",
+              message: {
+                id: "kapso-edit-escape-msg",
+                from: "+573004445566",
+                text: { body: "quiero editar la visita de Porcicultura caribe SAS" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) return false;
+            const body = JSON.parse(String(options?.body ?? "{}")) as { conversation_id?: string };
+            return body.conversation_id === conversation.id;
+          });
+
+        expect(forThisConversation("/whatsapp/agent/general")).toBeDefined();
+        expect(forThisConversation("/whatsapp/agent")).toBeUndefined();
+        expect(forThisConversation("/whatsapp/route")).toBeUndefined();
+      } finally {
+        if (prev === undefined) delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        else process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        if (prevExp === undefined) delete process.env.NORA_WHATSAPP_AGENT_EXPENSES;
+        else process.env.NORA_WHATSAPP_AGENT_EXPENSES = prevExp;
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-edit-escape");
+        removeMatching(accounts, (item) => item.id === "account-edit-escape");
+        removeMatching(messages, (item) => item.conversationId === "conversation-edit-escape");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-edit-escape");
+      }
+    });
+
     it("restarts an open visit case stuck on a bad customerRef when the user says crear visita", async () => {
       const account = {
         id: "account-visit-reset",

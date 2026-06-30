@@ -166,3 +166,88 @@ async def create_customer(
         return f"Error al crear cliente: {e.detail}"
     except Exception as e:
         return f"Error inesperado al crear cliente: {str(e)}"
+
+
+@tool
+async def update_customer(
+    customer_id: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    legal_name: Optional[str] = None,
+    display_name: Optional[str] = None,
+    tax_id: Optional[str] = None,
+    phone: Optional[str] = None,
+    email: Optional[str] = None,
+    address: Optional[str] = None,
+    city: Optional[str] = None,
+    department: Optional[str] = None,
+    notes: Optional[str] = None,
+    segment_id: Optional[str] = None,
+) -> str:
+    """
+    Edita/actualiza un cliente (empresa) existente en el CRM.
+
+    Es una actualización parcial: solo se modifican los campos que envíes;
+    los demás se mantienen igual. NO necesitas pasar todos los campos, solo
+    los que el usuario quiere cambiar.
+
+    IMPORTANTE:
+    - Primero usa search_customers para encontrar el cliente y obtener su
+      customer_id real. NUNCA inventes el customer_id.
+    - Confirma con el usuario los cambios antes de aplicarlos.
+
+    Args:
+        customer_id: ID del cliente a actualizar (obtenido con search_customers)
+        legal_name: Nueva razón social o nombre legal (opcional)
+        display_name: Nuevo nombre comercial o de display (opcional)
+        tax_id: Nuevo NIT o identificador tributario (opcional)
+        phone: Nuevo teléfono (opcional)
+        email: Nuevo email (opcional)
+        address: Nueva dirección física (opcional)
+        city: Nueva ciudad (opcional)
+        department: Nuevo departamento/estado (opcional)
+        notes: Nuevas notas (opcional)
+        segment_id: Nuevo ID de segmento (opcional)
+
+    Returns:
+        Datos del cliente actualizado en formato JSON
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+
+        # Normalizar NIT igual que en create_customer
+        normalized_tax_id = tax_id
+        if tax_id and tax_id.isdigit() and "-" not in tax_id:
+            if len(tax_id) >= 9:
+                normalized_tax_id = f"{tax_id[:-1]}-{tax_id[-1]}"
+
+        payload = {}
+        if legal_name is not None:
+            payload["legalName"] = legal_name
+        if display_name is not None:
+            payload["displayName"] = display_name
+        if normalized_tax_id is not None:
+            payload["taxId"] = normalized_tax_id
+        if phone is not None:
+            payload["phone"] = phone
+        if email is not None:
+            payload["email"] = email
+        if address is not None:
+            payload["address"] = address
+        if city is not None:
+            payload["city"] = city
+        if department is not None:
+            payload["department"] = department
+        if notes is not None:
+            payload["notes"] = notes
+        if segment_id is not None:
+            payload["segmentId"] = segment_id
+
+        if not payload:
+            return "No se especificó ningún campo para actualizar."
+
+        result = await nestjs_client.patch(f"/customers/{customer_id}", payload)
+        return f"Cliente actualizado exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
+    except NestJSAPIError as e:
+        return f"Error al actualizar cliente: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al actualizar cliente: {str(e)}"

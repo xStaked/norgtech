@@ -82,6 +82,51 @@ async def get_customer_visits(
 
 
 @tool
+async def update_visit(
+    visit_id: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    scheduled_at: Optional[str] = None,
+    summary: Optional[str] = None,
+    notes: Optional[str] = None,
+    next_step: Optional[str] = None,
+    customer_id: Optional[str] = None,
+) -> str:
+    """
+    Edita/actualiza una visita existente en el CRM.
+
+    Usa esta herramienta cuando el usuario pida modificar/cambiar/reagendar
+    datos de una visita (por ejemplo su fecha, resumen, notas, próximo paso
+    o el cliente asociado). Solo se actualizan los campos que proporciones.
+
+    Primero usa get_customer_visits para encontrar el visit_id de la visita
+    y SIEMPRE confirma con el usuario cuál visita y qué cambios antes de editar.
+
+    Args:
+        visit_id: ID de la visita a actualizar
+        scheduled_at: Nueva fecha y hora de la visita (ISO 8601, opcional)
+        summary: Nuevo resumen de la visita (opcional)
+        notes: Nuevas notas (opcional)
+        next_step: Nuevo próximo paso acordado (opcional)
+        customer_id: Nuevo cliente asociado (opcional)
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+        payload = {}
+        if scheduled_at: payload["scheduledAt"] = scheduled_at
+        if summary: payload["summary"] = summary
+        if notes: payload["notes"] = notes
+        if next_step: payload["nextStep"] = next_step
+        if customer_id: payload["customerId"] = customer_id
+
+        result = await nestjs_client.patch(f"/visits/{visit_id}", payload)
+        return f"Visita actualizada exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
+    except NestJSAPIError as e:
+        return f"Error al actualizar visita: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al actualizar visita: {str(e)}"
+
+
+@tool
 async def delete_visit(
     visit_id: str,
     auth_token: Annotated[str, InjectedState("auth_token")],

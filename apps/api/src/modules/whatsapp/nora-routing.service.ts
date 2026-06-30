@@ -162,7 +162,8 @@ export class NoraRoutingService {
         sender.userId &&
         (!openCase ||
           openCase.type === NoraConversationCaseType.new_customer ||
-          this.isVisitDeleteMessage(message.body)) &&
+          this.isVisitDeleteMessage(message.body) ||
+          this.isEntityEditMessage(message.body)) &&
         !this.isNewCustomerStartMessage(message.body) &&
         !this.isVisitStartMessage(message.body) &&
         !mediaPayload
@@ -1449,11 +1450,40 @@ export class NoraRoutingService {
     ].some((phrase) => normalized.includes(phrase));
   }
 
+  private isEntityEditMessage(message: string): boolean {
+    const normalized = message
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .toLowerCase();
+    const verbs = [
+      "editar",
+      "edita",
+      "modificar",
+      "modifica",
+      "actualizar",
+      "actualiza",
+      "cambiar",
+      "cambia",
+      "corregir",
+      "corrige",
+      "reagendar",
+      "reagenda",
+      "edit ",
+      "update ",
+    ];
+    const entities = ["visita", "cliente", "gasto"];
+    return (
+      verbs.some((verb) => normalized.includes(verb)) &&
+      entities.some((entity) => normalized.includes(entity))
+    );
+  }
+
   private isExplicitNonExpenseStartMessage(message: string): boolean {
     return (
       this.isNewCustomerStartMessage(message) ||
       this.isVisitStartMessage(message) ||
-      this.isVisitDeleteMessage(message)
+      this.isVisitDeleteMessage(message) ||
+      this.isEntityEditMessage(message)
     );
   }
 

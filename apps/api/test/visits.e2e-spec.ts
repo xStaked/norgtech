@@ -96,6 +96,7 @@ describe("Visits", () => {
       $transaction: async <T>(callback: (tx: {
         visit: {
           create: (args: { data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
+          update: (args: { where: { id: string }; data: Record<string, unknown> }) => Promise<Record<string, unknown>>;
         };
         executiveReport: { count: (args: { where: { visitId: string } }) => Promise<number> };
         commercialExpense: { count: (args: { where: { visitId: string } }) => Promise<number> };
@@ -134,6 +135,22 @@ describe("Visits", () => {
               return { count: 1 };
             }
             return { count: 0 };
+          },
+          update: async ({ where, data }: { where: { id: string }; data: Record<string, unknown> }) => {
+            const all = [...visits, ...pendingVisits];
+            const idx = all.findIndex((v) => v.id === where.id);
+            if (idx === -1) {
+              throw new Error("Record to update does not exist");
+            }
+            if (idx < visits.length) {
+              visits[idx] = { ...visits[idx], ...data };
+              return { ...visits[idx] };
+            }
+            pendingVisits[idx - visits.length] = {
+              ...pendingVisits[idx - visits.length],
+              ...data,
+            };
+            return { ...pendingVisits[idx - visits.length] };
           },
           delete: async ({ where }: { where: { id: string } }) => {
             const idx = visits.findIndex((v) => v.id === where.id);
@@ -292,6 +309,39 @@ describe("Visits", () => {
 
     expect(response.body).toEqual({ id: visitId, deleted: true });
     expect(visits.find((v) => v.id === visitId)).toBeUndefined();
+  });
+
+  it("updates a visit scheduledAt and summary", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ customerId: "customer-1", scheduledAt: "2026-05-05T10:00:00.000Z" })
+      .expect(201);
+
+    const visitId = createResponse.body.id;
+
+    const response = await request(globalThis.__APP__)
+      .patch(`/visits/${visitId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ scheduledAt: "2026-06-01T15:00:00.000Z", summary: "Resumen actualizado" })
+      .expect(200);
+
+    expect(response.body.id).toBe(visitId);
+    expect(response.body.summary).toBe("Resumen actualizado");
+    expect(new Date(response.body.scheduledAt as string).toISOString()).toBe(
+      "2026-06-01T15:00:00.000Z",
+    );
+
+    const updated = visits.find((v) => v.id === visitId);
+    expect(updated?.summary).toBe("Resumen actualizado");
+  });
+
+  it("returns 404 when updating a missing visit", async () => {
+    await request(globalThis.__APP__)
+      .patch("/visits/visit-does-not-exist")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ summary: "No existe" })
+      .expect(404);
   });
 
   it("returns 404 when deleting a missing visit", async () => {

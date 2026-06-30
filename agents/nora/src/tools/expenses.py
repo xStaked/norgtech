@@ -100,6 +100,69 @@ async def create_expense(
 
 
 @tool
+async def get_expenses(
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    status: Optional[str] = None,
+    category: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> str:
+    """
+    Lista los gastos comerciales del usuario actual (los más recientes primero),
+    con su ID, fecha, monto, categoría, descripción y estado.
+
+    Úsala para ENCONTRAR el gasto que el usuario quiere editar/corregir o
+    consultar, y así obtener su ID para usarlo con update_expense.
+
+    Args:
+        status: Filtra por estado (opcional), p.ej. 'pendiente',
+            'requiere_correccion', 'aprobado', 'rechazado'.
+        category: Filtra por categoría (opcional); mismos valores que create_expense.
+        date_from: Fecha mínima del gasto en formato YYYY-MM-DD (opcional).
+        date_to: Fecha máxima del gasto en formato YYYY-MM-DD (opcional).
+    """
+    params: dict = {}
+    if status is not None:
+        params["status"] = status
+    if category is not None:
+        params["category"] = category
+    if date_from is not None:
+        params["from"] = date_from
+    if date_to is not None:
+        params["to"] = date_to
+
+    client = NestJSClient(auth_token)
+    try:
+        result = await client.get("/commercial-expenses", params=params)
+        expenses = result if isinstance(result, list) else result.get("data", [])
+        if not expenses:
+            return "No tienes gastos registrados con esos criterios."
+        simplified = [
+            {
+                "id": e["id"],
+                "fecha": e.get("expenseDate"),
+                "monto": e.get("amount"),
+                "categoria": e.get("category"),
+                "descripcion": e.get("description"),
+                "estado": e.get("status"),
+            }
+            for e in expenses[:15]
+        ]
+        return f"Gastos del usuario: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+    except NestJSAPIError as e:
+        msg = f"Error al obtener los gastos [HTTP {e.status_code}]: {e.detail}"
+        logger.error("get_expenses API error: %s", msg)
+        return msg
+    except Exception as e:
+        msg = (
+            f"Error inesperado al obtener los gastos (destino {client.base_url}): "
+            f"{type(e).__name__}: {str(e)}"
+        )
+        logger.error("get_expenses unexpected error: %s", msg)
+        return msg
+
+
+@tool
 async def update_expense(
     expense_id: str,
     conversation_id: Annotated[str, InjectedState("conversation_id")],
@@ -116,12 +179,20 @@ async def update_expense(
     visit_id: Optional[str] = None,
 ) -> str:
     """
-    Corrige un gasto existente que está en estado 'requiere_correccion' y lo
-    reenvía a revisión. Llama esta herramienta UNA sola vez, cuando el comercial
-    haya confirmado todos los cambios. Pasa SOLO los campos que cambian.
+    Edita/corrige un gasto comercial existente y lo (re)envía a revisión.
+    Sirve tanto para corregir un gasto en estado 'requiere_correccion' (caso
+    admin) como para que el comercial EDITE LIBREMENTE cualquiera de sus gastos
+    editables (estado 'pendiente' o 'requiere_correccion').
+
+    Para editar un gasto cualquiera:
+      1. Usa get_expenses para listar los gastos del usuario y obtener el ID
+         del gasto que quiere modificar (a menos que el ID ya venga en un
+         [CASO DE GASTO]).
+      2. Confirma con el usuario los cambios exactos antes de aplicarlos.
+      3. Llama esta herramienta UNA sola vez, pasando SOLO los campos que cambian.
 
     Args:
-        expense_id: ID del gasto a corregir (viene en el [CASO DE GASTO]).
+        expense_id: ID del gasto a editar (de get_expenses o del [CASO DE GASTO]).
         Resto de campos: mismos valores válidos que create_expense; opcionales.
     """
     payload: dict = {"conversationId": conversation_id}

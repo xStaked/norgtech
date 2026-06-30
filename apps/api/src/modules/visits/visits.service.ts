@@ -10,6 +10,7 @@ import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CompleteVisitDto } from "./dto/complete-visit.dto";
 import { CreateVisitDto } from "./dto/create-visit.dto";
+import { UpdateVisitDto } from "./dto/update-visit.dto";
 import { UpdateVisitStatusDto } from "./dto/update-visit-status.dto";
 
 export interface VisitFilters {
@@ -193,6 +194,59 @@ export class VisitsService {
           entityType: "Visit",
           entityId: updatedVisit.id,
           action: "visit.completed",
+          actorUserId: user.id,
+          previousState: JSON.parse(JSON.stringify(visit)),
+          nextState: JSON.parse(JSON.stringify(updatedVisit)),
+        },
+        tx,
+      );
+
+      return updatedVisit;
+    });
+  }
+
+  async update(user: AuthUser, visitId: string, dto: UpdateVisitDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const visit = await tx.visit.findUnique({
+        where: { id: visitId },
+      });
+
+      if (!visit) {
+        throw new NotFoundException("Visit not found");
+      }
+
+      if (dto.customerId !== undefined) {
+        await this.assertCustomerExists(dto.customerId);
+      }
+
+      const data: Prisma.VisitUpdateInput = { updatedBy: user.id };
+
+      if (dto.scheduledAt !== undefined) {
+        data.scheduledAt = new Date(dto.scheduledAt);
+      }
+      if (dto.summary !== undefined) {
+        data.summary = dto.summary;
+      }
+      if (dto.notes !== undefined) {
+        data.notes = dto.notes;
+      }
+      if (dto.nextStep !== undefined) {
+        data.nextStep = dto.nextStep;
+      }
+      if (dto.customerId !== undefined) {
+        data.customer = { connect: { id: dto.customerId } };
+      }
+
+      const updatedVisit = await tx.visit.update({
+        where: { id: visitId },
+        data,
+      });
+
+      await this.auditService.record(
+        {
+          entityType: "Visit",
+          entityId: updatedVisit.id,
+          action: "visit.updated",
           actorUserId: user.id,
           previousState: JSON.parse(JSON.stringify(visit)),
           nextState: JSON.parse(JSON.stringify(updatedVisit)),

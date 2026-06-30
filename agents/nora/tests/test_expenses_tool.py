@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.tools.expenses import create_expense, update_expense
+from src.tools.expenses import create_expense, get_expenses, update_expense
 from src.tools.nestjs_client import NestJSAPIError, NestJSClient
 
 
@@ -153,6 +153,78 @@ def test_update_expense_patches_agent_endpoint():
     assert path == "/whatsapp/agent/expenses/exp_1"
     assert payload["supplierNit"] == "900123456"
     assert payload["conversationId"] == "conv_1"
+    assert "pendiente" in result
+
+
+def test_get_expenses_lists_user_expenses():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(
+        return_value=[
+            {
+                "id": "exp_1",
+                "expenseDate": "2026-04-24",
+                "amount": "25000.00",
+                "category": "alimentacion",
+                "description": "Almuerzo",
+                "status": "pendiente",
+            }
+        ]
+    )
+
+    with patch("src.tools.expenses.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            get_expenses.ainvoke(
+                {
+                    "status": "pendiente",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+
+    fake_client.get.assert_awaited_once()
+    path = fake_client.get.await_args.args[0]
+    params = fake_client.get.await_args.kwargs["params"]
+    assert path == "/commercial-expenses"
+    assert params["status"] == "pendiente"
+    assert "exp_1" in result
+    assert "alimentacion" in result
+
+
+def test_get_expenses_handles_empty_list():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[])
+
+    with patch("src.tools.expenses.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            get_expenses.ainvoke({"auth_token": "Bearer scoped"})
+        )
+
+    assert "No tienes gastos" in result
+
+
+def test_update_expense_standalone_edit_by_id():
+    """update_expense must be callable directly with just an expense_id."""
+    fake_client = AsyncMock()
+    fake_client.patch = AsyncMock(return_value={"id": "exp_7", "status": "pendiente"})
+
+    with patch("src.tools.expenses.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            update_expense.ainvoke(
+                {
+                    "expense_id": "exp_7",
+                    "amount": 30000,
+                    "description": "Cena corregida",
+                    "conversation_id": "conv_1",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+
+    fake_client.patch.assert_awaited_once()
+    path, payload = fake_client.patch.await_args.args
+    assert path == "/whatsapp/agent/expenses/exp_7"
+    assert payload["amount"] == 30000
+    assert payload["description"] == "Cena corregida"
     assert "pendiente" in result
 
 

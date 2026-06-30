@@ -18,6 +18,7 @@ import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CompleteVisitDto } from "./dto/complete-visit.dto";
 import { CreateVisitDto } from "./dto/create-visit.dto";
+import { UpdateVisitDto } from "./dto/update-visit.dto";
 import { UpdateVisitStatusDto } from "./dto/update-visit-status.dto";
 import { VisitsService } from "./visits.service";
 
@@ -107,6 +108,23 @@ export class VisitsController {
     dto: CompleteVisitDto,
   ) {
     return this.visitsService.complete(user, id, dto);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Patch(":id")
+  update(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: UpdateVisitDto,
+  ) {
+    return this.visitsService.update(user, id, dto);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

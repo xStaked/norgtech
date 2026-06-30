@@ -1,7 +1,8 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from src.tools.customers import create_customer
+from src.tools.customers import create_customer, update_customer
+from src.tools.nestjs_client import NestJSAPIError
 
 SEGMENTS = [
     {"id": "seg-oro", "name": "Oro"},
@@ -50,3 +51,45 @@ def test_create_customer_errors_clearly_when_no_segments_exist():
     client, result = _run_create(segments=[])
     client.post.assert_not_awaited()
     assert "segmento" in result.lower()
+
+
+def _run_update(extra_args=None, patch_side_effect=None):
+    fake_client = AsyncMock()
+    if patch_side_effect is not None:
+        fake_client.patch = AsyncMock(side_effect=patch_side_effect)
+    else:
+        fake_client.patch = AsyncMock(return_value={"id": "cust_1", "displayName": "ACME"})
+
+    with patch("src.tools.customers.NestJSClient", return_value=fake_client):
+        args = {"customer_id": "cust_1", "auth_token": "Bearer scoped"}
+        if extra_args:
+            args.update(extra_args)
+        result = asyncio.run(update_customer.ainvoke(args))
+    return fake_client, result
+
+
+def test_update_customer_patches_only_provided_fields():
+    client, result = _run_update({"display_name": "Nuevo Nombre", "city": "Bogotá"})
+    path, payload = client.patch.await_args.args
+    assert path == "/customers/cust_1"
+    assert payload == {"displayName": "Nuevo Nombre", "city": "Bogotá"}
+    assert "cust_1" in result
+
+
+def test_update_customer_normalizes_tax_id():
+    client, _ = _run_update({"tax_id": "900123456"})
+    _, payload = client.patch.await_args.args
+    assert payload == {"taxId": "90012345-6"}
+
+
+def test_update_customer_no_fields_does_not_call_api():
+    client, result = _run_update()
+    client.patch.assert_not_awaited()
+    assert "ningún campo" in result.lower()
+
+
+def test_update_customer_reports_api_error():
+    err = NestJSAPIError(status_code=404, detail="Customer not found")
+    client, result = _run_update({"display_name": "X"}, patch_side_effect=err)
+    assert "error al actualizar cliente" in result.lower()
+    assert "Customer not found" in result
