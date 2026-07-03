@@ -400,7 +400,7 @@ describe("WhatsApp inbox", () => {
 
     return Object.fromEntries(
       Object.entries(select)
-        .filter(([, enabled]) => enabled === true)
+        .filter(([, enabled]) => enabled === true || (enabled !== null && typeof enabled === "object"))
         .map(([key]) => [key, record[key]]),
     );
   };
@@ -4531,6 +4531,23 @@ describe("WhatsApp inbox", () => {
       accounts.push(customerAgentAccount);
       conversations.push(customerAgentConversation as unknown as (typeof conversations)[number]);
       contacts.push(customerAgentContact);
+      orders.push({
+        id: "order-customer-agent",
+        customerId: "customer-2",
+        orderNumber: "NT-100",
+        status: "despachado",
+        orderDate: new Date("2026-06-20T10:00:00.000Z"),
+        total: 1500000,
+        carrierName: "Envia",
+        trackingNumber: "TRK-777",
+        trackingUrl: "https://track/TRK-777",
+        dispatchDate: new Date("2026-06-21T10:00:00.000Z"),
+        committedDeliveryDate: new Date("2026-06-23T10:00:00.000Z"),
+        deliveryDate: null,
+        customerZoneId: "customer-zone-1",
+        company: { prefix: "NT" },
+        items: [{ productSnapshotSku: "FERT-001", quantity: 10, unitPrice: 150000 }],
+      } as unknown as (typeof orders)[number]);
       (globalThis.fetch as jest.Mock).mockClear();
       conversationUpdateMock.mockClear();
       internalNoteCreateMock.mockClear();
@@ -4541,6 +4558,7 @@ describe("WhatsApp inbox", () => {
       removeMatching(conversations, (item) => item.id === "conversation-customer-agent");
       removeMatching(contacts, (item) => item.id === "contact-customer-agent");
       removeMatching(messages, (item) => item.conversationId === "conversation-customer-agent");
+      removeMatching(orders, (item) => item.id === "order-customer-agent");
     });
 
     it("routes a customer message to the customer agent and hands off to the unicanal inbox", async () => {
@@ -4615,6 +4633,33 @@ describe("WhatsApp inbox", () => {
         } else {
           process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
         }
+      }
+    });
+
+    it("sends order tracking and items in the customer snapshot", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ reply_text: "ok", case_update: null, executed_entity: null, handoff: { needed: false }, order_case: null }),
+        });
+
+        await postCustomerWebhookText("¿dónde va mi pedido?");
+
+        const call = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+        );
+        expect(call).toBeDefined();
+        const body = JSON.parse((call as any)[1].body);
+        const order = body.customer_snapshot.recentOrders[0];
+        expect(order.trackingNumber).toBe("TRK-777");
+        expect(order.companyRef).toBe("NT");
+        expect(Array.isArray(order.items)).toBe(true);
+        expect(order.items[0].productRef).toBe("FERT-001");
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+        else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
       }
     });
   });
