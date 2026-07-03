@@ -226,6 +226,14 @@ export class NoraRoutingService {
       }
 
       if (
+        sender.senderType === WhatsAppSenderType.cliente &&
+        conversation.assignedToUserId &&
+        (conversation.status === "pendiente" || conversation.status === "en_gestion")
+      ) {
+        return;
+      }
+
+      if (
         process.env.NORA_WHATSAPP_CUSTOMER_AGENT === "true" &&
         sender.senderType === WhatsAppSenderType.cliente &&
         "customerId" in sender &&
@@ -242,6 +250,68 @@ export class NoraRoutingService {
             auth: "",
             customer_snapshot: customerSnapshot,
           });
+
+          if (agentResponse.order_case) {
+            const draft = agentResponse.order_case;
+            const referenced = draft.orderRef
+              ? customerSnapshot.recentOrders.find((o) => o.orderNumber === draft.orderRef)
+              : undefined;
+
+            const items = referenced
+              ? referenced.items.map((it) => ({ productRef: it.productRef, quantity: it.quantity }))
+              : (draft.items ?? [])
+                  .map((it) => ({
+                    productRef: this.stringValue(it.productRef) ?? this.stringValue(it.product_ref),
+                    quantity: Number(it.quantity),
+                  }))
+                  .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0);
+
+            if (items.length > 0) {
+              await this.noraCaseService.createCase({
+                conversationId: conversation.id,
+                type: NoraConversationCaseType.order,
+                status: NoraConversationCaseStatus.ready_for_review,
+                createdByUserId: null,
+                extractedData: {
+                  customerId: sender.customerId,
+                  ...(referenced?.companyRef && { companyRef: referenced.companyRef }),
+                  ...(referenced?.customerZoneId && { customerZoneId: referenced.customerZoneId }),
+                  items,
+                  notes: draft.motivo,
+                },
+              });
+
+              const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
+              if (unicanalUserId) {
+                await this.prisma.whatsAppConversation.update({
+                  where: { id: conversation.id },
+                  data: { assignedToUserId: unicanalUserId, status: "pendiente" },
+                });
+                await this.prisma.whatsAppInternalNote.create({
+                  data: {
+                    conversationId: conversation.id,
+                    authorUserId: unicanalUserId,
+                    body: `Pedido armado por Nora — ${draft.motivo}`,
+                  },
+                });
+              } else {
+                this.logger.warn("Order case armed but NORA_UNICANAL_USER_ID is not set");
+              }
+
+              await this.prisma.noraActionLog.update({
+                where: { id: actionLog.id },
+                data: {
+                  status: NoraActionStatus.proposed,
+                  output: agentResponse as unknown as Prisma.InputJsonObject,
+                },
+              });
+
+              if (agentResponse.reply_text) {
+                await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+              }
+              return;
+            }
+          }
 
           if (agentResponse.handoff?.needed) {
             const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
@@ -985,6 +1055,7 @@ export class NoraRoutingService {
       case_update: Record<string, unknown> | null;
       executed_entity: Record<string, unknown> | null;
       handoff: { needed: boolean; reason: string | null; intent: string | null } | null;
+      order_case: { orderRef: string | null; items: Array<Record<string, unknown>>; motivo: string } | null;
     }>;
   }
 
