@@ -16,7 +16,12 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 
 from .agent import create_llm
-from .models.whatsapp_models import NoraHandoff, WhatsAppAgentRequest, WhatsAppAgentResponse
+from .models.whatsapp_models import (
+    NoraHandoff,
+    NoraOrderDraft,
+    WhatsAppAgentRequest,
+    WhatsAppAgentResponse,
+)
 
 CUSTOMER_AGENT_PROMPT = """Eres Nora, la asistente de Norgtech, atendiendo a un CLIENTE externo por WhatsApp.
 
@@ -24,16 +29,19 @@ Tono: amable, claro y breve. Texto plano (sin markdown ni tablas).
 
 Qué puedes hacer:
 - Responder sobre los pedidos y la cartera del cliente USANDO SOLO los datos del
-  bloque [DATOS DEL CLIENTE]. Nunca inventes números, estados ni fechas.
+  bloque [DATOS DEL CLIENTE]. Nunca inventes números, estados, guías ni fechas.
+- Si el cliente pregunta por el estado o la guía de un pedido, respóndelo desde los
+  campos del pedido (estado, transportadora, guía, link, fechas) si están presentes.
 
-Cuándo derivar a un asesor humano (usa la tool derivar_a_unicanal):
-- El cliente quiere hacer, cambiar o cancelar un pedido.
-- Tiene un reclamo, una queja o un problema.
-- Pide información que NO está en [DATOS DEL CLIENTE].
-- Pide hablar con un área (cartera, contabilidad, logística, comercial) o con una persona.
-En esos casos llama a derivar_a_unicanal con un 'intent' corto (ej: "pedido",
-"cartera", "logistica", "reclamo", "comercial") y un 'motivo' de una frase, y luego
-dile al cliente en tono cálido que ya un asesor lo va a contactar.
+Cuando el cliente quiere HACER o REPETIR un pedido (usa la tool armar_pedido):
+- Si quiere repetir uno anterior, pasa order_ref con el número del pedido de [DATOS DEL CLIENTE].
+- Si es un pedido nuevo, pasa items con [{"productRef": producto, "quantity": cantidad}].
+- Siempre pasa un 'motivo' de una frase. Luego dile al cliente, cálido, que un asesor
+  confirma su pedido y le avisa. NO prometas precios ni fechas.
+
+Deriva a un asesor humano (usa derivar_a_unicanal) cuando: hay un reclamo/queja/problema,
+piden info que NO está en [DATOS DEL CLIENTE], o piden hablar con un área o persona.
+En ese caso pasa 'intent' corto (ej: "cartera", "logistica", "reclamo", "comercial") y 'motivo'.
 
 Si puedes resolver con los datos disponibles, responde directo y no derives.
 """
@@ -52,7 +60,25 @@ def derivar_a_unicanal(motivo: str, intent: str) -> str:
     return f"DERIVADO|{intent}|{motivo}"
 
 
-CUSTOMER_TOOLS = [derivar_a_unicanal]
+@tool
+def armar_pedido(motivo: str, order_ref: str = "", items: list[dict] | None = None) -> str:
+    """Arma un pedido para que un asesor lo confirme. Úsala cuando el cliente
+    quiere HACER o REPETIR un pedido.
+
+    Args:
+        motivo: Frase corta con lo que pidió el cliente.
+        order_ref: Si el cliente quiere repetir un pedido anterior, el número de ese
+            pedido tal como aparece en [DATOS DEL CLIENTE] (ej. "NT-100"). Vacío si es nuevo.
+        items: Para un pedido nuevo, lista de {"productRef": nombre del producto, "quantity": cantidad}.
+    """
+    payload = json.dumps(
+        {"orderRef": order_ref or None, "items": items or [], "motivo": motivo},
+        ensure_ascii=False,
+    )
+    return f"PEDIDO|{payload}"
+
+
+CUSTOMER_TOOLS = [derivar_a_unicanal, armar_pedido]
 
 
 class _CustomerState(TypedDict):
@@ -122,6 +148,24 @@ def _extract_handoff(messages: list) -> NoraHandoff:
     return NoraHandoff(needed=False)
 
 
+def _extract_order(messages: list) -> NoraOrderDraft | None:
+    """Scan in reverse for an armar_pedido ToolMessage ('PEDIDO|{json}')."""
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage) and msg.name == "armar_pedido":
+            parts = (msg.content or "").split("|", 1)
+            if len(parts) == 2 and parts[0] == "PEDIDO":
+                try:
+                    data = json.loads(parts[1])
+                except json.JSONDecodeError:
+                    return NoraOrderDraft(motivo="pedido")
+                return NoraOrderDraft(
+                    orderRef=data.get("orderRef"),
+                    items=data.get("items") or [],
+                    motivo=data.get("motivo") or "pedido",
+                )
+    return None
+
+
 async def run_whatsapp_customer_agent(request: WhatsAppAgentRequest) -> WhatsAppAgentResponse:
     """Run one stateless turn of the customer agent and return reply + handoff."""
     state: _CustomerState = {"messages": _to_messages(request)}
@@ -132,12 +176,19 @@ async def run_whatsapp_customer_agent(request: WhatsAppAgentRequest) -> WhatsApp
         if isinstance(msg, AIMessage) and msg.content and not getattr(msg, "tool_calls", None):
             reply_text = msg.content
             break
+
+    order_case = _extract_order(result["messages"])
     if not reply_text:
-        reply_text = "Gracias por escribir. Ya un asesor te va a contactar."
+        reply_text = (
+            "¡Gracias! Ya un asesor confirma tu pedido y te avisa."
+            if order_case
+            else "Gracias por escribir. Ya un asesor te va a contactar."
+        )
 
     return WhatsAppAgentResponse(
         reply_text=reply_text,
         case_update=None,
         executed_entity=None,
         handoff=_extract_handoff(result["messages"]),
+        order_case=order_case,
     )

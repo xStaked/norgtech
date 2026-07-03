@@ -141,6 +141,12 @@ class NoraHandoff(BaseModel):
     intent: str | None = None
 
 
+class NoraOrderDraft(BaseModel):
+    orderRef: str | None = None
+    items: list[dict] = Field(default_factory=list)
+    motivo: str = ""
+
+
 class WhatsAppAgentRequest(BaseModel):
     current_message: str
     history: list[NoraMessageContext] = Field(default_factory=list)
@@ -157,3 +163,4 @@ class WhatsAppAgentResponse(BaseModel):
     case_update: dict[str, Any] | None = None
     executed_entity: dict[str, Any] | None = None
     handoff: "NoraHandoff | None" = None
+    order_case: "NoraOrderDraft | None" = None

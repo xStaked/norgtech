@@ -4,9 +4,10 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 from src.models.whatsapp_models import (
     NoraCustomerSnapshot,
     NoraMessageContext,
+    NoraOrderDraft,
     WhatsAppAgentRequest,
 )
-from src.whatsapp_customer_agent import _extract_handoff, _snapshot_block, _to_messages
+from src.whatsapp_customer_agent import _extract_handoff, _extract_order, _snapshot_block, _to_messages
 
 
 def _snapshot() -> NoraCustomerSnapshot:
@@ -64,3 +65,27 @@ def test_extract_handoff_returns_not_needed_without_tool():
     msgs = [AIMessage(content="Tu pedido NT-100 va despachado.")]
     h = _extract_handoff(msgs)
     assert h.needed is False
+
+
+def test_extract_order_detects_repeat_by_order_ref():
+    payload = '{"orderRef": "NT-100", "items": [], "motivo": "repetir ultimo pedido"}'
+    msgs = [ToolMessage(content=f"PEDIDO|{payload}", tool_call_id="tc_1", name="armar_pedido")]
+    draft = _extract_order(msgs)
+    assert draft is not None
+    assert draft.orderRef == "NT-100"
+    assert draft.motivo == "repetir ultimo pedido"
+    assert draft.items == []
+
+
+def test_extract_order_detects_new_items():
+    payload = '{"orderRef": null, "items": [{"productRef": "FERT-001", "quantity": 10}], "motivo": "pedido nuevo"}'
+    msgs = [ToolMessage(content=f"PEDIDO|{payload}", tool_call_id="tc_2", name="armar_pedido")]
+    draft = _extract_order(msgs)
+    assert draft is not None
+    assert draft.orderRef is None
+    assert draft.items == [{"productRef": "FERT-001", "quantity": 10}]
+
+
+def test_extract_order_returns_none_without_tool():
+    msgs = [AIMessage(content="Tu pedido NT-100 va despachado.")]
+    assert _extract_order(msgs) is None
