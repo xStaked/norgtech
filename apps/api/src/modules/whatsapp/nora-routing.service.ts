@@ -253,18 +253,56 @@ export class NoraRoutingService {
 
           if (agentResponse.order_case) {
             const draft = agentResponse.order_case;
-            const referenced = draft.orderRef
-              ? customerSnapshot.recentOrders.find((o) => o.orderNumber === draft.orderRef)
+            const normalizedRef = draft.orderRef?.trim().toLowerCase();
+            const referenced = normalizedRef
+              ? customerSnapshot.recentOrders.find(
+                  (o) => o.orderNumber?.trim().toLowerCase() === normalizedRef,
+                )
               : undefined;
 
             const items = referenced
-              ? referenced.items.map((it) => ({ productRef: it.productRef, quantity: it.quantity }))
+              ? referenced.items
+                  .map((it) => ({ productRef: it.productRef, quantity: it.quantity }))
+                  .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0)
               : (draft.items ?? [])
                   .map((it) => ({
                     productRef: this.stringValue(it.productRef) ?? this.stringValue(it.product_ref),
                     quantity: Number(it.quantity),
                   }))
                   .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0);
+
+            if (items.length === 0) {
+              const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
+              if (unicanalUserId) {
+                await this.prisma.whatsAppConversation.update({
+                  where: { id: conversation.id },
+                  data: { assignedToUserId: unicanalUserId, status: "pendiente" },
+                });
+                await this.prisma.whatsAppInternalNote.create({
+                  data: {
+                    conversationId: conversation.id,
+                    authorUserId: unicanalUserId,
+                    body: `Nora intentó armar un pedido pero no pudo resolver los ítems — ${draft.motivo}`,
+                  },
+                });
+              } else {
+                this.logger.warn("Order case could not be resolved and NORA_UNICANAL_USER_ID is not set");
+              }
+
+              await this.prisma.noraActionLog.update({
+                where: { id: actionLog.id },
+                data: {
+                  status: NoraActionStatus.proposed,
+                  output: agentResponse as unknown as Prisma.InputJsonObject,
+                },
+              });
+
+              await this.whatsAppService.sendAgentReply(
+                conversation.id,
+                "Ya un asesor te va a contactar para ayudarte con tu pedido.",
+              );
+              return;
+            }
 
             if (items.length > 0) {
               await this.noraCaseService.createCase({

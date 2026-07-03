@@ -4717,6 +4717,50 @@ describe("WhatsApp inbox", () => {
       }
     });
 
+    it("hands off to a human instead of a false success reply when order_case items cannot be resolved", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      const prevUnicanal = process.env.NORA_UNICANAL_USER_ID;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      process.env.NORA_UNICANAL_USER_ID = "user-magali";
+      const casesBefore = noraCases.length;
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "¡Gracias! Ya un asesor confirma tu pedido y te avisa.",
+            case_update: null,
+            executed_entity: null,
+            handoff: { needed: false },
+            order_case: { orderRef: "NO-EXISTE", items: [], motivo: "repetir" },
+          }),
+        });
+
+        await postCustomerWebhookText("repite mi pedido");
+
+        const created = noraCases.find(
+          (c) => c.conversationId === "conversation-customer-agent" && String(c.type) === "order",
+        );
+        expect(created).toBeUndefined();
+        expect(noraCases.length).toBe(casesBefore);
+
+        // se deriva a un humano en vez de mandar la confirmación falsa de éxito
+        expect(conversationUpdateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali", status: "pendiente" }) }),
+        );
+        expect(internalNoteCreateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+        );
+
+        const outboundReplies = messages
+          .filter((m) => m.conversationId === "conversation-customer-agent")
+          .map((m) => m.body as string);
+        expect(outboundReplies.some((text) => text.includes("confirma tu pedido"))).toBe(false);
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT; else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+        if (prevUnicanal === undefined) delete process.env.NORA_UNICANAL_USER_ID; else process.env.NORA_UNICANAL_USER_ID = prevUnicanal;
+      }
+    });
+
     it("does not run the customer agent when the conversation is already assigned to a human", async () => {
       const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
       process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
