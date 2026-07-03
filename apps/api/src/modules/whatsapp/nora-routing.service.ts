@@ -226,6 +226,14 @@ export class NoraRoutingService {
       }
 
       if (
+        sender.senderType === WhatsAppSenderType.cliente &&
+        conversation.assignedToUserId &&
+        (conversation.status === "pendiente" || conversation.status === "en_gestion")
+      ) {
+        return;
+      }
+
+      if (
         process.env.NORA_WHATSAPP_CUSTOMER_AGENT === "true" &&
         sender.senderType === WhatsAppSenderType.cliente &&
         "customerId" in sender &&
@@ -242,6 +250,106 @@ export class NoraRoutingService {
             auth: "",
             customer_snapshot: customerSnapshot,
           });
+
+          if (agentResponse.order_case) {
+            const draft = agentResponse.order_case;
+            const normalizedRef = draft.orderRef?.trim().toLowerCase();
+            const referenced = normalizedRef
+              ? customerSnapshot.recentOrders.find(
+                  (o) => o.orderNumber?.trim().toLowerCase() === normalizedRef,
+                )
+              : undefined;
+
+            const items = referenced
+              ? referenced.items
+                  .map((it) => ({ productRef: it.productRef, quantity: it.quantity }))
+                  .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0)
+              : (draft.items ?? [])
+                  .map((it) => ({
+                    productRef: this.stringValue(it.productRef) ?? this.stringValue(it.product_ref),
+                    quantity: Number(it.quantity),
+                  }))
+                  .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0);
+
+            if (items.length === 0) {
+              const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
+              if (unicanalUserId) {
+                await this.prisma.whatsAppConversation.update({
+                  where: { id: conversation.id },
+                  data: { assignedToUserId: unicanalUserId, status: "pendiente" },
+                });
+                await this.prisma.whatsAppInternalNote.create({
+                  data: {
+                    conversationId: conversation.id,
+                    authorUserId: unicanalUserId,
+                    body: `Nora intentó armar un pedido pero no pudo resolver los ítems — ${draft.motivo}`,
+                  },
+                });
+              } else {
+                this.logger.warn("Order case could not be resolved and NORA_UNICANAL_USER_ID is not set");
+              }
+
+              await this.prisma.noraActionLog.update({
+                where: { id: actionLog.id },
+                data: {
+                  status: NoraActionStatus.proposed,
+                  output: agentResponse as unknown as Prisma.InputJsonObject,
+                },
+              });
+
+              await this.whatsAppService.sendAgentReply(
+                conversation.id,
+                "Ya un asesor te va a contactar para ayudarte con tu pedido.",
+              );
+              return;
+            }
+
+            if (items.length > 0) {
+              await this.noraCaseService.createCase({
+                conversationId: conversation.id,
+                type: NoraConversationCaseType.order,
+                status: NoraConversationCaseStatus.ready_for_review,
+                createdByUserId: null,
+                extractedData: {
+                  customerId: sender.customerId,
+                  ...(referenced?.companyRef && { companyRef: referenced.companyRef }),
+                  ...(referenced?.customerZoneId && { customerZoneId: referenced.customerZoneId }),
+                  items,
+                  notes: draft.motivo,
+                },
+              });
+
+              const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
+              if (unicanalUserId) {
+                await this.prisma.whatsAppConversation.update({
+                  where: { id: conversation.id },
+                  data: { assignedToUserId: unicanalUserId, status: "pendiente" },
+                });
+                await this.prisma.whatsAppInternalNote.create({
+                  data: {
+                    conversationId: conversation.id,
+                    authorUserId: unicanalUserId,
+                    body: `Pedido armado por Nora — ${draft.motivo}`,
+                  },
+                });
+              } else {
+                this.logger.warn("Order case armed but NORA_UNICANAL_USER_ID is not set");
+              }
+
+              await this.prisma.noraActionLog.update({
+                where: { id: actionLog.id },
+                data: {
+                  status: NoraActionStatus.proposed,
+                  output: agentResponse as unknown as Prisma.InputJsonObject,
+                },
+              });
+
+              if (agentResponse.reply_text) {
+                await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+              }
+              return;
+            }
+          }
 
           if (agentResponse.handoff?.needed) {
             const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
@@ -909,7 +1017,21 @@ export class NoraRoutingService {
         where: { customerId },
         orderBy: { orderDate: "desc" },
         take: 5,
-        select: { orderNumber: true, status: true, orderDate: true, total: true },
+        select: {
+          orderNumber: true,
+          status: true,
+          orderDate: true,
+          total: true,
+          carrierName: true,
+          trackingNumber: true,
+          trackingUrl: true,
+          dispatchDate: true,
+          committedDeliveryDate: true,
+          deliveryDate: true,
+          customerZoneId: true,
+          company: { select: { prefix: true } },
+          items: { select: { productSnapshotSku: true, quantity: true, unitPrice: true } },
+        },
       }),
       this.prisma.invoice.findMany({
         where: { customerId },
@@ -938,6 +1060,19 @@ export class NoraRoutingService {
         status: o.status,
         orderDate: o.orderDate.toISOString(),
         total: Number(o.total),
+        carrierName: o.carrierName ?? null,
+        trackingNumber: o.trackingNumber ?? null,
+        trackingUrl: o.trackingUrl ?? null,
+        dispatchDate: o.dispatchDate ? o.dispatchDate.toISOString() : null,
+        committedDeliveryDate: o.committedDeliveryDate ? o.committedDeliveryDate.toISOString() : null,
+        deliveryDate: o.deliveryDate ? o.deliveryDate.toISOString() : null,
+        companyRef: o.company?.prefix ?? null,
+        customerZoneId: o.customerZoneId ?? null,
+        items: o.items.map((it) => ({
+          productRef: it.productSnapshotSku,
+          quantity: Number(it.quantity),
+          unitPrice: Number(it.unitPrice),
+        })),
       })),
       cartera: { saldo, vencidasCount },
     };
@@ -958,6 +1093,7 @@ export class NoraRoutingService {
       case_update: Record<string, unknown> | null;
       executed_entity: Record<string, unknown> | null;
       handoff: { needed: boolean; reason: string | null; intent: string | null } | null;
+      order_case: { orderRef: string | null; items: Array<Record<string, unknown>>; motivo: string } | null;
     }>;
   }
 

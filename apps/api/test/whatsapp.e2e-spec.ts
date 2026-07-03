@@ -49,6 +49,15 @@ describe("WhatsApp inbox", () => {
       role: UserRole.comercial,
       active: true,
     },
+    {
+      id: "user-magali",
+      name: "Magali",
+      email: "magali@norgtech.local",
+      phone: "+573004445599",
+      passwordHash,
+      role: UserRole.comercial,
+      active: true,
+    },
   ];
 
   const customers = [
@@ -400,7 +409,7 @@ describe("WhatsApp inbox", () => {
 
     return Object.fromEntries(
       Object.entries(select)
-        .filter(([, enabled]) => enabled === true)
+        .filter(([, enabled]) => enabled === true || (enabled !== null && typeof enabled === "object"))
         .map(([key]) => [key, record[key]]),
     );
   };
@@ -4488,8 +4497,8 @@ describe("WhatsApp inbox", () => {
       phone: "+573009998877",
       senderName: "Carlos Cliente",
       senderType: WhatsAppSenderType.cliente,
-      status: WhatsAppConversationStatus.nuevo,
-      assignedToUserId: null,
+      status: WhatsAppConversationStatus.nuevo as WhatsAppConversationStatus,
+      assignedToUserId: null as string | null,
       customerId: "customer-2",
       contactId: "contact-customer-agent",
       lastMessageAt: new Date("2026-06-24T10:00:00.000Z"),
@@ -4531,6 +4540,23 @@ describe("WhatsApp inbox", () => {
       accounts.push(customerAgentAccount);
       conversations.push(customerAgentConversation as unknown as (typeof conversations)[number]);
       contacts.push(customerAgentContact);
+      orders.push({
+        id: "order-customer-agent",
+        customerId: "customer-2",
+        orderNumber: "NT-100",
+        status: "despachado",
+        orderDate: new Date("2026-06-20T10:00:00.000Z"),
+        total: 1500000,
+        carrierName: "Envia",
+        trackingNumber: "TRK-777",
+        trackingUrl: "https://track/TRK-777",
+        dispatchDate: new Date("2026-06-21T10:00:00.000Z"),
+        committedDeliveryDate: new Date("2026-06-23T10:00:00.000Z"),
+        deliveryDate: null,
+        customerZoneId: "customer-zone-1",
+        company: { prefix: "NT" },
+        items: [{ productSnapshotSku: "FERT-001", quantity: 10, unitPrice: 150000 }],
+      } as unknown as (typeof orders)[number]);
       (globalThis.fetch as jest.Mock).mockClear();
       conversationUpdateMock.mockClear();
       internalNoteCreateMock.mockClear();
@@ -4541,6 +4567,8 @@ describe("WhatsApp inbox", () => {
       removeMatching(conversations, (item) => item.id === "conversation-customer-agent");
       removeMatching(contacts, (item) => item.id === "contact-customer-agent");
       removeMatching(messages, (item) => item.conversationId === "conversation-customer-agent");
+      removeMatching(orders, (item) => item.id === "order-customer-agent");
+      removeMatching(noraCases, (item) => item.conversationId === "conversation-customer-agent");
     });
 
     it("routes a customer message to the customer agent and hands off to the unicanal inbox", async () => {
@@ -4615,6 +4643,141 @@ describe("WhatsApp inbox", () => {
         } else {
           process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
         }
+      }
+    });
+
+    it("sends order tracking and items in the customer snapshot", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ reply_text: "ok", case_update: null, executed_entity: null, handoff: { needed: false }, order_case: null }),
+        });
+
+        await postCustomerWebhookText("¿dónde va mi pedido?");
+
+        const call = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+        );
+        expect(call).toBeDefined();
+        const body = JSON.parse((call as any)[1].body);
+        const order = body.customer_snapshot.recentOrders[0];
+        expect(order.trackingNumber).toBe("TRK-777");
+        expect(order.companyRef).toBe("NT");
+        expect(Array.isArray(order.items)).toBe(true);
+        expect(order.items[0].productRef).toBe("FERT-001");
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+        else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+      }
+    });
+
+    it("creates a ready-for-review order case when the customer agent arms an order", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      const prevUnicanal = process.env.NORA_UNICANAL_USER_ID;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      process.env.NORA_UNICANAL_USER_ID = "user-magali";
+      const casesBefore = noraCases.length;
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "¡Gracias! Ya un asesor confirma tu pedido y te avisa.",
+            case_update: null,
+            executed_entity: null,
+            handoff: { needed: false },
+            order_case: { orderRef: "NT-100", items: [], motivo: "repetir ultimo pedido" },
+          }),
+        });
+
+        await postCustomerWebhookText("repite mi último pedido");
+
+        const created = noraCases.find(
+          (c) => c.conversationId === "conversation-customer-agent" && String(c.type) === "order",
+        );
+        expect(noraCases.length).toBe(casesBefore + 1);
+        expect(created).toBeDefined();
+        expect(String((created as Record<string, unknown>).status)).toBe("ready_for_review");
+        const data = (created as Record<string, unknown>).extractedData as Record<string, unknown>;
+        expect(data.customerId).toBe("customer-2");
+        expect((data.items as unknown[]).length).toBeGreaterThan(0);
+        expect((data.items as Array<Record<string, unknown>>)[0].productRef).toBe("FERT-001");
+
+        // conversación asignada al buzón único + nota interna
+        expect(conversationUpdateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali", status: "pendiente" }) }),
+        );
+        expect(internalNoteCreateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+        );
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT; else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+        if (prevUnicanal === undefined) delete process.env.NORA_UNICANAL_USER_ID; else process.env.NORA_UNICANAL_USER_ID = prevUnicanal;
+      }
+    });
+
+    it("hands off to a human instead of a false success reply when order_case items cannot be resolved", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      const prevUnicanal = process.env.NORA_UNICANAL_USER_ID;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      process.env.NORA_UNICANAL_USER_ID = "user-magali";
+      const casesBefore = noraCases.length;
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "¡Gracias! Ya un asesor confirma tu pedido y te avisa.",
+            case_update: null,
+            executed_entity: null,
+            handoff: { needed: false },
+            order_case: { orderRef: "NO-EXISTE", items: [], motivo: "repetir" },
+          }),
+        });
+
+        await postCustomerWebhookText("repite mi pedido");
+
+        const created = noraCases.find(
+          (c) => c.conversationId === "conversation-customer-agent" && String(c.type) === "order",
+        );
+        expect(created).toBeUndefined();
+        expect(noraCases.length).toBe(casesBefore);
+
+        // se deriva a un humano en vez de mandar la confirmación falsa de éxito
+        expect(conversationUpdateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali", status: "pendiente" }) }),
+        );
+        expect(internalNoteCreateMock).toHaveBeenCalledWith(
+          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+        );
+
+        const outboundReplies = messages
+          .filter((m) => m.conversationId === "conversation-customer-agent")
+          .map((m) => m.body as string);
+        expect(outboundReplies.some((text) => text.includes("confirma tu pedido"))).toBe(false);
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT; else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+        if (prevUnicanal === undefined) delete process.env.NORA_UNICANAL_USER_ID; else process.env.NORA_UNICANAL_USER_ID = prevUnicanal;
+      }
+    });
+
+    it("does not run the customer agent when the conversation is already assigned to a human", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      // la fixture customerAgentConversation ya está en el array; simula handoff previo
+      customerAgentConversation.assignedToUserId = "user-magali";
+      customerAgentConversation.status = WhatsAppConversationStatus.pendiente;
+      try {
+        await postCustomerWebhookText("sigo por aquí");
+
+        const customerCall = (globalThis.fetch as jest.Mock).mock.calls.find(
+          ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+        );
+        expect(customerCall).toBeUndefined();
+      } finally {
+        customerAgentConversation.assignedToUserId = null;
+        customerAgentConversation.status = WhatsAppConversationStatus.nuevo;
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT; else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
       }
     });
   });
