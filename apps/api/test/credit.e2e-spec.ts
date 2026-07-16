@@ -229,7 +229,17 @@ describe("Credit", () => {
           orders.find((o) => o.id === id) ?? null,
       },
       product: {
-        findUnique: async () => null,
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          id === "product-costly"
+            ? {
+                id: "product-costly",
+                name: "Insumo Caro",
+                sku: "IC-1",
+                unit: "unit",
+                presentation: null,
+                basePrice: new Prisma.Decimal(50000),
+              }
+            : null,
       },
       opportunity: {
         findUnique: async () => null,
@@ -369,6 +379,23 @@ describe("Credit", () => {
 
     expect(response.body.customerId).toBe("customer-high");
     expect(Number(response.body.subtotal)).toBe(100000);
+  });
+
+  it("checks credit against the catalog price, not the client-supplied unitPrice", async () => {
+    // customer-high has 150000 available. A catalog line is priced from
+    // product.basePrice (50000 x 100 = 5000000), so a lying unitPrice of 1
+    // must not buy its way past the limit.
+    const response = await request(app.getHttpServer())
+      .post("/orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        customerId: "customer-high",
+        companyId: "company-a",
+        items: [{ productId: "product-costly", quantity: 100, unitPrice: 1 }],
+      })
+      .expect(400);
+
+    expect(response.body.message).toContain("Credito excedido");
   });
 
   it("allows order creation when customer has no credit limit", async () => {

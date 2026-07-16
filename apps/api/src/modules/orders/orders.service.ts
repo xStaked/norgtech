@@ -92,15 +92,12 @@ export class OrdersService {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
 
-    const orderSubtotal = dto.items.reduce(
-      (sum, item) =>
-        sum.plus(
-          new Prisma.Decimal(item.quantity).times(new Prisma.Decimal(item.unitPrice)),
-        ),
-      new Prisma.Decimal(0),
-    );
+    // Price first, then gate: for catalog lines priceLines() derives unitPrice
+    // from product.basePrice and ignores dto's unitPrice, so checking credit
+    // against the DTO would guard a number the client controls.
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
 
-    await this.credit.assertCreditLimit(dto.customerId, orderSubtotal);
+    await this.credit.assertCreditLimit(dto.customerId, pricing.subtotal);
 
     const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
@@ -114,8 +111,6 @@ export class OrdersService {
       dto.preparedByName ||
       (await this.prisma.user.findUnique({ where: { id: user.id } }))?.name ||
       user.email;
-
-    const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
 
     const itemsWithSnapshot = pricing.rawItems.map((line, index) => {
       const item = dto.items[index];
