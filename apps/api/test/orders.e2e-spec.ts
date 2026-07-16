@@ -473,6 +473,10 @@ describe("Orders", () => {
           company: prismaStub.company,
           customer,
           user: prismaStub.user,
+          // Row lock de CreditService.assertCreditLimit. El stub no tiene
+          // transacciones reales, asi que solo debe devolver una fila (no
+          // vacia, o el lock lanzaria "Cliente no encontrado").
+          $queryRaw: async () => [{ id: "locked" }],
           invoice: {
             findFirst: async ({ where }: { where: any }) => findInvoice(where, [...invoices, ...pendingInvoices]),
             findMany: async ({ where }: { where: any }) =>

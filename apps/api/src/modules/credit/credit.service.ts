@@ -83,6 +83,30 @@ export class CreditService {
    * calculados como `order.total` leido de Prisma, que segun el driver/serie
    * puede llegar como string o number. Asumir Decimal reventaba en `.toFixed()`.
    */
+  /**
+   * Serializa a los callers por cliente tomando un row lock sobre la fila de
+   * Customer ANTES de leer la exposicion (TOCTOU).
+   *
+   * Sin esto, dos transacciones concurrentes (p.ej. dos `approve` sobre pedidos
+   * distintos del mismo cliente) leen cada una una exposicion que no incluye la
+   * escritura aun sin commitear de la otra, ambas pasan el chequeo y el commit
+   * deja al cliente por encima de su cupo. Prisma corre en READ COMMITTED, asi
+   * que el lock explicito es lo unico que las ordena.
+   *
+   * Solo aplica con `tx`: fuera de una transaccion el lock se soltaria de
+   * inmediato al terminar el statement y no serializaria nada, asi que se omite
+   * (ver `orders.service.create`, que chequea fuera del $transaction).
+   */
+  private async lockCustomerForUpdate(
+    tx: Prisma.TransactionClient,
+    customerId: string,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Customer" WHERE id = ${customerId} FOR UPDATE
+    `;
+    if (rows.length === 0) throw new NotFoundException("Cliente no encontrado");
+  }
+
   async assertCreditLimit(
     customerId: string,
     amount: Prisma.Decimal | string | number,
@@ -90,6 +114,9 @@ export class CreditService {
     opts?: { excludeOrderId?: string },
   ): Promise<void> {
     const client = tx ?? this.prisma;
+
+    if (tx) await this.lockCustomerForUpdate(tx, customerId);
+
     const customer = await client.customer.findUnique({
       where: { id: customerId },
       select: { creditLimit: true },

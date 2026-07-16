@@ -277,6 +277,10 @@ describe("Invoices", () => {
         create: async () => undefined,
         findMany: async () => auditLogs,
       },
+      // Row lock de CreditService.assertCreditLimit. El stub no tiene
+      // transacciones reales, asi que solo debe devolver una fila (no vacia,
+      // o el lock lanzaria "Cliente no encontrado").
+      $queryRaw: async () => [{ id: "locked" }],
     };
 
     const prismaStub = {
