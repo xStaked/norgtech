@@ -74,13 +74,8 @@ export class PricingService {
     const zero = new Prisma.Decimal(0);
     const seg = customer.segment;
 
-    if (!seg || new Prisma.Decimal(seg.discountPercent).lte(0)) {
-      return {
-        discountPercent: zero,
-        meetsGoal: false,
-        salesYTD: zero,
-        goalThreshold: seg ? new Prisma.Decimal(seg.minGoalAmount) : zero,
-      };
+    if (!seg) {
+      return { discountPercent: zero, meetsGoal: false, salesYTD: zero, goalThreshold: zero };
     }
 
     const { start, end } = currentYearRange();
@@ -96,9 +91,10 @@ export class PricingService {
     const salesYTD = new Prisma.Decimal(agg._sum.total ?? 0);
     const goalThreshold = new Prisma.Decimal(seg.minGoalAmount);
     const meetsGoal = salesYTD.gte(goalThreshold);
+    const segmentDiscount = new Prisma.Decimal(seg.discountPercent);
 
     return {
-      discountPercent: meetsGoal ? new Prisma.Decimal(seg.discountPercent) : zero,
+      discountPercent: meetsGoal && segmentDiscount.gt(0) ? segmentDiscount : zero,
       meetsGoal,
       salesYTD,
       goalThreshold,

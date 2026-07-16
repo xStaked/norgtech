@@ -107,13 +107,18 @@ describe("PricingService", () => {
       expect(aggregate).not.toHaveBeenCalled();
     });
 
-    it("returns 0 discount without querying sales when segment discount is <= 0", async () => {
-      const { service, aggregate } = makeService();
+    it("reports real goal progress for a zero-discount segment", async () => {
+      const { service, aggregate } = makeService({ salesYTD: 5_000_000 });
       const result = await service.resolveSegmentDiscount(customerZeroDiscountSegment);
 
+      // A 0% segment still has a goal the preview must report honestly:
+      // short-circuiting here made the UI show 0 progress for a customer well
+      // past their threshold.
       expect(result.discountPercent.toNumber()).toBe(0);
-      expect(result.meetsGoal).toBe(false);
-      expect(aggregate).not.toHaveBeenCalled();
+      expect(result.salesYTD.toNumber()).toBe(5_000_000);
+      expect(result.goalThreshold.toNumber()).toBe(1_000_000);
+      expect(result.meetsGoal).toBe(true);
+      expect(aggregate).toHaveBeenCalled();
     });
   });
 
