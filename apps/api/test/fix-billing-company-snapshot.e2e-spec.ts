@@ -1,4 +1,4 @@
-import { fixBillingCompanySnapshot } from "./fix-billing-company-snapshot";
+import { fixBillingCompanySnapshot } from "../prisma/scripts/fix-billing-company-snapshot";
 
 describe("fixBillingCompanySnapshot", () => {
   function buildPrisma(orders: any[]) {
