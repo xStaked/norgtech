@@ -28,6 +28,7 @@ import { InvoicesModule } from "./modules/invoices/invoices.module";
 import { ReturnsModule } from "./modules/returns/returns.module";
 import { UsersModule } from "./modules/users/users.module";
 import { ZonesModule } from "./modules/zones/zones.module";
+import { PricingModule } from "./modules/pricing/pricing.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -45,6 +46,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     CustomersModule,
     OpportunitiesModule,
     ProductsModule,
+    PricingModule,
     QuotesModule,
     OrdersModule,
     VisitsModule,
