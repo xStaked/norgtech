@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { PricingService } from "../pricing/pricing.service";
+import { PricingCustomer } from "../pricing/pricing.types";
 import { CreateQuoteDto } from "./dto/create-quote.dto";
+import { PreviewQuoteDto } from "./dto/preview-quote.dto";
 import { UpdateQuoteStatusDto } from "./dto/update-quote-status.dto";
 
 @Injectable()
@@ -11,74 +13,39 @@ export class QuotesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly pricingService: PricingService,
   ) {}
+
+  async preview(dto: PreviewQuoteDto) {
+    const customer = await this.loadCustomerOrThrow(dto.customerId);
+    return this.pricingService.buildPreview(customer, dto.items, "quote");
+  }
 
   async create(user: AuthUser, dto: CreateQuoteDto) {
     const opportunityId = dto.opportunityId?.trim() || null;
 
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: dto.customerId },
-      include: { segment: true },
-    });
-    if (!customer) {
-      throw new NotFoundException("Customer not found");
-    }
+    const customer = await this.loadCustomerOrThrow(dto.customerId);
     if (opportunityId) {
       await this.assertOpportunityExists(opportunityId);
     }
 
-    const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "quote");
 
-    const itemsWithSnapshot = await Promise.all(
-      dto.items.map(async (item) => {
-        if (item.productId) {
-          const product = await this.prisma.product.findUnique({
-            where: { id: item.productId },
-          });
-          if (!product) {
-            throw new NotFoundException(`Product ${item.productId} not found`);
-          }
-          const basePrice = product.basePrice;
-          const discountMultiplier = new Prisma.Decimal(1).minus(
-            new Prisma.Decimal(discountPercent).dividedBy(100),
-          );
-          const unitPrice = new Prisma.Decimal(basePrice).times(discountMultiplier);
-          const unitPriceRounded = unitPrice.toDecimalPlaces(2);
-          const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded);
+    const itemsWithSnapshot = pricing.rawItems.map((line, index) => ({
+      productId: line.productId,
+      productSnapshotName: line.productSnapshotName,
+      productSnapshotSku: line.productSnapshotSku,
+      unit: line.unit,
+      quantity: line.quantity,
+      originalUnitPrice: line.originalUnitPrice,
+      discountPercent: line.discountPercent,
+      unitPrice: line.unitPrice,
+      subtotal: line.subtotal,
+      notes: dto.items[index].notes,
+    }));
 
-          return {
-            productId: item.productId,
-            productSnapshotName: product.name,
-            productSnapshotSku: product.sku,
-            unit: product.unit,
-            quantity: item.quantity,
-            originalUnitPrice: basePrice,
-            discountPercent,
-            unitPrice: unitPriceRounded,
-            subtotal,
-            notes: item.notes,
-          };
-        }
-        return {
-          productId: null,
-          productSnapshotName: "Custom item",
-          productSnapshotSku: "CUSTOM",
-          unit: "unit",
-          quantity: item.quantity,
-          originalUnitPrice: null,
-          discountPercent: null,
-          unitPrice: item.unitPrice,
-          subtotal: new Prisma.Decimal(item.quantity).times(new Prisma.Decimal(item.unitPrice)),
-          notes: item.notes,
-        };
-      }),
-    );
-
-    const subtotal = itemsWithSnapshot.reduce(
-      (sum, item) => sum.plus(new Prisma.Decimal(item.subtotal)),
-      new Prisma.Decimal(0),
-    );
-    const total = subtotal;
+    const subtotal = pricing.subtotal;
+    const total = pricing.total;
 
     return this.prisma.$transaction(async (tx) => {
       const quote = await tx.quote.create({
@@ -211,5 +178,16 @@ export class QuotesService {
     if (!opportunity) {
       throw new NotFoundException("Opportunity not found");
     }
+  }
+
+  private async loadCustomerOrThrow(customerId: string): Promise<PricingCustomer> {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { segment: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
+    return customer as unknown as PricingCustomer;
   }
 }

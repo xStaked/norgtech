@@ -36,7 +36,7 @@ describe("Credit", () => {
       purchaseBudget: new Prisma.Decimal(2000000),
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
-      segment: { discountPercent: new Prisma.Decimal(0) },
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
     {
       id: "customer-low",
@@ -47,7 +47,7 @@ describe("Credit", () => {
       purchaseBudget: null,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
-      segment: { discountPercent: new Prisma.Decimal(0) },
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
     {
       id: "customer-no-limit",
@@ -58,7 +58,7 @@ describe("Credit", () => {
       purchaseBudget: null,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
-      segment: { discountPercent: new Prisma.Decimal(0) },
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
     {
       id: "customer-no-invoices",
@@ -69,7 +69,7 @@ describe("Credit", () => {
       purchaseBudget: null,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
-      segment: { discountPercent: new Prisma.Decimal(0) },
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
     {
       id: "customer-company-b",
@@ -80,7 +80,7 @@ describe("Credit", () => {
       purchaseBudget: null,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
-      segment: { discountPercent: new Prisma.Decimal(0) },
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
   ];
   const invoices = [

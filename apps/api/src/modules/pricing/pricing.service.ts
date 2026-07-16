@@ -46,6 +46,7 @@ interface RawPricedLine {
   subtotal: Prisma.Decimal;
   totalWithTax: Prisma.Decimal;
   notes?: string;
+  productPresentation?: string | null;
 }
 
 export interface PriceLinesResult {
@@ -162,6 +163,7 @@ export class PricingService {
             subtotal,
             totalWithTax,
             notes: item.notes,
+            productPresentation: product.presentation ?? null,
           };
         }
 

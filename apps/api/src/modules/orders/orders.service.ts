@@ -3,7 +3,9 @@ import { InvoiceStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { PricingService } from "../pricing/pricing.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
+import { PreviewOrderDto } from "./dto/preview-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
@@ -50,16 +52,16 @@ export class OrdersService {
     private readonly credit: CreditService,
     @Inject(forwardRef(() => WhatsAppService))
     private readonly whatsApp: WhatsAppService,
+    private readonly pricingService: PricingService,
   ) {}
 
+  async preview(dto: PreviewOrderDto) {
+    const customer = await this.loadCustomerOrThrow(dto.customerId);
+    return this.pricingService.buildPreview(customer, dto.items, "order");
+  }
+
   async create(user: AuthUser, dto: CreateOrderDto) {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: dto.customerId },
-      include: { segment: true },
-    });
-    if (!customer) {
-      throw new NotFoundException("Customer not found");
-    }
+    const customer = await this.loadCustomerOrThrow(dto.customerId);
     const company = await this.prisma.company.findUnique({
       where: { id: dto.companyId },
     });
@@ -100,7 +102,6 @@ export class OrdersService {
 
     await this.credit.assertCreditLimit(dto.customerId, orderSubtotal);
 
-    const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
     const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
     const customerNameSnapshot = customer.displayName;
@@ -114,86 +115,54 @@ export class OrdersService {
       (await this.prisma.user.findUnique({ where: { id: user.id } }))?.name ||
       user.email;
 
-    const itemsWithSnapshot = await Promise.all(
-      dto.items.map(async (item) => {
-        const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
 
-        if (item.productId) {
-          const product = await this.prisma.product.findUnique({
-            where: { id: item.productId },
-          });
-          if (!product) {
-            throw new NotFoundException(`Product ${item.productId} not found`);
-          }
-          const discountMultiplier = new Prisma.Decimal(1).minus(
-            new Prisma.Decimal(discountPercent).dividedBy(100),
-          );
-          const unitPriceRounded = new Prisma.Decimal(product.basePrice)
-            .times(discountMultiplier)
-            .toDecimalPlaces(2);
-          const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-          const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
-          const totalWithTax = new Prisma.Decimal(item.quantity)
-            .times(unitPriceRounded.plus(taxAmount))
-            .toDecimalPlaces(2);
-
-          return {
-            productId: item.productId,
-            productSnapshotName: product.name,
-            productSnapshotSku: product.sku,
-            unit: product.unit,
-            presentationSnapshot: item.presentation?.trim() || product.presentation || null,
-            customProductName: null,
-            quantity: item.quantity,
-            originalUnitPrice: product.basePrice,
-            discountPercent,
-            unitPrice: unitPriceRounded,
-            taxPercent,
-            taxAmount,
-            totalWithTax,
-            subtotal,
-            notes: item.notes,
-            needsResolution: false,
-          };
-        }
-        const customProductName = item.productName?.trim() || null;
-        const presentationSnapshot = item.presentation?.trim() || null;
-        const unitPriceRounded = new Prisma.Decimal(item.unitPrice).toDecimalPlaces(2);
-        const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-        const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
-        const totalWithTax = new Prisma.Decimal(item.quantity)
-          .times(unitPriceRounded.plus(taxAmount))
-          .toDecimalPlaces(2);
-
+    const itemsWithSnapshot = pricing.rawItems.map((line, index) => {
+      const item = dto.items[index];
+      if (line.productId) {
         return {
-          productId: null,
-          productSnapshotName: customProductName || "Custom item",
-          productSnapshotSku: "CUSTOM",
-          unit: "unit",
-          presentationSnapshot,
-          customProductName,
-          quantity: item.quantity,
-          originalUnitPrice: null,
-          discountPercent: null,
-          unitPrice: unitPriceRounded,
-          taxPercent,
-          taxAmount,
-          totalWithTax,
-          subtotal,
-          notes: item.notes,
-          needsResolution: item.needsResolution ?? false,
+          productId: line.productId,
+          productSnapshotName: line.productSnapshotName,
+          productSnapshotSku: line.productSnapshotSku,
+          unit: line.unit,
+          presentationSnapshot: item.presentation?.trim() || line.productPresentation || null,
+          customProductName: null,
+          quantity: line.quantity,
+          originalUnitPrice: line.originalUnitPrice,
+          discountPercent: line.discountPercent,
+          unitPrice: line.unitPrice,
+          taxPercent: line.taxPercent,
+          taxAmount: line.taxAmount,
+          totalWithTax: line.totalWithTax,
+          subtotal: line.subtotal,
+          notes: line.notes,
+          needsResolution: false,
         };
-      }),
-    );
+      }
+      const customProductName = item.productName?.trim() || null;
+      const presentationSnapshot = item.presentation?.trim() || null;
+      return {
+        productId: null,
+        productSnapshotName: customProductName || "Custom item",
+        productSnapshotSku: "CUSTOM",
+        unit: "unit",
+        presentationSnapshot,
+        customProductName,
+        quantity: line.quantity,
+        originalUnitPrice: line.originalUnitPrice,
+        discountPercent: line.discountPercent,
+        unitPrice: line.unitPrice,
+        taxPercent: line.taxPercent,
+        taxAmount: line.taxAmount,
+        totalWithTax: line.totalWithTax,
+        subtotal: line.subtotal,
+        notes: line.notes,
+        needsResolution: item.needsResolution ?? false,
+      };
+    });
 
-    const subtotal = itemsWithSnapshot.reduce(
-      (sum, item) => sum.plus(new Prisma.Decimal(item.subtotal)),
-      new Prisma.Decimal(0),
-    );
-    const total = itemsWithSnapshot.reduce(
-      (sum, item) => sum.plus(new Prisma.Decimal(item.totalWithTax)),
-      new Prisma.Decimal(0),
-    );
+    const subtotal = pricing.subtotal;
+    const total = pricing.total;
 
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -822,6 +791,17 @@ export class OrdersService {
     if (!user) {
       throw new NotFoundException("User not found");
     }
+  }
+
+  private async loadCustomerOrThrow(customerId: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { segment: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
+    return customer;
   }
 
   private isTransitionAllowed(currentStatus: OrderStatus, nextStatus: OrderStatus) {

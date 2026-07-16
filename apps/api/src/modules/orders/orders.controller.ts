@@ -17,6 +17,7 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "./dto/create-order.dto";
+import { PreviewOrderDto } from "./dto/preview-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
@@ -27,6 +28,21 @@ import { OrderStatus } from "@prisma/client";
 @Controller("orders")
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial", "logistica")
+  @Post("preview")
+  preview(
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: PreviewOrderDto,
+  ) {
+    return this.ordersService.preview(dto);
+  }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "logistica")

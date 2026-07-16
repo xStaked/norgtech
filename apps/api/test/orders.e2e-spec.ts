@@ -190,7 +190,7 @@ describe("Orders", () => {
             creditLimit: new Prisma.Decimal(5000000),
             paymentDays: 30,
             assignedToUserId: "comercial-user-id",
-            segment: { discountPercent: 0 },
+            segment: { discountPercent: 0, minGoalAmount: 0 },
           };
         }
         if (id === "customer-2") {
@@ -204,7 +204,7 @@ describe("Orders", () => {
             creditLimit: null,
             paymentDays: null,
             assignedToUserId: null,
-            segment: { discountPercent: 10 },
+            segment: { discountPercent: 10, minGoalAmount: 0 },
           };
         }
         return null;
@@ -355,6 +355,12 @@ describe("Orders", () => {
         create: async () => {
           throw new Error("order.create must run inside a transaction");
         },
+        // PricingService.resolveSegmentDiscount queries this to check whether
+        // a customer with a positive segment discount has met their YTD
+        // sales goal. Return a large sum so the (zero, in these fixtures)
+        // minGoalAmount is always satisfied and existing discount-dependent
+        // assertions keep holding.
+        aggregate: async () => ({ _sum: { total: 999_999_999 } }),
         count: async () => orders.length,
         findFirst: async ({ where }: { where: any }) => {
           const startsWith = where.orderNumber?.startsWith;
