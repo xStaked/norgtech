@@ -329,7 +329,9 @@ export class SellerGoalsService {
       goal.range ?? this.getPeriodRange(goal.periodType, goal.periodValue);
     const orders = await this.prisma.order.findMany({
       where: {
-        customer: { assignedToUserId: goal.userId },
+        // GOAL-02: atribución por el vendedor real del pedido, no por el
+        // vendedor asignado al cliente.
+        sellerUserId: goal.userId,
         status: { in: PROGRESS_STATUSES },
         orderDate: { gte: start, lte: end },
         ...(companyId ? { companyId } : {}),
@@ -382,22 +384,24 @@ export class SellerGoalsService {
     const sellerIds = goals.map((goal) => goal.userId);
     const orders = await this.prisma.order.findMany({
       where: {
-        customer: { assignedToUserId: { in: sellerIds } },
+        // GOAL-02: ver buildProgress.
+        sellerUserId: { in: sellerIds },
         status: { in: PROGRESS_STATUSES },
         orderDate: { gte: start, lte: end },
         ...(companyId ? { companyId } : {}),
       },
+      // customerId sigue siendo necesario para customersCount.
       select: {
         id: true,
         total: true,
         customerId: true,
-        customer: { select: { assignedToUserId: true } },
+        sellerUserId: true,
       },
     });
 
     const ordersBySeller = new Map<string, typeof orders>();
     for (const order of orders) {
-      const sellerId = order.customer?.assignedToUserId;
+      const sellerId = order.sellerUserId;
       if (!sellerId) continue;
       const sellerOrders = ordersBySeller.get(sellerId) ?? [];
       sellerOrders.push(order);
