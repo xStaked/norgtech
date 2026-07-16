@@ -41,6 +41,9 @@ describe("Auth", () => {
         commercialExpense: {
           findMany: async () => [],
         },
+        refreshToken: {
+          create: async () => ({}),
+        },
         user: {
           findUnique: async ({ where: { email } }: { where: { email: string } }) => {
             const user = mockUsers.find((u) => u.email === email);
