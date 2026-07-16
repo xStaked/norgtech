@@ -2,11 +2,15 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { PricingService } from "../pricing/pricing.service";
 import { CreateProductDto } from "./dto/create-product.dto";
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly pricingService: PricingService,
+  ) {}
 
   create(user: AuthUser, dto: CreateProductDto) {
     return this.prisma.product.create({
@@ -49,7 +53,12 @@ export class ProductsService {
       throw new NotFoundException("Customer not found");
     }
 
-    const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
+    // Must go through PricingService: the segment discount is conditional on
+    // the customer meeting their goal, so applying it raw here would quote a
+    // price the order would not honor.
+    const { discountPercent, meetsGoal, salesYTD, goalThreshold } =
+      await this.pricingService.resolveSegmentDiscount(customer);
+
     const discountMultiplier = new Prisma.Decimal(1).minus(
       new Prisma.Decimal(discountPercent).dividedBy(100),
     );
@@ -61,6 +70,9 @@ export class ProductsService {
       basePrice: product.basePrice,
       discountPercent,
       finalPrice,
+      meetsGoal,
+      salesYTD,
+      goalThreshold,
     };
   }
 }

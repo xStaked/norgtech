@@ -22,6 +22,7 @@ describe("Products", () => {
   const products: Array<Record<string, unknown>> = [];
   const customerId = "customer-id";
   const discountCustomerId = "discount-customer-id";
+  const goalMissCustomerId = "goal-miss-customer-id";
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -59,13 +60,25 @@ describe("Products", () => {
         refreshToken: refreshTokenStub(),
         customer: {
           findUnique: async ({ where: { id }, include }: { where: { id: string }; include?: Record<string, boolean> }) => {
-            if (id !== customerId && id !== discountCustomerId) return null;
+            if (id !== customerId && id !== discountCustomerId && id !== goalMissCustomerId) {
+              return null;
+            }
             const result: Record<string, unknown> = { id };
             if (include?.segment) {
-              result.segment = { discountPercent: id === discountCustomerId ? 5 : 0 };
+              result.segment = {
+                discountPercent: id === customerId ? 0 : 5,
+                // goalMissCustomer's YTD sales fall short of this; the others'
+                // zero threshold is always met.
+                minGoalAmount: id === goalMissCustomerId ? 30000000 : 0,
+              };
             }
             return result;
           },
+        },
+        order: {
+          aggregate: async ({ where }: { where: { customerId: string } }) => ({
+            _sum: { total: where.customerId === goalMissCustomerId ? 12000000 : 0 },
+          }),
         },
         product: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
@@ -164,7 +177,7 @@ describe("Products", () => {
     expect(response.body.productId).toBe(productId);
     expect(response.body.customerId).toBe(customerId);
     expect(response.body.basePrice).toBe(100000);
-    expect(response.body.discountPercent).toBe(0);
+    expect(Number(response.body.discountPercent)).toBe(0);
     expect(response.body.finalPrice).toBe("100000");
   });
 
@@ -191,8 +204,34 @@ describe("Products", () => {
     expect(response.body.productId).toBe(productId);
     expect(response.body.customerId).toBe(discountCustomerId);
     expect(response.body.basePrice).toBe(200000);
-    expect(response.body.discountPercent).toBe(5);
+    expect(response.body.meetsGoal).toBe(true);
+    expect(Number(response.body.discountPercent)).toBe(5);
     expect(response.body.finalPrice).toBe("190000");
+  });
+
+  it("quotes full price when the customer has not met the segment goal", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        sku: "VAC-004",
+        name: "Vacuna Carbon",
+        unit: "dosis",
+        presentation: "Caja x10",
+        basePrice: 200000,
+      })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get(`/products/${productResponse.body.id}/price-for-customer/${goalMissCustomerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    // The segment carries a 5% discount, but YTD sales (12M) fall short of the
+    // 30M goal — so the quote must match what an order would actually charge.
+    expect(response.body.meetsGoal).toBe(false);
+    expect(Number(response.body.discountPercent)).toBe(0);
+    expect(response.body.finalPrice).toBe("200000");
   });
 
   it("returns 404 for invalid product in price-for-customer", async () => {
