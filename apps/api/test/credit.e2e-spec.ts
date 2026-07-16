@@ -502,6 +502,21 @@ describe("Credit", () => {
     expect(Number(response.body.subtotal)).toBe(100000);
   });
 
+  it("checks credit against the total with IVA, not the pre-tax subtotal", async () => {
+    // customer-high tiene 150000 disponibles. Un subtotal de 130000 cabe, pero
+    // el pedido realmente vale 130000 * 1.19 = 154700, que es lo que acabara en
+    // invoice.totalAmount y en la exposicion. Validar el subtotal colaba el IVA
+    // sin cupo (spec 3.5).
+    const response = await request(app.getHttpServer())
+      .post("/orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send(orderPayload("customer-high", 130000))
+      .expect(400);
+
+    expect(response.body.message).toContain("Credito excedido");
+    expect(response.body.message).toContain("154700");
+  });
+
   it("checks credit against the catalog price, not the client-supplied unitPrice", async () => {
     // customer-high has 150000 available. A catalog line is priced from
     // product.basePrice (50000 x 100 = 5000000), so a lying unitPrice of 1

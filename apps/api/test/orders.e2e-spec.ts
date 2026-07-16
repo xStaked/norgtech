@@ -208,6 +208,28 @@ describe("Orders", () => {
             segment: { discountPercent: 10, minGoalAmount: 0 },
           };
         }
+        // Clientes de cupo ajustado para las pruebas de credito en
+        // aprobacion/avance/facturacion (ORD-01).
+        const creditCustomers: Record<string, number> = {
+          "customer-credit-tight": 1000000,
+          "customer-credit-exact": 1000000,
+          "customer-credit-status": 1000000,
+          "customer-credit-invoice": 1000000,
+        };
+        if (creditCustomers[id] !== undefined) {
+          return {
+            id,
+            displayName: "Agro Cupo",
+            taxId: "900555666-1",
+            address: "Calle 99",
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+            creditLimit: new Prisma.Decimal(creditCustomers[id]),
+            paymentDays: 30,
+            assignedToUserId: null,
+            segment: { discountPercent: 0, minGoalAmount: 0 },
+          };
+        }
         return null;
       },
     };
@@ -665,6 +687,98 @@ describe("Orders", () => {
       customProductName: null,
       notes: null,
     });
+
+    // --- Fixtures de credito (ORD-01) ---------------------------------------
+    const creditOrder = (over: Record<string, unknown>) => ({
+      companyId: "company-1",
+      status: "recibido",
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+      ...over,
+    });
+
+    // customer-credit-tight: cupo 1.000.000, ya con 500.000 comprometidos.
+    orders.push(creditOrder({
+      id: "order-credit-blocker",
+      customerId: "customer-credit-tight",
+      status: "orden_facturacion",
+      subtotal: new Prisma.Decimal(500000),
+      total: new Prisma.Decimal(500000),
+    }));
+    orders.push(creditOrder({
+      id: "order-credit-exceed",
+      customerId: "customer-credit-tight",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(900000),
+      total: new Prisma.Decimal(900000),
+      items: [],
+    }));
+    orders.push(creditOrder({
+      id: "order-credit-ok",
+      customerId: "customer-credit-tight",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(400000),
+      total: new Prisma.Decimal(400000),
+      items: [],
+    }));
+
+    // customer-credit-exact: el pedido YA cuenta en la exposicion y agota el
+    // cupo exacto. Solo aprueba si no se cuenta a si mismo (excludeOrderId).
+    orders.push(creditOrder({
+      id: "order-credit-atlimit",
+      customerId: "customer-credit-exact",
+      status: "orden_facturacion",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(1000000),
+      total: new Prisma.Decimal(1000000),
+      items: [],
+    }));
+
+    // customer-credit-status: avance manual a orden_facturacion.
+    orders.push(creditOrder({
+      id: "order-status-blocker",
+      customerId: "customer-credit-status",
+      status: "orden_facturacion",
+      subtotal: new Prisma.Decimal(800000),
+      total: new Prisma.Decimal(800000),
+    }));
+    orders.push(creditOrder({
+      id: "order-status-excess",
+      customerId: "customer-credit-status",
+      subtotal: new Prisma.Decimal(400000),
+      total: new Prisma.Decimal(400000),
+    }));
+    // Mismo cliente en exceso, pero una transicion que NO compromete cupo nuevo.
+    orders.push(creditOrder({
+      id: "order-status-dispatch",
+      customerId: "customer-credit-status",
+      status: "facturado",
+      subtotal: new Prisma.Decimal(700000),
+      total: new Prisma.Decimal(700000),
+    }));
+
+    // customer-credit-invoice: pedido que ya agota el cupo y se va a facturar.
+    orders.push(creditOrder({
+      id: "order-credit-invoice",
+      customerId: "customer-credit-invoice",
+      orderNumber: "NOR-900",
+      status: "orden_facturacion",
+      subtotal: new Prisma.Decimal(840336.13),
+      total: new Prisma.Decimal(1000000),
+      items: [
+        {
+          id: "item-credit-invoice",
+          orderId: "order-credit-invoice",
+          quantity: 1,
+          subtotal: new Prisma.Decimal(840336.13),
+          taxAmount: new Prisma.Decimal(159663.87),
+          totalWithTax: new Prisma.Decimal(1000000),
+          needsResolution: false,
+        },
+      ],
+    }));
 
     const loginResponse = await request(globalThis.__APP__)
       .post("/auth/login")
@@ -1539,5 +1653,96 @@ describe("Orders", () => {
       .expect(200);
     expect(response.body.approvalStatus).toBe("rechazado");
     expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
+  });
+
+  /**
+   * ORD-01: aprobar/avanzar un pedido es el momento en que COMPROMETE cupo,
+   * y hasta ahora ninguna de las dos rutas miraba el credito. Ademas, el propio
+   * pedido ya puede estar contado en la exposicion, asi que la validacion debe
+   * excluirlo de si mismo o se cuenta doble.
+   */
+  describe("credit gating on approve / advance / invoice (ORD-01)", () => {
+    const admin = () => `Bearer ${global.__ADMIN_TOKEN__}`;
+
+    it("blocks approving an order that exceeds available credit, and leaves it unapproved", async () => {
+      // customer-credit-tight: cupo 1.000.000, 500.000 ya comprometidos.
+      // order-credit-exceed vale 900.000 -> 1.400.000 > 1.000.000.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-credit-exceed/approve")
+        .set("Authorization", admin())
+        .expect(400);
+
+      expect(response.body.message).toContain("Credito excedido");
+
+      const after = await request(global.__APP__)
+        .get("/orders/order-credit-exceed")
+        .set("Authorization", admin())
+        .expect(200);
+      expect(after.body.approvalStatus).toBe("en_revision");
+      expect(after.body.status).toBe("recibido");
+    });
+
+    it("approves an order that fits within available credit", async () => {
+      // 500.000 comprometidos + 400.000 = 900.000 <= 1.000.000.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-credit-ok/approve")
+        .set("Authorization", admin())
+        .expect(200);
+
+      expect(response.body.approvalStatus).toBe("aprobado");
+      expect(response.body.status).toBe("orden_facturacion");
+    });
+
+    it("does not count an order against itself when approving (excludeOrderId)", async () => {
+      // order-credit-atlimit YA esta en orden_facturacion (ya suma exposicion)
+      // y vale exactamente el cupo. Sin excludeOrderId la exposicion seria
+      // 1.000.000 y aprobarlo pediria otro 1.000.000 -> falso "Credito excedido".
+      const response = await request(global.__APP__)
+        .patch("/orders/order-credit-atlimit/approve")
+        .set("Authorization", admin())
+        .expect(200);
+
+      expect(response.body.approvalStatus).toBe("aprobado");
+    });
+
+    it("blocks a manual advance to orden_facturacion that exceeds available credit", async () => {
+      // customer-credit-status: 800.000 comprometidos + este pedido 400.000.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-status-excess/status")
+        .set("Authorization", admin())
+        .send({ status: "orden_facturacion" })
+        .expect(400);
+
+      expect(response.body.message).toContain("Credito excedido");
+
+      const after = await request(global.__APP__)
+        .get("/orders/order-status-excess")
+        .set("Authorization", admin())
+        .expect(200);
+      expect(after.body.status).toBe("recibido");
+    });
+
+    it("does not check credit on transitions that commit no new cupo", async () => {
+      // Mismo cliente en exceso, pero facturado -> despachado no compromete
+      // cupo nuevo: no debe bloquearse.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-status-dispatch/status")
+        .set("Authorization", admin())
+        .send({ status: "despachado" })
+        .expect(200);
+
+      expect(response.body.status).toBe("despachado");
+    });
+
+    it("does not double-count an already-exposed order when invoicing it", async () => {
+      // order-credit-invoice ya suma 1.000.000 de exposicion (cupo 1.000.000).
+      // Facturarlo por 1.000.000 no puede leerse como 2.000.000.
+      const response = await request(global.__APP__)
+        .post("/orders/order-credit-invoice/invoice")
+        .set("Authorization", admin())
+        .expect(201);
+
+      expect(Number(response.body.totalAmount)).toBe(1000000);
+    });
   });
 });

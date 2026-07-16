@@ -97,7 +97,10 @@ export class OrdersService {
     // against the DTO would guard a number the client controls.
     const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
 
-    await this.credit.assertCreditLimit(dto.customerId, pricing.subtotal);
+    // Se valida contra el TOTAL (con IVA), no el subtotal: es lo que termina en
+    // invoice.totalAmount y lo que la exposicion suma (order.total). Validar el
+    // subtotal dejaba pasar el IVA sin cupo.
+    await this.credit.assertCreditLimit(dto.customerId, pricing.total);
 
     const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
@@ -275,7 +278,11 @@ export class OrdersService {
           }
 
           const totals = this.calculateInvoiceTotalsFromOrder(order);
-          await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx);
+          // El pedido YA cuenta en la exposicion: sin excluirlo, facturarlo se
+          // leeria como pedido + factura y duplicaria el consumo de cupo.
+          await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx, {
+            excludeOrderId: order.id,
+          });
 
           const issueDate = new Date();
           const dueDate = this.calculateInvoiceDueDate(issueDate, order.customer.paymentDays);
@@ -395,6 +402,14 @@ export class OrdersService {
 
       if (!this.isTransitionAllowed(order.status, dto.status)) {
         throw new BadRequestException("Invalid order status transition");
+      }
+
+      // Avance manual a orden_facturacion = mismo momento de compromiso que
+      // approveOrder(). El resto de transiciones no compromete cupo nuevo.
+      if (dto.status === OrderStatus.orden_facturacion) {
+        await this.credit.assertCreditLimit(order.customerId, order.total, tx, {
+          excludeOrderId: order.id,
+        });
       }
 
       const previousState = JSON.parse(JSON.stringify(order));
@@ -635,6 +650,13 @@ export class OrdersService {
       if (order.items.some((item) => item.needsResolution)) {
         throw new BadRequestException("Order has unresolved items");
       }
+
+      // Aprobar es el momento en que el pedido COMPROMETE cupo (pasa a
+      // orden_facturacion). Se excluye a si mismo: si ya figura en la
+      // exposicion, contarlo otra vez lo bloquearia contra su propio importe.
+      await this.credit.assertCreditLimit(order.customerId, order.total, tx, {
+        excludeOrderId: order.id,
+      });
 
       const previousState = JSON.parse(JSON.stringify(order));
       const reviewer =

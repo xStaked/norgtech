@@ -78,9 +78,14 @@ export class CreditService {
     return new Prisma.Decimal(agg._sum.totalAmount ?? 0);
   }
 
+  /**
+   * `amount` se normaliza a Decimal: los callers le pasan tanto totales ya
+   * calculados como `order.total` leido de Prisma, que segun el driver/serie
+   * puede llegar como string o number. Asumir Decimal reventaba en `.toFixed()`.
+   */
   async assertCreditLimit(
     customerId: string,
-    amount: Prisma.Decimal,
+    amount: Prisma.Decimal | string | number,
     tx?: Prisma.TransactionClient,
     opts?: { excludeOrderId?: string },
   ): Promise<void> {
@@ -91,14 +96,17 @@ export class CreditService {
     });
 
     if (!customer) throw new NotFoundException("Cliente no encontrado");
-    if (!customer.creditLimit || customer.creditLimit.lte(0)) return;
 
+    const creditLimit = new Prisma.Decimal(customer.creditLimit ?? 0);
+    if (creditLimit.lte(0)) return;
+
+    const requested = new Prisma.Decimal(amount);
     const currentTotal = await this.getCustomerExposure(customerId, tx, opts);
 
-    if (currentTotal.plus(amount).gt(customer.creditLimit)) {
-      const available = customer.creditLimit.minus(currentTotal);
+    if (currentTotal.plus(requested).gt(creditLimit)) {
+      const available = creditLimit.minus(currentTotal);
       throw new BadRequestException(
-        `Credito excedido. Disponible: $${available.toFixed(0)}, Pedido: $${amount.toFixed(0)}`,
+        `Credito excedido. Disponible: $${available.toFixed(0)}, Pedido: $${requested.toFixed(0)}`,
       );
     }
   }
