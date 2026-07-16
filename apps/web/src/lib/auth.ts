@@ -75,6 +75,8 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/segments": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
     "/users": ["administrador"],
+    "/companies": ["administrador", "director_comercial"],
+    "/zones": ["administrador", "director_comercial"],
   };
 
   const allowedRoles = moduleAccess[moduleHref];
