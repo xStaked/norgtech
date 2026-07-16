@@ -22,4 +22,11 @@ export const ALLOWLIST_OPEN: AllowlistedEndpoint[] = [
     // roles before authenticating.
     reason: "Public login endpoint — no session exists yet to carry roles",
   },
+  {
+    method: "POST",
+    path: "/whatsapp/webhooks/kapso",
+    // SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.
+    reason:
+      "SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.",
+  },
 ];
