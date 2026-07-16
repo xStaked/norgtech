@@ -4,6 +4,7 @@ import { InvoiceStatus, Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 const outboundMessages: Array<Record<string, unknown>> = [];
 
@@ -279,6 +280,7 @@ describe("Orders", () => {
 
     const prismaStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       company: {
         findUnique: async ({ where }: { where: { id?: string; prefix?: string } }) => {

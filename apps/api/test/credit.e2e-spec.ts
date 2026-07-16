@@ -4,6 +4,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 describe("Credit", () => {
   let app: INestApplication;
@@ -215,6 +216,7 @@ describe("Credit", () => {
 
     const prismaStub = {
       user,
+      refreshToken: refreshTokenStub(),
       company,
       customer,
       invoice,

@@ -4,6 +4,7 @@ import { UserRole, VisitStatus } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -77,6 +78,7 @@ describe("Reports", () => {
 
     const prismaStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       visit,
       executiveReport,

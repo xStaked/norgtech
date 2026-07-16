@@ -9,6 +9,7 @@ import {
   authHeader,
   findMockUserByEmail,
   loginAs,
+  refreshTokenStub,
 } from "./helpers/login-as";
 
 /**
@@ -53,6 +54,7 @@ describe("RBAC: companies & zones admin+director", () => {
         findUnique: async ({ where }: { where: { email?: string; id?: string } }) =>
           findMockUserByEmail(where.email),
       },
+      refreshToken: refreshTokenStub(),
       company: {
         create: async ({ data }: { data: Record<string, unknown> }) => ({
           id: "company-new",

@@ -4,6 +4,7 @@ import { OrderStatus, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -186,6 +187,7 @@ describe("SellerGoals", () => {
           return found ? { ...found } : null;
         },
       },
+      refreshToken: refreshTokenStub(),
       sellerGoal: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
           goalCounter++;

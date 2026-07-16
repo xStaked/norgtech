@@ -6,6 +6,7 @@ import {
   ALL_ROLES,
   findMockUserByEmail,
   loginAs,
+  refreshTokenStub,
 } from "./helpers/login-as";
 
 describe("login-as helper", () => {
@@ -22,6 +23,7 @@ describe("login-as helper", () => {
           findUnique: async ({ where }: { where: { email?: string } }) =>
             findMockUserByEmail(where.email),
         },
+        refreshToken: refreshTokenStub(),
       })
       .compile();
 

@@ -14,6 +14,7 @@ import { CommercialExpenseExtractionService } from "../src/modules/commercial-ex
 import { CommercialExpensesService } from "../src/modules/commercial-expenses/commercial-expenses.service";
 import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 declare global {
@@ -274,6 +275,7 @@ describe("CommercialExpenses", () => {
   beforeAll(async () => {
     const prismaStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       visit,
       commercialExpense,

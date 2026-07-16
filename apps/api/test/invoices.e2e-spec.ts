@@ -5,6 +5,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { R2StorageService } from "../src/shared/r2-storage.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -157,6 +158,7 @@ describe("Invoices", () => {
 
     const txStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       company,
       order,

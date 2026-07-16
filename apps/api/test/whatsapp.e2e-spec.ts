@@ -17,6 +17,7 @@ import { AppModule } from "../src/app.module";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { WhatsAppOrderAutomationService } from "../src/modules/whatsapp/whatsapp-order-automation.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 describe("WhatsApp inbox", () => {
@@ -603,6 +604,7 @@ describe("WhatsApp inbox", () => {
             return true;
           }).map((user) => (select ? applySelect(user, select) : user)),
       },
+      refreshToken: refreshTokenStub(),
       customer: {
         findUnique: async ({
           where: { id },

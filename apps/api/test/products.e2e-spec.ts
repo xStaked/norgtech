@@ -4,6 +4,7 @@ import { UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -55,6 +56,7 @@ describe("Products", () => {
             return null;
           },
         },
+        refreshToken: refreshTokenStub(),
         customer: {
           findUnique: async ({ where: { id }, include }: { where: { id: string }; include?: Record<string, boolean> }) => {
             if (id !== customerId && id !== discountCustomerId) return null;

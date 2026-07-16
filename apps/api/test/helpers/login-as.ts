@@ -120,3 +120,30 @@ export async function loginAs(
 export function authHeader(token: string): { Authorization: string } {
   return { Authorization: `Bearer ${token}` };
 }
+
+/**
+ * Minimal `refreshToken` model stub for a spec's `PrismaService` mock.
+ * `AuthService.login()` also issues a refresh token via
+ * `prisma.refreshToken.create(...)`, so every stub that defines `user` needs
+ * a sibling `refreshToken` stub or login throws
+ * "Cannot read properties of undefined (reading 'create')". Spread this into
+ * the stub, e.g. `refreshToken: refreshTokenStub()`.
+ */
+export function refreshTokenStub() {
+  return {
+    create: async ({ data }: { data: Record<string, unknown> }) => ({
+      id: "rt-test",
+      revokedAt: null,
+      expiresAt: new Date(Date.now() + 7 * 864e5),
+      createdAt: new Date(),
+      ...data,
+    }),
+    findUnique: async () => null,
+    findFirst: async () => null,
+    update: async ({ data }: { data: Record<string, unknown> }) => ({
+      id: "rt-test",
+      ...data,
+    }),
+    updateMany: async () => ({ count: 0 }),
+  };
+}
