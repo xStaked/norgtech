@@ -5,6 +5,7 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { refreshTokenStub } from "./helpers/login-as";
+import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 
 const outboundMessages: Array<Record<string, unknown>> = [];
 
@@ -381,6 +382,8 @@ describe("Orders", () => {
           if (where?.approvalStatus) {
             result = result.filter((o) => o.approvalStatus === where.approvalStatus);
           }
+          // El where de exposicion de credito (status/invoices/id) debe respetarse.
+          result = result.filter((o) => matchesOrderWhere(o, where, invoices));
           return result.map((o) => JSON.parse(JSON.stringify(withOrderIncludes(o, { items: true, customer: true, company: true }))));
         },
         update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
@@ -481,6 +484,11 @@ describe("Orders", () => {
             },
           },
           order: {
+            // CreditService.getCustomerExposure consulta pedidos dentro de la tx.
+            findMany: async ({ where }: { where?: OrderWhereStub } = {}) =>
+              [...orders, ...pendingOrders].filter((o) =>
+                matchesOrderWhere(o, where, [...invoices, ...pendingInvoices]),
+              ),
             create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
               const order = {
                 id: `order-${orders.length + pendingOrders.length + 1}`,

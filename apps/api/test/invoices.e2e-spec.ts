@@ -6,6 +6,7 @@ import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { R2StorageService } from "../src/shared/r2-storage.service";
 import { refreshTokenStub } from "./helpers/login-as";
+import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -77,6 +78,8 @@ describe("Invoices", () => {
       customerId: "customer-1",
       orderNumber: "PED-000001",
       status: "entregado",
+      subtotal: new Prisma.Decimal(100000),
+      total: new Prisma.Decimal(119000),
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
     },
@@ -154,6 +157,9 @@ describe("Invoices", () => {
       findUnique: async ({ where: { id } }: { where: { id: string } }) => {
         return orders.find((o) => o.id === id) ?? null;
       },
+      // CreditService.getCustomerExposure suma pedidos aprobados sin factura activa.
+      findMany: async ({ where }: { where?: OrderWhereStub } = {}) =>
+        orders.filter((o) => matchesOrderWhere(o, where, invoices as any)),
     };
 
     const txStub = {

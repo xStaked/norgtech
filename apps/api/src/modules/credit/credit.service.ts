@@ -1,14 +1,65 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { CreditSummaryDto, PurchaseProgressDto } from "./dto/credit-summary.dto";
 import { CreditAlertDto } from "./dto/credit-alert.dto";
 
 const ALERT_THRESHOLD_PERCENT = 80;
 
+/**
+ * Estados en los que un pedido ya compromete cupo (ORD-01/ORD-02).
+ *
+ * `recibido` queda FUERA: es un borrador y no consume cupo de otros pedidos.
+ * `facturado` queda DENTRO a proposito: si su factura se anula, el pedido debe
+ * volver a contar como exposicion. Mientras la factura este viva, el filtro
+ * `invoices: { none: { status: { not: "anulada" } } }` evita el doble conteo.
+ */
+export const ORDER_EXPOSURE_STATUSES: OrderStatus[] = [
+  "orden_facturacion",
+  "facturado",
+  "despachado",
+  "en_transito",
+  "entregado",
+];
+
 @Injectable()
 export class CreditService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Exposicion real de credito del cliente:
+   *   facturas abiertas + pedidos aprobados SIN factura activa.
+   *
+   * Antes solo se miraban facturas, por lo que un cliente con pedidos pendientes
+   * enormes mostraba el cupo entero disponible (ORD-01) y el disponible no bajaba
+   * al crear un pedido (ORD-02).
+   */
+  async getCustomerExposure(
+    customerId: string,
+    tx?: Prisma.TransactionClient,
+    opts?: { excludeOrderId?: string },
+  ): Promise<Prisma.Decimal> {
+    const client = tx ?? this.prisma;
+
+    const invoiceTotal = await this.getOpenInvoiceTotal(customerId, tx);
+
+    const orders = await client.order.findMany({
+      where: {
+        customerId,
+        status: { in: ORDER_EXPOSURE_STATUSES },
+        invoices: { none: { status: { not: "anulada" } } },
+        ...(opts?.excludeOrderId ? { id: { not: opts.excludeOrderId } } : {}),
+      },
+      select: { total: true },
+    });
+
+    const ordersTotal = orders.reduce(
+      (sum, order) => sum.plus(order.total),
+      new Prisma.Decimal(0),
+    );
+
+    return invoiceTotal.plus(ordersTotal);
+  }
 
   private async getOpenInvoiceTotal(
     customerId: string,
@@ -31,6 +82,7 @@ export class CreditService {
     customerId: string,
     amount: Prisma.Decimal,
     tx?: Prisma.TransactionClient,
+    opts?: { excludeOrderId?: string },
   ): Promise<void> {
     const client = tx ?? this.prisma;
     const customer = await client.customer.findUnique({
@@ -41,7 +93,7 @@ export class CreditService {
     if (!customer) throw new NotFoundException("Cliente no encontrado");
     if (!customer.creditLimit || customer.creditLimit.lte(0)) return;
 
-    const currentTotal = await this.getOpenInvoiceTotal(customerId, tx);
+    const currentTotal = await this.getCustomerExposure(customerId, tx, opts);
 
     if (currentTotal.plus(amount).gt(customer.creditLimit)) {
       const available = customer.creditLimit.minus(currentTotal);
@@ -59,7 +111,7 @@ export class CreditService {
 
     if (!customer) throw new NotFoundException("Cliente no encontrado");
 
-    const currentBalance = (await this.getOpenInvoiceTotal(customerId)).toNumber();
+    const currentBalance = (await this.getCustomerExposure(customerId)).toNumber();
     const creditLimit = customer.creditLimit ? customer.creditLimit.toNumber() : null;
 
     const availableCredit = creditLimit != null && creditLimit > 0
@@ -135,11 +187,32 @@ export class CreditService {
       _sum: { totalAmount: true },
     });
 
-    const balanceMap = new Map<string, number>();
+    // Pedidos aprobados sin factura activa, en UNA sola query para todos los
+    // clientes (nada de recorrer cliente por cliente).
+    const orderGroupByResult = await this.prisma.order.groupBy({
+      by: ["customerId"],
+      where: {
+        customerId: { in: customerIds },
+        status: { in: ORDER_EXPOSURE_STATUSES },
+        invoices: { none: { status: { not: "anulada" } } },
+        ...(companyId ? { companyId } : {}),
+      },
+      _sum: { total: true },
+    });
+
+    const balanceMap = new Map<string, Prisma.Decimal>();
     for (const row of groupByResult) {
       balanceMap.set(
         row.customerId,
-        new Prisma.Decimal(row._sum.totalAmount ?? 0).toNumber(),
+        new Prisma.Decimal(row._sum.totalAmount ?? 0),
+      );
+    }
+    for (const row of orderGroupByResult) {
+      balanceMap.set(
+        row.customerId,
+        (balanceMap.get(row.customerId) ?? new Prisma.Decimal(0)).plus(
+          new Prisma.Decimal(row._sum.total ?? 0),
+        ),
       );
     }
 
@@ -147,7 +220,7 @@ export class CreditService {
 
     for (const customer of customers) {
       const creditLimit = customer.creditLimit!.toNumber();
-      const currentBalance = balanceMap.get(customer.id) ?? 0;
+      const currentBalance = (balanceMap.get(customer.id) ?? new Prisma.Decimal(0)).toNumber();
       const utilizationPercent = (currentBalance / creditLimit) * 100;
 
       if (utilizationPercent >= ALERT_THRESHOLD_PERCENT) {

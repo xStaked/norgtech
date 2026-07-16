@@ -4,6 +4,8 @@ import { Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { CreditService } from "../src/modules/credit/credit.service";
+import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 import { refreshTokenStub } from "./helpers/login-as";
 
 describe("Credit", () => {
@@ -82,8 +84,37 @@ describe("Credit", () => {
       updatedBy: "admin-user-id",
       segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
+    {
+      id: "customer-exposure",
+      displayName: "Agro Exposicion",
+      taxId: "901111222-1",
+      address: "Calle 6",
+      creditLimit: new Prisma.Decimal(2000000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
+    {
+      id: "customer-alert-orders",
+      displayName: "Agro Alerta Pedidos",
+      taxId: "901333444-1",
+      address: "Calle 7",
+      creditLimit: new Prisma.Decimal(1000000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
   ];
-  const invoices = [
+  const invoices: Array<{
+    id: string;
+    customerId: string;
+    companyId: string;
+    orderId?: string;
+    status: string;
+    totalAmount: Prisma.Decimal;
+  }> = [
     {
       id: "invoice-high-a",
       customerId: "customer-high",
@@ -112,9 +143,76 @@ describe("Credit", () => {
       status: "emitida",
       totalAmount: new Prisma.Decimal(900000),
     },
+    // Factura ACTIVA de order-exp-invoiced: el pedido no debe volver a sumar.
+    {
+      id: "invoice-exp-active",
+      customerId: "customer-exposure",
+      companyId: "company-a",
+      orderId: "order-exp-invoiced",
+      status: "emitida",
+      totalAmount: new Prisma.Decimal(300000),
+    },
+    // Factura ANULADA de order-exp-voided: el pedido vuelve a contar como exposicion.
+    {
+      id: "invoice-exp-void",
+      customerId: "customer-exposure",
+      companyId: "company-a",
+      orderId: "order-exp-voided",
+      status: "anulada",
+      totalAmount: new Prisma.Decimal(200000),
+    },
   ];
-  const orders: Array<Record<string, unknown>> = [];
+  const orders: Array<Record<string, unknown>> = [
+    // Pedido aprobado sin factura -> suma exposicion.
+    {
+      id: "order-exp-approved",
+      customerId: "customer-exposure",
+      companyId: "company-a",
+      status: "orden_facturacion",
+      total: new Prisma.Decimal(400000),
+      subtotal: new Prisma.Decimal(400000),
+    },
+    // Borrador -> NO suma exposicion.
+    {
+      id: "order-exp-draft",
+      customerId: "customer-exposure",
+      companyId: "company-a",
+      status: "recibido",
+      total: new Prisma.Decimal(900000),
+      subtotal: new Prisma.Decimal(900000),
+    },
+    // Facturado con factura activa -> cuenta una sola vez (via la factura).
+    {
+      id: "order-exp-invoiced",
+      customerId: "customer-exposure",
+      companyId: "company-a",
+      status: "facturado",
+      total: new Prisma.Decimal(300000),
+      subtotal: new Prisma.Decimal(300000),
+    },
+    // Facturado pero con la factura anulada -> vuelve a contar como pedido.
+    {
+      id: "order-exp-voided",
+      customerId: "customer-exposure",
+      companyId: "company-a",
+      status: "facturado",
+      total: new Prisma.Decimal(200000),
+      subtotal: new Prisma.Decimal(200000),
+    },
+    // Cliente cuya exposicion viene solo de pedidos (para alertas).
+    {
+      id: "order-alert",
+      customerId: "customer-alert-orders",
+      companyId: "company-a",
+      status: "orden_facturacion",
+      total: new Prisma.Decimal(950000),
+      subtotal: new Prisma.Decimal(950000),
+    },
+  ];
   const auditLogs: Array<Record<string, unknown>> = [];
+
+  const orderMatches = (order: Record<string, unknown>, where?: OrderWhereStub) =>
+    matchesOrderWhere(order, where, invoices);
 
   beforeAll(async () => {
     const user = {
@@ -224,7 +322,24 @@ describe("Credit", () => {
         aggregate: async () => ({ _sum: { subtotal: new Prisma.Decimal(0) } }),
         count: async () => orders.length,
         findFirst: async () => null,
-        findMany: async () => orders,
+        findMany: async ({ where }: { where?: OrderWhereStub } = {}) =>
+          orders.filter((o) => orderMatches(o, where)),
+        groupBy: async ({ where }: { where?: OrderWhereStub } = {}) => {
+          const totals = new Map<string, Prisma.Decimal>();
+          for (const o of orders.filter((x) => orderMatches(x, where))) {
+            const customerId = o.customerId as string;
+            totals.set(
+              customerId,
+              (totals.get(customerId) ?? new Prisma.Decimal(0)).plus(
+                (o.total as Prisma.Decimal) ?? 0,
+              ),
+            );
+          }
+          return Array.from(totals, ([customerId, total]) => ({
+            customerId,
+            _sum: { total },
+          }));
+        },
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           orders.find((o) => o.id === id) ?? null,
       },
@@ -329,6 +444,12 @@ describe("Credit", () => {
       .expect(200);
 
     expect(response.body).toEqual([
+      // Exposicion solo por pedidos aprobados, sin ninguna factura.
+      expect.objectContaining({
+        customerId: "customer-alert-orders",
+        currentBalance: 950000,
+        utilizationPercent: 95,
+      }),
       expect.objectContaining({
         customerId: "customer-company-b",
         currentBalance: 900000,
@@ -396,6 +517,60 @@ describe("Credit", () => {
       .expect(400);
 
     expect(response.body.message).toContain("Credito excedido");
+  });
+
+  // ORD-01/ORD-02: la exposicion no puede ser solo-facturas.
+  describe("customer exposure (ORD-01/ORD-02)", () => {
+    function creditService() {
+      return moduleRef.get(CreditService);
+    }
+
+    it("sums open invoices plus approved orders without an active invoice", async () => {
+      // facturas abiertas: invoice-exp-active 300000 (la anulada no cuenta)
+      // pedidos: order-exp-approved 400000 + order-exp-voided 200000
+      //   - order-exp-draft (recibido) NO cuenta
+      //   - order-exp-invoiced tiene factura activa -> ya contado via la factura
+      const exposure = await creditService().getCustomerExposure("customer-exposure");
+      expect(exposure.toNumber()).toBe(900000);
+    });
+
+    it("does not count draft (recibido) orders toward exposure", async () => {
+      const exposure = await creditService().getCustomerExposure("customer-exposure");
+      // order-exp-draft vale 900000; si contara, la exposicion seria 1800000.
+      expect(exposure.toNumber()).not.toBe(1800000);
+      expect(exposure.toNumber()).toBe(900000);
+    });
+
+    it("excludes the given order from exposure via excludeOrderId", async () => {
+      const exposure = await creditService().getCustomerExposure("customer-exposure", undefined, {
+        excludeOrderId: "order-exp-approved",
+      });
+      expect(exposure.toNumber()).toBe(500000);
+    });
+
+    it("reports available credit net of pending orders in the summary", async () => {
+      const response = await api()
+        .get("/credit/customers/customer-exposure/summary")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      expect(response.body.creditLimit).toBe(2000000);
+      expect(response.body.currentBalance).toBe(900000);
+      expect(response.body.availableCredit).toBe(1100000);
+      expect(response.body.utilizationPercent).toBe(45);
+    });
+
+    it("blocks an order when pending orders alone consume the credit limit", async () => {
+      // customer-alert-orders: sin facturas, 950000 en pedidos aprobados, cupo 1000000.
+      // Antes del fix la exposicion era 0 y esto pasaba.
+      const response = await request(app.getHttpServer())
+        .post("/orders")
+        .set("Authorization", `Bearer ${token}`)
+        .send(orderPayload("customer-alert-orders", 100000))
+        .expect(400);
+
+      expect(response.body.message).toContain("Credito excedido");
+    });
   });
 
   it("allows order creation when customer has no credit limit", async () => {
