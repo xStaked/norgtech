@@ -62,7 +62,7 @@ test.describe("route guards (browser, fake JWT cookie)", () => {
       {
         name: "session_token",
         value: makeFakeJwt("tecnico"),
-        url: "http://localhost:3002",
+        url: "http://localhost:3000",
       },
     ]);
 
@@ -75,7 +75,7 @@ test.describe("route guards (browser, fake JWT cookie)", () => {
       {
         name: "session_token",
         value: makeFakeJwt("comercial"),
-        url: "http://localhost:3002",
+        url: "http://localhost:3000",
       },
     ]);
 
@@ -88,7 +88,7 @@ test.describe("route guards (browser, fake JWT cookie)", () => {
       {
         name: "session_token",
         value: makeFakeJwt("administrador"),
-        url: "http://localhost:3002",
+        url: "http://localhost:3000",
       },
     ]);
 

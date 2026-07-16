@@ -27,7 +27,7 @@ async function seedSession(page: Page, token: string) {
     {
       name: "session_token",
       value: token,
-      url: "http://localhost:3002",
+      url: "http://localhost:3000",
     },
   ]);
 }
