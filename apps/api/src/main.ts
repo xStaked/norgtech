@@ -1,11 +1,14 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ConfigService } from "@nestjs/config";
+import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+
+  app.use(cookieParser());
 
   const frontendUrl = configService.get<string>("FRONTEND_URL") ?? "http://localhost:3000";
   const allowedOrigins = frontendUrl.split(",").map((o) => o.trim());
