@@ -24,6 +24,20 @@ export const ALLOWLIST_OPEN: AllowlistedEndpoint[] = [
   },
   {
     method: "POST",
+    path: "/auth/refresh",
+    // Rotates the session using the httpOnly refresh cookie; authorized by the
+    // cookie itself, not by role — same class as /auth/login.
+    reason: "Session refresh — authorized by httpOnly refresh cookie, not by role",
+  },
+  {
+    method: "POST",
+    path: "/auth/logout",
+    // Revokes the refresh token; idempotent and safe for any authenticated
+    // session regardless of role.
+    reason: "Session logout — cookie-scoped, role-agnostic, idempotent",
+  },
+  {
+    method: "POST",
     path: "/whatsapp/webhooks/kapso",
     // SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.
     reason:
