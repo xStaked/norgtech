@@ -64,6 +64,7 @@ interface Order {
   customerNameSnapshot: string | null;
   customerNitSnapshot: string | null;
   billingCompanyNameSnapshot: string | null;
+  company: { name: string; prefix: string } | null;
   branchNameSnapshot: string | null;
   dispatchAddressSnapshot: string | null;
   requesterName: string | null;
@@ -299,7 +300,8 @@ export default async function OrderDetailPage({
             <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
               <Info label="Cliente" value={customerName} />
               <Info label="NIT" value={order.customerNitSnapshot} />
-              <Info label="Empresa facturadora" value={order.billingCompanyNameSnapshot} />
+              {/* Empresa facturadora: preferir la relación company (fuente viva) sobre el snapshot histórico (ORD-03) */}
+              <Info label="Empresa facturadora" value={order.company?.name ?? order.billingCompanyNameSnapshot} />
               <Info label="Sede" value={order.branchNameSnapshot} />
               <Info label="Orden de compra" value={order.purchaseOrderNumber} />
               <Info label="Fecha del pedido" value={formatDate(order.orderDate)} />
