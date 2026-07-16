@@ -24,6 +24,20 @@ export class UsersController {
     return this.usersService.findAll();
   }
 
+  /**
+   * Selector de "Vendedor" del formulario de pedido (GOAL-02). Los roles
+   * coinciden con los de `POST /orders`: quien puede crear un pedido puede
+   * elegir a quien se le atribuye. Sobreescribe el @Roles("administrador") de
+   * la clase, que dejaria a un comercial con 403 en su propio formulario.
+   *
+   * Debe declararse antes de cualquier @Get(":id") o la ruta lo capturaria.
+   */
+  @Roles("administrador", "comercial", "director_comercial", "logistica")
+  @Get("sellers")
+  findSellers() {
+    return this.usersService.findSellers();
+  }
+
   @Post()
   create(@Body(validationPipe) dto: CreateUserDto) {
     return this.usersService.create(dto);

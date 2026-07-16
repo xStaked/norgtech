@@ -139,6 +139,15 @@ export class CreateOrderDto {
   @IsString()
   assignedLogisticsUserId?: string;
 
+  /**
+   * Vendedor al que se atribuye la venta (GOAL-02). Opcional: si no viene, el
+   * servicio lo resuelve (asignado del cliente -> creador si es seller -> null).
+   */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  sellerUserId?: string;
+
   @IsOptional()
   @IsString()
   committedDeliveryDate?: string;

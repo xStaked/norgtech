@@ -10,11 +10,8 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateSellerGoalDto } from "./dto/create-seller-goal.dto";
 import { UpdateSellerGoalDto } from "./dto/update-seller-goal.dto";
+import { isEligibleSeller, SELLER_ROLES } from "./seller-eligibility";
 
-const SELLER_ROLES: UserRole[] = [
-  UserRole.comercial,
-  UserRole.director_comercial,
-];
 const WRITE_ROLES: UserRole[] = [
   UserRole.administrador,
   UserRole.director_comercial,
@@ -229,7 +226,7 @@ export class SellerGoalsService {
       throw new NotFoundException("Seller not found");
     }
 
-    if (!seller.active || !SELLER_ROLES.includes(seller.role)) {
+    if (!isEligibleSeller(seller)) {
       throw new BadRequestException("User is not an active eligible seller");
     }
 

@@ -14,6 +14,7 @@ import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
 import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { allowedTransitions } from "./order-status-transition-map";
+import { isEligibleSeller } from "../seller-goals/seller-eligibility";
 
 const INVOICE_ALLOWED_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.orden_facturacion,
@@ -91,6 +92,8 @@ export class OrdersService {
     if (dto.assignedLogisticsUserId) {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
+
+    const sellerUserId = await this.resolveSellerUserId(user, dto, customer);
 
     // Price first, then gate: for catalog lines priceLines() derives unitPrice
     // from product.basePrice and ignores dto's unitPrice, so checking credit
@@ -205,6 +208,7 @@ export class OrdersService {
             ? new Date(dto.committedDeliveryDate)
             : null,
           logisticsNotes: dto.logisticsNotes,
+          sellerUserId,
           subtotal,
           total,
           createdBy: user.id,
@@ -388,6 +392,9 @@ export class OrdersService {
         items: true,
         billingRequests: true,
         assignedLogisticsUser: true,
+        // GOAL-02: el detalle mostraba "Vendedor" desde preparedByName (texto
+        // libre, sin FK). Ahora lee el mismo vendedor que atribuye las metas.
+        seller: { select: { id: true, name: true } },
         customerZone: { include: { zone: true, assignedTo: { select: { id: true, name: true } } } },
       },
     });
@@ -836,6 +843,46 @@ export class OrdersService {
     if (!user) {
       throw new NotFoundException("User not found");
     }
+  }
+
+  /**
+   * Vendedor al que se atribuye la venta (GOAL-02).
+   *
+   * Precedencia: dto.sellerUserId -> customer.assignedToUserId -> creador (si es
+   * seller elegible) -> null. El ultimo caso es el default documentado: un
+   * administrador creando para un cliente sin asignado deja el pedido sin
+   * vendedor en vez de atribuirselo a alguien que no vende.
+   *
+   * `dto.sellerUserId` es un limite de confianza: lo elige el cliente, asi que
+   * se valida contra la MISMA regla de elegibilidad que usan las metas en vez
+   * de persistir un id arbitrario. `customer.assignedToUserId` no se revalida:
+   * es dato ya curado del CRM y revalidarlo dejaria pedidos sin atribuir si el
+   * asignado cambia de rol.
+   */
+  private async resolveSellerUserId(
+    user: AuthUser,
+    dto: CreateOrderDto,
+    customer: { assignedToUserId: string | null },
+  ): Promise<string | null> {
+    if (dto.sellerUserId) {
+      const seller = await this.prisma.user.findUnique({
+        where: { id: dto.sellerUserId },
+      });
+      if (!seller) {
+        throw new NotFoundException("Seller not found");
+      }
+      if (!isEligibleSeller(seller)) {
+        throw new BadRequestException("User is not an active eligible seller");
+      }
+      return seller.id;
+    }
+
+    if (customer.assignedToUserId) {
+      return customer.assignedToUserId;
+    }
+
+    const creator = await this.prisma.user.findUnique({ where: { id: user.id } });
+    return isEligibleSeller(creator) ? user.id : null;
   }
 
   private async loadCustomerOrThrow(customerId: string) {
