@@ -26,6 +26,27 @@ describe("Orders", () => {
   const orders: Array<Record<string, unknown>> = [];
   const orderItems: Array<Record<string, any>> = [
     {
+      // Aprobado y ya comprometiendo cupo: resolver este item reescribe
+      // order.total, que es justo lo que la exposicion de credito suma.
+      id: "item-approved-order",
+      orderId: "order-approved-credit",
+      productId: null,
+      productSnapshotName: "Producto por resolver",
+      productSnapshotSku: "CUSTOM",
+      unit: "unit",
+      quantity: 100,
+      unitPrice: new Prisma.Decimal(1000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(190),
+      subtotal: new Prisma.Decimal(100000),
+      totalWithTax: new Prisma.Decimal(119000),
+      needsResolution: true,
+      originalUnitPrice: null,
+      discountPercent: null,
+      customProductName: "Producto por resolver",
+      notes: null,
+    },
+    {
       id: "item-unresolved",
       orderId: "order-unresolved",
       productId: null,
@@ -615,6 +636,21 @@ describe("Orders", () => {
     globalThis.__APP__ = app.getHttpServer();
 
     // Seed orders (must happen after app.init() so Prisma.Decimal is available)
+    orders.push({
+      // customer-1 tiene cupo 5.000.000. Este pedido ya esta aprobado y
+      // comprometiendo cupo con 119.000.
+      id: "order-approved-credit",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "orden_facturacion",
+      approvalStatus: "aprobado",
+      subtotal: new Prisma.Decimal(100000),
+      total: new Prisma.Decimal(119000),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
     orders.push({
       id: "order-unresolved",
       customerId: "customer-1",
@@ -1569,6 +1605,23 @@ describe("Orders", () => {
     expect(Number(item.unitPrice)).toBe(50000);
     expect(Number(response.body.subtotal)).toBe(100000);
     expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("blocks resolving an item when the new price would exceed the credit limit", async () => {
+    // order-approved-credit ya esta en orden_facturacion (consume cupo) por
+    // 119.000 de un limite de 5.000.000. Resolver el item a 100 x 100.000
+    // reescribiria order.total a ~11.9M: debe bloquearse, no encogerse el cupo.
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-approved-credit/items/item-approved-order/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 100000 })
+      .expect(400);
+
+    expect(response.body.message).toContain("Credito excedido");
+
+    // Y el pedido NO quedo reescrito.
+    const order = orders.find((o) => o.id === "order-approved-credit");
+    expect(Number(order?.total)).toBe(119000);
   });
 
   it("approves a fully resolved order and advances it to orden_facturacion", async () => {

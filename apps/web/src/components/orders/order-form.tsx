@@ -249,15 +249,16 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       return;
     }
 
-    // Gate on the preview's subtotal: it is the price the backend will charge.
-    // The backend re-checks anyway — this is only to fail fast.
+    // Gate on the preview's total WITH IVA: that is what the backend validates
+    // and what exposure sums (order.total). Gating on the subtotal under-blocked
+    // by the tax amount. The backend re-checks anyway — this only fails fast.
     if (
       preview &&
       creditSummary?.availableCredit != null &&
-      subtotal > creditSummary.availableCredit
+      total > creditSummary.availableCredit
     ) {
       setError(
-        `Credito excedido. Disponible: $${creditSummary.availableCredit.toLocaleString("es-CO", { maximumFractionDigits: 0 })}, Pedido: $${subtotal.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`,
+        `Credito excedido. Disponible: $${creditSummary.availableCredit.toLocaleString("es-CO", { maximumFractionDigits: 0 })}, Pedido: $${total.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`,
       );
       setLoading(false);
       return;

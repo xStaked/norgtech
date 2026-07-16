@@ -603,6 +603,21 @@ export class OrdersService {
         new Prisma.Decimal(0),
       );
 
+      // Resolver un item reescribe order.total, que es exactamente lo que la
+      // exposicion de credito suma. Sin este chequeo se podia aprobar un pedido
+      // barato y despues subirle el precio sin limite: el unico gate estaba en
+      // la transicion a orden_facturacion, que ya habia pasado.
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { customerId: true },
+      });
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+      await this.credit.assertCreditLimit(order.customerId, orderTotal, tx, {
+        excludeOrderId: orderId,
+      });
+
       const updated = await tx.order.update({
         where: { id: orderId },
         data: { subtotal: orderSubtotal, total: orderTotal, updatedBy: user.id },
