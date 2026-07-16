@@ -94,10 +94,20 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   const [customerZones, setCustomerZones] = useState<Array<{ id: string; zone: { name: string }; assignedTo: { name: string } | null }>>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
   const [creditSummary, setCreditSummary] = useState<{
     availableCredit: number | null;
     utilizationPercent: number | null;
   } | null>(null);
+
+  // Vendedor al que se atribuye el pedido (GOAL-02). Si falla la carga el
+  // selector queda vacio y el backend resuelve la atribucion: no bloquea.
+  useEffect(() => {
+    apiFetchClient("/users/sellers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setSellers(Array.isArray(data) ? data : []))
+      .catch(() => setSellers([]));
+  }, []);
 
   useEffect(() => {
     if (!selectedCustomerId) {
@@ -202,6 +212,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       companyId: String(formData.get("companyId")),
       customerZoneId: optionalString(formData.get("customerZoneId")),
       customerId: String(formData.get("customerId")),
+      sellerUserId: optionalString(formData.get("sellerUserId")),
       opportunityId: optionalString(formData.get("opportunityId")),
       sourceQuoteId: optionalString(formData.get("sourceQuoteId")),
       requestedDeliveryDate: optionalString(formData.get("requestedDeliveryDate")),
@@ -331,6 +342,22 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                 {creditSummary.availableCredit <= 0 && " - Sin credito disponible"}
               </div>
             )}
+          </Field>
+          {/* Vendedor real al que se atribuye el pedido para las metas (GOAL-02).
+              Distinto de "Elaboro" (preparedByName), que es texto libre y dice
+              quien redacto el documento. Se deja sin preseleccionar: al omitirlo,
+              el backend aplica su precedencia (cliente asignado -> creador si es
+              vendedor -> ninguno). Adivinar aqui haria que el formulario mienta
+              sobre lo que se guarda. */}
+          <Field label="Vendedor" htmlFor="sellerUserId">
+            <select id="sellerUserId" name="sellerUserId" className={selectClasses}>
+              <option value="">Automatico (segun el cliente)</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Orden de compra" htmlFor="purchaseOrderNumber">
             <Input id="purchaseOrderNumber" name="purchaseOrderNumber" />

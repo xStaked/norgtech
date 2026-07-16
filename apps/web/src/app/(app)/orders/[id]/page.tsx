@@ -101,6 +101,7 @@ interface Order {
   items: OrderItem[];
   billingRequests: BillingRequest[];
   assignedLogisticsUser: LogisticsUser | null;
+  seller: { id: string; name: string } | null;
   createdAt: string;
 }
 
@@ -192,7 +193,10 @@ export default async function OrderDetailPage({
   const subtitleParts = [
     formatDate(order.createdAt) ? `Creado el ${formatDate(order.createdAt)}` : null,
     customerName,
-    order.preparedByName ? `Vendedor: ${order.preparedByName}` : null,
+    // El vendedor sale de la relacion real (Order.sellerUserId), que es la que
+    // atribuye las metas. Antes se mostraba preparedByName ("Elaboro"), texto
+    // libre y un concepto distinto (GOAL-02).
+    `Vendedor: ${order.seller?.name ?? "Sin vendedor"}`,
   ].filter(Boolean);
 
   const latestBilling = order.billingRequests[0] ?? null;
