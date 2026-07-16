@@ -229,6 +229,28 @@ describe("Orders", () => {
             segment: { discountPercent: 10, minGoalAmount: 0 },
           };
         }
+        // Clientes con descuento de segmento positivo, para probar que
+        // resolveOrderItem tarifa por catalogo + descuento condicionado a meta.
+        // El stub de order.aggregate devuelve 999.999.999 de ventas YTD, asi
+        // que un minGoalAmount por encima de eso = meta NO cumplida.
+        const segmentCustomers: Record<string, { discountPercent: number; minGoalAmount: number }> = {
+          "customer-goal-met": { discountPercent: 10, minGoalAmount: 0 },
+          "customer-goal-missed": { discountPercent: 10, minGoalAmount: 10_000_000_000 },
+        };
+        if (segmentCustomers[id]) {
+          return {
+            id,
+            displayName: "Agro Segmento",
+            taxId: "900777888-1",
+            address: "Calle 1",
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+            creditLimit: null,
+            paymentDays: 30,
+            assignedToUserId: null,
+            segment: { name: "Oro", ...segmentCustomers[id] },
+          };
+        }
         // Clientes de cupo ajustado para las pruebas de credito en
         // aprobacion/avance/facturacion (ORD-01).
         const creditCustomers: Record<string, number> = {
@@ -727,6 +749,47 @@ describe("Orders", () => {
       customProductName: null,
       notes: null,
     });
+
+    // --- Fixtures de tarifacion al resolver (ORD-05) ------------------------
+    // Cada caso necesita su propio pedido/item porque resolver muta el fixture.
+    const unresolvedItem = (id: string, orderId: string) => ({
+      id,
+      orderId,
+      productId: null,
+      productSnapshotName: "Producto desconocido",
+      productSnapshotSku: "CUSTOM",
+      unit: "unit",
+      quantity: 2,
+      unitPrice: new Prisma.Decimal(0),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(0),
+      subtotal: new Prisma.Decimal(0),
+      totalWithTax: new Prisma.Decimal(0),
+      needsResolution: true,
+      originalUnitPrice: null,
+      discountPercent: null,
+      customProductName: "Producto desconocido",
+      notes: null,
+    });
+    const segmentOrder = (id: string, customerId: string) => ({
+      id,
+      customerId,
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(0),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push(segmentOrder("order-goal-met", "customer-goal-met"));
+    orderItems.push(unresolvedItem("item-goal-met", "order-goal-met"));
+    orders.push(segmentOrder("order-goal-missed", "customer-goal-missed"));
+    orderItems.push(unresolvedItem("item-goal-missed", "order-goal-missed"));
+    orders.push(segmentOrder("order-ignore-price", "customer-goal-met"));
+    orderItems.push(unresolvedItem("item-ignore-price", "order-ignore-price"));
 
     // --- Fixtures de credito (ORD-01) ---------------------------------------
     const creditOrder = (over: Record<string, unknown>) => ({
@@ -1607,18 +1670,77 @@ describe("Orders", () => {
     expect(item.productId).toBe("product-1");
     expect(item.needsResolution).toBe(false);
     expect(Number(item.unitPrice)).toBe(50000);
+    // customer-1 tiene segmento con 0% de descuento: el precio de catalogo
+    // pasa intacto, pero la linea queda internamente consistente.
+    expect(Number(item.originalUnitPrice)).toBe(50000);
+    // No basta Number(x) === 0: null tambien lo satisface, y "discountPercent
+    // null con originalUnitPrice seteado" es justo el registro inconsistente
+    // que este fix elimina.
+    expect(item.discountPercent).not.toBeNull();
+    expect(Number(item.discountPercent)).toBe(0);
     expect(Number(response.body.subtotal)).toBe(100000);
     expect(Number(response.body.total)).toBe(119000);
   });
 
+  it("prices a resolved item from the catalog with the segment discount when the goal is met", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-goal-met/items/item-goal-met/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-goal-met");
+    // basePrice 50.000 - 10% = 45.000; IVA 19% = 8.550; qty 2.
+    expect(Number(item.originalUnitPrice)).toBe(50000);
+    expect(Number(item.discountPercent)).toBe(10);
+    expect(Number(item.unitPrice)).toBe(45000);
+    expect(Number(item.taxAmount)).toBe(8550);
+    expect(Number(item.subtotal)).toBe(90000);
+    expect(Number(item.totalWithTax)).toBe(107100);
+    expect(Number(response.body.subtotal)).toBe(90000);
+    expect(Number(response.body.total)).toBe(107100);
+  });
+
+  it("prices a resolved item at full base price when the segment goal is not met", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-goal-missed/items/item-goal-missed/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-goal-missed");
+    expect(item.discountPercent).not.toBeNull();
+    expect(Number(item.discountPercent)).toBe(0);
+    expect(Number(item.originalUnitPrice)).toBe(50000);
+    expect(Number(item.unitPrice)).toBe(50000);
+    expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("ignores dto.unitPrice when resolving: the catalog price rules", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-ignore-price/items/item-ignore-price/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .set("Content-Type", "application/json")
+      // Precio absurdo tecleado por el operador: no debe llegar a la linea.
+      .send({ productId: "product-1", unitPrice: 1 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-ignore-price");
+    expect(Number(item.unitPrice)).toBe(45000);
+    expect(Number(response.body.total)).toBe(107100);
+  });
+
   it("blocks resolving an item when the new price would exceed the credit limit", async () => {
     // order-approved-credit ya esta en orden_facturacion (consume cupo) por
-    // 119.000 de un limite de 5.000.000. Resolver el item a 100 x 100.000
-    // reescribiria order.total a ~11.9M: debe bloquearse, no encogerse el cupo.
+    // 119.000 de un limite de 5.000.000. El item pide 100 unidades; a precio
+    // de catalogo (50.000 + IVA) eso reescribe order.total a 5.950.000: debe
+    // bloquearse, no encogerse el cupo.
+    // NOTA: el cupo se revienta por CANTIDAD x precio de catalogo, no por un
+    // unitPrice tecleado, porque dto.unitPrice ya no tarifa la linea.
     const response = await request(global.__APP__)
       .patch(`/orders/order-approved-credit/items/item-approved-order/resolve`)
       .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
-      .send({ productId: "product-1", unitPrice: 100000 })
+      .send({ productId: "product-1", unitPrice: 50000 })
       .expect(400);
 
     expect(response.body.message).toContain("Credito excedido");

@@ -564,31 +564,49 @@ export class OrdersService {
       if (!item || item.orderId !== orderId) {
         throw new NotFoundException("Order item not found");
       }
-      const product = await tx.product.findUnique({ where: { id: dto.productId } });
-      if (!product) {
-        throw new NotFoundException(`Product ${dto.productId} not found`);
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { customerId: true },
+      });
+      if (!order) {
+        throw new NotFoundException("Order not found");
       }
 
-      const quantity = new Prisma.Decimal(item.quantity);
-      const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
-      const unitPrice = new Prisma.Decimal(dto.unitPrice).toDecimalPlaces(2);
-      const taxAmount = unitPrice.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-      const subtotal = quantity.times(unitPrice).toDecimalPlaces(2);
-      const totalWithTax = quantity.times(unitPrice.plus(taxAmount)).toDecimalPlaces(2);
+      // La linea resuelta se tarifa como cualquier linea de catalogo en
+      // create(): precio derivado de product.basePrice y descuento de segmento
+      // condicionado a la meta. dto.unitPrice se ignora a proposito -- si el
+      // precio tecleado por el operador mandara, el mismo producto tendria dos
+      // precios segun la puerta por la que entro, y la linea quedaba
+      // inconsistente (originalUnitPrice seteado y discountPercent null).
+      const customer = await this.loadCustomerOrThrow(order.customerId);
+      const pricing = await this.pricingService.priceLines(
+        customer,
+        [
+          {
+            productId: dto.productId,
+            quantity: Number(item.quantity),
+            taxPercent: item.taxPercent ?? 19,
+          },
+        ],
+        "order",
+      );
+      const line = pricing.rawItems[0];
 
       await tx.orderItem.update({
         where: { id: itemId },
         data: {
-          productId: product.id,
-          productSnapshotName: product.name,
-          productSnapshotSku: product.sku,
-          unit: product.unit,
+          productId: line.productId,
+          productSnapshotName: line.productSnapshotName,
+          productSnapshotSku: line.productSnapshotSku,
+          unit: line.unit,
           customProductName: null,
-          originalUnitPrice: product.basePrice,
-          unitPrice,
-          taxAmount,
-          subtotal,
-          totalWithTax,
+          originalUnitPrice: line.originalUnitPrice,
+          discountPercent: line.discountPercent,
+          unitPrice: line.unitPrice,
+          taxPercent: line.taxPercent,
+          taxAmount: line.taxAmount,
+          subtotal: line.subtotal,
+          totalWithTax: line.totalWithTax,
           needsResolution: false,
         },
       });
@@ -607,13 +625,8 @@ export class OrdersService {
       // exposicion de credito suma. Sin este chequeo se podia aprobar un pedido
       // barato y despues subirle el precio sin limite: el unico gate estaba en
       // la transicion a orden_facturacion, que ya habia pasado.
-      const order = await tx.order.findUnique({
-        where: { id: orderId },
-        select: { customerId: true },
-      });
-      if (!order) {
-        throw new NotFoundException("Order not found");
-      }
+      // El pedido ya se cargo arriba (hace falta el customerId para tarifar);
+      // el chequeo sigue DESPUES de recomputar los totales, a proposito.
       await this.credit.assertCreditLimit(order.customerId, orderTotal, tx, {
         excludeOrderId: orderId,
       });
