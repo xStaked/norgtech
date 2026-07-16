@@ -110,10 +110,27 @@ describe("BillingRequests", () => {
       },
     };
 
+    const company = {
+      findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+        if (id === "company-1") {
+          return {
+            id: "company-1",
+            name: "Nortech",
+            legalName: "Tecnologia de Nutricion Organica SAS",
+            nit: "900999888-1",
+            prefix: "NOR",
+            isActive: true,
+          };
+        }
+        return null;
+      },
+    };
+
     const prismaStub = {
       user,
       refreshToken: refreshTokenStub(),
       customer,
+      company,
       order,
       quote,
       billingRequest: {
@@ -248,6 +265,7 @@ describe("BillingRequests", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         sourceOrderId: "order-1",
         notes: "Facturar urgente",
       })
@@ -255,6 +273,7 @@ describe("BillingRequests", () => {
 
     expect(response.body.customerId).toBe("customer-1");
     expect(response.body.sourceOrderId).toBe("order-1");
+    expect(response.body.companyId).toBe("company-1");
   });
 
   it("transitions billing request status", async () => {
@@ -263,6 +282,7 @@ describe("BillingRequests", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
         customerId: "customer-1",
+        companyId: "company-1",
         notes: "Test",
       })
       .expect(201);

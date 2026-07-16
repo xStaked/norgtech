@@ -704,6 +704,23 @@ describe("Orders", () => {
     expect(Number(response.body.total)).toBe(119000);
   });
 
+  it("snapshots the billing company name from company, not the customer, when omitted", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [
+          { productId: "product-1", quantity: 1, unitPrice: 50000 },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.billingCompanyNameSnapshot).toBe("Nortech");
+    expect(response.body.billingCompanyNameSnapshot).not.toBe("Agro Norte");
+  });
+
   it("creates a product-backed order with automatic segment discount pricing", async () => {
     const response = await request(globalThis.__APP__)
       .post("/orders")
@@ -795,7 +812,9 @@ describe("Orders", () => {
     expect(response.body.purchaseOrderNumber).toBe("OC-7788");
     expect(response.body.customerNameSnapshot).toBe("Agro Norte");
     expect(response.body.customerNitSnapshot).toBe("900111222-1");
-    expect(response.body.billingCompanyNameSnapshot).toBe("Norgtech Facturacion SAS");
+    // billingCompanyNameSnapshot always reflects the billing company (company.name),
+    // regardless of any dto.billingCompanyNameSnapshot override (ORD-03).
+    expect(response.body.billingCompanyNameSnapshot).toBe("Nortech");
     expect(response.body.branchNameSnapshot).toBe("Sede Norte");
     expect(response.body.dispatchAddressSnapshot).toBe("Bodega cliente");
     expect(response.body.requesterName).toBe("Laura Cliente");

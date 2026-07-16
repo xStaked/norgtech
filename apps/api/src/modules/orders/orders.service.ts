@@ -105,8 +105,7 @@ export class OrdersService {
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
     const customerNameSnapshot = customer.displayName;
     const customerNitSnapshot = customer.taxId ?? null;
-    const billingCompanyNameSnapshot =
-      dto.billingCompanyNameSnapshot?.trim() || customerNameSnapshot || null;
+    const billingCompanyNameSnapshot = company.name;
     const branchNameSnapshot = dto.branchNameSnapshot?.trim() || null;
     const dispatchAddressSnapshot =
       dto.dispatchAddressSnapshot?.trim() || customer.address || null;
@@ -411,6 +410,7 @@ export class OrdersService {
       where: { id },
       include: {
         customer: true,
+        company: true,
         opportunity: true,
         sourceQuote: true,
         sourceConversation: true,

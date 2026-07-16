@@ -1645,7 +1645,9 @@ describe("WhatsApp inbox", () => {
     expect(response.body.sourceConversationId).toBe("conversation-1");
     expect(response.body.sourceConversation.id).toBe("conversation-1");
     expect(response.body.approvalStatus).toBe("en_revision");
-    expect(response.body.billingCompanyNameSnapshot).toBe("Facturadora WhatsApp SAS");
+    // billingCompanyNameSnapshot always reflects the billing company (company.name),
+    // regardless of any dto.billingCompanyNameSnapshot override (ORD-03).
+    expect(response.body.billingCompanyNameSnapshot).toBe("Norgtech");
     expect(response.body.branchNameSnapshot).toBe("Sucursal WhatsApp");
     expect(response.body.requesterName).toBe("Laura Cliente");
   });
