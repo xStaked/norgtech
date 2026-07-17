@@ -50,16 +50,18 @@ export class VisitsController {
     @Query("status") status?: VisitStatus,
     @Query("today") today?: string,
     @Query("thisWeek") thisWeek?: string,
+    @Query("overdue") overdue?: string,
     @Query("assignedToMe") assignedToMe?: string,
     @Query("customerId") customerId?: string,
   ) {
-    const hasFilters = status || today || thisWeek || assignedToMe || customerId;
+    const hasFilters = status || today || thisWeek || overdue || assignedToMe || customerId;
 
     if (hasFilters) {
       return this.visitsService.findWithFilters({
         status,
         today: today === "true",
         thisWeek: thisWeek === "true",
+        overdue: overdue === "true",
         assignedToMe: assignedToMe === "true",
         userId: user.id,
         customerId,

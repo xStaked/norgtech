@@ -3,13 +3,11 @@ import { AgendaFilters } from "@/components/agenda/agenda-filters";
 import { AgendaQueue } from "@/components/agenda/agenda-queue";
 import type { AgendaView } from "@/components/agenda/agenda-filters";
 import { ButtonLink } from "@/components/ui/button-link";
-import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { isSameDayInBogota } from "@/lib/datetime";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
 
@@ -24,6 +22,8 @@ interface Visit {
   scheduledAt: string;
   summary: string;
   status: string;
+  /** Derivado por el API con la regla compartida. El front no lo recalcula. */
+  isOverdue: boolean;
 }
 
 interface FollowUpTask {
@@ -33,6 +33,8 @@ interface FollowUpTask {
   title: string;
   type: string;
   status: string;
+  /** Derivado por el API con la regla compartida. El front no lo recalcula. */
+  isOverdue: boolean;
 }
 
 interface AgendaItem {
@@ -42,34 +44,9 @@ interface AgendaItem {
   customer: Customer | null;
   scheduledAt: string;
   status: string;
+  isOverdue: boolean;
   type?: string;
 }
-
-const visitStatusTone: Record<string, CrmStatusTone> = {
-  programada: "warning",
-  completada: "success",
-  cancelada: "danger",
-  no_realizada: "neutral",
-};
-
-const taskStatusTone: Record<string, CrmStatusTone> = {
-  pendiente: "warning",
-  completada: "success",
-  vencida: "danger",
-};
-
-const visitStatusLabels: Record<string, string> = {
-  programada: "Programada",
-  completada: "Completada",
-  cancelada: "Cancelada",
-  no_realizada: "No realizada",
-};
-
-const taskStatusLabels: Record<string, string> = {
-  pendiente: "Pendiente",
-  completada: "Completada",
-  vencida: "Vencida",
-};
 
 function toAgendaItems(visits: Visit[], tasks: FollowUpTask[]): AgendaItem[] {
   const visitItems = visits.map<AgendaItem>((visit) => ({
@@ -79,6 +56,7 @@ function toAgendaItems(visits: Visit[], tasks: FollowUpTask[]): AgendaItem[] {
     customer: visit.customer,
     scheduledAt: visit.scheduledAt,
     status: visit.status,
+    isOverdue: visit.isOverdue,
   }));
 
   const taskItems = tasks.map<AgendaItem>((task) => ({
@@ -88,6 +66,7 @@ function toAgendaItems(visits: Visit[], tasks: FollowUpTask[]): AgendaItem[] {
     customer: task.customer,
     scheduledAt: task.dueAt,
     status: task.status,
+    isOverdue: task.isOverdue,
     type: task.type,
   }));
 
@@ -97,18 +76,8 @@ function toAgendaItems(visits: Visit[], tasks: FollowUpTask[]): AgendaItem[] {
   );
 }
 
-function isOverdueTask(task: FollowUpTask): boolean {
-  return task.status === "pendiente" && new Date(task.dueAt).getTime() < Date.now();
-}
-
 function isDueToday(task: FollowUpTask): boolean {
-  const now = new Date();
-  const due = new Date(task.dueAt);
-  return (
-    due.getFullYear() === now.getFullYear() &&
-    due.getMonth() === now.getMonth() &&
-    due.getDate() === now.getDate()
-  );
+  return isSameDayInBogota(task.dueAt, new Date());
 }
 
 export default async function AgendaPage({
@@ -118,13 +87,6 @@ export default async function AgendaPage({
 }) {
   const params = await searchParams;
   const view = (typeof params.view === "string" ? params.view : "hoy") as AgendaView;
-
-  // Auto-mark overdue tasks on every agenda load
-  try {
-    await apiFetch("/follow-up-tasks/mark-overdue", { method: "POST" });
-  } catch {
-    // Silently ignore if the user lacks permission
-  }
 
   let visits: Visit[] = [];
   let tasks: FollowUpTask[] = [];
@@ -149,7 +111,7 @@ export default async function AgendaPage({
     tasks = tasksRes.ok ? await tasksRes.json() : [];
   } else if (view === "vencidos") {
     const [visitsRes, tasksRes] = await Promise.all([
-      apiFetch("/visits?status=no_realizada"),
+      apiFetch("/visits?overdue=true"),
       apiFetch("/follow-up-tasks?overdue=true"),
     ]);
     visits = visitsRes.ok ? await visitsRes.json() : [];
@@ -163,20 +125,17 @@ export default async function AgendaPage({
   const allVisits: Visit[] = allVisitsRes.ok ? await allVisitsRes.json() : [];
   const allTasks: FollowUpTask[] = allTasksRes.ok ? await allTasksRes.json() : [];
 
-  const todayVisits = allVisits.filter((v) => {
-    const d = new Date(v.scheduledAt);
-    const now = new Date();
-    return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
-  });
+  const todayVisits = allVisits.filter((v) => isSameDayInBogota(v.scheduledAt, new Date()));
 
-  const overdueTasks = allTasks.filter((t) => t.status === "vencida" || isOverdueTask(t));
+  const overdueTasks = allTasks.filter((t) => t.isOverdue);
+  const overdueVisits = allVisits.filter((v) => v.isOverdue);
   const dueTodayTasks = allTasks.filter((t) => isDueToday(t));
 
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
   const counts: Record<AgendaView, number> = {
-    hoy: todayVisits.length + dueTodayTasks.length + overdueTasks.filter((t) => isDueToday(t) || isOverdueTask(t)).length,
+    hoy: todayVisits.length + dueTodayTasks.length + overdueTasks.filter((t) => !isDueToday(t)).length,
     semana: allVisits.filter((v) => {
       const d = new Date(v.scheduledAt);
       const now = new Date();
@@ -202,7 +161,7 @@ export default async function AgendaPage({
       end.setHours(23, 59, 59, 999);
       return d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
     }).length,
-    vencidos: overdueTasks.length + allVisits.filter((v) => v.status === "no_realizada").length,
+    vencidos: overdueTasks.length + overdueVisits.length,
   };
 
   return (
@@ -236,7 +195,7 @@ export default async function AgendaPage({
           label="Vencidos / Urgente"
           value={counts.vencidos.toLocaleString("es-CO")}
           tone={counts.vencidos > 0 ? "danger" : "success"}
-          meta="Tareas vencidas y visitas no realizadas"
+          meta="Visitas y seguimientos cuya fecha ya pasó"
         />
         <StatCard
           label="Seguimientos pendientes"
@@ -267,7 +226,7 @@ export default async function AgendaPage({
             ? "Visitas de hoy y tareas que vencen o están vencidas."
             : view === "semana"
               ? "Todas las visitas y seguimientos programados para esta semana."
-              : "Tareas vencidas y visitas no realizadas que requieren atención."
+              : "Visitas y seguimientos cuya fecha ya pasó y siguen sin resolver."
         }
       >
         <AgendaQueue
@@ -284,7 +243,7 @@ export default async function AgendaPage({
               ? "La agenda del día está limpia. Puedes cargar una visita o un seguimiento nuevo."
               : view === "semana"
                 ? "No hay visitas ni seguimientos programados para esta semana."
-                : "No hay tareas vencidas ni visitas no realizadas."
+                : "No hay visitas ni seguimientos vencidos."
           }
         />
       </SectionCard>

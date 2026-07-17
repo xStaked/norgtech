@@ -1,9 +1,9 @@
 import { IsNotEmpty, IsOptional, IsString } from "class-validator";
+import { IsInstantString } from "../../../shared/is-instant.decorator";
 
 export class UpdateVisitDto {
   @IsOptional()
-  @IsString()
-  @IsNotEmpty()
+  @IsInstantString()
   scheduledAt?: string;
 
   @IsOptional()

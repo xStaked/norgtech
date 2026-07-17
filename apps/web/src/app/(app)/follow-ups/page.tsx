@@ -9,6 +9,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { dateTimeFormatter, isSameDayInBogota } from "@/lib/datetime";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
 
@@ -24,6 +25,8 @@ interface FollowUpTask {
   title: string;
   type: string;
   status: string;
+  /** Derivado por el API con la regla compartida. El front no lo recalcula. */
+  isOverdue: boolean;
 }
 
 interface FollowUpRow {
@@ -34,6 +37,7 @@ interface FollowUpRow {
   title: string;
   type: string;
   status: string;
+  isOverdue: boolean;
 }
 
 const statusLabels: Record<string, string> = {
@@ -57,10 +61,6 @@ const typeLabels: Record<string, string> = {
   otro: "Otro",
 };
 
-const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 const linkStyle = {
   color: "#0f5c8a",
@@ -84,11 +84,13 @@ const columns: readonly DataTableColumn<FollowUpRow>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (row) => (
-      <StatusBadge tone={statusTones[row.status] ?? "neutral"}>
-        {statusLabels[row.status] ?? row.status}
-      </StatusBadge>
-    ),
+    render: (row) => {
+      // "Vencida" es estado derivado: una tarea pendiente cuya fecha ya paso lo
+      // esta, aunque su columna siga diciendo "pendiente" (nadie la reescribe).
+      const label = row.isOverdue ? "Vencida" : statusLabels[row.status] ?? row.status;
+      const tone = row.isOverdue ? "danger" : statusTones[row.status] ?? "neutral";
+      return <StatusBadge tone={tone}>{label}</StatusBadge>;
+    },
   },
   {
     key: "customer",
@@ -123,16 +125,14 @@ function countByStatus(rows: FollowUpRow[], status: string) {
   return rows.filter((row) => row.status === status).length.toLocaleString("es-CO");
 }
 
+function countOverdue(rows: FollowUpRow[]) {
+  return rows.filter((row) => row.isOverdue).length.toLocaleString("es-CO");
+}
+
 function countDueToday(rows: FollowUpRow[]) {
-  const today = new Date();
-  return rows.filter((row) => {
-    const dueDate = new Date(row.dueAt);
-    return (
-      dueDate.getFullYear() === today.getFullYear()
-      && dueDate.getMonth() === today.getMonth()
-      && dueDate.getDate() === today.getDate()
-    );
-  }).length.toLocaleString("es-CO");
+  return rows
+    .filter((row) => isSameDayInBogota(row.dueAt, new Date()))
+    .length.toLocaleString("es-CO");
 }
 
 type FilterKey = "all" | "pendiente" | "vencida" | "completada" | "dueToday" | "mine";
@@ -140,7 +140,7 @@ type FilterKey = "all" | "pendiente" | "vencida" | "completada" | "dueToday" | "
 const filterConfig: { key: FilterKey; label: string; param?: string }[] = [
   { key: "all", label: "Todas" },
   { key: "pendiente", label: "Pendientes", param: "status=pendiente" },
-  { key: "vencida", label: "Vencidas", param: "status=vencida" },
+  { key: "vencida", label: "Vencidas", param: "overdue=true" },
   { key: "completada", label: "Completadas", param: "status=completada" },
   { key: "dueToday", label: "Vencen hoy", param: "dueToday=true" },
   { key: "mine", label: "Mías", param: "assignedToMe=true" },
@@ -174,6 +174,7 @@ export default async function FollowUpsPage({
     title: task.title,
     type: task.type,
     status: task.status,
+    isOverdue: task.isOverdue,
   }));
 
   const allRows: FollowUpRow[] = allTasks.map((task) => ({
@@ -184,6 +185,7 @@ export default async function FollowUpsPage({
     title: task.title,
     type: task.type,
     status: task.status,
+    isOverdue: task.isOverdue,
   }));
 
   return (
@@ -210,7 +212,7 @@ export default async function FollowUpsPage({
         }}
       >
         <StatCard label="Pendientes" value={countByStatus(allRows, "pendiente")} tone="warning" />
-        <StatCard label="Vencidas" value={countByStatus(allRows, "vencida")} tone="danger" />
+        <StatCard label="Vencidas" value={countOverdue(allRows)} tone="danger" />
         <StatCard label="Completadas" value={countByStatus(allRows, "completada")} tone="success" />
         <StatCard label="Vencen hoy" value={countDueToday(allRows)} tone="info" />
       </div>

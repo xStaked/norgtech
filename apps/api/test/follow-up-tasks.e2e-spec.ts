@@ -241,31 +241,9 @@ describe("FollowUpTasks", () => {
     expect(updated?.status).toBe(FollowUpTaskStatus.completada);
   });
 
-  it("marks overdue tasks", async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
-
-    const createResponse = await request(globalThis.__APP__)
-      .post("/follow-up-tasks")
-      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
-      .send({
-        customerId: "customer-1",
-        type: FollowUpTaskType.llamada,
-        title: "Tarea vencida",
-        dueAt: pastDate.toISOString(),
-      })
-      .expect(201);
-
-    const taskId = createResponse.body.id;
-
-    await request(globalThis.__APP__)
-      .post("/follow-up-tasks/mark-overdue")
-      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
-      .expect(201);
-
-    const updated = tasks.find((t) => t.id === taskId);
-    expect(updated?.status).toBe(FollowUpTaskStatus.vencida);
-  });
+  // El test "marks overdue tasks" se elimino junto con markOverdue: probaba un
+  // mecanismo que ya no existe (escribir `vencida` en la columna). "Vencido"
+  // ahora se deriva en lectura; su cobertura vive en overdue.e2e-spec.ts.
 
   it("filters tasks by status", async () => {
     const response = await request(globalThis.__APP__)

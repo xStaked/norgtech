@@ -10,6 +10,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { dateTimeFormatter } from "@/lib/datetime";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
 
@@ -32,6 +33,8 @@ interface Visit {
   notes: string | null;
   nextStep: string | null;
   status: string;
+  /** Derivado por el API con la regla compartida. El front no lo recalcula. */
+  isOverdue: boolean;
   createdAt: string;
 }
 
@@ -49,10 +52,6 @@ const statusTones: Record<string, CrmStatusTone> = {
   no_realizada: "neutral",
 };
 
-const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 const linkStyle = {
   color: "#0c2c44",
@@ -76,6 +75,11 @@ export default async function VisitDetailPage({
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
   const scheduledAt = dateTimeFormatter.format(new Date(visit.scheduledAt));
+  // "Vencida" es estado derivado; la columna solo guarda decisiones humanas.
+  const statusLabel = visit.isOverdue ? "Vencida" : statusLabels[visit.status] ?? visit.status;
+  const statusTone: CrmStatusTone = visit.isOverdue
+    ? "danger"
+    : statusTones[visit.status] ?? "neutral";
   const createdAt = dateTimeFormatter.format(new Date(visit.createdAt));
 
   return (
@@ -86,8 +90,8 @@ export default async function VisitDetailPage({
         description="Detalle operativo de la visita, su contexto comercial y el siguiente movimiento esperado."
         actions={
           <>
-            <StatusBadge tone={statusTones[visit.status] ?? "neutral"}>
-              {statusLabels[visit.status] ?? visit.status}
+            <StatusBadge tone={statusTone}>
+              {statusLabel}
             </StatusBadge>
             <ButtonLink href="/visits" variant="ghost" size="sm">
               Volver a visitas
@@ -103,7 +107,7 @@ export default async function VisitDetailPage({
           gap: 12,
         }}
       >
-        <InlineMetric label="Agenda" value={scheduledAt} tone={statusTones[visit.status] ?? "info"} />
+        <InlineMetric label="Agenda" value={scheduledAt} tone={statusTone} />
         <InlineMetric label="Registro" value={`#${visit.id.slice(-6)}`} />
       </div>
 
@@ -141,7 +145,7 @@ export default async function VisitDetailPage({
           },
           {
             label: "Estado",
-            value: statusLabels[visit.status] ?? visit.status,
+            value: statusLabel,
           },
           {
             label: "Creada",

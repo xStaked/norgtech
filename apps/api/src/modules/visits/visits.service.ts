@@ -6,6 +6,12 @@ import {
 } from "@nestjs/common";
 import { Prisma, VisitStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import {
+  dayRangeInZone,
+  isVisitOverdue,
+  visitOverdueWhere,
+  weekRangeInZone,
+} from "../../shared/overdue";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CompleteVisitDto } from "./dto/complete-visit.dto";
@@ -17,6 +23,7 @@ export interface VisitFilters {
   status?: VisitStatus;
   today?: boolean;
   thisWeek?: boolean;
+  overdue?: boolean;
   assignedToMe?: boolean;
   userId?: string;
   customerId?: string;
@@ -294,8 +301,9 @@ export class VisitsService {
     });
   }
 
-  findWithFilters(filters: VisitFilters) {
-    const where: Record<string, unknown> = {};
+  async findWithFilters(filters: VisitFilters) {
+    const now = new Date();
+    const where: Prisma.VisitWhereInput = {};
 
     if (filters.status) {
       where.status = filters.status;
@@ -310,44 +318,56 @@ export class VisitsService {
     }
 
     if (filters.today) {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const { start, end } = dayRangeInZone(now);
       where.scheduledAt = { gte: start, lte: end };
+    }
+
+    if (filters.overdue) {
+      Object.assign(where, visitOverdueWhere(now));
     }
 
     if (filters.thisWeek) {
-      const now = new Date();
-      const day = now.getDay();
-      const diffToMonday = day === 0 ? -6 : 1 - day;
-      const start = new Date(now);
-      start.setDate(now.getDate() + diffToMonday);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      end.setHours(23, 59, 59, 999);
+      const { start, end } = weekRangeInZone(now);
       where.scheduledAt = { gte: start, lte: end };
     }
 
-    return this.prisma.visit.findMany({
+    const visits = await this.prisma.visit.findMany({
       where,
       include: { customer: true },
       orderBy: { scheduledAt: "desc" },
     });
+
+    return visits.map((visit) => this.withDerivedState(visit, now));
   }
 
-  findAll() {
-    return this.prisma.visit.findMany({
+  async findAll() {
+    const now = new Date();
+    const visits = await this.prisma.visit.findMany({
       include: { customer: true },
       orderBy: { scheduledAt: "asc" },
     });
+
+    return visits.map((visit) => this.withDerivedState(visit, now));
   }
 
-  findOne(id: string) {
-    return this.prisma.visit.findUnique({
+  async findOne(id: string) {
+    const visit = await this.prisma.visit.findUnique({
       where: { id },
       include: { customer: true },
     });
+
+    return visit ? this.withDerivedState(visit, new Date()) : visit;
+  }
+
+  /**
+   * Expone el estado derivado para que el front pinte la insignia sin
+   * reimplementar la regla (y sin fiarse de la columna `status`).
+   */
+  private withDerivedState<T extends { status: VisitStatus; scheduledAt: Date }>(
+    visit: T,
+    now: Date,
+  ) {
+    return { ...visit, isOverdue: isVisitOverdue(visit, now) };
   }
 
   private async assertCustomerExists(customerId: string) {

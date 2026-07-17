@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { MapPin, Clock } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
+import { shortDateTimeFormatter } from "@/lib/datetime";
 import { computeUrgency, UrgencyBadge } from "./urgency-badge";
 
 interface Customer {
@@ -17,6 +18,7 @@ interface QueueItem {
   customer: Customer | null;
   scheduledAt: string;
   status: string;
+  isOverdue: boolean;
   type?: string;
 }
 
@@ -25,13 +27,6 @@ interface AgendaQueueProps {
   emptyTitle?: string;
   emptyDescription?: string;
 }
-
-const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
-  day: "2-digit",
-  month: "short",
-  hour: "2-digit",
-  minute: "2-digit",
-});
 
 const kindLabels: Record<string, string> = {
   visit: "Visita",
@@ -60,7 +55,7 @@ export function AgendaQueue({ items, emptyTitle, emptyDescription }: AgendaQueue
   return (
     <div className="grid grid-cols-1 gap-3.5 md:grid-cols-2">
       {items.map((item) => {
-        const urgency = computeUrgency(item.scheduledAt, item.status, item.kind);
+        const urgency = computeUrgency(item.scheduledAt, item.isOverdue);
         const href = item.kind === "visit" ? `/visits/${item.id}` : `/follow-ups/${item.id}`;
         const meta =
           item.kind === "task"
@@ -99,7 +94,7 @@ export function AgendaQueue({ items, emptyTitle, emptyDescription }: AgendaQueue
                   {item.customer?.displayName ?? "Sin cliente"}
                 </span>
                 <span className="shrink-0 text-[12px] font-semibold tabular-nums text-[#3a4658]">
-                  {dateTimeFormatter.format(new Date(item.scheduledAt))}
+                  {shortDateTimeFormatter.format(new Date(item.scheduledAt))}
                 </span>
               </div>
             </div>

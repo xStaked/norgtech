@@ -9,6 +9,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { dateTimeFormatter } from "@/lib/datetime";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
 
@@ -23,6 +24,8 @@ interface Visit {
   scheduledAt: string;
   summary: string;
   status: string;
+  /** Derivado por el API con la regla compartida. El front no lo recalcula. */
+  isOverdue: boolean;
 }
 
 interface VisitRow {
@@ -32,6 +35,7 @@ interface VisitRow {
   scheduledAt: string;
   summary: string;
   status: string;
+  isOverdue: boolean;
 }
 
 const statusLabels: Record<string, string> = {
@@ -48,10 +52,6 @@ const statusTones: Record<string, CrmStatusTone> = {
   no_realizada: "neutral",
 };
 
-const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 const linkStyle = {
   color: "#0f5c8a",
@@ -79,11 +79,13 @@ const columns: readonly DataTableColumn<VisitRow>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (row) => (
-      <StatusBadge tone={statusTones[row.status] ?? "neutral"}>
-        {statusLabels[row.status] ?? row.status}
-      </StatusBadge>
-    ),
+    render: (row) => {
+      // "Vencida" es estado derivado: una visita programada cuya fecha ya paso
+      // lo esta, aunque su columna siga diciendo "programada".
+      const label = row.isOverdue ? "Vencida" : statusLabels[row.status] ?? row.status;
+      const tone = row.isOverdue ? "danger" : statusTones[row.status] ?? "neutral";
+      return <StatusBadge tone={tone}>{label}</StatusBadge>;
+    },
   },
   {
     key: "scheduledAt",
@@ -153,6 +155,7 @@ export default async function VisitsPage({
     scheduledAt: visit.scheduledAt,
     summary: visit.summary,
     status: visit.status,
+    isOverdue: visit.isOverdue,
   }));
 
   const allRows: VisitRow[] = allVisits.map((visit) => ({
@@ -162,6 +165,7 @@ export default async function VisitsPage({
     scheduledAt: visit.scheduledAt,
     summary: visit.summary,
     status: visit.status,
+    isOverdue: visit.isOverdue,
   }));
 
   return (
