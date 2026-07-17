@@ -235,6 +235,27 @@ describe("Visits", () => {
     expect(response.body.status).toBe(VisitStatus.programada);
   });
 
+  it("acepta el formato que manda Nora (sin offset) y lo lee como hora de Colombia", async () => {
+    // agents/nora/src/tools/visits.py postea a /visits el `scheduled_at` que
+    // produce el LLM, sin offset (ver agents/nora/tests/test_visits_tool.py).
+    // Exigir offset devolvia 400 y rompia la creacion de visitas por WhatsApp.
+    const response = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        scheduledAt: "2026-06-29T12:00:00",
+        notes: "Visita creada por Nora",
+      })
+      .expect(201);
+
+    // 12:00 en Bogota (UTC-5) = 17:00 UTC. Si saliera 12:00Z, se interpreto en
+    // la zona del servidor y VIS-03 sigue vivo.
+    expect(new Date(response.body.scheduledAt).toISOString()).toBe(
+      "2026-06-29T17:00:00.000Z",
+    );
+  });
+
   it("filters visits by status", async () => {
     const response = await request(globalThis.__APP__)
       .get("/visits?status=programada")

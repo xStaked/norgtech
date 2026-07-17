@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { Prisma, VisitStatus } from "@prisma/client";
+import { parseInstant } from "../../shared/instant";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
   dayRangeInZone,
@@ -229,7 +230,7 @@ export class VisitsService {
       const data: Prisma.VisitUpdateInput = { updatedBy: user.id };
 
       if (dto.scheduledAt !== undefined) {
-        data.scheduledAt = new Date(dto.scheduledAt);
+        data.scheduledAt = parseInstant(dto.scheduledAt);
       }
       if (dto.summary !== undefined) {
         data.summary = dto.summary;
@@ -432,7 +433,7 @@ export class VisitsService {
       data: {
         customerId: dto.customerId,
         opportunityId: dto.opportunityId,
-        scheduledAt: new Date(dto.scheduledAt),
+        scheduledAt: parseInstant(dto.scheduledAt),
         summary: dto.summary,
         notes: dto.notes,
         nextStep: dto.nextStep,

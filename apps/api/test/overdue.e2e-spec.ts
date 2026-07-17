@@ -413,15 +413,26 @@ describe("Overdue via HTTP", () => {
     expect(wallClock).toBe("14:30");
   });
 
-  it("rechaza un scheduledAt sin offset porque es ambiguo (la causa de VIS-03)", async () => {
-    await request(app.getHttpServer())
+  it("lee un scheduledAt sin offset como hora de Colombia, no del servidor (VIS-03)", async () => {
+    // Rechazar esto con 400 parecia lo correcto ("un instante sin offset no es
+    // un instante"), pero rompia produccion: Nora
+    // (agents/nora/src/tools/visits.py) postea el `scheduled_at` del LLM sin
+    // offset. Y ademas no hacia falta: en este negocio una hora sin offset
+    // significa hora de pared en Colombia. El bug de VIS-03 era interpretarla
+    // en la zona del SERVIDOR, no que faltara el offset.
+    const response = await request(app.getHttpServer())
       .post("/visits")
       .set("Authorization", `Bearer ${await token()}`)
       .send({
         customerId: "customer-1",
         scheduledAt: "2026-07-16T14:30",
-        summary: "Visita ambigua",
+        summary: "Visita creada con hora local",
       })
-      .expect(400);
+      .expect(201);
+
+    // 14:30 en Bogota (UTC-5) = 19:30 UTC.
+    expect(new Date(response.body.scheduledAt).toISOString()).toBe(
+      "2026-07-16T19:30:00.000Z",
+    );
   });
 });

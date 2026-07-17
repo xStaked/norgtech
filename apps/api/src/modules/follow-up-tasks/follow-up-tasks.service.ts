@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { FollowUpTaskStatus, FollowUpTaskType, Prisma } from "@prisma/client";
+import { parseInstant } from "../../shared/instant";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
   dayRangeInZone,
@@ -295,7 +296,7 @@ export class FollowUpTasksService {
         opportunityId: dto.opportunityId,
         type: dto.type,
         title: dto.title,
-        dueAt: new Date(dto.dueAt),
+        dueAt: parseInstant(dto.dueAt),
         notes: dto.notes,
         assignedToUserId: dto.assignedToUserId,
         createdBy: user.id,
