@@ -35,9 +35,31 @@ NEW_CUSTOMER_CASE_PROMPT = (
     "contenga conversaciones anteriores. Para crear el cliente necesitas nombre "
     "o razón social; usa el mismo valor como display_name si no hay nombre "
     "comercial distinto. NIT, ciudad y teléfono son datos deseables: si faltan, "
-    "pregúntalos de forma breve. Cuando ya estén nombre, NIT, ciudad y teléfono, "
-    "llama create_customer directamente (el segmento se asigna solo, no pases "
-    "segment_id) y confirma el resultado."
+    "pregúntalos de forma breve. Pregunta también, de forma breve, por el correo, "
+    "la dirección, el departamento y las notas del cliente, PERO estos cuatro son "
+    "OPCIONALES: si el usuario dice que no los tiene o no los da, NO bloquees la "
+    "creación; crea el cliente igual con lo que tengas. Cuando ya tengas al menos "
+    "nombre, NIT, ciudad y teléfono, llama create_customer directamente (el "
+    "segmento se asigna solo, no pases segment_id; pasa email, address, department "
+    "y notes solo si los tienes) y confirma el resultado."
+)
+
+CUSTOMER_EDIT_PROMPT = (
+    "\n\n## Consultar y editar clientes por WhatsApp\n"
+    "Puedes consultar y actualizar los datos de un cliente existente con "
+    "update_customer, incluyendo teléfono (phone), NIT (tax_id), correo (email), "
+    "dirección (address), ciudad (city) y departamento (department). Si el "
+    "comercial pide ver o cambiar el teléfono (u otro dato) de un cliente, hazlo: "
+    "búscalo primero con search_customers para obtener su customer_id y luego "
+    "llama update_customer solo con el campo que cambia. Nunca digas que no puedes "
+    "ver o modificar el teléfono de un cliente."
+)
+
+VISIT_EDIT_FIELD_PROMPT = (
+    "\n\n## Editar una visita: descripción = summary\n"
+    "Cuando el usuario edite una visita y hable de su 'descripción' o 'detalle', "
+    "eso corresponde al campo summary (resumen) de update_visit: pásalo en summary "
+    "para que el cambio quede guardado."
 )
 
 VISIT_FLOW_PROMPT = (
@@ -142,6 +164,12 @@ def _detected_new_customer_fields(request: WhatsAppAgentRequest) -> dict:
         ):
             city = candidate
 
+    # Optional (prompt-but-optional) fields, labeled forms only (AI-05).
+    email = _field_value(combined, ("correo", "email", "e-mail", "e mail"))
+    address = _field_value(combined, ("direccion", "dirección"))
+    department = _field_value(combined, ("departamento",))
+    notes = _field_value(combined, ("notas", "nota", "observaciones", "observacion", "observación"))
+
     if name:
         fields["legalName"] = name
         fields["displayName"] = name
@@ -151,6 +179,14 @@ def _detected_new_customer_fields(request: WhatsAppAgentRequest) -> dict:
         fields["city"] = city
     if phone:
         fields["phone"] = phone
+    if email:
+        fields["email"] = email
+    if address:
+        fields["address"] = address
+    if department:
+        fields["department"] = department
+    if notes:
+        fields["notes"] = notes
     return fields
 
 
@@ -282,7 +318,13 @@ def _field_value(text: str, labels: tuple[str, ...]) -> str | None:
 
 def _to_messages(request: WhatsAppAgentRequest) -> list:
     """System prompt (+WhatsApp addendum) + history + current message (no dup)."""
-    system_prompt = NORA_SYSTEM_PROMPT + WHATSAPP_ADDENDUM + VISIT_FLOW_PROMPT
+    system_prompt = (
+        NORA_SYSTEM_PROMPT
+        + WHATSAPP_ADDENDUM
+        + VISIT_FLOW_PROMPT
+        + CUSTOMER_EDIT_PROMPT
+        + VISIT_EDIT_FIELD_PROMPT
+    )
     if request.open_case and request.open_case.type == "new_customer":
         system_prompt += NEW_CUSTOMER_CASE_PROMPT
 
