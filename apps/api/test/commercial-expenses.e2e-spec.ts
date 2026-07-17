@@ -696,26 +696,28 @@ describe("CommercialExpenses", () => {
 
   it("exports CSV and XLSX with expected content types", async () => {
     await createExpense().expect(201);
+    // EXP-02: los encabezados exportados van en espanol legible, no en los
+    // codigos snake_case internos.
     const expectedExportHeaders = [
-      "fecha",
-      "comercial",
-      "categoria",
-      "monto",
-      "moneda",
-      "proveedor",
-      "nit",
-      "numero_factura",
-      "medio_pago",
-      "cliente",
-      "visita",
-      "estado",
-      "descripcion",
-      "nota_revision",
-      "fecha_revision",
-      "revisor",
-      "confianza_extraccion",
-      "modelo_extraccion",
-      "fecha_creacion",
+      "Fecha",
+      "Comercial",
+      "Categoría",
+      "Monto",
+      "Moneda",
+      "Proveedor",
+      "NIT",
+      "Número de factura",
+      "Medio de pago",
+      "Cliente",
+      "Visita",
+      "Estado",
+      "Descripción",
+      "Nota de revisión",
+      "Fecha de revisión",
+      "Revisor",
+      "Confianza de extracción",
+      "Modelo de extracción",
+      "Fecha de creación",
     ] as const;
     const parseCsvRow = (row: string) => row.slice(1, -1).split('","');
     const binaryParser = (
@@ -759,6 +761,11 @@ describe("CommercialExpenses", () => {
     expect(csvDataRow[12]).toBe("Almuerzo con cliente");
     expect(csvDataRow[16]).toBe("0.91");
     expect(csvDataRow[17]).toBe("gpt-4.1-mini");
+    // EXP-03: las fechas se exportan como dd/mm/aaaa HH:mm en hora de Colombia
+    // (UTC-5). expenseDate "2026-05-01" => 2026-05-01T00:00:00Z => 30/04/2026 19:00.
+    // Este valor es independiente de la TZ del proceso, por eso pasa bajo TZ=UTC.
+    expect(csvDataRow[0]).toBe("30/04/2026 19:00");
+    expect(csvDataRow[0]).toMatch(/^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
 
     const xlsx = await request(globalThis.__APP__)
       .get("/commercial-expenses/export?format=xlsx")
@@ -786,5 +793,7 @@ describe("CommercialExpenses", () => {
     expect(dataRow.getCell(7).value).toBe("900123456-7");
     expect(dataRow.getCell(8).value).toBe("FE-1001");
     expect(dataRow.getCell(9).value).toBe("tarjeta");
+    // EXP-03: la celda de fecha (col 1) tambien en hora de Colombia dd/mm/aaaa HH:mm.
+    expect(dataRow.getCell(1).value).toBe("30/04/2026 19:00");
   });
 });

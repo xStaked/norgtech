@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import ExcelJS from "exceljs";
+import { BOGOTA_OFFSET } from "../../shared/instant";
 
 export interface ExpenseExportRow {
   expenseDate: Date;
@@ -23,27 +24,40 @@ export interface ExpenseExportRow {
   createdAt: Date;
 }
 
+// EXP-02: encabezados de exportacion en espanol legible (antes eran los codigos
+// snake_case internos). El orden refleja 1:1 el orden de `toValues`.
 const EXPORT_COLUMNS = [
-  "fecha",
-  "comercial",
-  "categoria",
-  "monto",
-  "moneda",
-  "proveedor",
-  "nit",
-  "numero_factura",
-  "medio_pago",
-  "cliente",
-  "visita",
-  "estado",
-  "descripcion",
-  "nota_revision",
-  "fecha_revision",
-  "revisor",
-  "confianza_extraccion",
-  "modelo_extraccion",
-  "fecha_creacion",
+  "Fecha",
+  "Comercial",
+  "Categoría",
+  "Monto",
+  "Moneda",
+  "Proveedor",
+  "NIT",
+  "Número de factura",
+  "Medio de pago",
+  "Cliente",
+  "Visita",
+  "Estado",
+  "Descripción",
+  "Nota de revisión",
+  "Fecha de revisión",
+  "Revisor",
+  "Confianza de extracción",
+  "Modelo de extracción",
+  "Fecha de creación",
 ] as const;
+
+// EXP-03: Colombia es UTC-5 todo el año (sin DST), asi que basta desplazar el
+// instante UTC por el offset y leer los componentes UTC. Es independiente de la
+// zona horaria del proceso (por eso funciona bajo TZ=UTC y TZ=America/Bogota).
+const BOGOTA_OFFSET_MINUTES = (() => {
+  const match = BOGOTA_OFFSET.match(/([+-])(\d{2}):(\d{2})/);
+  if (!match) return 0;
+  const [, sign, hours, minutes] = match;
+  const total = Number(hours) * 60 + Number(minutes);
+  return sign === "-" ? -total : total;
+})();
 
 @Injectable()
 export class CommercialExpensesExportService {
@@ -113,8 +127,19 @@ export class CommercialExpensesExportService {
     return value;
   }
 
-  private formatDate(value: Date | null): string {
+  private formatDate(value: Date | null | undefined): string {
     if (!value) return "";
-    return value.toISOString();
+    const time = value.getTime();
+    if (Number.isNaN(time)) return "";
+
+    // Desplaza el instante UTC al horario de pared de Colombia y lee los
+    // componentes en UTC: dd/mm/aaaa HH:mm, sin depender de la TZ del proceso.
+    const shifted = new Date(time + BOGOTA_OFFSET_MINUTES * 60_000);
+    const dd = String(shifted.getUTCDate()).padStart(2, "0");
+    const mm = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+    const yyyy = shifted.getUTCFullYear();
+    const hh = String(shifted.getUTCHours()).padStart(2, "0");
+    const min = String(shifted.getUTCMinutes()).padStart(2, "0");
+    return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
   }
 }
