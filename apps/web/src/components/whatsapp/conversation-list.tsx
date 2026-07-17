@@ -107,6 +107,15 @@ export function ConversationList({
                       </span>
                     ) : null}
                   </div>
+                  {conversation.assignedToUser ? (
+                    <div className="mt-0.5 truncate text-[11px] text-[#167c4a]">
+                      Tomada por {conversation.assignedToUser.name}
+                    </div>
+                  ) : conversation.assignedToRole ? (
+                    <div className="mt-0.5 truncate text-[11px] font-semibold text-[#b45309]">
+                      Pendiente · {conversation.assignedToRole}
+                    </div>
+                  ) : null}
                 </div>
               </button>
             );

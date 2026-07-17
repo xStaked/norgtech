@@ -69,7 +69,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
   const moduleAccess: Record<string, readonly UserRole[]> = {
     "/dashboard": ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
     "/agenda": ["administrador", "director_comercial", "comercial", "tecnico"],
-    "/whatsapp": ["administrador", "director_comercial", "comercial"],
+    "/whatsapp": ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
     "/nora": ["administrador", "director_comercial", "comercial", "tecnico"],
     "/visits": ["administrador", "director_comercial", "comercial", "tecnico"],
     "/expenses": ["administrador", "director_comercial", "comercial", "facturacion"],

@@ -138,7 +138,7 @@ class NoraCustomerSnapshot(BaseModel):
 class NoraHandoff(BaseModel):
     needed: bool = False
     reason: str | None = None
-    intent: str | None = None
+    rol: str | None = None
 
 
 class NoraOrderDraft(BaseModel):

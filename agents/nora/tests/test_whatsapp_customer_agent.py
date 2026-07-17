@@ -54,17 +54,18 @@ def test_current_message_not_duplicated_when_last_history():
 
 
 def test_extract_handoff_detects_derivation():
-    msgs = [ToolMessage(content="DERIVADO|pedido|quiere hacer un pedido", tool_call_id="tc_1", name="derivar_a_unicanal")]
+    msgs = [ToolMessage(content="DERIVADO|tecnico|el cliente quiere hablar con soporte",
+                        tool_call_id="tc_1", name="derivar_a_unicanal")]
     h = _extract_handoff(msgs)
     assert h.needed is True
-    assert h.intent == "pedido"
-    assert h.reason == "quiere hacer un pedido"
+    assert h.rol == "tecnico"
+    assert h.reason == "el cliente quiere hablar con soporte"
 
 
-def test_extract_handoff_returns_not_needed_without_tool():
-    msgs = [AIMessage(content="Tu pedido NT-100 va despachado.")]
-    h = _extract_handoff(msgs)
+def test_extract_handoff_none_when_no_tool():
+    h = _extract_handoff([])
     assert h.needed is False
+    assert h.rol is None
 
 
 def test_extract_order_detects_repeat_by_order_ref():

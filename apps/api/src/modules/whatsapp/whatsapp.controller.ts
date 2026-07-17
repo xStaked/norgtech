@@ -42,22 +42,35 @@ export class WhatsAppWebhookController {
 
 @Controller("whatsapp")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles("administrador", "comercial", "director_comercial")
+@Roles(
+  "administrador",
+  "director_comercial",
+  "comercial",
+  "tecnico",
+  "facturacion",
+  "logistica",
+)
 export class WhatsAppController {
   constructor(private readonly whatsAppService: WhatsAppService) {}
 
   @Get("conversations")
-  listConversations() {
-    return this.whatsAppService.listConversations();
+  listConversations(@CurrentUser() user: AuthUser) {
+    return this.whatsAppService.listConversations(user);
+  }
+
+  @Get("conversations/pending-count")
+  pendingCount(@CurrentUser() user: AuthUser) {
+    return this.whatsAppService.pendingCount(user);
   }
 
   @Get("conversations/:id")
-  getConversation(@Param("id") id: string) {
-    return this.whatsAppService.getConversation(id);
+  getConversation(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.whatsAppService.getConversation(user, id);
   }
 
   @Patch("conversations/:id")
   updateConversation(
+    @CurrentUser() user: AuthUser,
     @Param("id") id: string,
     @Body(
       new ValidationPipe({
@@ -67,7 +80,7 @@ export class WhatsAppController {
     )
     dto: UpdateConversationDto,
   ) {
-    return this.whatsAppService.updateConversation(id, dto);
+    return this.whatsAppService.updateConversation(user, id, dto);
   }
 
   @Post("conversations/:id/notes")
@@ -98,6 +111,11 @@ export class WhatsAppController {
     dto: SendWhatsAppMessageDto,
   ) {
     return this.whatsAppService.sendMessage(user, id, dto);
+  }
+
+  @Post("conversations/:id/claim")
+  claimConversation(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.whatsAppService.claimConversation(user, id);
   }
 
   @Post("conversations/:id/order-draft")

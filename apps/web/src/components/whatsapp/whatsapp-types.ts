@@ -13,6 +13,7 @@ export type WhatsAppConversation = {
   customer?: { id: string; displayName: string } | null;
   contact?: { id: string; fullName: string } | null;
   assignedToUser?: { id: string; name: string } | null;
+  assignedToRole?: string | null;
   tags?: { id: string; label: string }[];
 };
 

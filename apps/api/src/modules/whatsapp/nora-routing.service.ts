@@ -5,6 +5,7 @@ import {
   NoraConversationCaseStatus,
   NoraConversationCaseType,
   Prisma,
+  UserRole,
   WhatsAppConversation,
   WhatsAppMessage,
   WhatsAppSenderType,
@@ -17,6 +18,7 @@ import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
 import { NoraExpenseExtractionService } from "./nora-expense-extraction.service";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
+import { isAttendableRole } from "./unicanal-roles";
 import { ResolvedWhatsAppSender, WhatsAppService } from "./whatsapp.service";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 
@@ -256,7 +258,7 @@ export class NoraRoutingService {
 
       if (
         sender.senderType === WhatsAppSenderType.cliente &&
-        conversation.assignedToUserId &&
+        (conversation.assignedToRole || conversation.assignedToUserId) &&
         (conversation.status === "pendiente" || conversation.status === "en_gestion")
       ) {
         return;
@@ -301,22 +303,10 @@ export class NoraRoutingService {
                   .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0);
 
             if (items.length === 0) {
-              const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
-              if (unicanalUserId) {
-                await this.prisma.whatsAppConversation.update({
-                  where: { id: conversation.id },
-                  data: { assignedToUserId: unicanalUserId, status: "pendiente" },
-                });
-                await this.prisma.whatsAppInternalNote.create({
-                  data: {
-                    conversationId: conversation.id,
-                    authorUserId: unicanalUserId,
-                    body: `Nora intentó armar un pedido pero no pudo resolver los ítems — ${draft.motivo}`,
-                  },
-                });
-              } else {
-                this.logger.warn("Order case could not be resolved and NORA_UNICANAL_USER_ID is not set");
-              }
+              await this.prisma.whatsAppConversation.update({
+                where: { id: conversation.id },
+                data: { assignedToRole: UserRole.comercial, status: "pendiente", assignedToUserId: null },
+              });
 
               await this.prisma.noraActionLog.update({
                 where: { id: actionLog.id },
@@ -348,22 +338,10 @@ export class NoraRoutingService {
                 },
               });
 
-              const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
-              if (unicanalUserId) {
-                await this.prisma.whatsAppConversation.update({
-                  where: { id: conversation.id },
-                  data: { assignedToUserId: unicanalUserId, status: "pendiente" },
-                });
-                await this.prisma.whatsAppInternalNote.create({
-                  data: {
-                    conversationId: conversation.id,
-                    authorUserId: unicanalUserId,
-                    body: `Pedido armado por Nora — ${draft.motivo}`,
-                  },
-                });
-              } else {
-                this.logger.warn("Order case armed but NORA_UNICANAL_USER_ID is not set");
-              }
+              await this.prisma.whatsAppConversation.update({
+                where: { id: conversation.id },
+                data: { assignedToRole: UserRole.comercial, status: "pendiente", assignedToUserId: null },
+              });
 
               await this.prisma.noraActionLog.update({
                 where: { id: actionLog.id },
@@ -381,21 +359,22 @@ export class NoraRoutingService {
           }
 
           if (agentResponse.handoff?.needed) {
-            const unicanalUserId = process.env.NORA_UNICANAL_USER_ID?.trim();
-            if (unicanalUserId) {
+            const rol = agentResponse.handoff.rol?.trim();
+            if (isAttendableRole(rol)) {
               await this.prisma.whatsAppConversation.update({
                 where: { id: conversation.id },
-                data: { assignedToUserId: unicanalUserId, status: "pendiente" },
-              });
-              await this.prisma.whatsAppInternalNote.create({
-                data: {
-                  conversationId: conversation.id,
-                  authorUserId: unicanalUserId,
-                  body: `Derivación Nora — intent: ${agentResponse.handoff.intent ?? "n/d"}. Motivo: ${agentResponse.handoff.reason ?? "n/d"}`,
-                },
+                data: { assignedToRole: rol, status: "pendiente", assignedToUserId: null },
               });
             } else {
-              this.logger.warn("Customer handoff requested but NORA_UNICANAL_USER_ID is not set");
+              this.logger.warn(
+                `Customer handoff sin rol válido (${rol ?? "n/d"}) — no se asigna, Nora re-pregunta`,
+              );
+              if (!agentResponse.reply_text) {
+                await this.whatsAppService.sendAgentReply(
+                  conversation.id,
+                  "¿Con qué área querés hablar: comercial, soporte técnico, facturación o entregas?",
+                );
+              }
             }
           }
 
@@ -1121,7 +1100,7 @@ export class NoraRoutingService {
       reply_text: string;
       case_update: Record<string, unknown> | null;
       executed_entity: Record<string, unknown> | null;
-      handoff: { needed: boolean; reason: string | null; intent: string | null } | null;
+      handoff: { needed: boolean; reason: string | null; rol: string | null } | null;
       order_case: { orderRef: string | null; items: Array<Record<string, unknown>>; motivo: string } | null;
     }>;
   }
