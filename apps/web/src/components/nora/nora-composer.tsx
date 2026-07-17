@@ -6,11 +6,18 @@ import { cn } from "@/lib/utils";
 
 const MIN_LENGTH = 5;
 
-const QUICK_ACTIONS = [
-  "¿Qué tengo pendiente hoy?",
-  "Registrar una visita",
-  "Crear una cotización",
-  "Resumen del cliente",
+// Each quick action shows `label` on the pill but may send a fuller `message`
+// so the agent gets an unambiguous instruction. "Resumen del cliente" is global
+// (no customer is preselected here), so the message tells Nora to ask which one.
+const QUICK_ACTIONS: Array<{ label: string; message?: string }> = [
+  { label: "¿Qué tengo pendiente hoy?" },
+  { label: "Registrar una visita" },
+  { label: "Crear una cotización" },
+  {
+    label: "Resumen del cliente",
+    message:
+      "Quiero el resumen de un cliente. Pregúntame de cuál cliente y luego dame su resumen.",
+  },
 ];
 
 export function NoraComposer({
@@ -64,13 +71,13 @@ export function NoraComposer({
       <div className="flex flex-wrap gap-2">
         {QUICK_ACTIONS.map((action) => (
           <button
-            key={action}
+            key={action.label}
             type="button"
             disabled={disabled}
-            onClick={() => void onSubmit(action)}
+            onClick={() => void onSubmit(action.message ?? action.label)}
             className="rounded-full border border-[#ece8f8] bg-card px-3 py-1.5 text-[12px] text-[#5a4bc4] transition-colors hover:bg-[#f6f4ff] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {action}
+            {action.label}
           </button>
         ))}
       </div>

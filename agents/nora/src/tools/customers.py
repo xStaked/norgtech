@@ -47,6 +47,111 @@ async def search_customers(
         return f"Error inesperado al buscar clientes: {str(e)}"
 
 
+@tool
+async def get_customer_summary(
+    customer_id: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+) -> str:
+    """
+    Arma un resumen 360 de UN cliente combinando datos que ya existen en el CRM:
+    datos básicos, estado de cartera (saldo y facturas vencidas), últimas visitas
+    y oportunidades abiertas. Úsala cuando el usuario pida el "resumen del cliente",
+    "¿cómo va X?", "cuéntame de X" o similar.
+
+    IMPORTANTE: necesitas el customer_id real. Si el usuario solo da el nombre,
+    primero usa search_customers para obtener el ID y luego llama esta herramienta.
+
+    Args:
+        customer_id: ID del cliente a resumir (obtenido con search_customers).
+
+    Returns:
+        Un resumen conciso en español con lo más relevante del cliente.
+    """
+    try:
+        nestjs_client = NestJSClient(auth_token)
+
+        # Datos básicos del cliente.
+        customer = await nestjs_client.get(f"/customers/{customer_id}")
+        nombre = customer.get("displayName") or customer.get("legalName") or "Cliente"
+        partes: list[str] = [f"Resumen de {nombre}:"]
+        basics: list[str] = []
+        if customer.get("legalName"):
+            basics.append(f"razón social {customer['legalName']}")
+        if customer.get("taxId"):
+            basics.append(f"NIT {customer['taxId']}")
+        if customer.get("city"):
+            basics.append(f"ciudad {customer['city']}")
+        if customer.get("phone"):
+            basics.append(f"tel {customer['phone']}")
+        segment = customer.get("segment") or {}
+        if isinstance(segment, dict) and segment.get("name"):
+            basics.append(f"segmento {segment['name']}")
+        if basics:
+            partes.append("Datos: " + ", ".join(basics) + ".")
+
+        # Cartera enfocada en el cliente (/invoices/summary + /invoices/overdue).
+        try:
+            cartera = await nestjs_client.get(
+                "/invoices/summary", params={"customerId": customer_id}
+            )
+            saldo = cartera.get("totalBalance")
+            if saldo is not None:
+                partes.append(f"Cartera: saldo pendiente ${saldo:,.0f}.".replace(",", "."))
+            else:
+                partes.append("Cartera: sin saldo pendiente.")
+            overdue = await nestjs_client.get("/invoices/overdue")
+            overdue_list = overdue if isinstance(overdue, list) else overdue.get("data", [])
+            vencidas = [
+                i for i in overdue_list
+                if (i.get("customer") or {}).get("id") == customer_id
+            ]
+            if vencidas:
+                partes.append(f"Tiene {len(vencidas)} factura(s) vencida(s).")
+        except NestJSAPIError as e:
+            partes.append(f"(No pude leer la cartera: {e.detail})")
+
+        # Últimas visitas (/visits?customerId).
+        try:
+            visits_res = await nestjs_client.get(
+                "/visits", params={"customerId": customer_id}
+            )
+            visits = visits_res if isinstance(visits_res, list) else visits_res.get("data", [])
+            if visits:
+                ultima = visits[0]
+                partes.append(
+                    f"Visitas: {len(visits)} registrada(s); la más reciente "
+                    f"({ultima.get('scheduledAt', 'sin fecha')}): "
+                    f"{ultima.get('summary') or 'sin resumen'}."
+                )
+            else:
+                partes.append("Visitas: ninguna registrada.")
+        except NestJSAPIError as e:
+            partes.append(f"(No pude leer las visitas: {e.detail})")
+
+        # Oportunidades abiertas (/opportunities?customerId).
+        try:
+            opps_res = await nestjs_client.get(
+                "/opportunities", params={"customerId": customer_id}
+            )
+            opps = opps_res if isinstance(opps_res, list) else opps_res.get("data", [])
+            if opps:
+                detalle = "; ".join(
+                    f"{o.get('title') or 'sin título'} (etapa {o.get('stage', '?')})"
+                    for o in opps[:5]
+                )
+                partes.append(f"Oportunidades: {len(opps)} abierta(s) — {detalle}.")
+            else:
+                partes.append("Oportunidades: ninguna abierta.")
+        except NestJSAPIError as e:
+            partes.append(f"(No pude leer las oportunidades: {e.detail})")
+
+        return " ".join(partes)
+    except NestJSAPIError as e:
+        return f"Error al obtener el resumen del cliente: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al obtener el resumen del cliente: {str(e)}"
+
+
 async def _resolve_segment_id(nestjs_client: NestJSClient, segment_id: Optional[str]) -> str:
     """Resolve a valid customer segment id.
 
