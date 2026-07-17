@@ -189,6 +189,18 @@ export function dayRangeInZone(now: Date, timeZone: string = BOGOTA_TIME_ZONE): 
   return { start, end };
 }
 
+/**
+ * Mes natural de `now` en `timeZone`, como clave `YYYY-MM`.
+ *
+ * A las 21:00 de Bogota del 31 de julio ya es 1 de agosto en UTC: un servidor
+ * en UTC que use `new Date().getMonth()` cambia de mes cinco horas antes que el
+ * usuario colombiano (GOAL-01).
+ */
+export function monthKeyInZone(now: Date, timeZone: string = BOGOTA_TIME_ZONE): string {
+  const wall = wallClockIn(now, timeZone);
+  return `${wall.year}-${String(wall.month).padStart(2, "0")}`;
+}
+
 /** Semana (lunes 00:00:00.000 - domingo 23:59:59.999) de `now` en `timeZone`. */
 export function weekRangeInZone(now: Date, timeZone: string = BOGOTA_TIME_ZONE): DateRange {
   const wall = wallClockIn(now, timeZone);

@@ -705,4 +705,151 @@ describe("SellerGoals", () => {
       }),
     );
   });
+
+  // GOAL-01 -------------------------------------------------------------
+  // El panel filtra por periodo (correcto: es un panel POR periodo), pero ese
+  // filtro era invisible: una meta anual/trimestral/de otro mes aparecía en la
+  // lista del usuario y NO en el panel, sin decir por qué. El panel debe
+  // declarar qué periodos existen para que "mi meta no está" se convierta en
+  // "mi meta no está EN ESTE periodo".
+
+  async function createGoal(
+    userId: string,
+    periodType: string,
+    periodValue: string,
+    targetAmount: number,
+  ) {
+    await request(globalThis.__APP__)
+      .post(`/users/${userId}/seller-goals`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ periodType, periodValue, targetAmount })
+      .expect(201);
+  }
+
+  it("exposes every period that has goals, so a goal outside the shown period is discoverable", async () => {
+    await createGoal("seller-user-id", "mensual", "2026-06", 300000000);
+    await createGoal("seller-user-id", "anual", "2026", 900000000);
+    await createGoal("seller-user-id", "trimestral", "2026-Q2", 500000000);
+    await createGoal("other-seller-id", "anual", "2026", 400000000);
+
+    const response = await request(globalThis.__APP__)
+      .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-06")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    // El panel sigue filtrando: solo la meta mensual de junio.
+    expect(response.body.items).toHaveLength(1);
+    expect(response.body.items[0].userId).toBe("seller-user-id");
+
+    // ...pero ahora DICE qué otros periodos tienen metas.
+    expect(response.body.availablePeriods).toEqual([
+      { periodType: "anual", periodValue: "2026", goals: 2 },
+      { periodType: "trimestral", periodValue: "2026-Q2", goals: 1 },
+      { periodType: "mensual", periodValue: "2026-06", goals: 1 },
+    ]);
+  });
+
+  it("omits from availablePeriods the goals of users the dashboard can never show", async () => {
+    await createGoal("seller-user-id", "mensual", "2026-06", 300000000);
+    goals.push(
+      {
+        id: "billing-anual-goal",
+        userId: "billing-user-id",
+        periodType: "anual",
+        periodValue: "2026",
+        targetAmount: 100000000,
+        notes: null,
+        createdBy: "admin-user-id",
+        updatedBy: "admin-user-id",
+        createdAt: new Date("2026-06-01T00:00:03.000Z"),
+        updatedAt: new Date("2026-06-01T00:00:03.000Z"),
+      },
+      {
+        id: "inactive-anual-goal",
+        userId: "inactive-seller-id",
+        periodType: "anual",
+        periodValue: "2026",
+        targetAmount: 150000000,
+        notes: null,
+        createdBy: "admin-user-id",
+        updatedBy: "admin-user-id",
+        createdAt: new Date("2026-06-01T00:00:04.000Z"),
+        updatedAt: new Date("2026-06-01T00:00:04.000Z"),
+      },
+    );
+
+    const response = await request(globalThis.__APP__)
+      .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-06")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    // Un periodo que solo contiene metas de usuarios no elegibles saldría
+    // vacío al seleccionarlo: ofrecerlo sería otra mentira por omisión.
+    expect(response.body.availablePeriods).toEqual([
+      { periodType: "mensual", periodValue: "2026-06", goals: 1 },
+    ]);
+  });
+
+  it("marks the period as defaulted when the client did not choose one", async () => {
+    await createGoal("seller-user-id", "mensual", "2026-06", 300000000);
+
+    const defaulted = await request(globalThis.__APP__)
+      .get("/dashboard/seller-goals")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+    expect(defaulted.body.periodIsDefault).toBe(true);
+
+    const explicit = await request(globalThis.__APP__)
+      .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-06")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+    expect(explicit.body.periodIsDefault).toBe(false);
+  });
+
+  // El mes por defecto se calculaba con el reloj del proceso. A las 21:00 de
+  // Bogotá del 31 de julio ya es 1 de agosto en UTC: un servidor en UTC
+  // mostraba agosto mientras el usuario colombiano seguía en julio, y sus
+  // metas de julio "desaparecían" del panel esa noche.
+  // OJO: este test solo DISCRIMINA si TZ del proceso != America/Bogota.
+  describe("default period (GOAL-01, VIS-03)", () => {
+    beforeEach(() => {
+      jest.useFakeTimers({
+        doNotFake: [
+          "setTimeout",
+          "clearTimeout",
+          "setInterval",
+          "clearInterval",
+          "setImmediate",
+          "clearImmediate",
+          "nextTick",
+          "queueMicrotask",
+          "performance",
+          "hrtime",
+        ],
+      });
+      // 2026-08-01T02:00Z == 2026-07-31 21:00 en Bogotá.
+      jest.setSystemTime(new Date("2026-08-01T02:00:00.000Z"));
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("defaults to the current month in America/Bogota, not in the server's timezone", async () => {
+      // El token global se emitió con el reloj real: bajo el reloj falso ya
+      // estaría vencido. Se re-emite dentro del instante bajo prueba.
+      const login = await request(globalThis.__APP__)
+        .post("/auth/login")
+        .send({ email: "admin@norgtech.local", password: "Admin123*" })
+        .expect(200);
+
+      const response = await request(globalThis.__APP__)
+        .get("/dashboard/seller-goals")
+        .set("Authorization", `Bearer ${login.body.accessToken}`)
+        .expect(200);
+
+      expect(response.body.periodType).toBe("mensual");
+      expect(response.body.periodValue).toBe("2026-07");
+    });
+  });
 });

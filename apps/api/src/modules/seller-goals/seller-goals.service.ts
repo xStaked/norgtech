@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { OrderStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { monthKeyInZone } from "../../shared/overdue";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateSellerGoalDto } from "./dto/create-seller-goal.dto";
 import { UpdateSellerGoalDto } from "./dto/update-seller-goal.dto";
@@ -16,6 +17,8 @@ const WRITE_ROLES: UserRole[] = [
   UserRole.administrador,
   UserRole.director_comercial,
 ];
+/** Del periodo más amplio al más estrecho (orden del selector, GOAL-01). */
+const PERIOD_TYPE_ORDER = ["anual", "trimestral", "mensual"];
 const PROGRESS_STATUSES: OrderStatus[] = [
   OrderStatus.facturado,
   OrderStatus.despachado,
@@ -161,17 +164,20 @@ export class SellerGoalsService {
       throw new ForbiddenException("Insufficient permissions");
     }
 
-    const normalizedPeriod = this.normalizeDashboardPeriod(
+    const { isDefault, ...normalizedPeriod } = this.normalizeDashboardPeriod(
       periodType,
       periodValue,
     );
+    // Mismo predicado de elegibilidad para las metas mostradas y para los
+    // periodos ofrecidos: si divergen, el selector ofrece periodos vacíos.
+    const eligibleSellerWhere = {
+      active: true,
+      role: { in: SELLER_ROLES },
+    };
     const goals = await this.prisma.sellerGoal.findMany({
       where: {
         ...normalizedPeriod,
-        user: {
-          active: true,
-          role: { in: SELLER_ROLES },
-        },
+        user: eligibleSellerWhere,
       },
       include: {
         user: { select: { id: true, name: true, active: true, role: true } },
@@ -179,6 +185,9 @@ export class SellerGoalsService {
       orderBy: { periodValue: "desc" },
     });
 
+    const availablePeriods = await this.listAvailablePeriods(
+      eligibleSellerWhere,
+    );
     const items = await this.buildDashboardItems(goals, companyId);
     const targetAmount = items.reduce(
       (sum, item) => sum + item.targetAmount,
@@ -188,6 +197,12 @@ export class SellerGoalsService {
 
     return {
       ...normalizedPeriod,
+      // GOAL-01: el panel filtra por periodo, y ese filtro debe ser visible.
+      // `periodIsDefault` deja que la UI diga "estás viendo el mes actual
+      // porque no elegiste periodo"; `availablePeriods` deja que encuentre una
+      // meta anual/trimestral/de otro mes en vez de creer que se perdió.
+      periodIsDefault: isDefault,
+      availablePeriods,
       companyId: companyId ?? null,
       totals: {
         targetAmount,
@@ -303,15 +318,63 @@ export class SellerGoalsService {
       return {
         periodType,
         periodValue: this.normalizeAndValidatePeriod(periodType, periodValue),
+        isDefault: false,
       };
     }
 
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, "0");
+    // El mes se calcula en Bogota, no en la zona del proceso: con el servidor
+    // en UTC, el panel cambiaba de mes a las 19:00 hora de Colombia y las
+    // metas del mes en curso "desaparecian" esa noche.
     return {
       periodType: "mensual",
-      periodValue: `${now.getFullYear()}-${month}`,
+      periodValue: monthKeyInZone(new Date()),
+      isDefault: true,
     };
+  }
+
+  /**
+   * Periodos que TIENEN metas visibles para este panel, con cuántas.
+   *
+   * Es la contraparte honesta del filtro por periodo (GOAL-01): sin esto, una
+   * meta anual o de otro mes simplemente no aparece y no hay forma de saber
+   * que existe. Usa el mismo predicado de elegibilidad que las metas mostradas
+   * para no ofrecer periodos que al seleccionarlos salen vacíos.
+   */
+  private async listAvailablePeriods(eligibleSellerWhere: {
+    active: boolean;
+    role: { in: UserRole[] };
+  }) {
+    const goals = await this.prisma.sellerGoal.findMany({
+      where: { user: eligibleSellerWhere },
+      select: { periodType: true, periodValue: true },
+    });
+
+    const counts = new Map<
+      string,
+      { periodType: string; periodValue: string; goals: number }
+    >();
+    for (const goal of goals) {
+      const key = `${goal.periodType}|${goal.periodValue}`;
+      const entry = counts.get(key);
+      if (entry) {
+        entry.goals++;
+      } else {
+        counts.set(key, {
+          periodType: goal.periodType,
+          periodValue: goal.periodValue,
+          goals: 1,
+        });
+      }
+    }
+
+    // Del periodo más amplio al más estrecho, y dentro de cada uno el más
+    // reciente primero: es el orden en que un director busca una meta.
+    const typeRank = (type: string) => PERIOD_TYPE_ORDER.indexOf(type);
+    return [...counts.values()].sort(
+      (a, b) =>
+        typeRank(a.periodType) - typeRank(b.periodType) ||
+        b.periodValue.localeCompare(a.periodValue),
+    );
   }
 
   private async buildProgress(
