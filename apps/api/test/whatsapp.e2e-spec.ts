@@ -4801,7 +4801,7 @@ describe("WhatsApp inbox", () => {
       removeMatching(noraCases, (item) => item.conversationId === "conversation-customer-agent");
     });
 
-    it("routes a customer message to the customer agent and hands off to the unicanal inbox", async () => {
+    it("routes a customer message to the customer agent and hands off by role", async () => {
       const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
       const prevUnicanal = process.env.NORA_UNICANAL_USER_ID;
       process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
@@ -4813,7 +4813,7 @@ describe("WhatsApp inbox", () => {
             reply_text: "Ya un asesor te contacta.",
             case_update: null,
             executed_entity: null,
-            handoff: { needed: true, intent: "pedido", reason: "quiere pedir" },
+            handoff: { needed: true, rol: "tecnico", reason: "quiere soporte" },
           }),
         });
 
@@ -4829,12 +4829,12 @@ describe("WhatsApp inbox", () => {
         );
         expect(routeCall).toBeUndefined();
 
-        // handoff assigns the conversation to the unicanal user and writes a note
+        // handoff assigns the conversation by role — no more unicanal user / internal note
         expect(conversationUpdateMock).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali" }) }),
-        );
-        expect(internalNoteCreateMock).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+          expect.objectContaining({
+            where: { id: "conversation-customer-agent" },
+            data: expect.objectContaining({ assignedToRole: "tecnico", status: "pendiente" }),
+          }),
         );
       } finally {
         if (prevFlag === undefined) {
@@ -4934,12 +4934,11 @@ describe("WhatsApp inbox", () => {
         expect((data.items as unknown[]).length).toBeGreaterThan(0);
         expect((data.items as Array<Record<string, unknown>>)[0].productRef).toBe("FERT-001");
 
-        // conversación asignada al buzón único + nota interna
+        // conversación asignada por rol (comercial) — ya no al buzón único / nota interna
         expect(conversationUpdateMock).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali", status: "pendiente" }) }),
-        );
-        expect(internalNoteCreateMock).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+          expect.objectContaining({
+            data: expect.objectContaining({ assignedToRole: "comercial", status: "pendiente" }),
+          }),
         );
       } finally {
         if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT; else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
@@ -4973,12 +4972,11 @@ describe("WhatsApp inbox", () => {
         expect(created).toBeUndefined();
         expect(noraCases.length).toBe(casesBefore);
 
-        // se deriva a un humano en vez de mandar la confirmación falsa de éxito
+        // se deriva a un humano (por rol) en vez de mandar la confirmación falsa de éxito
         expect(conversationUpdateMock).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ assignedToUserId: "user-magali", status: "pendiente" }) }),
-        );
-        expect(internalNoteCreateMock).toHaveBeenCalledWith(
-          expect.objectContaining({ data: expect.objectContaining({ authorUserId: "user-magali" }) }),
+          expect.objectContaining({
+            data: expect.objectContaining({ assignedToRole: "comercial", status: "pendiente" }),
+          }),
         );
 
         const outboundReplies = messages
