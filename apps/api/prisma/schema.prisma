@@ -343,6 +343,7 @@ model WhatsAppConversation {
   senderType       WhatsAppSenderType         @default(desconocido)
   status           WhatsAppConversationStatus @default(nuevo)
   assignedToUserId String?
+  assignedToRole   UserRole?
   customerId       String?
   contactId        String?
   lastMessageAt    DateTime?
@@ -365,6 +366,7 @@ model WhatsAppConversation {
   @@index([phone])
   @@index([customerId])
   @@index([assignedToUserId])
+  @@index([status, assignedToRole])
 }
 
 model WhatsAppMessage {
