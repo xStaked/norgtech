@@ -54,25 +54,32 @@ Cuando el cliente quiere HACER o REPETIR un pedido (usa la tool armar_pedido):
 - Siempre pasa un 'motivo' de una frase. Luego dile al cliente, cálido, que un asesor
   confirma su pedido y le avisa. NO prometas precios ni fechas.
 
-Deriva a un asesor humano (usa derivar_a_unicanal) cuando: hay un reclamo/queja/problema,
-piden info que NO está en [DATOS DEL CLIENTE], o piden hablar con un área o persona.
-En ese caso pasa 'intent' corto (ej: "cartera", "logistica", "reclamo", "comercial") y 'motivo'.
+Deriva a un humano (usa derivar_a_unicanal) cuando: hay un reclamo/queja/problema,
+piden info que NO está en [DATOS DEL CLIENTE], quieren hacer/cambiar un pedido que no
+puedes armar, o piden hablar con un área o persona. SIEMPRE pasa el 'rol' del área que
+corresponde (comercial, tecnico, facturacion, logistica) y un 'motivo' corto. Si NO
+tienes claro a qué área mandarlo, NO derives: pregúntale al cliente con cuál área quiere
+hablar (comercial, soporte técnico, facturación o entregas) y espera su respuesta.
 
 Si puedes resolver con los datos disponibles, responde directo y no derives.
 """
 
 
 @tool
-def derivar_a_unicanal(motivo: str, intent: str) -> str:
-    """Deriva la conversación a un asesor humano (buzón único) cuando el cliente
-    necesita algo que no puedes resolver con los datos disponibles: hacer/cambiar
-    un pedido, reclamos, info faltante, o hablar con un área/persona.
+def derivar_a_unicanal(motivo: str, rol: str) -> str:
+    """Deriva la conversación al área humana correcta cuando el cliente necesita
+    algo que no puedes resolver con los datos disponibles (reclamo, info faltante,
+    hacer/cambiar un pedido, o hablar con un área/persona).
 
     Args:
         motivo: Frase corta con el motivo de la derivación.
-        intent: Etiqueta corta del tema (pedido, cartera, logistica, reclamo, comercial).
+        rol: El área que debe atender. EXACTAMENTE uno de:
+            "comercial"  -> ventas, cotizaciones, hablar con su asesor, hacer/cambiar pedidos.
+            "tecnico"    -> soporte, instalación, fallas, asistencia técnica.
+            "facturacion"-> facturas, pagos, cartera, comprobantes.
+            "logistica"  -> entregas, envíos, transporte, dónde está el pedido.
     """
-    return f"DERIVADO|{intent}|{motivo}"
+    return f"DERIVADO|{rol}|{motivo}"
 
 
 @tool
@@ -153,12 +160,12 @@ def _to_messages(request: WhatsAppAgentRequest) -> list:
 
 
 def _extract_handoff(messages: list) -> NoraHandoff:
-    """Scan in reverse for a derivar_a_unicanal ToolMessage ('DERIVADO|intent|motivo')."""
+    """Scan in reverse for a derivar_a_unicanal ToolMessage ('DERIVADO|rol|motivo')."""
     for msg in reversed(messages):
         if isinstance(msg, ToolMessage) and msg.name == "derivar_a_unicanal":
             parts = (msg.content or "").split("|", 2)
             if len(parts) == 3 and parts[0] == "DERIVADO":
-                return NoraHandoff(needed=True, intent=parts[1] or None, reason=parts[2] or None)
+                return NoraHandoff(needed=True, rol=parts[1] or None, reason=parts[2] or None)
             return NoraHandoff(needed=True)
     return NoraHandoff(needed=False)
 

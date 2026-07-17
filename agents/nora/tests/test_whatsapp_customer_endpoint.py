@@ -14,7 +14,7 @@ def test_whatsapp_customer_endpoint_returns_reply_and_handoff():
             reply_text="Ya un asesor te contacta.",
             case_update=None,
             executed_entity=None,
-            handoff=NoraHandoff(needed=True, intent="pedido", reason="quiere pedir"),
+            handoff=NoraHandoff(needed=True, rol="comercial", reason="quiere pedir"),
         )
 
     with patch("src.main.run_whatsapp_customer_agent", side_effect=fake_run):
@@ -27,4 +27,4 @@ def test_whatsapp_customer_endpoint_returns_reply_and_handoff():
     body = response.json()
     assert body["reply_text"] == "Ya un asesor te contacta."
     assert body["handoff"]["needed"] is True
-    assert body["handoff"]["intent"] == "pedido"
+    assert body["handoff"]["rol"] == "comercial"
