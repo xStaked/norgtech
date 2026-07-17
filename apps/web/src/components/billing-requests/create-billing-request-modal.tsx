@@ -13,6 +13,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CompanySelect } from "@/components/companies/company-select";
 import {
   Select,
   SelectContent,
@@ -30,6 +31,9 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Empresa emisora: el DTO la exige y el JWT no la lleva, asi que el servidor
+  // no puede derivarla. Se elige igual que en el pedido (BILL-01/BILL-02).
+  const [companyId, setCompanyId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [sourceOrderId, setSourceOrderId] = useState("");
   const [sourceQuoteId, setSourceQuoteId] = useState("");
@@ -39,6 +43,11 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
     e.preventDefault();
     setError(null);
 
+    if (!companyId) {
+      setError("Debes seleccionar una empresa facturadora.");
+      return;
+    }
+
     if (!customerId) {
       setError("Debes seleccionar un cliente.");
       return;
@@ -46,7 +55,7 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
 
     setLoading(true);
     try {
-      const body: Record<string, string> = { customerId };
+      const body: Record<string, string> = { companyId, customerId };
       if (sourceOrderId) body.sourceOrderId = sourceOrderId;
       if (sourceQuoteId) body.sourceQuoteId = sourceQuoteId;
       if (notes) body.notes = notes;
@@ -62,6 +71,7 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
         return;
       }
       setOpen(false);
+      setCompanyId("");
       setCustomerId("");
       setSourceOrderId("");
       setSourceQuoteId("");
@@ -86,6 +96,11 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
 
           <form onSubmit={handleSubmit} className="grid gap-4 py-2">
             {error && <p className="text-sm text-destructive">{error}</p>}
+
+            <div className="grid gap-2">
+              <Label htmlFor="companyId">Empresa facturadora *</Label>
+              <CompanySelect value={companyId} onChange={setCompanyId} required />
+            </div>
 
             <div className="grid gap-2">
               <Label htmlFor="customerId">Cliente *</Label>

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { ConflictException, Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -12,20 +12,28 @@ export class ProductsService {
     private readonly pricingService: PricingService,
   ) {}
 
-  create(user: AuthUser, dto: CreateProductDto) {
-    return this.prisma.product.create({
-      data: {
-        sku: dto.sku,
-        name: dto.name,
-        description: dto.description,
-        unit: dto.unit,
-        presentation: dto.presentation,
-        basePrice: dto.basePrice,
-        active: dto.active ?? true,
-        createdBy: user.id,
-        updatedBy: user.id,
-      },
-    });
+  async create(user: AuthUser, dto: CreateProductDto) {
+    try {
+      return await this.prisma.product.create({
+        data: {
+          sku: dto.sku,
+          name: dto.name,
+          description: dto.description,
+          unit: dto.unit,
+          presentation: dto.presentation,
+          basePrice: dto.basePrice,
+          active: dto.active ?? true,
+          createdBy: user.id,
+          updatedBy: user.id,
+        },
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException("Ya existe un producto con ese SKU");
+      }
+
+      throw error;
+    }
   }
 
   findAll() {
@@ -74,5 +82,9 @@ export class ProductsService {
       salesYTD,
       goalThreshold,
     };
+  }
+
+  private isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
   }
 }

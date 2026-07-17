@@ -1,6 +1,6 @@
 import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -82,6 +82,12 @@ describe("Products", () => {
         },
         product: {
           create: async ({ data }: { data: Record<string, unknown> }) => {
+            if (products.some((p) => (p as { sku?: string }).sku === data.sku)) {
+              throw new Prisma.PrismaClientKnownRequestError(
+                "Unique constraint failed on the fields: (`sku`)",
+                { code: "P2002", clientVersion: "test", meta: { target: ["sku"] } },
+              );
+            }
             const product = {
               id: `product-${products.length + 1}`,
               ...data,
@@ -246,7 +252,7 @@ describe("Products", () => {
       .post("/products")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({
-        sku: "VAC-004",
+        sku: "VAC-005",
         name: "Vacuna Rabia",
         unit: "dosis",
         presentation: "Caja x10",
@@ -258,6 +264,31 @@ describe("Products", () => {
       .get(`/products/${productResponse.body.id}/price-for-customer/invalid-customer`)
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .expect(404);
+  });
+
+  // PRD-01: a duplicate SKU used to surface the raw Prisma P2002 as a 500.
+  it("returns 409 with a Spanish message when the sku already exists", async () => {
+    const payload = {
+      sku: "DUP-001",
+      name: "Vacuna Duplicada",
+      unit: "dosis",
+      presentation: "Caja x10",
+      basePrice: 45000,
+    };
+
+    await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send(payload)
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ ...payload, name: "Otro nombre" })
+      .expect(409);
+
+    expect(response.body.message).toBe("Ya existe un producto con ese SKU");
   });
 
   it("allows facturacion role to list products", async () => {

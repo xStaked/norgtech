@@ -11,6 +11,7 @@ interface Customer {
 interface Opportunity {
   id: string;
   title: string;
+  customerId: string;
 }
 
 interface Product {

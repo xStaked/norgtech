@@ -1133,7 +1133,7 @@ describe("Orders", () => {
       })
       .expect(400);
 
-    expect(response.body.message).toBe("Opportunity does not belong to customer");
+    expect(response.body.message).toBe("La oportunidad no pertenece al cliente");
   });
 
   it("rejects quotes that do not belong to the order customer", async () => {
@@ -1148,7 +1148,7 @@ describe("Orders", () => {
       })
       .expect(400);
 
-    expect(response.body.message).toBe("Quote does not belong to customer");
+    expect(response.body.message).toBe("La cotización no pertenece al cliente");
   });
 
   it("transitions order status and sets dispatch/delivery dates", async () => {

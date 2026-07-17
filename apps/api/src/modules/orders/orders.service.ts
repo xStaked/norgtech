@@ -812,7 +812,7 @@ export class OrdersService {
       throw new NotFoundException("Opportunity not found");
     }
     if (opportunity.customerId !== customerId) {
-      throw new BadRequestException("Opportunity does not belong to customer");
+      throw new BadRequestException("La oportunidad no pertenece al cliente");
     }
   }
 
@@ -822,7 +822,7 @@ export class OrdersService {
       throw new NotFoundException("Quote not found");
     }
     if (quote.customerId !== customerId) {
-      throw new BadRequestException("Quote does not belong to customer");
+      throw new BadRequestException("La cotización no pertenece al cliente");
     }
   }
 
