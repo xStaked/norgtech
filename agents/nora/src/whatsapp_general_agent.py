@@ -6,6 +6,7 @@ whatsapp_agent.py but with every CRM tool instead of only the expense tools.
 NestJS passes the full conversation history on every turn (no checkpointer).
 """
 from datetime import date
+from .visit_parsing import resolve_visit_datetime
 from typing import Annotated, TypedDict
 
 import json
@@ -74,6 +75,18 @@ VISIT_FLOW_PROMPT = (
     "Si ya tienes cliente, fecha/hora y resumen, crea la visita; no vuelvas a "
     "pedir confirmación. Una solicitud de visita no es un gasto y no debe "
     "activar el flujo de gastos."
+)
+
+VISIT_DELETE_PROMPT = (
+    "\n\n## Eliminar una visita (operación destructiva)\n"
+    "Eliminar una visita borra un registro y no se puede deshacer. NUNCA "
+    "infieras cuál visita eliminar a partir de una descripción o texto "
+    "mencionado en un mensaje anterior. Para eliminar: (1) identifica el "
+    "cliente (búscalo con search_customers si hace falta), (2) llama "
+    "get_customer_visits para listar sus visitas, (3) muéstralas y pide que "
+    "confirmen CUÁL por fecha, y (4) solo entonces llama delete_visit con ese "
+    "id. Si no hay una visita claramente identificada y confirmada, pregunta; "
+    "no borres nada."
 )
 
 
@@ -233,43 +246,10 @@ def _latest_customer_ref(text: str) -> str | None:
 
 
 def _latest_visit_datetime(text: str) -> str | None:
-    month_names = {
-        "enero": 1,
-        "febrero": 2,
-        "marzo": 3,
-        "abril": 4,
-        "mayo": 5,
-        "junio": 6,
-        "julio": 7,
-        "agosto": 8,
-        "septiembre": 9,
-        "setiembre": 9,
-        "octubre": 10,
-        "noviembre": 11,
-        "diciembre": 12,
-    }
-    pattern = (
-        r"\b(?:el\s+)?(?P<day>\d{1,2})\s+de\s+"
-        r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
-        r"septiembre|setiembre|octubre|noviembre|diciembre)"
-        r"(?:\s+(?:de\s+)?(?P<year>\d{4}))?"
-        r"(?:\s+a\s+las\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm|a\.m\.|p\.m\.)?)?"
-    )
-    matches = list(re.finditer(pattern, text, flags=re.IGNORECASE))
-    if not matches:
-        return None
-    match = matches[-1]
-    day = int(match.group("day"))
-    month = month_names[match.group("month").lower()]
-    year = int(match.group("year") or date.today().year)
-    hour = int(match.group("hour") or 9)
-    minute = int(match.group("minute") or 0)
-    ampm = (match.group("ampm") or "").lower().replace(".", "")
-    if ampm == "pm" and hour < 12:
-        hour += 12
-    if ampm == "am" and hour == 12:
-        hour = 0
-    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+    # AI-07: parser compartido (src/visit_parsing.py) — misma regla que el
+    # planner. Entiende fechas absolutas y relativas (hoy/manana/dia-de-semana)
+    # + horas sueltas, en hora de Colombia.
+    return resolve_visit_datetime(text)
 
 
 def _latest_visit_summary(text: str) -> str | None:
@@ -322,6 +302,7 @@ def _to_messages(request: WhatsAppAgentRequest) -> list:
         NORA_SYSTEM_PROMPT
         + WHATSAPP_ADDENDUM
         + VISIT_FLOW_PROMPT
+        + VISIT_DELETE_PROMPT
         + CUSTOMER_EDIT_PROMPT
         + VISIT_EDIT_FIELD_PROMPT
     )

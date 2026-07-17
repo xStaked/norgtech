@@ -192,9 +192,16 @@ export class NoraRoutingService {
       ) {
         try {
           const scopedToken = await this.authService.mintScopedToken(sender.userId);
+          // AI-09/AI-10: borrar una visita es destructivo. Con el historial
+          // completo, un turno anterior de descripcion (de un intento de EDITAR)
+          // se colaba y delete_visit lo tomaba como la visita a eliminar,
+          // borrando la equivocada. Para un borrado se manda SOLO el mensaje
+          // actual: el agente vuelve a listar las visitas del cliente y confirma
+          // cual, en vez de inferirla de contexto viejo.
+          const isVisitDelete = this.isVisitDeleteMessage(message.body);
           const agentResponse = await this.requestNoraGeneralAgent({
             current_message: message.body,
-            history: context.recent_messages,
+            history: isVisitDelete ? [] : context.recent_messages,
             open_case: openCase
               ? {
                   id: openCase.id,

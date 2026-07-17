@@ -4156,8 +4156,18 @@ describe("WhatsApp inbox", () => {
             return body.conversation_id === conversation.id;
           });
 
-        expect(forThisConversation("/whatsapp/agent/general")).toBeDefined();
+        const generalCall = forThisConversation("/whatsapp/agent/general");
+        expect(generalCall).toBeDefined();
         expect(forThisConversation("/whatsapp/route")).toBeUndefined();
+
+        // AI-09/AI-10: un borrado de visita NO debe arrastrar el historial. Con
+        // el historial completo, una descripcion de un turno anterior se colaba
+        // y delete_visit borraba la visita equivocada. Se manda history vacio
+        // para que el agente vuelva a listar y confirme cual.
+        const generalBody = JSON.parse(
+          String((generalCall as [string, { body?: string }])[1]?.body ?? "{}"),
+        ) as { history?: unknown[] };
+        expect(generalBody.history).toEqual([]);
       } finally {
         if (prev === undefined) {
           delete process.env.NORA_WHATSAPP_GENERAL_AGENT;

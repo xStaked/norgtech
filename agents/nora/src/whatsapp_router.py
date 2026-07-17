@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from .visit_parsing import resolve_visit_datetime
 from typing import Any
 
 from .models.whatsapp_models import (
@@ -792,28 +793,10 @@ def _looks_like_visit_command(value: str) -> bool:
 
 
 def _visit_datetime(message: str) -> str | None:
-    pattern = (
-        r"\b(?:el\s+)?(?P<day>\d{1,2})\s+de\s+"
-        r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
-        r"septiembre|setiembre|octubre|noviembre|diciembre)"
-        r"(?:\s+(?:de\s+)?(?P<year>\d{4}))?"
-        r"(?:\s+a\s+las\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm|a\.m\.|p\.m\.)?)?"
-    )
-    matches = list(re.finditer(pattern, message, flags=re.IGNORECASE))
-    if not matches:
-        return None
-    match = matches[-1]
-    day = int(match.group("day"))
-    month = _VISIT_MONTHS[match.group("month").lower()]
-    year = int(match.group("year") or date.today().year)
-    hour = int(match.group("hour") or 9)
-    minute = int(match.group("minute") or 0)
-    ampm = (match.group("ampm") or "").lower().replace(".", "")
-    if ampm == "pm" and hour < 12:
-        hour += 12
-    if ampm == "am" and hour == 12:
-        hour = 0
-    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+    # AI-07: parser compartido (src/visit_parsing.py). Ademas de "DD de <mes>"
+    # ahora entiende hoy/manana/pasado manana/dia-de-semana + horas sueltas,
+    # resueltas contra el dia de HOY EN COLOMBIA (no la zona del proceso).
+    return resolve_visit_datetime(message)
 
 
 def _visit_summary(message: str) -> str | None:
