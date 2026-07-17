@@ -1,6 +1,8 @@
 import {
   BadGatewayException,
   BadRequestException,
+  ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -25,6 +27,7 @@ import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
 import { NoraCaseService } from "./nora-case.service";
+import { isSupervisor } from "./unicanal-roles";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 
 const conversationSummaryInclude = {
@@ -111,14 +114,15 @@ export class WhatsAppService {
     private readonly noraCaseService: NoraCaseService,
   ) {}
 
-  listConversations() {
+  listConversations(user: AuthUser) {
     return this.prisma.whatsAppConversation.findMany({
+      where: isSupervisor(user.role) ? {} : { assignedToRole: user.role },
       include: conversationSummaryInclude,
       orderBy: { updatedAt: "desc" },
     });
   }
 
-  async getConversation(id: string) {
+  async getConversation(user: AuthUser, id: string) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id },
       include: conversationDetailInclude,
@@ -128,7 +132,51 @@ export class WhatsAppService {
       throw new NotFoundException("WhatsApp conversation not found");
     }
 
+    this.assertCanAccess(user, conversation);
     return conversation;
+  }
+
+  private assertCanAccess(
+    user: AuthUser,
+    conversation: { assignedToRole: UserRole | null },
+  ) {
+    if (isSupervisor(user.role)) return;
+    if (conversation.assignedToRole === user.role) return;
+    throw new ForbiddenException("No tenés acceso a esta conversación");
+  }
+
+  async claimConversation(user: AuthUser, id: string) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id },
+    });
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+    if (!isSupervisor(user.role) && conversation.assignedToRole !== user.role) {
+      throw new ForbiddenException("Esta conversación no es de tu área");
+    }
+    if (conversation.assignedToUserId && conversation.assignedToUserId !== user.id) {
+      throw new ConflictException("La conversación ya fue tomada por otro agente");
+    }
+    return this.prisma.whatsAppConversation.update({
+      where: { id },
+      data: { assignedToUserId: user.id, status: "en_gestion" },
+      include: conversationDetailInclude,
+    });
+  }
+
+  async pendingCount(user: AuthUser): Promise<{ count: number }> {
+    if (isSupervisor(user.role)) {
+      return { count: 0 };
+    }
+    const count = await this.prisma.whatsAppConversation.count({
+      where: {
+        assignedToRole: user.role,
+        status: "pendiente",
+        assignedToUserId: null,
+      },
+    });
+    return { count };
   }
 
   async updateConversation(id: string, dto: UpdateConversationDto) {
