@@ -38,8 +38,20 @@ const periodTypeOptions = [
 const selectClasses =
   "h-9 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-input/30";
 
+/**
+ * Mes actual en Bogota, `YYYY-MM`.
+ *
+ * `toISOString()` da el mes en UTC: a las 19:00 de Bogota del ultimo dia del
+ * mes ya es el mes siguiente, asi que el formulario se prellenaba con un mes
+ * que aun no empieza y la meta nacia fuera del periodo que muestra el panel
+ * (GOAL-01). Misma zona que usa la API para su periodo por defecto.
+ */
 function defaultPeriodValue() {
-  return new Date().toISOString().slice(0, 7);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    year: "numeric",
+    month: "2-digit",
+  }).format(new Date());
 }
 
 function periodPlaceholder(periodType: string) {
@@ -92,6 +104,7 @@ export function SellerGoalsManager({ userId, canManage }: SellerGoalsManagerProp
   const [editingGoalId, setEditingGoalId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<GoalDraft | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -125,13 +138,17 @@ export function SellerGoalsManager({ userId, canManage }: SellerGoalsManagerProp
 
     setSaving(true);
     setError(null);
+    setNotice(null);
+
+    const createdPeriodType = periodType;
+    const createdPeriodValue = normalizePeriodValue(periodValue);
 
     try {
       const response = await apiFetchClient(`/users/${userId}/seller-goals`, {
         method: "POST",
         body: JSON.stringify({
           periodType,
-          periodValue: normalizePeriodValue(periodValue),
+          periodValue: createdPeriodValue,
           targetAmount: Number(targetAmount),
           notes: notes.trim() || undefined,
         }),
@@ -140,6 +157,18 @@ export function SellerGoalsManager({ userId, canManage }: SellerGoalsManagerProp
       if (!response.ok) {
         setError(await readErrorMessage(response, "No se pudo crear la meta"));
         return;
+      }
+
+      // GOAL-01: el panel del dashboard muestra por defecto el mes actual. Una
+      // meta anual, trimestral o de otro mes se crea BIEN pero no aparece ahi,
+      // y sin este aviso el usuario concluye que no se guardo.
+      if (
+        createdPeriodType !== "mensual" ||
+        createdPeriodValue !== defaultPeriodValue()
+      ) {
+        setNotice(
+          `Meta creada para ${createdPeriodValue}. El panel "Metas por vendedor" del dashboard muestra el mes actual (${defaultPeriodValue()}) por defecto: selecciona alli ese periodo para verla.`,
+        );
       }
 
       setPeriodType("mensual");
@@ -285,6 +314,12 @@ export function SellerGoalsManager({ userId, canManage }: SellerGoalsManagerProp
       ) : null}
 
       {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
+
+      {notice ? (
+        <p className="mb-3 rounded-md border border-border/60 bg-background p-2 text-xs text-muted-foreground">
+          {notice}
+        </p>
+      ) : null}
 
       {!loading && goals.length === 0 ? (
         <p className="text-sm text-muted-foreground">Sin metas registradas.</p>

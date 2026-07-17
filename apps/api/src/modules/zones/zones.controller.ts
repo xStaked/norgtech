@@ -1,11 +1,14 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards, ValidationPipe } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, ValidationPipe } from "@nestjs/common";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { ROLE_GROUPS } from "../auth/permissions";
+import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { ZonesService } from "./zones.service";
 import { CreateZoneDto } from "./dto/create-zone.dto";
 import { UpdateZoneDto } from "./dto/update-zone.dto";
+
+const listQueryPipe = new ValidationPipe({ transform: true, whitelist: true });
 
 @Controller("zones")
 export class ZonesController {
@@ -21,8 +24,8 @@ export class ZonesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial")
   @Get()
-  findAll() {
-    return this.zonesService.findAll();
+  findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
+    return this.zonesService.findAll(query.includeInactive);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

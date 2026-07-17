@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatPercent } from "@/lib/labels";
 import { apiFetchClient } from "@/lib/api.client";
 import { AlertTriangle } from "lucide-react";
 
@@ -75,7 +76,7 @@ export function CreditAlertsWidget({ companyId }: CreditAlertsWidgetProps) {
                     color: barColor(alert.utilizationPercent),
                   }}
                 >
-                  {alert.utilizationPercent.toFixed(0)}%
+                  {formatPercent(alert.utilizationPercent)}
                 </span>
               </div>
               <div

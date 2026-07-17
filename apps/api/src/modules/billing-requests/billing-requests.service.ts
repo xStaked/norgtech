@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { BillingRequestStatus, Prisma } from "@prisma/client";
+import { BillingRequestStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -129,8 +129,52 @@ export class BillingRequestsService {
         tx,
       );
 
+      // BILL-04: procesar una solicitud ligada a un pedido es lo que AVANZA ese
+      // pedido a facturado. Se respeta el mismo mapa de transiciones que usa
+      // OrdersService (orden_facturacion -> facturado). Es idempotente: si el
+      // pedido ya esta facturado (p.ej. facturado por createInvoiceFromOrder),
+      // se omite el avance en vez de reventar al reprocesar.
+      if (dto.status === BillingRequestStatus.procesada && billingRequest.sourceOrderId) {
+        await this.advanceSourceOrderToFacturado(user, billingRequest.sourceOrderId, tx);
+      }
+
       return updated;
     });
+  }
+
+  private async advanceSourceOrderToFacturado(
+    user: AuthUser,
+    sourceOrderId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const order = await tx.order.findUnique({ where: { id: sourceOrderId } });
+    // El mapa de transiciones solo permite facturado DESDE orden_facturacion
+    // (order-status-transition-map: orden_facturacion -> facturado). Cualquier
+    // otro estado significa que el pedido ya paso por ahi (facturado o mas
+    // adelante) o que nunca estuvo listo: se omite en silencio. Procesar la
+    // solicitud NUNCA debe reventar por donde quedo el pedido — bloquear al
+    // back-office de facturacion es peor que no avanzar. Idempotente.
+    if (!order || order.status !== OrderStatus.orden_facturacion) {
+      return;
+    }
+
+    const previousState = JSON.parse(JSON.stringify(order));
+    const updatedOrder = await tx.order.update({
+      where: { id: order.id },
+      data: { status: OrderStatus.facturado, updatedBy: user.id },
+    });
+
+    await this.auditService.record(
+      {
+        entityType: "Order",
+        entityId: order.id,
+        action: "order.status_changed",
+        actorUserId: user.id,
+        previousState,
+        nextState: JSON.parse(JSON.stringify(updatedOrder)),
+      },
+      tx,
+    );
   }
 
   private isStatusTransitionAllowed(

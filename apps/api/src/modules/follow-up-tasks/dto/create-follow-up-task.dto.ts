@@ -6,6 +6,7 @@ import {
   IsString,
   Matches,
 } from "class-validator";
+import { IsInstantString } from "../../../shared/is-instant.decorator";
 
 export class CreateFollowUpTaskDto {
   @IsString()
@@ -24,8 +25,7 @@ export class CreateFollowUpTaskDto {
   @Matches(/\S/)
   title!: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsInstantString()
   dueAt!: string;
 
   @IsOptional()

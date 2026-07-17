@@ -29,6 +29,7 @@ interface Customer {
 interface Opportunity {
   id: string;
   title: string;
+  customerId: string;
 }
 
 interface Quote {
@@ -94,6 +95,12 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   const [customerZones, setCustomerZones] = useState<Array<{ id: string; zone: { name: string }; assignedTo: { name: string } | null }>>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  // Oportunidad/cotizacion origen: el backend rechaza con 400 si no pertenecen
+  // al cliente del pedido (ORD-08). Se filtran por el cliente seleccionado para
+  // no ofrecer opciones invalidas, y se controlan por estado para poder limpiar
+  // una seleccion que quede huerfana al cambiar de cliente.
+  const [opportunityId, setOpportunityId] = useState("");
+  const [sourceQuoteId, setSourceQuoteId] = useState("");
   const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
   const [creditSummary, setCreditSummary] = useState<{
     availableCredit: number | null;
@@ -126,6 +133,33 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       .then(setCreditSummary)
       .catch(() => setCreditSummary(null));
   }, [selectedCustomerId]);
+
+  const customerOpportunities = useMemo(
+    () =>
+      selectedCustomerId
+        ? opportunities.filter((o) => o.customerId === selectedCustomerId)
+        : [],
+    [opportunities, selectedCustomerId],
+  );
+
+  const customerQuotes = useMemo(
+    () => (selectedCustomerId ? quotes.filter((q) => q.customerId === selectedCustomerId) : []),
+    [quotes, selectedCustomerId],
+  );
+
+  // Si el cliente cambia despues de elegir origen, la seleccion previa deja de
+  // ser valida: se limpia en vez de enviarse y provocar el 400 del backend.
+  useEffect(() => {
+    if (opportunityId && !customerOpportunities.some((o) => o.id === opportunityId)) {
+      setOpportunityId("");
+    }
+  }, [customerOpportunities, opportunityId]);
+
+  useEffect(() => {
+    if (sourceQuoteId && !customerQuotes.some((q) => q.id === sourceQuoteId)) {
+      setSourceQuoteId("");
+    }
+  }, [customerQuotes, sourceQuoteId]);
 
   function addItem() {
     setItems([...items, emptyItem()]);
@@ -213,8 +247,11 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       customerZoneId: optionalString(formData.get("customerZoneId")),
       customerId: String(formData.get("customerId")),
       sellerUserId: optionalString(formData.get("sellerUserId")),
-      opportunityId: optionalString(formData.get("opportunityId")),
-      sourceQuoteId: optionalString(formData.get("sourceQuoteId")),
+      // Desde el estado, no del FormData: los selects deshabilitados (sin
+      // cliente) no aparecen en el FormData y la seleccion huerfana ya se
+      // limpio arriba.
+      opportunityId: opportunityId || undefined,
+      sourceQuoteId: sourceQuoteId || undefined,
       requestedDeliveryDate: optionalString(formData.get("requestedDeliveryDate")),
       purchaseOrderNumber: optionalString(formData.get("purchaseOrderNumber")),
       orderDate: optionalString(formData.get("orderDate")),
@@ -375,24 +412,44 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             <Input id="branchNameSnapshot" name="branchNameSnapshot" />
           </Field>
           <Field label="Oportunidad" htmlFor="opportunityId">
-            <select id="opportunityId" name="opportunityId" className={selectClasses}>
+            <select
+              id="opportunityId"
+              name="opportunityId"
+              className={selectClasses}
+              value={opportunityId}
+              onChange={(e) => setOpportunityId(e.target.value)}
+              disabled={!selectedCustomerId}
+            >
               <option value="">Ninguna</option>
-              {opportunities.map((o) => (
+              {customerOpportunities.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.title}
                 </option>
               ))}
             </select>
+            {!selectedCustomerId && (
+              <p className="text-xs text-muted-foreground">Seleccione un cliente primero</p>
+            )}
           </Field>
           <Field label="Cotizacion origen" htmlFor="sourceQuoteId">
-            <select id="sourceQuoteId" name="sourceQuoteId" className={selectClasses}>
+            <select
+              id="sourceQuoteId"
+              name="sourceQuoteId"
+              className={selectClasses}
+              value={sourceQuoteId}
+              onChange={(e) => setSourceQuoteId(e.target.value)}
+              disabled={!selectedCustomerId}
+            >
               <option value="">Ninguna</option>
-              {quotes.map((q) => (
+              {customerQuotes.map((q) => (
                 <option key={q.id} value={q.id}>
                   Cotizacion #{q.id.slice(-6)}
                 </option>
               ))}
             </select>
+            {!selectedCustomerId && (
+              <p className="text-xs text-muted-foreground">Seleccione un cliente primero</p>
+            )}
           </Field>
         </div>
         <Field label="Direccion para despacho" htmlFor="dispatchAddressSnapshot">
@@ -460,8 +517,8 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                   <Input
                     id={`quantity-${index}`}
                     type="number"
-                    min={0.0001}
-                    step={0.0001}
+                    min={1}
+                    step={1}
                     value={String(item.quantity)}
                     onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
                   />

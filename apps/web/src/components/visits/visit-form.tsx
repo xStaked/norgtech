@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { toInstantString } from "@/lib/datetime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -46,7 +47,9 @@ export function VisitForm({ customers, opportunities }: VisitFormProps) {
     const body = {
       customerId: String(formData.get("customerId")),
       opportunityId: optionalString("opportunityId"),
-      scheduledAt: String(formData.get("scheduledAt")),
+      // El input da una hora local sin offset; se convierte a un instante real
+      // para que el servidor no la reinterprete en SU zona (VIS-03).
+      scheduledAt: toInstantString(String(formData.get("scheduledAt"))),
       summary: String(formData.get("summary")),
       notes: optionalString("notes"),
       nextStep: optionalString("nextStep"),

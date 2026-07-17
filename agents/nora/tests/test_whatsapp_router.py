@@ -121,11 +121,16 @@ def test_comercial_new_customer_request_starts_case_instead_of_general_classific
     assert result["requires_human_review"] is False
     assert result["case_transition"]["action"] == "start_case"
     assert result["case_transition"]["type"] == "new_customer"
+    # AI-05: required fields first, then the optional prompt-but-don't-block set.
     assert result["case_transition"]["missingFields"] == [
         "displayName",
         "taxId",
         "city",
         "phone",
+        "email",
+        "address",
+        "department",
+        "notes",
     ]
     assert "nombre" in result["suggested_reply"].lower()
     assert "nit" in result["suggested_reply"].lower()
@@ -341,7 +346,15 @@ def test_new_customer_case_collects_name_and_tax_id_then_asks_city_phone():
     assert result["case_transition"]["caseId"] == "case-customer-1"
     assert result["case_transition"]["extractedData"]["legalName"] == "Porcicultura Caribe SAS"
     assert result["case_transition"]["extractedData"]["taxId"] == "3948192-0"
-    assert result["case_transition"]["missingFields"] == ["city", "phone"]
+    # city+phone still required (asked first); the optional set trails behind.
+    assert result["case_transition"]["missingFields"] == [
+        "city",
+        "phone",
+        "email",
+        "address",
+        "department",
+        "notes",
+    ]
     assert "ciudad" in result["suggested_reply"].lower()
     assert "tel" in result["suggested_reply"].lower()
 
@@ -371,7 +384,14 @@ def test_new_customer_case_collects_city_and_phone_without_switching_to_expense(
     assert result["case_transition"]["action"] == "update_case"
     assert result["case_transition"]["extractedData"]["city"] == "Monteria"
     assert result["case_transition"]["extractedData"]["phone"] == "329768969"
-    assert result["case_transition"]["missingFields"] == []
+    # AI-05: required data complete -> only the optional set remains; it must not
+    # block, so the reply already offers to create the customer.
+    assert result["case_transition"]["missingFields"] == [
+        "email",
+        "address",
+        "department",
+        "notes",
+    ]
     assert "crear el cliente" in result["suggested_reply"].lower()
     assert not result["proposals"]
 
@@ -399,6 +419,65 @@ def test_new_customer_case_accepts_unlabeled_city_and_phone():
 
     assert result["case_transition"]["extractedData"]["city"] == "Monteria"
     assert result["case_transition"]["extractedData"]["phone"] == "329768969"
+    # Required complete; only the optional (non-blocking) set remains.
+    assert result["case_transition"]["missingFields"] == [
+        "email",
+        "address",
+        "department",
+        "notes",
+    ]
+
+
+def test_new_customer_optional_fields_do_not_block_creation():
+    """AI-05: with all required fields present, the case is ready to create even
+    though the optional fields are still missing (prompt-but-optional)."""
+    from src.whatsapp_router import _new_customer_ready, _new_customer_missing_fields
+
+    extracted = {
+        "displayName": "Ferretería El Tornillo",
+        "legalName": "Ferretería El Tornillo",
+        "taxId": "900123456-7",
+        "city": "Montería",
+        "phone": "3001234567",
+    }
+    assert _new_customer_ready(extracted) is True
+    assert _new_customer_missing_fields(extracted) == [
+        "email",
+        "address",
+        "department",
+        "notes",
+    ]
+
+
+def test_new_customer_captures_optional_labeled_fields():
+    """AI-05: labeled optional fields are captured and drop out of missing."""
+    result = route_whatsapp_message(
+        {
+            "sender_type": "comercial",
+            "message": "correo: ventas@tornillo.co\ndireccion: Calle 1 #2-3\ndepartamento: Córdoba\nnotas: cliente preferente",
+            "conversation_id": "conversation-sergio",
+            "user": {"id": "sales-user-id", "role": "comercial", "name": "Sergio"},
+            "open_case": {
+                "id": "case-customer-1",
+                "type": "new_customer",
+                "status": "collecting_info",
+                "extractedData": {
+                    "legalName": "Ferretería El Tornillo",
+                    "displayName": "Ferretería El Tornillo",
+                    "taxId": "900123456-7",
+                    "city": "Montería",
+                    "phone": "3001234567",
+                },
+                "missingFields": ["email", "address", "department", "notes"],
+            },
+        }
+    )
+
+    extracted = result["case_transition"]["extractedData"]
+    assert extracted["email"] == "ventas@tornillo.co"
+    assert extracted["address"] == "Calle 1 #2-3"
+    assert extracted["department"] == "Córdoba"
+    assert extracted["notes"] == "cliente preferente"
     assert result["case_transition"]["missingFields"] == []
 
 

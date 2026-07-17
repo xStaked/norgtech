@@ -1,5 +1,6 @@
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
+import { isSameDayInBogota } from "@/lib/datetime";
 
 export type UrgencyLevel = "vencido" | "vence_hoy" | "proximo" | "esta_semana" | "futuro";
 
@@ -27,27 +28,21 @@ export function UrgencyBadge({ level }: UrgencyBadgeProps) {
   return <StatusBadge tone={levelTones[level]}>{levelLabels[level]}</StatusBadge>;
 }
 
-export function computeUrgency(
-  dateString: string,
-  status: string,
-  kind: "visit" | "task",
-): UrgencyLevel {
+/**
+ * "Vencido" NO se decide aqui: lo decide el API (`isOverdue`), que aplica la
+ * regla compartida de src/shared/overdue.ts. Antes esta funcion tenia su propia
+ * version del predicado -- y discrepaba: una tarea vencida esta misma manana se
+ * pintaba "Vence hoy" mientras el API ya la contaba como vencida.
+ *
+ * Lo que queda aqui es presentacion pura: cuanto falta para la fecha.
+ */
+export function computeUrgency(dateString: string, isOverdue: boolean): UrgencyLevel {
+  if (isOverdue) return "vencido";
+
   const now = new Date();
   const date = new Date(dateString);
 
-  const isToday =
-    date.getFullYear() === now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
-
-  const isPast = date.getTime() < now.getTime() && !isToday;
-
-  if (kind === "task" && status === "vencida") return "vencido";
-  if (kind === "visit" && status === "no_realizada") return "vencido";
-  if (isPast && ((kind === "task" && status === "pendiente") || (kind === "visit" && status === "programada"))) {
-    return "vencido";
-  }
-  if (isToday) return "vence_hoy";
+  if (isSameDayInBogota(date, now)) return "vence_hoy";
 
   const dayDiff = Math.ceil((date.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
   if (dayDiff <= 2) return "proximo";

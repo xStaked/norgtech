@@ -99,9 +99,13 @@ function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ companyId?: string }>;
+  searchParams: Promise<{
+    companyId?: string;
+    goalPeriodType?: string;
+    goalPeriodValue?: string;
+  }>;
 }) {
-  const { companyId } = await searchParams;
+  const { companyId, goalPeriodType, goalPeriodValue } = await searchParams;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
   const canViewCommercialAdvanced = userRole ? commercialAdvancedRoles.has(userRole) : false;
@@ -111,8 +115,16 @@ export default async function DashboardPage({
   const commercialQuery = companyId
     ? `/dashboard/commercial-advanced?days=90&companyId=${companyId}`
     : "/dashboard/commercial-advanced?days=90";
-  const sellerGoalsQuery = companyId
-    ? `/dashboard/seller-goals?companyId=${companyId}`
+  // periodType y periodValue viajan juntos o no viajan: la API rechaza uno
+  // suelto (400), y el panel caeria entero por un enlace a medias.
+  const sellerGoalsParams = new URLSearchParams();
+  if (companyId) sellerGoalsParams.set("companyId", companyId);
+  if (goalPeriodType && goalPeriodValue) {
+    sellerGoalsParams.set("periodType", goalPeriodType);
+    sellerGoalsParams.set("periodValue", goalPeriodValue);
+  }
+  const sellerGoalsQuery = sellerGoalsParams.size
+    ? `/dashboard/seller-goals?${sellerGoalsParams}`
     : "/dashboard/seller-goals";
 
   const [response, commercialAdvancedResponse, sellerGoalsResponse, companiesRes] = await Promise.all([
@@ -221,7 +233,7 @@ export default async function DashboardPage({
       {/* Goals Progress Section */}
       <CustomerGoalsDashboard />
 
-      <SellerGoalsDashboard summary={sellerGoalsSummary} />
+      <SellerGoalsDashboard summary={sellerGoalsSummary} companyId={companyId} />
 
       <CommercialAdvancedDashboard summary={commercialAdvancedSummary} />
 

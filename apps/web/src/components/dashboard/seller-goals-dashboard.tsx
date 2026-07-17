@@ -1,7 +1,9 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
-import { Target, TrendingUp, WalletCards } from "lucide-react";
+import { formatPercent } from "@/lib/labels";
+import { CalendarRange, Target, TrendingUp, WalletCards } from "lucide-react";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 interface SellerGoalTotals {
@@ -23,9 +25,19 @@ export interface SellerGoalItem {
   customersCount: number;
 }
 
+export interface SellerGoalPeriod {
+  periodType: string;
+  periodValue: string;
+  goals: number;
+}
+
 export interface SellerGoalsSummary {
   periodType: string;
   periodValue: string;
+  /** El periodo no lo eligió el usuario: la API cayó al mes actual. */
+  periodIsDefault: boolean;
+  /** Todos los periodos que tienen metas, no solo el mostrado (GOAL-01). */
+  availablePeriods: SellerGoalPeriod[];
   companyId: string | null;
   totals: SellerGoalTotals;
   items: SellerGoalItem[];
@@ -33,6 +45,7 @@ export interface SellerGoalsSummary {
 
 interface SellerGoalsDashboardProps {
   summary: SellerGoalsSummary | null;
+  companyId?: string;
 }
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
@@ -41,23 +54,50 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const numberFormatter = new Intl.NumberFormat("es-CO", {
-  maximumFractionDigits: 1,
-});
-
 function formatCurrency(value: number) {
   return currencyFormatter.format(Math.round(value));
 }
 
 function formatPercentage(value: number) {
-  return `${numberFormatter.format(value)}%`;
+  return formatPercent(value);
 }
 
+const MONTH_NAMES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
 function periodLabel(periodType: string, periodValue: string) {
-  if (periodType === "mensual") return `Mes ${periodValue}`;
-  if (periodType === "trimestral") return `Trimestre ${periodValue}`;
-  if (periodType === "anual") return `Anio ${periodValue}`;
+  if (periodType === "mensual") {
+    const [year, month] = periodValue.split("-");
+    const name = MONTH_NAMES[Number(month) - 1];
+    if (!name) return periodValue;
+    return `${name.charAt(0).toUpperCase()}${name.slice(1)} ${year}`;
+  }
+  if (periodType === "trimestral") return `Trimestre ${periodValue.replace("-", " ")}`;
+  if (periodType === "anual") return `Año ${periodValue}`;
   return periodValue;
+}
+
+function periodHref(
+  period: { periodType: string; periodValue: string },
+  companyId?: string,
+) {
+  const params = new URLSearchParams();
+  if (companyId) params.set("companyId", companyId);
+  params.set("goalPeriodType", period.periodType);
+  params.set("goalPeriodValue", period.periodValue);
+  return `/dashboard?${params}`;
 }
 
 function badgeForPercentage(percentage: number) {
@@ -129,20 +169,31 @@ function Td({
   );
 }
 
-export function SellerGoalsDashboard({ summary }: SellerGoalsDashboardProps) {
+export function SellerGoalsDashboard({ summary, companyId }: SellerGoalsDashboardProps) {
   if (!summary) return null;
 
   const totals = summary.totals;
   const remaining = Math.max(0, totals.remainingAmount);
+  const activeLabel = periodLabel(summary.periodType, summary.periodValue);
+  const periods = summary.availablePeriods ?? [];
+  // Periodos que existen pero no se estan viendo: son exactamente las metas que
+  // el usuario cree perdidas cuando no las encuentra aqui (GOAL-01).
+  const otherPeriods = periods.filter(
+    (period) =>
+      period.periodType !== summary.periodType ||
+      period.periodValue !== summary.periodValue,
+  );
 
   return (
     <Card className="border-border/50 bg-card/50 backdrop-blur-sm">
       <CardHeader className="pb-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <CardTitle className="text-lg font-bold">Metas por vendedor</CardTitle>
+            <CardTitle className="text-lg font-bold">Metas por vendedor · {activeLabel}</CardTitle>
             <CardDescription>
-              Avance comercial por vendedor para {periodLabel(summary.periodType, summary.periodValue)}.
+              Avance comercial por vendedor para {activeLabel}
+              {summary.periodIsDefault ? " (periodo actual, por defecto)" : ""}. Solo se muestran las
+              metas de este periodo.
             </CardDescription>
           </div>
           <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
@@ -152,6 +203,35 @@ export function SellerGoalsDashboard({ summary }: SellerGoalsDashboardProps) {
         </div>
       </CardHeader>
       <CardContent className="space-y-5">
+        {periods.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+              <CalendarRange className="h-3.5 w-3.5" />
+              Periodo:
+            </span>
+            {periods.map((period) => {
+              const isActive =
+                period.periodType === summary.periodType &&
+                period.periodValue === summary.periodValue;
+              return (
+                <Link
+                  key={`${period.periodType}-${period.periodValue}`}
+                  href={periodHref(period, companyId)}
+                  aria-current={isActive ? "true" : undefined}
+                  className={cn(
+                    "rounded-lg border px-2.5 py-1 text-xs font-semibold transition-colors",
+                    isActive
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {periodLabel(period.periodType, period.periodValue)} ({period.goals})
+                </Link>
+              );
+            })}
+          </div>
+        ) : null}
+
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Meta total" value={formatCurrency(totals.targetAmount)} />
           <Metric label="Vendido" value={formatCurrency(totals.soldAmount)} />
@@ -161,7 +241,24 @@ export function SellerGoalsDashboard({ summary }: SellerGoalsDashboardProps) {
 
         {summary.items.length === 0 ? (
           <div className="rounded-lg border border-border/60 bg-background/30 p-5 text-sm text-muted-foreground">
-            No hay metas de vendedores para este periodo.
+            <p>No hay metas de vendedores para {activeLabel}.</p>
+            {otherPeriods.length > 0 ? (
+              <p className="mt-1">
+                Sí hay metas en{" "}
+                {otherPeriods.map((period, index) => (
+                  <span key={`${period.periodType}-${period.periodValue}`}>
+                    {index > 0 ? ", " : ""}
+                    <Link
+                      href={periodHref(period, companyId)}
+                      className="font-semibold text-foreground underline underline-offset-2"
+                    >
+                      {periodLabel(period.periodType, period.periodValue)}
+                    </Link>
+                  </span>
+                ))}
+                .
+              </p>
+            ) : null}
           </div>
         ) : (
           <div className="overflow-hidden rounded-lg border border-border/60">

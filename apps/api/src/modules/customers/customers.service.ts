@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -23,70 +24,78 @@ export class CustomersService {
     this.assertExactlyOnePrimaryContact(dto);
     await this.assertValidReferences(dto);
 
-    return this.prisma.$transaction(async (tx) => {
-      const customer = await tx.customer.create({
-        data: {
-          legalName: dto.legalName,
-          displayName: dto.displayName,
-          taxId: dto.taxId,
-          phone: dto.phone,
-          email: dto.email,
-          address: dto.address,
-          city: dto.city,
-          department: dto.department,
-          notes: dto.notes,
-          segmentId: dto.segmentId,
-          assignedToUserId: dto.assignedToUserId,
-          customerType: dto.customerType || undefined,
-          creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
-          paymentCondition: dto.paymentCondition || undefined,
-          paymentDays: dto.paymentDays !== undefined ? dto.paymentDays : undefined,
-          purchaseBudget: dto.purchaseBudget !== undefined ? dto.purchaseBudget : undefined,
-          createdBy: user.id,
-          updatedBy: user.id,
-          contacts: {
-            create: dto.contacts.map((contact) => ({
-              fullName: contact.fullName,
-              roleTitle: contact.roleTitle,
-              phone: contact.phone,
-              email: contact.email,
-              isPrimary: contact.isPrimary,
-              notes: contact.notes,
-              createdBy: user.id,
-              updatedBy: user.id,
-            })),
-          },
-        },
-        include: { contacts: true },
-      });
-
-      if (dto.initialGoal) {
-        await tx.customerGoal.create({
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const customer = await tx.customer.create({
           data: {
-            customerId: customer.id,
-            periodType: dto.initialGoal.periodType,
-            periodValue: dto.initialGoal.periodValue,
-            targetAmount: dto.initialGoal.targetAmount,
-            notes: dto.initialGoal.notes || null,
+            legalName: dto.legalName,
+            displayName: dto.displayName,
+            taxId: dto.taxId,
+            phone: dto.phone,
+            email: dto.email,
+            address: dto.address,
+            city: dto.city,
+            department: dto.department,
+            notes: dto.notes,
+            segmentId: dto.segmentId,
+            assignedToUserId: dto.assignedToUserId,
+            customerType: dto.customerType || undefined,
+            creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
+            paymentCondition: dto.paymentCondition || undefined,
+            paymentDays: dto.paymentDays !== undefined ? dto.paymentDays : undefined,
+            purchaseBudget: dto.purchaseBudget !== undefined ? dto.purchaseBudget : undefined,
             createdBy: user.id,
             updatedBy: user.id,
+            contacts: {
+              create: dto.contacts.map((contact) => ({
+                fullName: contact.fullName,
+                roleTitle: contact.roleTitle,
+                phone: contact.phone,
+                email: contact.email,
+                isPrimary: contact.isPrimary,
+                notes: contact.notes,
+                createdBy: user.id,
+                updatedBy: user.id,
+              })),
+            },
           },
+          include: { contacts: true },
         });
+
+        if (dto.initialGoal) {
+          await tx.customerGoal.create({
+            data: {
+              customerId: customer.id,
+              periodType: dto.initialGoal.periodType,
+              periodValue: dto.initialGoal.periodValue,
+              targetAmount: dto.initialGoal.targetAmount,
+              notes: dto.initialGoal.notes || null,
+              createdBy: user.id,
+              updatedBy: user.id,
+            },
+          });
+        }
+
+        await this.auditService.record(
+          {
+            entityType: "Customer",
+            entityId: customer.id,
+            action: "customer.created",
+            actorUserId: user.id,
+            nextState: JSON.parse(JSON.stringify(customer)),
+          },
+          tx,
+        );
+
+        return customer;
+      });
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException("Ya existe un cliente con ese NIT (taxId)");
       }
 
-      await this.auditService.record(
-        {
-          entityType: "Customer",
-          entityId: customer.id,
-          action: "customer.created",
-          actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(customer)),
-        },
-        tx,
-      );
-
-      return customer;
-    });
+      throw error;
+    }
   }
 
   private async assertValidReferences(dto: CreateCustomerDto) {
@@ -183,8 +192,9 @@ export class CustomersService {
     return updated;
   }
 
-  findAll() {
+  findAll(includeInactive = false) {
     return this.prisma.customer.findMany({
+      where: includeInactive ? undefined : { active: true },
       select: {
         id: true,
         legalName: true,
@@ -195,6 +205,7 @@ export class CustomersService {
         city: true,
         department: true,
         creditLimit: true,
+        active: true,
         segment: { select: { id: true, name: true } },
         contacts: {
           select: {
@@ -400,5 +411,9 @@ export class CustomersService {
         "Customer must include exactly one primary contact",
       );
     }
+  }
+
+  private isUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+    return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
   }
 }

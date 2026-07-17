@@ -38,6 +38,28 @@ const VISIT_CASE_TYPE = "visit" as NoraConversationCaseType;
 export class NoraRoutingService {
   private readonly logger = new Logger(NoraRoutingService.name);
 
+  // AI-05: the new-customer field set, kept in sync with Nora's Python router
+  // (_NEW_CUSTOMER_REQUIRED_FIELDS / _NEW_CUSTOMER_OPTIONAL_FIELDS in
+  // whatsapp_router.py). REQUIRED fields hard-gate creation; OPTIONAL fields are
+  // prompted/collected but must NOT block ("no tengo correo" still creates).
+  private static readonly NEW_CUSTOMER_REQUIRED_FIELDS = [
+    "displayName",
+    "taxId",
+    "city",
+    "phone",
+  ];
+  private static readonly NEW_CUSTOMER_OPTIONAL_FIELDS = [
+    "email",
+    "address",
+    "department",
+    "notes",
+  ];
+  // Seed order = required first, then optional (mirrors _new_customer_missing_fields).
+  private static readonly NEW_CUSTOMER_MISSING_FIELDS_SEED = [
+    ...NoraRoutingService.NEW_CUSTOMER_REQUIRED_FIELDS,
+    ...NoraRoutingService.NEW_CUSTOMER_OPTIONAL_FIELDS,
+  ];
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsAppService: WhatsAppService,
@@ -170,9 +192,16 @@ export class NoraRoutingService {
       ) {
         try {
           const scopedToken = await this.authService.mintScopedToken(sender.userId);
+          // AI-09/AI-10: borrar una visita es destructivo. Con el historial
+          // completo, un turno anterior de descripcion (de un intento de EDITAR)
+          // se colaba y delete_visit lo tomaba como la visita a eliminar,
+          // borrando la equivocada. Para un borrado se manda SOLO el mensaje
+          // actual: el agente vuelve a listar las visitas del cliente y confirma
+          // cual, en vez de inferirla de contexto viejo.
+          const isVisitDelete = this.isVisitDeleteMessage(message.body);
           const agentResponse = await this.requestNoraGeneralAgent({
             current_message: message.body,
-            history: context.recent_messages,
+            history: isVisitDelete ? [] : context.recent_messages,
             open_case: openCase
               ? {
                   id: openCase.id,
@@ -546,7 +575,7 @@ export class NoraRoutingService {
         type: NoraConversationCaseType.new_customer,
         status: NoraConversationCaseStatus.collecting_info,
         extractedData: {},
-        missingFields: ["displayName", "taxId", "city", "phone"],
+        missingFields: [...NoraRoutingService.NEW_CUSTOMER_MISSING_FIELDS_SEED],
         proposal: {
           type: "new_customer",
           title: "Cliente nuevo para visita",
@@ -1196,10 +1225,9 @@ export class NoraRoutingService {
         return this.noraCaseService.createCase({
           conversationId,
           type: NoraConversationCaseType.new_customer,
-          status:
-            missingFields.length === 0
-              ? NoraConversationCaseStatus.ready_for_review
-              : NoraConversationCaseStatus.collecting_info,
+          status: this.newCustomerRequiredSatisfied(missingFields)
+            ? NoraConversationCaseStatus.ready_for_review
+            : NoraConversationCaseStatus.collecting_info,
           extractedData: this.objectValue(source.extractedData) ?? {},
           missingFields,
           proposal: {
@@ -1283,7 +1311,7 @@ export class NoraRoutingService {
             status: NoraConversationCaseStatus.ready_for_review,
           }),
         ...(existingCase.type === NoraConversationCaseType.new_customer &&
-          nextMissing.length === 0 && {
+          this.newCustomerRequiredSatisfied(nextMissing) && {
             status: NoraConversationCaseStatus.ready_for_review,
           }),
         ...(existingCase.type === VISIT_CASE_TYPE && {
@@ -1607,10 +1635,40 @@ export class NoraRoutingService {
       "edit ",
       "update ",
     ];
-    const entities = ["visita", "cliente", "gasto"];
+    // AI-02: opportunity/stage messages must also reach the general agent (it
+    // owns update_opportunity_stage). "oportunidad"/"etapa" are routable
+    // entities, and stage-change verbs like "mover/pasar/avanzar" count too.
+    const entities = ["visita", "cliente", "gasto", "oportunidad", "etapa"];
+    const stageVerbs = ["mover", "mueve", "pasar", "pasa", "avanzar", "avanza"];
+    // AI-03/04: a customer field edit ("cambia el NIT de Ferretería a 900...",
+    // "actualiza el teléfono de...") rarely says the literal word "cliente".
+    // Route on the customer-field intent so it reaches update_customer.
+    const customerFieldTokens = [
+      "nit",
+      "telefono",
+      "celular",
+      "correo",
+      "email",
+      "direccion",
+    ];
+    const hasVerb = verbs.some((verb) => normalized.includes(verb));
+    const hasEntity = entities.some((entity) => normalized.includes(entity));
+    const hasStageVerb = stageVerbs.some((verb) => normalized.includes(verb));
+    const hasCustomerField = customerFieldTokens.some((token) =>
+      normalized.includes(token),
+    );
     return (
-      verbs.some((verb) => normalized.includes(verb)) &&
-      entities.some((entity) => normalized.includes(entity))
+      (hasVerb && hasEntity) ||
+      (hasStageVerb && normalized.includes("oportunidad")) ||
+      (hasVerb && hasCustomerField)
+    );
+  }
+
+  // AI-05: a new-customer case is ready once every REQUIRED field is present,
+  // even if optional fields (email/address/department/notes) are still missing.
+  private newCustomerRequiredSatisfied(missingFields: string[]): boolean {
+    return NoraRoutingService.NEW_CUSTOMER_REQUIRED_FIELDS.every(
+      (field) => !missingFields.includes(field),
     );
   }
 

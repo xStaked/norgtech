@@ -1,5 +1,6 @@
 import re
 from datetime import date
+from .visit_parsing import resolve_visit_datetime
 from typing import Any
 
 from .models.whatsapp_models import (
@@ -623,6 +624,14 @@ def _extract_new_customer_fields(message: str) -> dict[str, Any]:
         if candidate and not re.search(r"\b(?:nombre|nit|crear|cliente)\b", candidate, flags=re.IGNORECASE):
             city = candidate
 
+    # Optional, prompt-but-don't-block fields (AI-05). Only labeled forms are
+    # captured so the required-field heuristics above stay unaffected; a user
+    # who never provides them can still create the customer.
+    email = _field_value(message, ("correo", "email", "e-mail", "e mail"))
+    address = _field_value(message, ("direccion", "dirección"))
+    department = _field_value(message, ("departamento",))
+    notes = _field_value(message, ("notas", "nota", "observaciones", "observacion", "observación"))
+
     if name:
         fields["legalName"] = name
         fields["displayName"] = name
@@ -632,6 +641,14 @@ def _extract_new_customer_fields(message: str) -> dict[str, Any]:
         fields["city"] = city
     if phone:
         fields["phone"] = phone
+    if email:
+        fields["email"] = email
+    if address:
+        fields["address"] = address
+    if department:
+        fields["department"] = department
+    if notes:
+        fields["notes"] = notes
 
     return fields
 
@@ -645,7 +662,15 @@ def _field_value(message: str, labels: tuple[str, ...]) -> str | None:
     return None
 
 
-def _new_customer_missing_fields(extracted: dict[str, Any]) -> list[str]:
+# AI-05: required fields hard-gate creation; optional fields are prompted but
+# must NOT block creation ("no tengo correo" still creates). Both lists are
+# mirrored in nora-routing.service.ts (newCustomerRequiredFields / the subcase
+# missingFields seed) — keep them in sync.
+_NEW_CUSTOMER_REQUIRED_FIELDS = ("displayName", "taxId", "city", "phone")
+_NEW_CUSTOMER_OPTIONAL_FIELDS = ("email", "address", "department", "notes")
+
+
+def _new_customer_missing_required(extracted: dict[str, Any]) -> list[str]:
     missing = []
     if not (extracted.get("legalName") or extracted.get("displayName")):
         missing.append("displayName")
@@ -658,20 +683,40 @@ def _new_customer_missing_fields(extracted: dict[str, Any]) -> list[str]:
     return missing
 
 
+def _new_customer_missing_fields(extracted: dict[str, Any]) -> list[str]:
+    # Required first (hard gate), then the optional fields Nora still asks for.
+    missing = _new_customer_missing_required(extracted)
+    missing += [field for field in _NEW_CUSTOMER_OPTIONAL_FIELDS if not extracted.get(field)]
+    return missing
+
+
+def _new_customer_ready(extracted: dict[str, Any]) -> bool:
+    """True once every REQUIRED field is present, regardless of optional gaps."""
+    return not _new_customer_missing_required(extracted)
+
+
 def _new_customer_question(missing: list[str]) -> str:
-    if not missing:
+    required_missing = [field for field in missing if field in _NEW_CUSTOMER_REQUIRED_FIELDS]
+    if not required_missing:
+        # Required data complete -> ready to create. Optional fields are asked
+        # for but never block: the user can create with what we have.
+        if missing:
+            return (
+                "Listo, con eso ya puedo crear el cliente. Si tienes correo, dirección, "
+                "departamento o notas, pásamelos; si no, dime 'créalo' y lo registro así."
+            )
         return "Listo, ya tengo los datos. Voy a crear el cliente y te confirmo."
-    if "displayName" in missing and "taxId" in missing:
+    if "displayName" in required_missing and "taxId" in required_missing:
         return "Claro. Envíame el nombre o razón social y el NIT del cliente."
-    if "displayName" in missing:
+    if "displayName" in required_missing:
         return "Me falta el nombre o razón social del cliente."
-    if "taxId" in missing:
+    if "taxId" in required_missing:
         return "Me falta el NIT del cliente."
-    if "city" in missing and "phone" in missing:
+    if "city" in required_missing and "phone" in required_missing:
         return "Perfecto. Ahora envíame la ciudad y el teléfono de contacto."
-    if "city" in missing:
+    if "city" in required_missing:
         return "Me falta la ciudad del cliente."
-    if "phone" in missing:
+    if "phone" in required_missing:
         return "Me falta el teléfono de contacto del cliente."
     return "Me falta un dato del cliente para continuar."
 
@@ -748,28 +793,10 @@ def _looks_like_visit_command(value: str) -> bool:
 
 
 def _visit_datetime(message: str) -> str | None:
-    pattern = (
-        r"\b(?:el\s+)?(?P<day>\d{1,2})\s+de\s+"
-        r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
-        r"septiembre|setiembre|octubre|noviembre|diciembre)"
-        r"(?:\s+(?:de\s+)?(?P<year>\d{4}))?"
-        r"(?:\s+a\s+las\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm|a\.m\.|p\.m\.)?)?"
-    )
-    matches = list(re.finditer(pattern, message, flags=re.IGNORECASE))
-    if not matches:
-        return None
-    match = matches[-1]
-    day = int(match.group("day"))
-    month = _VISIT_MONTHS[match.group("month").lower()]
-    year = int(match.group("year") or date.today().year)
-    hour = int(match.group("hour") or 9)
-    minute = int(match.group("minute") or 0)
-    ampm = (match.group("ampm") or "").lower().replace(".", "")
-    if ampm == "pm" and hour < 12:
-        hour += 12
-    if ampm == "am" and hour == 12:
-        hour = 0
-    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+    # AI-07: parser compartido (src/visit_parsing.py). Ademas de "DD de <mes>"
+    # ahora entiende hoy/manana/pasado manana/dia-de-semana + horas sueltas,
+    # resueltas contra el dia de HOY EN COLOMBIA (no la zona del proceso).
+    return resolve_visit_datetime(message)
 
 
 def _visit_summary(message: str) -> str | None:

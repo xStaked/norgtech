@@ -2,6 +2,7 @@ import { apiFetch } from "@/lib/api.server";
 import { PageHeader } from "@/components/ui/page-header";
 import { ButtonLink } from "@/components/ui/button-link";
 import { FilterBar } from "@/components/ui/filter-bar";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 interface Product {
   id: string;
@@ -11,6 +12,7 @@ interface Product {
   unit: string;
   presentation: string | null;
   basePrice: string;
+  active: boolean;
 }
 
 const AVATAR_COLORS = [
@@ -40,7 +42,7 @@ function initials(name: string): string {
 }
 
 export default async function ProductsPage() {
-  const response = await apiFetch("/products");
+  const response = await apiFetch("/products?includeInactive=true");
   const products: Product[] = response.ok ? await response.json() : [];
 
   return (
@@ -97,6 +99,11 @@ export default async function ProductsPage() {
                   <div className="truncate text-[14px] font-bold text-foreground">
                     {product.name}
                   </div>
+                  {!product.active ? (
+                    <div className="mt-1">
+                      <StatusBadge tone="neutral">Inactivo</StatusBadge>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="shrink-0 text-right">
                   <div className="text-[15px] font-extrabold tabular-nums text-[#167c4a]">

@@ -107,6 +107,8 @@ describe("Opportunities", () => {
                 title: string;
                 stage: OpportunityStage;
                 estimatedValue?: number | string | null;
+                closedAt?: Date | null;
+                lostReason?: string | null;
                 createdBy: string;
                 updatedBy: string;
               };
@@ -122,6 +124,8 @@ describe("Opportunities", () => {
               data: {
                 stage: OpportunityStage;
                 updatedBy: string;
+                closedAt?: Date | null;
+                lostReason?: string | null;
               };
             }) => Promise<{ count: number }>;
           };
@@ -150,8 +154,14 @@ describe("Opportunities", () => {
                 estimatedValue: data.estimatedValue ?? null,
                 expectedCloseDate: null,
                 assignedToUserId: null,
-                lostReason: null,
-                closedAt: null,
+                // OPP-02: el stub honra `data.lostReason` (antes lo fijaba a
+                // null). Si lo ignorara, un test podria pasar sin que el servicio
+                // escriba el motivo — un stub que traga claves desconocidas.
+                lostReason: data.lostReason ?? null,
+                // El stub honra `closedAt` en vez de fijarlo a null: si lo
+                // ignorara, un test de DASH-06 pasaria sin que el servicio
+                // escriba nada (stub que traga claves desconocidas).
+                closedAt: data.closedAt ?? null,
                 createdBy: data.createdBy,
                 updatedBy: data.updatedBy,
                 createdAt: new Date("2026-04-29T00:00:00.000Z"),
@@ -209,6 +219,8 @@ describe("Opportunities", () => {
                 stage: data.stage,
                 updatedBy: data.updatedBy,
                 updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+                ...("closedAt" in data ? { closedAt: data.closedAt } : {}),
+                ...("lostReason" in data ? { lostReason: data.lostReason } : {}),
               };
 
               const pendingIndex = pendingOpportunities.findIndex(
@@ -300,6 +312,171 @@ describe("Opportunities", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({ stage: "venta_cerrada" })
       .expect(400);
+  });
+
+  // DASH-06: `closedAt` no lo escribia nadie, asi que el contador
+  // "Ventas cerradas 30d" (stage=venta_cerrada AND closedAt >= hace 30d)
+  // era estructuralmente 0: la columna siempre era NULL.
+  describe("closedAt (DASH-06)", () => {
+    const advanceTo = async (id: string, stages: OpportunityStage[]) => {
+      for (const stage of stages) {
+        await request(globalThis.__APP__)
+          .patch(`/opportunities/${id}/stage`)
+          .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+          .send({ stage })
+          .expect(200);
+      }
+    };
+
+    it("stamps closedAt when an opportunity transitions into venta_cerrada", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Cierre por transicion",
+          stage: "prospecto",
+        })
+        .expect(201);
+
+      expect(created.body.closedAt).toBeNull();
+
+      await advanceTo(created.body.id, [
+        "contacto",
+        "visita",
+        "cotizacion",
+        "negociacion",
+        "orden_facturacion",
+      ]);
+
+      const closed = await request(globalThis.__APP__)
+        .patch(`/opportunities/${created.body.id}/stage`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ stage: "venta_cerrada" })
+        .expect(200);
+
+      expect(closed.body.stage).toBe("venta_cerrada");
+      expect(closed.body.closedAt).not.toBeNull();
+      expect(closed.body.closedAt).toEqual(expect.any(String));
+      expect(Number.isNaN(Date.parse(closed.body.closedAt))).toBe(false);
+    });
+
+    it("leaves closedAt null while the opportunity is not a closed sale", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Sigue abierta",
+          stage: "prospecto",
+        })
+        .expect(201);
+
+      // Se afirma sobre la respuesta del PATCH: el stub de este spec no
+      // implementa `opportunity.findUnique` fuera de transaccion (GET -> 500).
+      const moved = await request(globalThis.__APP__)
+        .patch(`/opportunities/${created.body.id}/stage`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ stage: "contacto" })
+        .expect(200);
+
+      expect(moved.body.stage).toBe("contacto");
+      expect(moved.body.closedAt).toBeNull();
+    });
+
+    it("stamps closedAt when an opportunity is created directly as venta_cerrada", async () => {
+      // `CreateOpportunityDto.stage` es un @IsEnum libre: se puede crear ya
+      // cerrada sin pasar por updateStage, asi que el create tambien sella.
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Nace cerrada",
+          stage: "venta_cerrada",
+        })
+        .expect(201);
+
+      expect(created.body.stage).toBe("venta_cerrada");
+      expect(created.body.closedAt).not.toBeNull();
+      expect(Number.isNaN(Date.parse(created.body.closedAt))).toBe(false);
+    });
+
+    it("leaves closedAt null when an opportunity is created as perdida", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Nace perdida",
+          stage: "perdida",
+        })
+        .expect(201);
+
+      expect(created.body.closedAt).toBeNull();
+    });
+  });
+
+  // OPP-02: `Opportunity.lostReason` existia pero nada lo escribia. Ahora se
+  // captura tanto al crear directamente como `perdida` como al transicionar.
+  describe("lostReason (OPP-02)", () => {
+    it("persists lostReason when transitioning into perdida", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Se pierde por precio",
+          stage: "prospecto",
+        })
+        .expect(201);
+
+      const lost = await request(globalThis.__APP__)
+        .patch(`/opportunities/${created.body.id}/stage`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ stage: "perdida", lostReason: "Precio no competitivo" })
+        .expect(200);
+
+      expect(lost.body.stage).toBe("perdida");
+      expect(lost.body.lostReason).toBe("Precio no competitivo");
+    });
+
+    it("persists lostReason when created directly as perdida", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Nace perdida con motivo",
+          stage: "perdida",
+          lostReason: "Cliente eligio competencia",
+        })
+        .expect(201);
+
+      expect(created.body.stage).toBe("perdida");
+      expect(created.body.lostReason).toBe("Cliente eligio competencia");
+    });
+
+    it("accepts stage updates without lostReason (Nora-safe / optional)", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Avanza sin motivo",
+          stage: "prospecto",
+        })
+        .expect(201);
+
+      const moved = await request(globalThis.__APP__)
+        .patch(`/opportunities/${created.body.id}/stage`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ stage: "contacto" })
+        .expect(200);
+
+      expect(moved.body.stage).toBe("contacto");
+      expect(moved.body.lostReason).toBeNull();
+    });
   });
 
   it("rejects stale stage updates when the row changes before persistence", async () => {

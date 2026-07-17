@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { apiFetchClient } from "@/lib/api.client";
+import { formatPercent } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -179,7 +180,7 @@ export function CustomerGoalsDashboard() {
                   Progreso general del comercial
                 </div>
                 <div className="text-sm font-semibold">
-                  {overallPercentage.toFixed(1)}%
+                  {formatPercent(overallPercentage)}
                 </div>
               </div>
               <ProgressBar percentage={overallPercentage} />
@@ -193,7 +194,7 @@ export function CustomerGoalsDashboard() {
                   <div className="text-xs text-muted-foreground">Vendido total</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-xl font-bold">{overallPercentage.toFixed(1)}%</div>
+                  <div className="text-xl font-bold">{formatPercent(overallPercentage)}</div>
                   <div className="text-xs text-muted-foreground">% general</div>
                 </div>
                 <div className="text-center">
@@ -236,7 +237,7 @@ export function CustomerGoalsDashboard() {
                         <div className="text-[0.65rem] text-muted-foreground">Vendido</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-semibold">{progress.percentage.toFixed(0)}%</div>
+                        <div className="text-sm font-semibold">{formatPercent(progress.percentage)}</div>
                         <div className="text-[0.65rem] text-muted-foreground">Cumplido</div>
                       </div>
                       <div className="hidden w-24 sm:block">

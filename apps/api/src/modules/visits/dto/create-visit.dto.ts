@@ -4,6 +4,7 @@ import {
   IsString,
   Matches,
 } from "class-validator";
+import { IsInstantString } from "../../../shared/is-instant.decorator";
 
 export class CreateVisitDto {
   @IsString()
@@ -14,8 +15,7 @@ export class CreateVisitDto {
   @IsString()
   opportunityId?: string;
 
-  @IsString()
-  @IsNotEmpty()
+  @IsInstantString()
   scheduledAt!: string;
 
   @IsOptional()

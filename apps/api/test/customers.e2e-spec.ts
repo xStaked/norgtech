@@ -1,6 +1,6 @@
 import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
-import { UserRole } from "@prisma/client";
+import { Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
@@ -179,7 +179,15 @@ describe("Customers", () => {
           }
           return result;
         },
-        findMany: async () => customers,
+        // Honors the `where.active` filter so the includeInactive e2e below is
+        // real: the admin list passes `where: { active: true }` by default and
+        // `where: undefined` when includeInactive is set.
+        findMany: async ({ where }: { where?: { active?: boolean } } = {}) =>
+          customers.filter(
+            (c) =>
+              where?.active === undefined ||
+              ((c as { active?: boolean }).active ?? true) === where.active,
+          ),
         update: async () => {
           throw new Error("customer.update must run inside a transaction");
         },
@@ -282,6 +290,16 @@ describe("Customers", () => {
               };
               include?: { contacts?: boolean };
             }) => {
+              const taxIdTaken = [...customers, ...pendingCustomers].some(
+                (c) => data.taxId !== undefined && c.taxId === data.taxId,
+              );
+              if (taxIdTaken) {
+                throw new Prisma.PrismaClientKnownRequestError(
+                  "Unique constraint failed on the fields: (`taxId`)",
+                  { code: "P2002", clientVersion: "test", meta: { target: ["taxId"] } },
+                );
+              }
+
               const customer = {
                 id: `customer-${pendingCustomers.length + customers.length + 1}`,
                 legalName: data.legalName,
@@ -597,6 +615,77 @@ describe("Customers", () => {
     expect(getResponse.body.quotes).toBeDefined();
     expect(getResponse.body.orders).toBeDefined();
     expect(getResponse.body.billingRequests).toBeDefined();
+  });
+
+  // CLI-02: a duplicate taxId used to surface the raw Prisma P2002 as a 500.
+  it("returns 409 with a Spanish message when the taxId already exists", async () => {
+    const payload = {
+      legalName: "Duplicada SAS",
+      displayName: "Duplicada",
+      taxId: "901555444",
+      segmentId: globalThis.__SEGMENT_ID__,
+      contacts: [
+        {
+          fullName: "Carlos Perez",
+          email: "carlos@duplicada.co",
+          isPrimary: true,
+        },
+      ],
+    };
+
+    await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send(payload)
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ ...payload, displayName: "Otra razon social" })
+      .expect(409);
+
+    expect(response.body.message).toBe("Ya existe un cliente con ese NIT (taxId)");
+  });
+
+  // ZON-01/COM-01 family: a deactivated customer must not silently disappear
+  // from the admin list, but only when the caller opts in. Default stays
+  // active-only so selectors and Nora keep receiving active rows.
+  it("excludes inactive customers from the default list but includes them with includeInactive", async () => {
+    customers.push({
+      id: "inactive-customer-id",
+      legalName: "Inactiva SAS",
+      displayName: "Inactiva",
+      taxId: "800000000",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      assignedToUserId: null,
+      creditLimit: null,
+      active: false,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const defaultResponse = await request(globalThis.__APP__)
+      .get("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    const defaultIds = (defaultResponse.body as Array<{ id: string }>).map((c) => c.id);
+    expect(defaultIds).not.toContain("inactive-customer-id");
+
+    const inclusiveResponse = await request(globalThis.__APP__)
+      .get("/customers?includeInactive=true")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    const inclusiveIds = (inclusiveResponse.body as Array<{ id: string }>).map((c) => c.id);
+    expect(inclusiveIds).toContain("inactive-customer-id");
   });
 
   it("allows director_comercial to refresh segments", async () => {

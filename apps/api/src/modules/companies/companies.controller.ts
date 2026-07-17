@@ -5,6 +5,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
@@ -12,9 +13,12 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { ROLE_GROUPS } from "../auth/permissions";
+import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { CompaniesService } from "./companies.service";
 import { CreateCompanyDto } from "./dto/create-company.dto";
 import { UpdateCompanyDto } from "./dto/update-company.dto";
+
+const listQueryPipe = new ValidationPipe({ transform: true, whitelist: true });
 
 @Controller("companies")
 export class CompaniesController {
@@ -34,8 +38,8 @@ export class CompaniesController {
 
   @UseGuards(JwtAuthGuard)
   @Get()
-  findAll() {
-    return this.companiesService.findAll();
+  findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
+    return this.companiesService.findAll(query.includeInactive);
   }
 
   @UseGuards(JwtAuthGuard)

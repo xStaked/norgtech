@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Clock } from "lucide-react";
+import { AUDIT_ENTITY_LABELS, AUDIT_ACTION_LABELS } from "@/lib/labels";
 
 interface ActivityItem {
   id: string;
@@ -65,9 +66,13 @@ export function ActivityList({ items }: ActivityListProps) {
           <div className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-primary/60" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-semibold text-foreground">{item.entityType}</span>
+              <span className="font-semibold text-foreground">
+                {AUDIT_ENTITY_LABELS[item.entityType] ?? item.entityType}
+              </span>
               <span className="text-muted-foreground">·</span>
-              <span className="text-muted-foreground">{item.action}</span>
+              <span className="text-muted-foreground">
+                {AUDIT_ACTION_LABELS[item.action] ?? item.action}
+              </span>
             </div>
             <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               <span>por {item.actorName}</span>

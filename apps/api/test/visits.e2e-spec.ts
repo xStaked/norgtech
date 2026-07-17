@@ -51,16 +51,52 @@ describe("Visits", () => {
       },
     };
 
+    // OPP-03: la visita puede quedar vinculada a una oportunidad. El servicio
+    // valida su existencia con `this.prisma.opportunity.findUnique` fuera de la
+    // transaccion, asi que el stub necesita modelar `opportunity`.
+    const opportunity = {
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        if (where.id === "opp-1") {
+          return { id: "opp-1", title: "Oportunidad Test" };
+        }
+        return null;
+      },
+    };
+
     const prismaStub = {
       user,
       refreshToken: refreshTokenStub(),
       customer,
+      opportunity,
       visit: {
         create: async () => {
           throw new Error("visit.create must run inside a transaction");
         },
-        findUnique: async ({ where }: { where: { id: string } }) => {
-          return visits.find((v) => v.id === where.id) ?? null;
+        findUnique: async ({
+          where,
+          include,
+        }: {
+          where: { id: string };
+          include?: { customer?: unknown; opportunity?: unknown };
+        }) => {
+          const found = visits.find((v) => v.id === where.id);
+          if (!found) {
+            return null;
+          }
+          const result: Record<string, unknown> = { ...found };
+          if (include?.customer) {
+            result.customer = { id: "customer-1", displayName: "Cliente Test" };
+          }
+          // OPP-03: el stub honra `include.opportunity` (antes ignoraba include
+          // y jamas devolvia la oportunidad). Sin esto el test seria vacuo: el
+          // detalle pintaria "Sin oportunidad" aunque el servicio la incluyera.
+          if (include?.opportunity && found.opportunityId) {
+            result.opportunity = {
+              id: found.opportunityId,
+              title: "Oportunidad Test",
+            };
+          }
+          return result;
         },
         findMany: async ({ where }: { where?: Record<string, unknown> }) => {
           let result = [...visits];
@@ -233,6 +269,85 @@ describe("Visits", () => {
 
     expect(response.body.customerId).toBe("customer-1");
     expect(response.body.status).toBe(VisitStatus.programada);
+  });
+
+  // DASH-03: ningun formulario del web manda `assignedToUserId`, asi que sin
+  // este default toda visita creada desde la UI nace con NULL y "Mi cola de
+  // trabajo" (filtra assignedToUserId = user.id) sale vacia para todos.
+  it("assigns a new visit to its creator when no assignee is sent (DASH-03)", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        scheduledAt: "2026-04-30T10:00:00.000Z",
+      })
+      .expect(201);
+
+    expect(response.body.assignedToUserId).toBe("admin-user-id");
+    expect(response.body.assignedToUserId).not.toBeNull();
+  });
+
+  it("keeps an explicit assignee over the creator (DASH-03)", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        scheduledAt: "2026-04-30T10:00:00.000Z",
+        assignedToUserId: "other-user-id",
+      })
+      .expect(201);
+
+    expect(response.body.assignedToUserId).toBe("other-user-id");
+  });
+
+  it("acepta el formato que manda Nora (sin offset) y lo lee como hora de Colombia", async () => {
+    // agents/nora/src/tools/visits.py postea a /visits el `scheduled_at` que
+    // produce el LLM, sin offset (ver agents/nora/tests/test_visits_tool.py).
+    // Exigir offset devolvia 400 y rompia la creacion de visitas por WhatsApp.
+    const response = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        scheduledAt: "2026-06-29T12:00:00",
+        notes: "Visita creada por Nora",
+      })
+      .expect(201);
+
+    // 12:00 en Bogota (UTC-5) = 17:00 UTC. Si saliera 12:00Z, se interpreto en
+    // la zona del servidor y VIS-03 sigue vivo.
+    expect(new Date(response.body.scheduledAt).toISOString()).toBe(
+      "2026-06-29T17:00:00.000Z",
+    );
+  });
+
+  // OPP-03: el detalle leia `visit.opportunity`, pero findOne solo incluia
+  // `customer`, asi que una visita con oportunidad vinculada mostraba siempre
+  // "Sin oportunidad".
+  it("includes the linked opportunity when reading a visit (OPP-03)", async () => {
+    const created = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        opportunityId: "opp-1",
+        scheduledAt: "2026-05-06T10:00:00.000Z",
+      })
+      .expect(201);
+
+    const visitId = created.body.id;
+
+    const detail = await request(globalThis.__APP__)
+      .get(`/visits/${visitId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(detail.body.opportunity).toBeDefined();
+    expect(detail.body.opportunity).not.toBeNull();
+    expect(detail.body.opportunity.id).toBe("opp-1");
+    expect(detail.body.opportunity.title).toBe("Oportunidad Test");
   });
 
   it("filters visits by status", async () => {

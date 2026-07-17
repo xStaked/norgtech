@@ -30,8 +30,9 @@ type PublicUser = Prisma.UserGetPayload<{ select: typeof publicUserSelect }>;
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async findAll(): Promise<PublicUser[]> {
+  async findAll(includeInactive = false): Promise<PublicUser[]> {
     return this.prisma.user.findMany({
+      where: includeInactive ? undefined : { active: true },
       orderBy: { name: "asc" },
       select: publicUserSelect,
     });

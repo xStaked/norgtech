@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Query,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
@@ -12,8 +13,11 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { CreateProductDto } from "./dto/create-product.dto";
 import { ProductsService } from "./products.service";
+
+const listQueryPipe = new ValidationPipe({ transform: true, whitelist: true });
 
 @Controller("products")
 export class ProductsController {
@@ -38,8 +42,8 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "comercial", "facturacion")
   @Get()
-  findAll() {
-    return this.productsService.findAll();
+  findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
+    return this.productsService.findAll(query.includeInactive);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

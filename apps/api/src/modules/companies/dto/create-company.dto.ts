@@ -17,6 +17,6 @@ export class CreateCompanyDto {
   @IsString()
   @MinLength(2)
   @MaxLength(4)
-  @Matches(/^[A-Z]+$/, { message: "prefix must be uppercase letters only" })
+  @Matches(/^[A-Z]+$/, { message: "El prefijo solo puede contener letras mayusculas" })
   prefix!: string;
 }

@@ -3,7 +3,7 @@
 import { Fragment, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
-import { type UserRole, USER_ROLES } from "@/lib/auth";
+import { type UserRole, USER_ROLES, ROLE_LABELS } from "@/lib/auth";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -461,7 +461,7 @@ export function UserManagementClient({
                   >
                     {USER_ROLES.map((roleOption) => (
                       <option key={roleOption} value={roleOption}>
-                        {roleOption}
+                        {ROLE_LABELS[roleOption] ?? roleOption}
                       </option>
                     ))}
                   </select>
@@ -576,7 +576,7 @@ export function UserManagementClient({
                           >
                             {USER_ROLES.map((roleOption) => (
                               <option key={roleOption} value={roleOption}>
-                                {roleOption}
+                                {ROLE_LABELS[roleOption] ?? roleOption}
                               </option>
                             ))}
                           </select>

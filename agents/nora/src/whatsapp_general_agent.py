@@ -6,6 +6,7 @@ whatsapp_agent.py but with every CRM tool instead of only the expense tools.
 NestJS passes the full conversation history on every turn (no checkpointer).
 """
 from datetime import date
+from .visit_parsing import resolve_visit_datetime
 from typing import Annotated, TypedDict
 
 import json
@@ -35,9 +36,31 @@ NEW_CUSTOMER_CASE_PROMPT = (
     "contenga conversaciones anteriores. Para crear el cliente necesitas nombre "
     "o razón social; usa el mismo valor como display_name si no hay nombre "
     "comercial distinto. NIT, ciudad y teléfono son datos deseables: si faltan, "
-    "pregúntalos de forma breve. Cuando ya estén nombre, NIT, ciudad y teléfono, "
-    "llama create_customer directamente (el segmento se asigna solo, no pases "
-    "segment_id) y confirma el resultado."
+    "pregúntalos de forma breve. Pregunta también, de forma breve, por el correo, "
+    "la dirección, el departamento y las notas del cliente, PERO estos cuatro son "
+    "OPCIONALES: si el usuario dice que no los tiene o no los da, NO bloquees la "
+    "creación; crea el cliente igual con lo que tengas. Cuando ya tengas al menos "
+    "nombre, NIT, ciudad y teléfono, llama create_customer directamente (el "
+    "segmento se asigna solo, no pases segment_id; pasa email, address, department "
+    "y notes solo si los tienes) y confirma el resultado."
+)
+
+CUSTOMER_EDIT_PROMPT = (
+    "\n\n## Consultar y editar clientes por WhatsApp\n"
+    "Puedes consultar y actualizar los datos de un cliente existente con "
+    "update_customer, incluyendo teléfono (phone), NIT (tax_id), correo (email), "
+    "dirección (address), ciudad (city) y departamento (department). Si el "
+    "comercial pide ver o cambiar el teléfono (u otro dato) de un cliente, hazlo: "
+    "búscalo primero con search_customers para obtener su customer_id y luego "
+    "llama update_customer solo con el campo que cambia. Nunca digas que no puedes "
+    "ver o modificar el teléfono de un cliente."
+)
+
+VISIT_EDIT_FIELD_PROMPT = (
+    "\n\n## Editar una visita: descripción = summary\n"
+    "Cuando el usuario edite una visita y hable de su 'descripción' o 'detalle', "
+    "eso corresponde al campo summary (resumen) de update_visit: pásalo en summary "
+    "para que el cambio quede guardado."
 )
 
 VISIT_FLOW_PROMPT = (
@@ -52,6 +75,18 @@ VISIT_FLOW_PROMPT = (
     "Si ya tienes cliente, fecha/hora y resumen, crea la visita; no vuelvas a "
     "pedir confirmación. Una solicitud de visita no es un gasto y no debe "
     "activar el flujo de gastos."
+)
+
+VISIT_DELETE_PROMPT = (
+    "\n\n## Eliminar una visita (operación destructiva)\n"
+    "Eliminar una visita borra un registro y no se puede deshacer. NUNCA "
+    "infieras cuál visita eliminar a partir de una descripción o texto "
+    "mencionado en un mensaje anterior. Para eliminar: (1) identifica el "
+    "cliente (búscalo con search_customers si hace falta), (2) llama "
+    "get_customer_visits para listar sus visitas, (3) muéstralas y pide que "
+    "confirmen CUÁL por fecha, y (4) solo entonces llama delete_visit con ese "
+    "id. Si no hay una visita claramente identificada y confirmada, pregunta; "
+    "no borres nada."
 )
 
 
@@ -142,6 +177,12 @@ def _detected_new_customer_fields(request: WhatsAppAgentRequest) -> dict:
         ):
             city = candidate
 
+    # Optional (prompt-but-optional) fields, labeled forms only (AI-05).
+    email = _field_value(combined, ("correo", "email", "e-mail", "e mail"))
+    address = _field_value(combined, ("direccion", "dirección"))
+    department = _field_value(combined, ("departamento",))
+    notes = _field_value(combined, ("notas", "nota", "observaciones", "observacion", "observación"))
+
     if name:
         fields["legalName"] = name
         fields["displayName"] = name
@@ -151,6 +192,14 @@ def _detected_new_customer_fields(request: WhatsAppAgentRequest) -> dict:
         fields["city"] = city
     if phone:
         fields["phone"] = phone
+    if email:
+        fields["email"] = email
+    if address:
+        fields["address"] = address
+    if department:
+        fields["department"] = department
+    if notes:
+        fields["notes"] = notes
     return fields
 
 
@@ -197,43 +246,10 @@ def _latest_customer_ref(text: str) -> str | None:
 
 
 def _latest_visit_datetime(text: str) -> str | None:
-    month_names = {
-        "enero": 1,
-        "febrero": 2,
-        "marzo": 3,
-        "abril": 4,
-        "mayo": 5,
-        "junio": 6,
-        "julio": 7,
-        "agosto": 8,
-        "septiembre": 9,
-        "setiembre": 9,
-        "octubre": 10,
-        "noviembre": 11,
-        "diciembre": 12,
-    }
-    pattern = (
-        r"\b(?:el\s+)?(?P<day>\d{1,2})\s+de\s+"
-        r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
-        r"septiembre|setiembre|octubre|noviembre|diciembre)"
-        r"(?:\s+(?:de\s+)?(?P<year>\d{4}))?"
-        r"(?:\s+a\s+las\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?P<ampm>am|pm|a\.m\.|p\.m\.)?)?"
-    )
-    matches = list(re.finditer(pattern, text, flags=re.IGNORECASE))
-    if not matches:
-        return None
-    match = matches[-1]
-    day = int(match.group("day"))
-    month = month_names[match.group("month").lower()]
-    year = int(match.group("year") or date.today().year)
-    hour = int(match.group("hour") or 9)
-    minute = int(match.group("minute") or 0)
-    ampm = (match.group("ampm") or "").lower().replace(".", "")
-    if ampm == "pm" and hour < 12:
-        hour += 12
-    if ampm == "am" and hour == 12:
-        hour = 0
-    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:00"
+    # AI-07: parser compartido (src/visit_parsing.py) — misma regla que el
+    # planner. Entiende fechas absolutas y relativas (hoy/manana/dia-de-semana)
+    # + horas sueltas, en hora de Colombia.
+    return resolve_visit_datetime(text)
 
 
 def _latest_visit_summary(text: str) -> str | None:
@@ -282,7 +298,14 @@ def _field_value(text: str, labels: tuple[str, ...]) -> str | None:
 
 def _to_messages(request: WhatsAppAgentRequest) -> list:
     """System prompt (+WhatsApp addendum) + history + current message (no dup)."""
-    system_prompt = NORA_SYSTEM_PROMPT + WHATSAPP_ADDENDUM + VISIT_FLOW_PROMPT
+    system_prompt = (
+        NORA_SYSTEM_PROMPT
+        + WHATSAPP_ADDENDUM
+        + VISIT_FLOW_PROMPT
+        + VISIT_DELETE_PROMPT
+        + CUSTOMER_EDIT_PROMPT
+        + VISIT_EDIT_FIELD_PROMPT
+    )
     if request.open_case and request.open_case.type == "new_customer":
         system_prompt += NEW_CUSTOMER_CASE_PROMPT
 

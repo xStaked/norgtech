@@ -68,13 +68,6 @@ export class FollowUpTasksController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
-  @Post("mark-overdue")
-  markOverdue() {
-    return this.followUpTasksService.markOverdue();
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.followUpTasksService.findOne(id);

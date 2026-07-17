@@ -31,7 +31,7 @@ export default async function UsersPage() {
   let response: Response;
 
   try {
-    response = await apiFetch("/users");
+    response = await apiFetch("/users?includeInactive=true");
   } catch {
     return <UsersPageErrorState />;
   }

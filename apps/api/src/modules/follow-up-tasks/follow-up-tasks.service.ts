@@ -5,7 +5,14 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { FollowUpTaskStatus, FollowUpTaskType, Prisma } from "@prisma/client";
+import { parseInstant } from "../../shared/instant";
 import { PrismaService } from "../../prisma/prisma.service";
+import {
+  dayRangeInZone,
+  followUpTaskOverdueWhere,
+  isFollowUpTaskOverdue,
+  weekRangeInZone,
+} from "../../shared/overdue";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateFollowUpTaskDto } from "./dto/create-follow-up-task.dto";
@@ -172,21 +179,9 @@ export class FollowUpTasksService {
     });
   }
 
-  async markOverdue() {
+  async findWithFilters(filters: FollowUpTaskFilters) {
     const now = new Date();
-    return this.prisma.followUpTask.updateMany({
-      where: {
-        dueAt: { lt: now },
-        status: FollowUpTaskStatus.pendiente,
-      },
-      data: {
-        status: FollowUpTaskStatus.vencida,
-      },
-    });
-  }
-
-  findWithFilters(filters: FollowUpTaskFilters) {
-    const where: Record<string, unknown> = {};
+    const where: Prisma.FollowUpTaskWhereInput = {};
 
     if (filters.status) {
       where.status = filters.status;
@@ -197,50 +192,56 @@ export class FollowUpTasksService {
     }
 
     if (filters.dueToday) {
-      const now = new Date();
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      const { start, end } = dayRangeInZone(now);
       where.dueAt = { gte: start, lte: end };
     }
 
     if (filters.overdue) {
-      const now = new Date();
-      where.dueAt = { lt: now };
-      where.status = FollowUpTaskStatus.pendiente;
+      Object.assign(where, followUpTaskOverdueWhere(now));
     }
 
     if (filters.thisWeek) {
-      const now = new Date();
-      const day = now.getDay();
-      const diffToMonday = day === 0 ? -6 : 1 - day;
-      const start = new Date(now);
-      start.setDate(now.getDate() + diffToMonday);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(start);
-      end.setDate(start.getDate() + 6);
-      end.setHours(23, 59, 59, 999);
+      const { start, end } = weekRangeInZone(now);
       where.dueAt = { gte: start, lte: end };
     }
 
-    return this.prisma.followUpTask.findMany({
+    const tasks = await this.prisma.followUpTask.findMany({
       where,
       include: { customer: true },
       orderBy: { dueAt: "asc" },
     });
+
+    return tasks.map((task) => this.withDerivedState(task, now));
   }
 
-  findAll() {
-    return this.prisma.followUpTask.findMany({
+  async findAll() {
+    const now = new Date();
+    const tasks = await this.prisma.followUpTask.findMany({
       include: { customer: true },
       orderBy: { dueAt: "asc" },
     });
+
+    return tasks.map((task) => this.withDerivedState(task, now));
   }
 
-  findOne(id: string) {
-    return this.prisma.followUpTask.findUnique({
+  async findOne(id: string) {
+    const task = await this.prisma.followUpTask.findUnique({
       where: { id },
       include: { customer: true },
     });
+
+    return task ? this.withDerivedState(task, new Date()) : task;
+  }
+
+  /**
+   * Expone el estado derivado para que el front pinte la insignia sin
+   * reimplementar la regla (y sin fiarse de la columna `status`).
+   */
+  private withDerivedState<T extends { status: FollowUpTaskStatus; dueAt: Date }>(
+    task: T,
+    now: Date,
+  ) {
+    return { ...task, isOverdue: isFollowUpTaskOverdue(task, now) };
   }
 
   private async assertCustomerExists(customerId: string) {
@@ -295,9 +296,14 @@ export class FollowUpTasksService {
         opportunityId: dto.opportunityId,
         type: dto.type,
         title: dto.title,
-        dueAt: new Date(dto.dueAt),
+        dueAt: parseInstant(dto.dueAt),
         notes: dto.notes,
-        assignedToUserId: dto.assignedToUserId,
+        // DASH-03: `assignedToUserId` es nullable y NINGUN formulario del web lo
+        // envia, asi que toda tarea creada desde la UI quedaba con NULL y no
+        // aparecia en la cola de nadie ("Mi cola de trabajo" filtra por
+        // assignedToUserId = user.id). Solo createFromNora lo pasaba explicito.
+        // El creador es el dueño por defecto; un assignedToUserId explicito manda.
+        assignedToUserId: dto.assignedToUserId ?? user.id,
         createdBy: user.id,
         updatedBy: user.id,
       },

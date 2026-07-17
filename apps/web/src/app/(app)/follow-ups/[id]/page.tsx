@@ -9,6 +9,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { dateTimeFormatter } from "@/lib/datetime";
 
 interface Customer {
   id: string;
@@ -29,6 +30,8 @@ interface FollowUpTask {
   dueAt: string;
   notes: string | null;
   status: string;
+  /** Derivado por el API con la regla compartida. El front no lo recalcula. */
+  isOverdue: boolean;
   createdAt: string;
 }
 
@@ -53,10 +56,6 @@ const typeLabels: Record<string, string> = {
   otro: "Otro",
 };
 
-const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
-  dateStyle: "medium",
-  timeStyle: "short",
-});
 
 const linkStyle = {
   color: "#0c2c44",
@@ -78,6 +77,11 @@ export default async function FollowUpDetailPage({
 
   const task: FollowUpTask = await response.json();
   const dueAt = dateTimeFormatter.format(new Date(task.dueAt));
+  // "Vencida" es estado derivado; la columna solo guarda decisiones humanas.
+  const statusLabel = task.isOverdue ? "Vencida" : statusLabels[task.status] ?? task.status;
+  const statusTone: CrmStatusTone = task.isOverdue
+    ? "danger"
+    : statusTones[task.status] ?? "neutral";
   const createdAt = dateTimeFormatter.format(new Date(task.createdAt));
 
   return (
@@ -88,8 +92,8 @@ export default async function FollowUpDetailPage({
         description="Detalle de la tarea, su canal de seguimiento y el contexto comercial asociado para decidir la siguiente accion."
         actions={
           <>
-            <StatusBadge tone={statusTones[task.status] ?? "neutral"}>
-              {statusLabels[task.status] ?? task.status}
+            <StatusBadge tone={statusTone}>
+              {statusLabel}
             </StatusBadge>
             <ButtonLink href="/follow-ups" variant="ghost" size="sm">
               Volver a seguimientos
@@ -105,7 +109,7 @@ export default async function FollowUpDetailPage({
           gap: 12,
         }}
       >
-        <InlineMetric label="Vence" value={dueAt} tone={statusTones[task.status] ?? "info"} />
+        <InlineMetric label="Vence" value={dueAt} tone={statusTone} />
         <InlineMetric label="Canal" value={typeLabels[task.type] ?? task.type} />
         <InlineMetric label="Registro" value={`#${task.id.slice(-6)}`} />
       </div>
@@ -144,7 +148,7 @@ export default async function FollowUpDetailPage({
           },
           {
             label: "Estado",
-            value: statusLabels[task.status] ?? task.status,
+            value: statusLabel,
           },
           {
             label: "Creada",

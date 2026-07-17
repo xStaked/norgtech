@@ -42,7 +42,7 @@ const columns: readonly DataTableColumn<Zone>[] = [
 ] as const;
 
 export default async function ZonesPage() {
-  const response = await apiFetch("/zones");
+  const response = await apiFetch("/zones?includeInactive=true");
   const zones: Zone[] = response.ok ? await response.json() : [];
 
   return (

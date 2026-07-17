@@ -3900,7 +3900,17 @@ describe("WhatsApp inbox", () => {
             item.type === "new_customer",
         );
         expect(childCase).toBeDefined();
-        expect(childCase?.missingFields).toEqual(["displayName", "taxId", "city", "phone"]);
+        // AI-05: required fields first, then the optional prompt-but-don't-block set.
+        expect(childCase?.missingFields).toEqual([
+          "displayName",
+          "taxId",
+          "city",
+          "phone",
+          "email",
+          "address",
+          "department",
+          "notes",
+        ]);
       } finally {
         const removeMatching = (
           collection: Array<Record<string, unknown>>,
@@ -4146,8 +4156,18 @@ describe("WhatsApp inbox", () => {
             return body.conversation_id === conversation.id;
           });
 
-        expect(forThisConversation("/whatsapp/agent/general")).toBeDefined();
+        const generalCall = forThisConversation("/whatsapp/agent/general");
+        expect(generalCall).toBeDefined();
         expect(forThisConversation("/whatsapp/route")).toBeUndefined();
+
+        // AI-09/AI-10: un borrado de visita NO debe arrastrar el historial. Con
+        // el historial completo, una descripcion de un turno anterior se colaba
+        // y delete_visit borraba la visita equivocada. Se manda history vacio
+        // para que el agente vuelva a listar y confirme cual.
+        const generalBody = JSON.parse(
+          String((generalCall as [string, { body?: string }])[1]?.body ?? "{}"),
+        ) as { history?: unknown[] };
+        expect(generalBody.history).toEqual([]);
       } finally {
         if (prev === undefined) {
           delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
@@ -4274,6 +4294,212 @@ describe("WhatsApp inbox", () => {
         removeMatching(accounts, (item) => item.id === "account-edit-escape");
         removeMatching(messages, (item) => item.conversationId === "conversation-edit-escape");
         removeMatching(noraCases, (item) => item.conversationId === "conversation-edit-escape");
+      }
+    });
+
+    it("routes an opportunity stage-change message to the general agent (AI-02)", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+
+      const account = {
+        id: "account-opp-stage",
+        phoneNumberId: "phone-number-opp-stage",
+        phoneNumber: "phone-number-opp-stage",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-opp-stage",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-07-01T10:00:00.000Z"),
+        lastMessageText: "mueve la oportunidad de Ferretería a ganada",
+        createdAt: new Date("2026-07-01T09:59:00.000Z"),
+        updatedAt: new Date("2026-07-01T10:00:00.000Z"),
+      };
+      // An unrelated open case means routing depends on isEntityEditMessage
+      // recognising the opportunity/stage intent (mutation guard for AI-02).
+      const openCase = {
+        id: "case-opp-stage-open",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "expense",
+        status: "collecting_info",
+        extractedData: { amount: 5000 },
+        missingFields: [],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "¿Cuál es el valor del gasto?",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-07-01T09:58:00.000Z"),
+        updatedAt: new Date("2026-07-01T09:58:30.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(openCase);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ reply_text: "Listo, moví la oportunidad a ganada.", case_update: null, executed_entity: null }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-opp-stage",
+              message: {
+                id: "kapso-opp-stage-msg",
+                from: "+573004445566",
+                text: { body: "cambia la etapa de la oportunidad de Ferretería a ganada" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) return false;
+            const body = JSON.parse(String(options?.body ?? "{}")) as { conversation_id?: string };
+            return body.conversation_id === conversation.id;
+          });
+
+        expect(forThisConversation("/whatsapp/agent/general")).toBeDefined();
+        expect(forThisConversation("/whatsapp/route")).toBeUndefined();
+      } finally {
+        if (prev === undefined) delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        else process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-opp-stage");
+        removeMatching(accounts, (item) => item.id === "account-opp-stage");
+        removeMatching(messages, (item) => item.conversationId === "conversation-opp-stage");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-opp-stage");
+      }
+    });
+
+    it("routes a customer field edit without the word 'cliente' to the general agent (AI-03/04)", async () => {
+      const prev = process.env.NORA_WHATSAPP_GENERAL_AGENT;
+      process.env.NORA_WHATSAPP_GENERAL_AGENT = "true";
+
+      const account = {
+        id: "account-nit-edit",
+        phoneNumberId: "phone-number-nit-edit",
+        phoneNumber: "phone-number-nit-edit",
+        displayName: "WhatsApp",
+        active: true,
+      };
+      const conversation = {
+        id: "conversation-nit-edit",
+        accountId: account.id,
+        waId: "+573004445566",
+        phone: "+573004445566",
+        senderName: "Sales",
+        senderType: WhatsAppSenderType.comercial,
+        status: WhatsAppConversationStatus.nuevo,
+        assignedToUserId: "sales-user-id",
+        customerId: null,
+        contactId: null,
+        lastMessageAt: new Date("2026-07-01T11:00:00.000Z"),
+        lastMessageText: "cambia el NIT de Ferretería a 900123456-7",
+        createdAt: new Date("2026-07-01T10:59:00.000Z"),
+        updatedAt: new Date("2026-07-01T11:00:00.000Z"),
+      };
+      // Unrelated open case: routing depends on isEntityEditMessage recognising
+      // the customer-field intent without the literal "cliente" (AI-03/04 guard).
+      const openCase = {
+        id: "case-nit-edit-open",
+        conversationId: conversation.id,
+        parentCaseId: null,
+        type: "expense",
+        status: "collecting_info",
+        extractedData: { amount: 5000 },
+        missingFields: [],
+        attachments: [],
+        proposal: null,
+        lastQuestion: "¿Cuál es el valor del gasto?",
+        riskLevel: "medium",
+        createdByUserId: "sales-user-id",
+        approvedByUserId: null,
+        executedEntityType: null,
+        executedEntityId: null,
+        createdAt: new Date("2026-07-01T10:58:00.000Z"),
+        updatedAt: new Date("2026-07-01T10:58:30.000Z"),
+      };
+      accounts.push(account);
+      conversations.push(conversation as unknown as (typeof conversations)[number]);
+      noraCases.unshift(openCase);
+
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ reply_text: "Listo, actualicé el NIT.", case_update: null, executed_entity: null }),
+        });
+
+        await request(app.getHttpServer())
+          .post("/whatsapp/webhooks/kapso")
+          .send({
+            type: "whatsapp.message.received",
+            data: {
+              phone_number_id: "phone-number-nit-edit",
+              message: {
+                id: "kapso-nit-edit-msg",
+                from: "+573004445566",
+                text: { body: "cambia el NIT de Ferretería a 900123456-7" },
+                profile: { name: "Sales" },
+              },
+            },
+          })
+          .expect(201);
+
+        const forThisConversation = (urlSuffix: string) =>
+          (globalThis.fetch as jest.Mock).mock.calls.find(([callUrl, options]) => {
+            if (!String(callUrl).endsWith(urlSuffix)) return false;
+            const body = JSON.parse(String(options?.body ?? "{}")) as { conversation_id?: string };
+            return body.conversation_id === conversation.id;
+          });
+
+        expect(forThisConversation("/whatsapp/agent/general")).toBeDefined();
+        expect(forThisConversation("/whatsapp/route")).toBeUndefined();
+      } finally {
+        if (prev === undefined) delete process.env.NORA_WHATSAPP_GENERAL_AGENT;
+        else process.env.NORA_WHATSAPP_GENERAL_AGENT = prev;
+        const removeMatching = (
+          collection: Array<Record<string, unknown>>,
+          predicate: (item: Record<string, unknown>) => boolean,
+        ) => {
+          let index = collection.findIndex(predicate);
+          while (index !== -1) {
+            collection.splice(index, 1);
+            index = collection.findIndex(predicate);
+          }
+        };
+        removeMatching(conversations, (item) => item.id === "conversation-nit-edit");
+        removeMatching(accounts, (item) => item.id === "account-nit-edit");
+        removeMatching(messages, (item) => item.conversationId === "conversation-nit-edit");
+        removeMatching(noraCases, (item) => item.conversationId === "conversation-nit-edit");
       }
     });
 

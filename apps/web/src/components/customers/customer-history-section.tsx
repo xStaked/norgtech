@@ -6,6 +6,16 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
+import {
+  OPPORTUNITY_STAGE_LABELS,
+  VISIT_STATUS_LABELS,
+  FOLLOW_UP_TASK_TYPE_LABELS,
+  FOLLOW_UP_TASK_STATUS_LABELS,
+  QUOTE_STATUS_LABELS,
+  ORDER_STATUS_LABELS,
+  BILLING_REQUEST_STATUS_LABELS,
+  BILLING_SOURCE_TYPE_LABELS,
+} from "@/lib/labels";
 
 interface Opportunity {
   id: string;
@@ -198,7 +208,11 @@ const opportunityColumns: readonly DataTableColumn<Opportunity>[] = [
   {
     key: "stage",
     header: "Etapa",
-    render: (row) => <StatusBadge tone={mapStageTone(row.stage)}>{row.stage}</StatusBadge>,
+    render: (row) => (
+      <StatusBadge tone={mapStageTone(row.stage)}>
+        {OPPORTUNITY_STAGE_LABELS[row.stage] ?? row.stage}
+      </StatusBadge>
+    ),
   },
   {
     key: "estimatedValue",
@@ -223,7 +237,11 @@ const visitColumns: readonly DataTableColumn<Visit>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (row) => <StatusBadge tone={mapVisitTone(row.status)}>{row.status}</StatusBadge>,
+    render: (row) => (
+      <StatusBadge tone={mapVisitTone(row.status)}>
+        {VISIT_STATUS_LABELS[row.status] ?? row.status}
+      </StatusBadge>
+    ),
   },
   { key: "summary", header: "Resumen", render: (row) => row.summary ?? "—" },
 ] as const;
@@ -233,12 +251,16 @@ const followUpTaskColumns: readonly DataTableColumn<FollowUpTask>[] = [
   {
     key: "type",
     header: "Tipo",
-    render: (row) => row.type,
+    render: (row) => FOLLOW_UP_TASK_TYPE_LABELS[row.type] ?? row.type,
   },
   {
     key: "status",
     header: "Estado",
-    render: (row) => <StatusBadge tone={mapTaskTone(row.status)}>{row.status}</StatusBadge>,
+    render: (row) => (
+      <StatusBadge tone={mapTaskTone(row.status)}>
+        {FOLLOW_UP_TASK_STATUS_LABELS[row.status] ?? row.status}
+      </StatusBadge>
+    ),
   },
   {
     key: "dueAt",
@@ -257,7 +279,11 @@ const quoteColumns: readonly DataTableColumn<Quote>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (row) => <StatusBadge tone={mapQuoteTone(row.status)}>{row.status}</StatusBadge>,
+    render: (row) => (
+      <StatusBadge tone={mapQuoteTone(row.status)}>
+        {QUOTE_STATUS_LABELS[row.status] ?? row.status}
+      </StatusBadge>
+    ),
   },
   {
     key: "total",
@@ -282,7 +308,11 @@ const orderColumns: readonly DataTableColumn<Order>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (row) => <StatusBadge tone={mapOrderTone(row.status)}>{row.status}</StatusBadge>,
+    render: (row) => (
+      <StatusBadge tone={mapOrderTone(row.status)}>
+        {ORDER_STATUS_LABELS[row.status] ?? row.status}
+      </StatusBadge>
+    ),
   },
   {
     key: "total",
@@ -307,12 +337,16 @@ const billingRequestColumns: readonly DataTableColumn<BillingRequest>[] = [
   {
     key: "status",
     header: "Estado",
-    render: (row) => <StatusBadge tone={mapBillingTone(row.status)}>{row.status}</StatusBadge>,
+    render: (row) => (
+      <StatusBadge tone={mapBillingTone(row.status)}>
+        {BILLING_REQUEST_STATUS_LABELS[row.status] ?? row.status}
+      </StatusBadge>
+    ),
   },
   {
     key: "sourceType",
     header: "Origen",
-    render: (row) => row.sourceType,
+    render: (row) => BILLING_SOURCE_TYPE_LABELS[row.sourceType] ?? row.sourceType,
   },
   {
     key: "createdAt",

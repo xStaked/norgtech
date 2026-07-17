@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
@@ -14,6 +15,7 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { AssignZoneDto } from "./dto/assign-zone.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
@@ -50,8 +52,10 @@ export class CustomersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get()
-  findAll() {
-    return this.customersService.findAll();
+  findAll(
+    @Query(new ValidationPipe({ transform: true, whitelist: true })) query: IncludeInactiveQueryDto,
+  ) {
+    return this.customersService.findAll(query.includeInactive);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

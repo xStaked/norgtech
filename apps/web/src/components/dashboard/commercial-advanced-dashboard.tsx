@@ -1,5 +1,6 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { AlertCircle, MapPinned, Package, Repeat, Trophy, Users } from "lucide-react";
+import { formatPercent } from "@/lib/labels";
 import type { ReactNode } from "react";
 
 type Money = number;
@@ -161,7 +162,7 @@ export function CommercialAdvancedDashboard({ summary }: CommercialAdvancedDashb
           {summary.repurchase && (
             <Metric
               label="Recompra"
-              value={`${formatNumber(summary.repurchase.repurchaseRate)}%`}
+              value={formatPercent(summary.repurchase.repurchaseRate)}
             />
           )}
         </div>
@@ -275,7 +276,7 @@ export function CommercialAdvancedDashboard({ summary }: CommercialAdvancedDashb
               <div className="rounded-lg border border-border/60 bg-background/40 p-3">
                 <div className="text-xs font-medium uppercase text-muted-foreground">Tasa recompra</div>
                 <div className="mt-1 text-lg font-semibold">
-                  {formatNumber(summary.repurchase.repurchaseRate)}%
+                  {formatPercent(summary.repurchase.repurchaseRate)}
                 </div>
               </div>
               <div className="rounded-lg border border-border/60 bg-background/40 p-3">
