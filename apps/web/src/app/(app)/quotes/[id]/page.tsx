@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { QuoteBillingButton } from "@/components/quotes/quote-billing-button";
+import { QuoteStatusControl } from "@/components/quotes/quote-status-control";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { DetailSection } from "@/components/ui/detail-section";
@@ -271,11 +272,10 @@ export default async function QuoteDetailPage({
           </strong>
         </div>
 
-        {quote.status === "cerrada" ? (
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <QuoteBillingButton quoteId={quote.id} />
-          </div>
-        ) : null}
+        <div style={{ display: "grid", gap: 12, justifyItems: "end" }}>
+          <QuoteStatusControl quoteId={quote.id} currentStatus={quote.status} />
+          {quote.status === "cerrada" ? <QuoteBillingButton quoteId={quote.id} /> : null}
+        </div>
       </SectionCard>
     </div>
   );

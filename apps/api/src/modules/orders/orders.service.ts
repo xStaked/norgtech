@@ -411,6 +411,16 @@ export class OrdersService {
         throw new BadRequestException("Invalid order status transition");
       }
 
+      // ORD-07: marcar en_transito sin guia deja el pedido "despachado" sin
+      // rastro fisico. El numero de guia solo lo escribe updateLogistics, asi
+      // que se exige que YA este persistido antes de dejar salir la mercancia.
+      if (dto.status === OrderStatus.en_transito) {
+        const trackingNumber = order.trackingNumber?.trim();
+        if (!trackingNumber) {
+          throw new BadRequestException("No se puede marcar en transito sin numero de guia");
+        }
+      }
+
       // Avance manual a orden_facturacion = mismo momento de compromiso que
       // approveOrder(). El resto de transiciones no compromete cupo nuevo.
       if (dto.status === OrderStatus.orden_facturacion) {
@@ -526,8 +536,13 @@ export class OrdersService {
       throw new NotFoundException("Order not found");
     }
 
-    if (order.status !== "entregado" && order.status !== "facturado") {
-      throw new BadRequestException("Billing request only allowed when order status is entregado or facturado");
+    // BILL-04: la solicitud de facturacion se ABRE cuando el pedido esta en
+    // orden_facturacion; procesarla es lo que lo avanza a facturado. Antes la
+    // puerta exigia entregado/facturado, justo lo contrario del flujo deseado.
+    // orden_facturacion es el ancla de INVOICE_ALLOWED_ORDER_STATUSES: no se
+    // introduce una tercera lista divergente, se afila a ese unico estado.
+    if (order.status !== OrderStatus.orden_facturacion) {
+      throw new BadRequestException("La solicitud de facturacion solo se permite cuando el pedido esta en orden de facturacion");
     }
 
     return this.prisma.$transaction(async (tx) => {

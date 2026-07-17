@@ -23,6 +23,13 @@ describe("BillingRequests", () => {
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
   const billingRequests: Array<Record<string, unknown>> = [];
   const auditLogs: Array<Record<string, unknown>> = [];
+  // BILL-04: el pedido origen debe modelar su transicion orden_facturacion ->
+  // facturado; un stub que ignore `status` haria vacua la prueba del avance.
+  const orders: Array<Record<string, any>> = [
+    { id: "order-1", customerId: "customer-1", opportunityId: null, status: "entregado" },
+    { id: "order-of", customerId: "customer-1", opportunityId: null, status: "orden_facturacion" },
+    { id: "order-already-facturado", customerId: "customer-1", opportunityId: null, status: "facturado" },
+  ];
 
   beforeAll(async () => {
     const user = {
@@ -85,15 +92,8 @@ describe("BillingRequests", () => {
 
     const order = {
       findUnique: async ({ where: { id } }: { where: { id: string } }) => {
-        if (id === "order-1") {
-          return {
-            id: "order-1",
-            customerId: "customer-1",
-            opportunityId: null,
-            status: "entregado",
-          };
-        }
-        return null;
+        const found = orders.find((o) => o.id === id);
+        return found ? JSON.parse(JSON.stringify(found)) : null;
       },
     };
 
@@ -193,6 +193,18 @@ describe("BillingRequests", () => {
                 return JSON.parse(JSON.stringify(pendingBillingRequests[idx]));
               }
               return null;
+            },
+          },
+          order: {
+            findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+              const found = orders.find((o) => o.id === id);
+              return found ? JSON.parse(JSON.stringify(found)) : null;
+            },
+            update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, any> }) => {
+              const idx = orders.findIndex((o) => o.id === id);
+              if (idx === -1) return null;
+              orders[idx] = { ...orders[idx], ...data, updatedAt: new Date() };
+              return JSON.parse(JSON.stringify(orders[idx]));
             },
           },
           auditLog: {
@@ -296,6 +308,73 @@ describe("BillingRequests", () => {
       .expect(200);
 
     expect(response.body.status).toBe("procesada");
+  });
+
+  it("advances the linked source order to facturado when processed (BILL-04)", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/billing-requests")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        sourceOrderId: "order-of",
+      })
+      .expect(201);
+
+    expect(orders.find((o) => o.id === "order-of")?.status).toBe("orden_facturacion");
+
+    await request(globalThis.__APP__)
+      .patch(`/billing-requests/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "procesada" })
+      .expect(200);
+
+    // El pedido origen avanzo por el efecto lateral del procesamiento.
+    expect(orders.find((o) => o.id === "order-of")?.status).toBe("facturado");
+  });
+
+  it("is idempotent when the source order is already facturado (BILL-04)", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/billing-requests")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        sourceOrderId: "order-already-facturado",
+      })
+      .expect(201);
+
+    // Procesar no debe reventar aunque el pedido ya este facturado.
+    await request(globalThis.__APP__)
+      .patch(`/billing-requests/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "procesada" })
+      .expect(200);
+
+    expect(orders.find((o) => o.id === "order-already-facturado")?.status).toBe("facturado");
+  });
+
+  it("no revienta al procesar cuando el pedido origen ya paso de facturado (BILL-04)", async () => {
+    // order-1 esta en 'entregado' (mas adelante que facturado). Procesar la
+    // solicitud NO debe devolver 400 ni tocar el pedido: bloquear al back-office
+    // por donde quedo el pedido seria peor que no avanzar.
+    const createResponse = await request(globalThis.__APP__)
+      .post("/billing-requests")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        sourceOrderId: "order-1",
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .patch(`/billing-requests/${createResponse.body.id}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "procesada" })
+      .expect(200);
+
+    expect(orders.find((o) => o.id === "order-1")?.status).toBe("entregado");
   });
 
   it("allows facturacion to access billing requests", async () => {

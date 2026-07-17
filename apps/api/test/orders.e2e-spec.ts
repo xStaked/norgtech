@@ -1186,6 +1186,14 @@ describe("Orders", () => {
     expect(step3.body.status).toBe("despachado");
     expect(step3.body.dispatchDate).toBeTruthy();
 
+    // ORD-07: en_transito exige numero de guia persistido; se registra via
+    // logistics antes de despachar la mercancia.
+    await request(globalThis.__APP__)
+      .patch(`/orders/${orderId}/logistics`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ trackingNumber: "GUIA-STATUS-1" })
+      .expect(200);
+
     const step4 = await request(globalThis.__APP__)
       .patch(`/orders/${orderId}/status`)
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
@@ -1200,6 +1208,57 @@ describe("Orders", () => {
       .expect(200);
     expect(step5.body.status).toBe("entregado");
     expect(step5.body.deliveryDate).toBeTruthy();
+  });
+
+  it("rejects marking en_transito without a tracking number (ORD-07)", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    const orderId = createResponse.body.id;
+
+    for (const status of ["orden_facturacion", "facturado", "despachado"]) {
+      await request(globalThis.__APP__)
+        .patch(`/orders/${orderId}/status`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ status })
+        .expect(200);
+    }
+
+    // Sin numero de guia registrado: debe bloquearse.
+    const blocked = await request(globalThis.__APP__)
+      .patch(`/orders/${orderId}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "en_transito" })
+      .expect(400);
+    expect(blocked.body.message).toBe("No se puede marcar en transito sin numero de guia");
+
+    // El pedido sigue en despachado, no avanzo.
+    const after = await request(globalThis.__APP__)
+      .get(`/orders/${orderId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+    expect(after.body.status).toBe("despachado");
+
+    // Tras registrar la guia, la transicion procede.
+    await request(globalThis.__APP__)
+      .patch(`/orders/${orderId}/logistics`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ trackingNumber: "GUIA-ORD07" })
+      .expect(200);
+
+    const ok = await request(globalThis.__APP__)
+      .patch(`/orders/${orderId}/status`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ status: "en_transito" })
+      .expect(200);
+    expect(ok.body.status).toBe("en_transito");
   });
 
   it("rejects invalid status transitions", async () => {
@@ -1257,7 +1316,7 @@ describe("Orders", () => {
     expect(response.body.logisticsNotes).toBe("Entrega prioritaria");
   });
 
-  it("creates billing request from order when status is entregado", async () => {
+  it("creates billing request from order when status is orden_facturacion (BILL-04)", async () => {
     const createResponse = await request(globalThis.__APP__)
       .post("/orders")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
@@ -1270,34 +1329,11 @@ describe("Orders", () => {
 
     const orderId = createResponse.body.id;
 
+    // BILL-04: la solicitud se ABRE en orden_facturacion (no en entregado).
     await request(globalThis.__APP__)
       .patch(`/orders/${orderId}/status`)
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .send({ status: "orden_facturacion" })
-      .expect(200);
-
-    await request(globalThis.__APP__)
-      .patch(`/orders/${orderId}/status`)
-      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
-      .send({ status: "facturado" })
-      .expect(200);
-
-    await request(globalThis.__APP__)
-      .patch(`/orders/${orderId}/status`)
-      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
-      .send({ status: "despachado" })
-      .expect(200);
-
-    await request(globalThis.__APP__)
-      .patch(`/orders/${orderId}/status`)
-      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
-      .send({ status: "en_transito" })
-      .expect(200);
-
-    await request(globalThis.__APP__)
-      .patch(`/orders/${orderId}/status`)
-      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
-      .send({ status: "entregado" })
       .expect(200);
 
     const response = await request(globalThis.__APP__)
@@ -1307,6 +1343,24 @@ describe("Orders", () => {
 
     expect(response.body.sourceType).toBe("order");
     expect(response.body.sourceOrderId).toBe(orderId);
+  });
+
+  it("rejects a billing request from an order not yet in orden_facturacion (BILL-04)", async () => {
+    // Recien creado (recibido): aun no se puede abrir solicitud de facturacion.
+    const createResponse = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .post(`/orders/${createResponse.body.id}/billing-request`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(400);
   });
 
   it("exports an order using the customer XLSX format", async () => {
