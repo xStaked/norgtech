@@ -116,7 +116,9 @@ export class WhatsAppService {
 
   listConversations(user: AuthUser) {
     return this.prisma.whatsAppConversation.findMany({
-      where: isSupervisor(user.role) ? {} : { assignedToRole: user.role },
+      where: isSupervisor(user.role)
+        ? {}
+        : { OR: [{ assignedToRole: user.role }, { assignedToUserId: user.id }] },
       include: conversationSummaryInclude,
       orderBy: { updatedAt: "desc" },
     });
@@ -138,10 +140,11 @@ export class WhatsAppService {
 
   private assertCanAccess(
     user: AuthUser,
-    conversation: { assignedToRole: UserRole | null },
+    conversation: { assignedToRole: UserRole | null; assignedToUserId: string | null },
   ) {
     if (isSupervisor(user.role)) return;
     if (conversation.assignedToRole === user.role) return;
+    if (conversation.assignedToUserId === user.id) return;
     throw new ForbiddenException("No tenés acceso a esta conversación");
   }
 
@@ -179,7 +182,7 @@ export class WhatsAppService {
     return { count };
   }
 
-  async updateConversation(id: string, dto: UpdateConversationDto) {
+  async updateConversation(user: AuthUser, id: string, dto: UpdateConversationDto) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id },
     });
@@ -187,6 +190,8 @@ export class WhatsAppService {
     if (!conversation) {
       throw new NotFoundException("WhatsApp conversation not found");
     }
+
+    this.assertCanAccess(user, conversation);
 
     await this.assertReferencesExist(conversation, dto);
 
@@ -217,6 +222,8 @@ export class WhatsAppService {
       throw new NotFoundException("WhatsApp conversation not found");
     }
 
+    this.assertCanAccess(user, conversation);
+
     return this.prisma.whatsAppInternalNote.create({
       data: {
         conversationId,
@@ -227,6 +234,15 @@ export class WhatsAppService {
   }
 
   async sendMessage(user: AuthUser, conversationId: string, dto: SendWhatsAppMessageDto) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedToRole: true, assignedToUserId: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+    this.assertCanAccess(user, conversation);
+
     return this.createAndSendOutboundMessage(conversationId, dto.body, user.id);
   }
 
@@ -425,6 +441,8 @@ export class WhatsAppService {
       throw new NotFoundException("WhatsApp conversation not found");
     }
 
+    this.assertCanAccess(user, conversation);
+
     return this.ordersService.create(user, {
       ...dto,
       sourceConversationId: conversationId,
@@ -437,10 +455,28 @@ export class WhatsAppService {
     conversationId: string,
     dto: ProcessOrderAutomationDto,
   ) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedToRole: true, assignedToUserId: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+    this.assertCanAccess(user, conversation);
+
     return this.orderAutomation.process(user, conversationId, dto);
   }
 
   async createOrderFromCase(user: AuthUser, conversationId: string, caseId: string) {
+    const conversation = await this.prisma.whatsAppConversation.findUnique({
+      where: { id: conversationId },
+      select: { assignedToRole: true, assignedToUserId: true },
+    });
+    if (!conversation) {
+      throw new NotFoundException("WhatsApp conversation not found");
+    }
+    this.assertCanAccess(user, conversation);
+
     const noraCase = await this.prisma.noraConversationCase.findFirst({
       where: { id: caseId, conversationId },
     });

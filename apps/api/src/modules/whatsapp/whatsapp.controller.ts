@@ -70,6 +70,7 @@ export class WhatsAppController {
 
   @Patch("conversations/:id")
   updateConversation(
+    @CurrentUser() user: AuthUser,
     @Param("id") id: string,
     @Body(
       new ValidationPipe({
@@ -79,7 +80,7 @@ export class WhatsAppController {
     )
     dto: UpdateConversationDto,
   ) {
-    return this.whatsAppService.updateConversation(id, dto);
+    return this.whatsAppService.updateConversation(user, id, dto);
   }
 
   @Post("conversations/:id/notes")

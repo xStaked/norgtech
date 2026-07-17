@@ -369,6 +369,12 @@ export class NoraRoutingService {
               this.logger.warn(
                 `Customer handoff sin rol válido (${rol ?? "n/d"}) — no se asigna, Nora re-pregunta`,
               );
+              if (!agentResponse.reply_text) {
+                await this.whatsAppService.sendAgentReply(
+                  conversation.id,
+                  "¿Con qué área querés hablar: comercial, soporte técnico, facturación o entregas?",
+                );
+              }
             }
           }
 

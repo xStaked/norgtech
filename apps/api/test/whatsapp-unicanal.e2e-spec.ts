@@ -24,7 +24,9 @@ describe("unicanal por rol — WhatsAppService", () => {
     const { service } = makeService({ findMany });
     await service.listConversations(agent as any);
     expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { assignedToRole: UserRole.tecnico } }),
+      expect.objectContaining({
+        where: { OR: [{ assignedToRole: UserRole.tecnico }, { assignedToUserId: "u-tec" }] },
+      }),
     );
   });
 
@@ -86,5 +88,51 @@ describe("unicanal por rol — WhatsAppService", () => {
         data: { assignedToUserId: "u-tec", status: "en_gestion" },
       }),
     );
+  });
+
+  it("sendMessage: agente de otro rol no puede escribir en la conversación", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: UserRole.facturacion, assignedToUserId: null,
+    });
+    const update = jest.fn();
+    const { service, prisma } = makeService({ findUnique, update });
+    (prisma as any).whatsAppMessage = { create: jest.fn(), update: jest.fn() };
+    await expect(
+      service.sendMessage(agent as any, "c1", { body: "hola" } as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+    expect((prisma as any).whatsAppMessage.create).not.toHaveBeenCalled();
+  });
+
+  it("updateConversation: agente de otro rol no puede actualizar la conversación", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: UserRole.facturacion, assignedToUserId: null,
+    });
+    const update = jest.fn();
+    const { service } = makeService({ findUnique, update });
+    await expect(
+      service.updateConversation(agent as any, "c1", {} as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("createNote: agente de otro rol no puede anotar la conversación", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: UserRole.facturacion, assignedToUserId: null,
+    });
+    const { service, prisma } = makeService({ findUnique });
+    (prisma as any).whatsAppInternalNote = { create: jest.fn() };
+    await expect(
+      service.createNote(agent as any, "c1", "nota"),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect((prisma as any).whatsAppInternalNote.create).not.toHaveBeenCalled();
+  });
+
+  it("dueño: agente con assignedToUserId propio accede aunque el rol no coincida", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: null, assignedToUserId: "u-tec",
+    });
+    const { service } = makeService({ findUnique });
+    await expect(service.getConversation(agent as any, "c1")).resolves.toBeTruthy();
   });
 });
