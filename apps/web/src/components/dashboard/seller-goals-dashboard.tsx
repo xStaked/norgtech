@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { cn } from "@/lib/utils";
+import { formatPercent } from "@/lib/labels";
 import { CalendarRange, Target, TrendingUp, WalletCards } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -53,16 +54,12 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const numberFormatter = new Intl.NumberFormat("es-CO", {
-  maximumFractionDigits: 1,
-});
-
 function formatCurrency(value: number) {
   return currencyFormatter.format(Math.round(value));
 }
 
 function formatPercentage(value: number) {
-  return `${numberFormatter.format(value)}%`;
+  return formatPercent(value);
 }
 
 const MONTH_NAMES = [

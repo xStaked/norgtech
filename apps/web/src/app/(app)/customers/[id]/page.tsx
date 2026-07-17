@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button-link";
+import { formatPercent } from "@/lib/labels";
 import { DataTable } from "@/components/ui/data-table";
 import { DetailSection } from "@/components/ui/detail-section";
 import { PageHeader } from "@/components/ui/page-header";
@@ -257,7 +258,7 @@ export default async function CustomerDetailPage({
             <span style={{ color: crmTheme.colors.textMuted }}>·</span>
             <span>Meta: {formatMillions(goalProgress.targetAmount)}</span>
             <span style={{ color: crmTheme.colors.textMuted }}>·</span>
-            <span>{goalProgress.percentage.toFixed(1)}% cumplido</span>
+            <span>{formatPercent(goalProgress.percentage)} cumplido</span>
             <span style={{ color: crmTheme.colors.textMuted }}>·</span>
             <span>{formatMillions(goalProgress.soldAmount)} vendidos</span>
           </div>

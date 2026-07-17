@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ExpenseForm } from "@/components/expenses/expense-form";
+import { formatPercent } from "@/lib/labels";
 import { ExpenseStatusAction } from "@/components/expenses/expense-status-action";
 import { ExpenseSupportLink } from "@/components/expenses/expense-support-link";
 import { ButtonLink } from "@/components/ui/button-link";
@@ -209,7 +210,7 @@ export default async function ExpenseDetailPage({
           {
             label: "IA",
             value: expense.extractionConfidence
-              ? `${Math.round(Number(expense.extractionConfidence) * 100)}% (${expense.extractionModel ?? "modelo no registrado"})`
+              ? `${formatPercent(Number(expense.extractionConfidence) * 100)} (${expense.extractionModel ?? "modelo no registrado"})`
               : "Sin lectura IA",
           },
           {

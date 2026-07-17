@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { apiFetchClient } from "@/lib/api.client";
+import { formatPercent } from "@/lib/labels";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -218,7 +219,7 @@ export function CustomerGoalsSection({
                   Progreso: {formatPeriodLabel(progress.periodType, progress.periodValue)}
                 </div>
                 <div className="text-sm font-semibold">
-                  {progress.percentage.toFixed(1)}%
+                  {formatPercent(progress.percentage)}
                 </div>
               </div>
               <ProgressBar percentage={progress.percentage} />
@@ -237,7 +238,7 @@ export function CustomerGoalsSection({
                 </div>
                 <div className="text-center">
                   <div className="text-xl font-bold">
-                    {progress.percentage.toFixed(1)}%
+                    {formatPercent(progress.percentage)}
                   </div>
                   <div className="text-xs text-muted-foreground">% Cumplido</div>
                 </div>
