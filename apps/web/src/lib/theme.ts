@@ -46,7 +46,7 @@ export const primaryNavItems = [
     shortLabel: "WA",
     description: "Inbox de conversaciones y pedidos asistidos",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
+    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
   },
   {
     href: "/visits",
