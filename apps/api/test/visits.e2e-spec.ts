@@ -51,16 +51,52 @@ describe("Visits", () => {
       },
     };
 
+    // OPP-03: la visita puede quedar vinculada a una oportunidad. El servicio
+    // valida su existencia con `this.prisma.opportunity.findUnique` fuera de la
+    // transaccion, asi que el stub necesita modelar `opportunity`.
+    const opportunity = {
+      findUnique: async ({ where }: { where: { id: string } }) => {
+        if (where.id === "opp-1") {
+          return { id: "opp-1", title: "Oportunidad Test" };
+        }
+        return null;
+      },
+    };
+
     const prismaStub = {
       user,
       refreshToken: refreshTokenStub(),
       customer,
+      opportunity,
       visit: {
         create: async () => {
           throw new Error("visit.create must run inside a transaction");
         },
-        findUnique: async ({ where }: { where: { id: string } }) => {
-          return visits.find((v) => v.id === where.id) ?? null;
+        findUnique: async ({
+          where,
+          include,
+        }: {
+          where: { id: string };
+          include?: { customer?: unknown; opportunity?: unknown };
+        }) => {
+          const found = visits.find((v) => v.id === where.id);
+          if (!found) {
+            return null;
+          }
+          const result: Record<string, unknown> = { ...found };
+          if (include?.customer) {
+            result.customer = { id: "customer-1", displayName: "Cliente Test" };
+          }
+          // OPP-03: el stub honra `include.opportunity` (antes ignoraba include
+          // y jamas devolvia la oportunidad). Sin esto el test seria vacuo: el
+          // detalle pintaria "Sin oportunidad" aunque el servicio la incluyera.
+          if (include?.opportunity && found.opportunityId) {
+            result.opportunity = {
+              id: found.opportunityId,
+              title: "Oportunidad Test",
+            };
+          }
+          return result;
         },
         findMany: async ({ where }: { where?: Record<string, unknown> }) => {
           let result = [...visits];
@@ -285,6 +321,33 @@ describe("Visits", () => {
     expect(new Date(response.body.scheduledAt).toISOString()).toBe(
       "2026-06-29T17:00:00.000Z",
     );
+  });
+
+  // OPP-03: el detalle leia `visit.opportunity`, pero findOne solo incluia
+  // `customer`, asi que una visita con oportunidad vinculada mostraba siempre
+  // "Sin oportunidad".
+  it("includes the linked opportunity when reading a visit (OPP-03)", async () => {
+    const created = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        opportunityId: "opp-1",
+        scheduledAt: "2026-05-06T10:00:00.000Z",
+      })
+      .expect(201);
+
+    const visitId = created.body.id;
+
+    const detail = await request(globalThis.__APP__)
+      .get(`/visits/${visitId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(detail.body.opportunity).toBeDefined();
+    expect(detail.body.opportunity).not.toBeNull();
+    expect(detail.body.opportunity.id).toBe("opp-1");
+    expect(detail.body.opportunity.title).toBe("Oportunidad Test");
   });
 
   it("filters visits by status", async () => {

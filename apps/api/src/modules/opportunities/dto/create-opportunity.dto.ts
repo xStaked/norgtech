@@ -28,4 +28,11 @@ export class CreateOpportunityDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   estimatedValue?: number;
+
+  // OPP-02: permite registrar el motivo cuando la oportunidad nace ya `perdida`
+  // (el form de creacion es el unico punto de la UI que fija `stage`). Opcional
+  // para no romper `createFromNora`, que solo pasa customerId/title/stage.
+  @IsOptional()
+  @IsString()
+  lostReason?: string;
 }

@@ -108,6 +108,7 @@ describe("Opportunities", () => {
                 stage: OpportunityStage;
                 estimatedValue?: number | string | null;
                 closedAt?: Date | null;
+                lostReason?: string | null;
                 createdBy: string;
                 updatedBy: string;
               };
@@ -124,6 +125,7 @@ describe("Opportunities", () => {
                 stage: OpportunityStage;
                 updatedBy: string;
                 closedAt?: Date | null;
+                lostReason?: string | null;
               };
             }) => Promise<{ count: number }>;
           };
@@ -152,7 +154,10 @@ describe("Opportunities", () => {
                 estimatedValue: data.estimatedValue ?? null,
                 expectedCloseDate: null,
                 assignedToUserId: null,
-                lostReason: null,
+                // OPP-02: el stub honra `data.lostReason` (antes lo fijaba a
+                // null). Si lo ignorara, un test podria pasar sin que el servicio
+                // escriba el motivo — un stub que traga claves desconocidas.
+                lostReason: data.lostReason ?? null,
                 // El stub honra `closedAt` en vez de fijarlo a null: si lo
                 // ignorara, un test de DASH-06 pasaria sin que el servicio
                 // escriba nada (stub que traga claves desconocidas).
@@ -215,6 +220,7 @@ describe("Opportunities", () => {
                 updatedBy: data.updatedBy,
                 updatedAt: new Date("2026-04-29T00:00:00.000Z"),
                 ...("closedAt" in data ? { closedAt: data.closedAt } : {}),
+                ...("lostReason" in data ? { lostReason: data.lostReason } : {}),
               };
 
               const pendingIndex = pendingOpportunities.findIndex(
@@ -408,6 +414,68 @@ describe("Opportunities", () => {
         .expect(201);
 
       expect(created.body.closedAt).toBeNull();
+    });
+  });
+
+  // OPP-02: `Opportunity.lostReason` existia pero nada lo escribia. Ahora se
+  // captura tanto al crear directamente como `perdida` como al transicionar.
+  describe("lostReason (OPP-02)", () => {
+    it("persists lostReason when transitioning into perdida", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Se pierde por precio",
+          stage: "prospecto",
+        })
+        .expect(201);
+
+      const lost = await request(globalThis.__APP__)
+        .patch(`/opportunities/${created.body.id}/stage`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ stage: "perdida", lostReason: "Precio no competitivo" })
+        .expect(200);
+
+      expect(lost.body.stage).toBe("perdida");
+      expect(lost.body.lostReason).toBe("Precio no competitivo");
+    });
+
+    it("persists lostReason when created directly as perdida", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Nace perdida con motivo",
+          stage: "perdida",
+          lostReason: "Cliente eligio competencia",
+        })
+        .expect(201);
+
+      expect(created.body.stage).toBe("perdida");
+      expect(created.body.lostReason).toBe("Cliente eligio competencia");
+    });
+
+    it("accepts stage updates without lostReason (Nora-safe / optional)", async () => {
+      const created = await request(globalThis.__APP__)
+        .post("/opportunities")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: globalThis.__CUSTOMER_ID__,
+          title: "Avanza sin motivo",
+          stage: "prospecto",
+        })
+        .expect(201);
+
+      const moved = await request(globalThis.__APP__)
+        .patch(`/opportunities/${created.body.id}/stage`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({ stage: "contacto" })
+        .expect(200);
+
+      expect(moved.body.stage).toBe("contacto");
+      expect(moved.body.lostReason).toBeNull();
     });
   });
 

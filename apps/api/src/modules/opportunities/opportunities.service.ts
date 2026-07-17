@@ -28,7 +28,9 @@ export class OpportunitiesService {
     opportunityId: string,
     dto: UpdateOpportunityStageDto,
   ) {
-    return this.prisma.$transaction((tx) => this.updateStageRecord(user, opportunityId, dto.stage, tx));
+    return this.prisma.$transaction((tx) =>
+      this.updateStageRecord(user, opportunityId, dto.stage, tx, dto.lostReason),
+    );
   }
 
   createFromNora(
@@ -89,7 +91,10 @@ export class OpportunitiesService {
 
   private async createRecord(
     user: AuthUser,
-    dto: Pick<CreateOpportunityDto, "customerId" | "title" | "stage" | "estimatedValue">,
+    dto: Pick<
+      CreateOpportunityDto,
+      "customerId" | "title" | "stage" | "estimatedValue" | "lostReason"
+    >,
     client: Prisma.TransactionClient,
   ) {
     await this.assertCustomerExists(dto.customerId);
@@ -104,6 +109,9 @@ export class OpportunitiesService {
         // oportunidad puede nacer ya cerrada sin pasar por updateStage. Si solo
         // sellara la transicion, esas nacerian con closedAt NULL y no contarian.
         closedAt: dto.stage === OpportunityStage.venta_cerrada ? new Date() : null,
+        // OPP-02: mismo caso para `perdida` — el form puede crear una oportunidad
+        // ya perdida; solo entonces guardamos el motivo (en otros estados es NULL).
+        lostReason: dto.stage === OpportunityStage.perdida ? dto.lostReason ?? null : null,
         createdBy: user.id,
         updatedBy: user.id,
       },
@@ -128,6 +136,7 @@ export class OpportunitiesService {
     opportunityId: string,
     stage: OpportunityStage,
     client: Prisma.TransactionClient,
+    lostReason?: string,
   ) {
     const opportunity = await client.opportunity.findUnique({
       where: { id: opportunityId },
@@ -159,6 +168,10 @@ export class OpportunitiesService {
         // hay que limpiarlo aqui, o un re-cierre conservaria la fecha del
         // primer cierre y caeria en la ventana equivocada.
         ...(stage === OpportunityStage.venta_cerrada ? { closedAt: new Date() } : {}),
+        // OPP-02: al transicionar a `perdida` persistimos el motivo. `perdida` es
+        // terminal en el mapa de transiciones, asi que no hace falta limpiarlo al
+        // salir (seria codigo inalcanzable, igual que closedAt arriba).
+        ...(stage === OpportunityStage.perdida ? { lostReason: lostReason ?? null } : {}),
       },
     });
 

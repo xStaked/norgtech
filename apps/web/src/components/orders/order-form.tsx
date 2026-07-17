@@ -517,8 +517,8 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                   <Input
                     id={`quantity-${index}`}
                     type="number"
-                    min={0.0001}
-                    step={0.0001}
+                    min={1}
+                    step={1}
                     value={String(item.quantity)}
                     onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
                   />

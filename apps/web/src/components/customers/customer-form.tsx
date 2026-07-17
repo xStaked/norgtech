@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { UserSelect } from "@/components/users/user-select";
 
 interface Segment {
   id: string;
@@ -231,11 +232,10 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
       </div>
 
       <div className="grid gap-1">
-        <Label>Asignado a (ID de usuario)</Label>
-        <Input
+        <Label>Asignado a</Label>
+        <UserSelect
           name="assignedToUserId"
-          type="text"
-          defaultValue={customer?.assignedToUserId ?? ""}
+          value={customer?.assignedToUserId ?? ""}
         />
       </div>
 

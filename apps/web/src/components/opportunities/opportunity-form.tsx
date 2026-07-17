@@ -34,6 +34,7 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [stage, setStage] = useState("prospecto");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -42,6 +43,8 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
 
     const formData = new FormData(event.currentTarget);
 
+    const lostReasonRaw = String(formData.get("lostReason") ?? "").trim();
+
     const body = {
       customerId: String(formData.get("customerId")),
       title: String(formData.get("title")),
@@ -49,6 +52,13 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
       estimatedValue: formData.get("estimatedValue")
         ? Number(formData.get("estimatedValue"))
         : undefined,
+      // OPP-02: solo se envia cuando la etapa es `perdida`; en cualquier otro
+      // caso queda undefined y JSON.stringify lo omite (el backend rechaza
+      // campos no permitidos con forbidNonWhitelisted).
+      lostReason:
+        formData.get("stage") === "perdida" && lostReasonRaw
+          ? lostReasonRaw
+          : undefined,
     };
 
     try {
@@ -100,7 +110,13 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
 
       <div className="grid gap-1">
         <Label>Etapa *</Label>
-        <select name="stage" required className={selectClasses}>
+        <select
+          name="stage"
+          required
+          className={selectClasses}
+          value={stage}
+          onChange={(e) => setStage(e.target.value)}
+        >
           {stages.map((s) => (
             <option key={s.value} value={s.value}>
               {s.label}
@@ -108,6 +124,18 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
           ))}
         </select>
       </div>
+
+      {stage === "perdida" && (
+        <div className="grid gap-1">
+          <Label>Motivo de pérdida</Label>
+          <Input
+            name="lostReason"
+            type="text"
+            aria-label="Motivo de perdida"
+            placeholder="Ej: precio, competencia, sin presupuesto"
+          />
+        </div>
+      )}
 
       <div className="grid gap-1">
         <Label>Valor estimado</Label>

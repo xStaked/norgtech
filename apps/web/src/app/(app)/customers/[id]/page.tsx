@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button-link";
 import { formatPercent } from "@/lib/labels";
-import { DataTable } from "@/components/ui/data-table";
 import { DetailSection } from "@/components/ui/detail-section";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -11,6 +10,7 @@ import { CreditInfoCard } from "@/components/customers/credit-info-card";
 import { CustomerGoalsSection } from "@/components/customers/customer-goals-section";
 import { CustomerHistorySection } from "@/components/customers/customer-history-section";
 import { CustomerRelatedRecords } from "@/components/customers/customer-related-records";
+import { CustomerZonesManager } from "@/components/customers/customer-zones-manager";
 import { NoraContextLauncher } from "@/components/nora/nora-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
@@ -402,19 +402,11 @@ export default async function CustomerDetailPage({
         }}
       />
 
-      {customerZones.length > 0 && (
-        <SectionCard title="Zonas de despacho" description="Zonas asignadas a este cliente con vendedor por zona.">
-          <DataTable
-            columns={[
-              { key: "zone", header: "Zona", render: (r: typeof customerZones[number]) => r.zone.name },
-              { key: "address", header: "Direccion", render: (r: typeof customerZones[number]) => r.address || "—" },
-              { key: "seller", header: "Vendedor", render: (r: typeof customerZones[number]) => r.assignedTo?.name || "—" },
-            ]}
-            rows={customerZones}
-            getRowKey={(r) => r.id}
-          />
-        </SectionCard>
-      )}
+      <CustomerZonesManager
+        customerId={id}
+        zones={customerZones}
+        canAssign={userRole === "administrador" || userRole === "director_comercial"}
+      />
     </div>
   );
 }

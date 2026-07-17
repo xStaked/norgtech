@@ -354,7 +354,14 @@ export class VisitsService {
   async findOne(id: string) {
     const visit = await this.prisma.visit.findUnique({
       where: { id },
-      include: { customer: true },
+      include: {
+        customer: true,
+        // OPP-03: el detalle de la visita lee `visit.opportunity.{id,title}`,
+        // pero el include solo traia `customer`, asi que la oportunidad
+        // vinculada (persistida en createRecord/updateRecord) nunca llegaba al
+        // front y la pagina siempre pintaba "Sin oportunidad".
+        opportunity: { select: { id: true, title: true } },
+      },
     });
 
     return visit ? this.withDerivedState(visit, new Date()) : visit;
