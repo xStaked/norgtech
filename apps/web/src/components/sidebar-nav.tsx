@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState } from "react";
+import { apiFetchClient } from "@/lib/api.client";
 import {
   navGroups,
   type NavItem,
@@ -37,7 +39,15 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavSection({ group, pathname }: { group: NavGroup; pathname: string }) {
+function NavSection({
+  group,
+  pathname,
+  pending,
+}: {
+  group: NavGroup;
+  pathname: string;
+  pending: number;
+}) {
   return (
     <div>
       <div className="px-2.5 pb-1.5 pt-3 text-[10px] font-bold uppercase tracking-[0.09em] text-[#5f7d96]">
@@ -48,13 +58,22 @@ function NavSection({ group, pathname }: { group: NavGroup; pathname: string }) 
           key={item.href}
           item={item}
           active={isActive(pathname, item.href)}
+          badge={item.href === "/whatsapp" ? pending : 0}
         />
       ))}
     </div>
   );
 }
 
-function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
+function SidebarNavItem({
+  item,
+  active,
+  badge = 0,
+}: {
+  item: NavItem;
+  active: boolean;
+  badge?: number;
+}) {
   return (
     <Link
       href={item.href}
@@ -74,6 +93,11 @@ function SidebarNavItem({ item, active }: { item: NavItem; active: boolean }) {
         {item.shortLabel}
       </span>
       <span className="truncate">{item.label}</span>
+      {badge > 0 ? (
+        <span className="ml-auto flex h-5 min-w-5 items-center justify-center rounded-full bg-[#25d366] px-1.5 text-[10px] font-bold text-white">
+          {badge}
+        </span>
+      ) : null}
     </Link>
   );
 }
@@ -104,6 +128,24 @@ export function SidebarNav({
   const visibleGroups = userRole ? filterNavGroups(userRole) : [];
   const displayName = userName ?? "Usuario";
   const roleLabel = userRole ? ROLE_LABELS[userRole] : "";
+
+  const [pending, setPending] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    async function poll() {
+      const res = await apiFetchClient("/whatsapp/conversations/pending-count");
+      if (alive && res.ok) {
+        const data = (await res.json()) as { count: number };
+        setPending(data.count);
+      }
+    }
+    void poll();
+    const id = setInterval(poll, 15000);
+    return () => {
+      alive = false;
+      clearInterval(id);
+    };
+  }, []);
 
   return (
     <div className="flex h-full flex-col pb-3.5">
@@ -142,7 +184,12 @@ export function SidebarNav({
         aria-label="Navegación principal"
       >
         {visibleGroups.map((group) => (
-          <NavSection key={group.label} group={group} pathname={pathname} />
+          <NavSection
+            key={group.label}
+            group={group}
+            pathname={pathname}
+            pending={pending}
+          />
         ))}
       </nav>
 

@@ -1,3 +1,4 @@
+import type { UserRole } from "@/lib/auth";
 import type { WhatsAppConversation } from "./whatsapp-types";
 
 const AVATAR_COLORS = ["#0f5c8a", "#167c4a", "#6d4ff0", "#c2410c", "#0891b2", "#9333ea"];
@@ -52,3 +53,11 @@ export function formatOrderTotal(total: string | number | null | undefined) {
   if (!Number.isFinite(value)) return typeof total === "string" ? total : null;
   return currencyFormatter.format(value as number);
 }
+
+/** Roles que atienden el unicanal (espejo de UNICANAL_AGENT_ROLES del API). */
+export const UNICANAL_AGENT_ROLE_SET = new Set<UserRole>([
+  "comercial",
+  "tecnico",
+  "facturacion",
+  "logistica",
+]);

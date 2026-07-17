@@ -3,6 +3,7 @@
 import { MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetchClient } from "@/lib/api.client";
+import { getSessionTokenClient, getUserRoleFromToken } from "@/lib/auth";
 import { ConversationComposer } from "./conversation-composer";
 import { ConversationList } from "./conversation-list";
 import { ConversationThread } from "./conversation-thread";
@@ -12,6 +13,7 @@ import type {
   WhatsAppConversationDetail,
   WhatsAppConversationStatus,
 } from "./whatsapp-types";
+import { UNICANAL_AGENT_ROLE_SET } from "./whatsapp-ui";
 
 export function WhatsAppInbox({
   initialConversations,
@@ -22,6 +24,9 @@ export function WhatsAppInbox({
   const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? null);
   const [selectedConversation, setSelectedConversation] =
     useState<WhatsAppConversationDetail | null>(null);
+
+  const role = getUserRoleFromToken(getSessionTokenClient());
+  const isAgent = role != null && UNICANAL_AGENT_ROLE_SET.has(role);
 
   async function refreshList() {
     const response = await apiFetchClient("/whatsapp/conversations");
@@ -44,6 +49,13 @@ export function WhatsAppInbox({
   useEffect(() => {
     loadConversation(selectedId);
   }, [selectedId]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      void refreshList();
+    }, 15000);
+    return () => clearInterval(id);
+  }, []);
 
   const selectedSummary = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedId) ?? null,
@@ -73,6 +85,15 @@ export function WhatsAppInbox({
     const response = await apiFetchClient(`/whatsapp/conversations/${selectedId}`, {
       method: "PATCH",
       body: JSON.stringify({ status }),
+    });
+    if (response.ok) {
+      await refreshSelected();
+    }
+  }
+
+  async function claimConversation(id: string) {
+    const response = await apiFetchClient(`/whatsapp/conversations/${id}/claim`, {
+      method: "POST",
     });
     if (response.ok) {
       await refreshSelected();
@@ -110,6 +131,20 @@ export function WhatsAppInbox({
         />
         <div className="flex min-h-0 flex-col">
           <ConversationThread conversation={activeConversation} />
+          {isAgent && activeConversation && !activeConversation.assignedToUser ? (
+            <div className="flex items-center justify-between gap-3 border-t border-border bg-[#fff7e6] px-4 py-2.5">
+              <span className="text-xs font-medium text-[#8a6d1f]">
+                Sin asignar — tomala para responder.
+              </span>
+              <button
+                type="button"
+                onClick={() => activeConversation && claimConversation(activeConversation.id)}
+                className="rounded-md bg-[#0f5c8a] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#0c4a70]"
+              >
+                Tomar conversación
+              </button>
+            </div>
+          ) : null}
           <ConversationComposer
             conversationId={selectedId}
             suggestedReply={suggestedReply}
