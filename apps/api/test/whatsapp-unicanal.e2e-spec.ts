@@ -10,9 +10,20 @@ function makeService(overrides: Record<string, jest.Mock>) {
       findUnique: overrides.findUnique ?? jest.fn(),
       update: overrides.update ?? jest.fn(),
     },
+    noraConversationCase: {
+      findFirst: overrides.noraCaseFindFirst ?? jest.fn(),
+    },
   };
-  const service = new WhatsAppService(prisma as any, {} as any, {} as any, {} as any);
-  return { service, prisma };
+  const ordersService = { create: overrides.ordersCreate ?? jest.fn() };
+  const orderAutomation = { process: overrides.orderAutomationProcess ?? jest.fn() };
+  const noraCaseService = { claimForExecution: overrides.claimForExecution ?? jest.fn() };
+  const service = new WhatsAppService(
+    prisma as any,
+    ordersService as any,
+    orderAutomation as any,
+    noraCaseService as any,
+  );
+  return { service, prisma, ordersService, orderAutomation, noraCaseService };
 }
 
 const agent = { id: "u-tec", email: "t@n.co", role: UserRole.tecnico };
@@ -126,6 +137,48 @@ describe("unicanal por rol — WhatsAppService", () => {
       service.createNote(agent as any, "c1", "nota"),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect((prisma as any).whatsAppInternalNote.create).not.toHaveBeenCalled();
+  });
+
+  it("createOrderDraft: agente de otro rol no puede crear la orden", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: UserRole.facturacion, assignedToUserId: null,
+    });
+    const ordersCreate = jest.fn();
+    const { service, ordersService } = makeService({ findUnique, ordersCreate });
+    await expect(
+      service.createOrderDraft(agent as any, "c1", {} as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(ordersService.create).not.toHaveBeenCalled();
+  });
+
+  it("processOrderAutomation: agente de otro rol no puede procesar la automatización", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: UserRole.facturacion, assignedToUserId: null,
+    });
+    const orderAutomationProcess = jest.fn();
+    const { service, orderAutomation } = makeService({ findUnique, orderAutomationProcess });
+    await expect(
+      service.processOrderAutomation(agent as any, "c1", {} as any),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(orderAutomation.process).not.toHaveBeenCalled();
+  });
+
+  it("createOrderFromCase: agente de otro rol no puede crear la orden desde el caso", async () => {
+    const findUnique = jest.fn().mockResolvedValue({
+      id: "c1", assignedToRole: UserRole.facturacion, assignedToUserId: null,
+    });
+    const noraCaseFindFirst = jest.fn();
+    const claimForExecution = jest.fn();
+    const { service, prisma, noraCaseService } = makeService({
+      findUnique,
+      noraCaseFindFirst,
+      claimForExecution,
+    });
+    await expect(
+      service.createOrderFromCase(agent as any, "c1", "case-1"),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect((prisma as any).noraConversationCase.findFirst).not.toHaveBeenCalled();
+    expect(noraCaseService.claimForExecution).not.toHaveBeenCalled();
   });
 
   it("dueño: agente con assignedToUserId propio accede aunque el rol no coincida", async () => {
