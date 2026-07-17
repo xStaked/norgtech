@@ -13,9 +13,9 @@ export class ZonesService {
     });
   }
 
-  findAll() {
+  findAll(includeInactive = false) {
     return this.prisma.zone.findMany({
-      where: { isActive: true },
+      where: includeInactive ? undefined : { isActive: true },
       orderBy: { name: "asc" },
     });
   }

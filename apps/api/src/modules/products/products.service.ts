@@ -36,9 +36,9 @@ export class ProductsService {
     }
   }
 
-  findAll() {
+  findAll(includeInactive = false) {
     return this.prisma.product.findMany({
-      where: { active: true },
+      where: includeInactive ? undefined : { active: true },
       orderBy: { name: "asc" },
     });
   }

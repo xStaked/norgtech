@@ -1,9 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards, ValidationPipe } from "@nestjs/common";
+import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, ValidationPipe } from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { UsersService } from "./users.service";
@@ -13,6 +14,8 @@ const validationPipe = new ValidationPipe({
   forbidNonWhitelisted: true,
 });
 
+const listQueryPipe = new ValidationPipe({ transform: true, whitelist: true });
+
 @Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("administrador")
@@ -20,8 +23,8 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get()
-  findAll() {
-    return this.usersService.findAll();
+  findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
+    return this.usersService.findAll(query.includeInactive);
   }
 
   /**

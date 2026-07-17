@@ -5,6 +5,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
@@ -32,6 +33,7 @@ interface Customer {
   city: string | null;
   department: string | null;
   creditLimit: string | number | null;
+  active: boolean;
   segment: Segment | null;
   contacts: Contact[];
 }
@@ -45,6 +47,7 @@ interface CustomerRow {
   primaryContact: string | null;
   primaryContactMeta: string | null;
   creditLimit: string | null;
+  active: boolean;
 }
 
 function buildLocation(customer: Customer) {
@@ -95,6 +98,15 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     render: (row) => row.location,
   },
   {
+    key: "status",
+    header: "Estado",
+    render: (row) => (
+      <StatusBadge tone={row.active ? "success" : "neutral"}>
+        {row.active ? "Activo" : "Inactivo"}
+      </StatusBadge>
+    ),
+  },
+  {
     key: "credit",
     header: "Crédito",
     render: (row) =>
@@ -135,7 +147,7 @@ export default async function CustomersPage() {
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
-  const response = await apiFetch("/customers");
+  const response = await apiFetch("/customers?includeInactive=true");
   const customers: Customer[] = response.ok ? await response.json() : [];
 
   const rows: CustomerRow[] = customers.map((customer) => {
@@ -152,6 +164,7 @@ export default async function CustomersPage() {
       creditLimit: customer.creditLimit != null
         ? `$${Number(customer.creditLimit).toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
         : null,
+      active: customer.active,
     };
   });
 

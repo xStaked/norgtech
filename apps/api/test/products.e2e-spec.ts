@@ -97,7 +97,15 @@ describe("Products", () => {
             products.push(product);
             return product;
           },
-          findMany: async () => products.filter((p) => (p as { active?: boolean }).active !== false),
+          // Honors the `where.active` filter so the includeInactive e2e below is
+          // real: the service passes `where: { active: true }` by default and
+          // `where: undefined` when includeInactive is set.
+          findMany: async ({ where }: { where?: { active?: boolean } } = {}) =>
+            products.filter(
+              (p) =>
+                where?.active === undefined ||
+                ((p as { active?: boolean }).active ?? true) === where.active,
+            ),
           findUnique: async ({ where: { id } }: { where: { id: string } }) =>
             products.find((p) => (p as { id: string }).id === id) ?? null,
         },
@@ -289,6 +297,41 @@ describe("Products", () => {
       .expect(409);
 
     expect(response.body.message).toBe("Ya existe un producto con ese SKU");
+  });
+
+  // ZON-01/COM-01 family: deactivated records must not silently disappear, but
+  // only when the caller opts in. Default list stays active-only.
+  it("excludes inactive products from the default list", async () => {
+    await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        sku: "INACT-001",
+        name: "Producto Inactivo",
+        unit: "dosis",
+        presentation: "Caja x10",
+        basePrice: 1000,
+        active: false,
+      })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    const skus = (response.body as Array<{ sku: string }>).map((p) => p.sku);
+    expect(skus).not.toContain("INACT-001");
+  });
+
+  it("includes inactive products when includeInactive=true", async () => {
+    const response = await request(globalThis.__APP__)
+      .get("/products?includeInactive=true")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    const skus = (response.body as Array<{ sku: string }>).map((p) => p.sku);
+    expect(skus).toContain("INACT-001");
   });
 
   it("allows facturacion role to list products", async () => {

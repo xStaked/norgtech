@@ -65,7 +65,7 @@ const columns: readonly DataTableColumn<CompanyRow>[] = [
 ] as const;
 
 export default async function CompaniesPage() {
-  const response = await apiFetch("/companies");
+  const response = await apiFetch("/companies?includeInactive=true");
   const companies: Company[] = response.ok ? await response.json() : [];
 
   const rows: CompanyRow[] = companies;

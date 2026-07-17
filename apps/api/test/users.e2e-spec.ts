@@ -56,7 +56,9 @@ describe("Users", () => {
   let lastFindUniqueArgs:
     | { where: { id?: string; email?: string }; select?: MockUserSelect }
     | undefined;
-  let lastFindManyArgs: { orderBy?: { name?: "asc" | "desc" }; select?: MockUserSelect } | undefined;
+  let lastFindManyArgs:
+    | { where?: { active?: boolean }; orderBy?: { name?: "asc" | "desc" }; select?: MockUserSelect }
+    | undefined;
   let lastCreateArgs:
     | {
         data: { name: string; email: string; phone: string; passwordHash: string; role: UserRole; active: boolean };
@@ -92,15 +94,22 @@ describe("Users", () => {
         return applySelect(user, select);
       },
       findMany: async ({
+        where,
         orderBy,
         select,
       }: {
+        where?: { active?: boolean };
         orderBy?: { name?: "asc" | "desc" };
         select?: MockUserSelect;
       }) => {
-        lastFindManyArgs = { orderBy, select };
+        lastFindManyArgs = { where, orderBy, select };
 
-        const result = Array.from(users.values());
+        // Honors the `where.active` filter so the includeInactive e2e below is
+        // real: GET /users passes `where: { active: true }` by default and
+        // `where: undefined` when includeInactive is set.
+        const result = Array.from(users.values()).filter(
+          (u) => where?.active === undefined || u.active === where.active,
+        );
         if (orderBy?.name === "asc") {
           result.sort((a, b) => a.name.localeCompare(b.name));
         }
@@ -238,6 +247,44 @@ describe("Users", () => {
       expect(typeof user.phone).toBe("string");
     }
     expect(JSON.stringify(response.body)).not.toContain("passwordHash");
+  });
+
+  // ZON-01/COM-01 family: a deactivated user must not silently disappear from
+  // the admin list, but only when the caller opts in. GET /users/sellers (the
+  // seller selector) stays active-only regardless.
+  it("excludes inactive users from the default list but includes them with includeInactive", async () => {
+    const now = new Date("2026-06-11T10:00:00.000Z");
+    users.set("inactive-id", {
+      id: "inactive-id",
+      name: "Inactivo",
+      email: "inactivo@norgtech.com",
+      phone: "+573001000099",
+      passwordHash,
+      role: UserRole.comercial,
+      active: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const token = await login("admin@norgtech.com");
+
+    const defaultResponse = await request(app.getHttpServer())
+      .get("/users")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+
+    const defaultIds = (defaultResponse.body as Array<{ id: string }>).map((u) => u.id);
+    expect(defaultIds).not.toContain("inactive-id");
+    expect(lastFindManyArgs?.where).toEqual({ active: true });
+
+    const inclusiveResponse = await request(app.getHttpServer())
+      .get("/users?includeInactive=true")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+
+    const inclusiveIds = (inclusiveResponse.body as Array<{ id: string }>).map((u) => u.id);
+    expect(inclusiveIds).toContain("inactive-id");
+    expect(lastFindManyArgs?.where).toBeUndefined();
   });
 
   it("rejects non-admin access", async () => {

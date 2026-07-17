@@ -192,8 +192,9 @@ export class CustomersService {
     return updated;
   }
 
-  findAll() {
+  findAll(includeInactive = false) {
     return this.prisma.customer.findMany({
+      where: includeInactive ? undefined : { active: true },
       select: {
         id: true,
         legalName: true,
@@ -204,6 +205,7 @@ export class CustomersService {
         city: true,
         department: true,
         creditLimit: true,
+        active: true,
         segment: { select: { id: true, name: true } },
         contacts: {
           select: {
