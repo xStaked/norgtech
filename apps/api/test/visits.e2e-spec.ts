@@ -235,6 +235,37 @@ describe("Visits", () => {
     expect(response.body.status).toBe(VisitStatus.programada);
   });
 
+  // DASH-03: ningun formulario del web manda `assignedToUserId`, asi que sin
+  // este default toda visita creada desde la UI nace con NULL y "Mi cola de
+  // trabajo" (filtra assignedToUserId = user.id) sale vacia para todos.
+  it("assigns a new visit to its creator when no assignee is sent (DASH-03)", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        scheduledAt: "2026-04-30T10:00:00.000Z",
+      })
+      .expect(201);
+
+    expect(response.body.assignedToUserId).toBe("admin-user-id");
+    expect(response.body.assignedToUserId).not.toBeNull();
+  });
+
+  it("keeps an explicit assignee over the creator (DASH-03)", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/visits")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        scheduledAt: "2026-04-30T10:00:00.000Z",
+        assignedToUserId: "other-user-id",
+      })
+      .expect(201);
+
+    expect(response.body.assignedToUserId).toBe("other-user-id");
+  });
+
   it("acepta el formato que manda Nora (sin offset) y lo lee como hora de Colombia", async () => {
     // agents/nora/src/tools/visits.py postea a /visits el `scheduled_at` que
     // produce el LLM, sin offset (ver agents/nora/tests/test_visits_tool.py).

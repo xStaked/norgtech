@@ -100,6 +100,10 @@ export class OpportunitiesService {
         title: dto.title,
         stage: dto.stage,
         estimatedValue: dto.estimatedValue,
+        // DASH-06: `stage` en el DTO es un @IsEnum libre, asi que una
+        // oportunidad puede nacer ya cerrada sin pasar por updateStage. Si solo
+        // sellara la transicion, esas nacerian con closedAt NULL y no contarian.
+        closedAt: dto.stage === OpportunityStage.venta_cerrada ? new Date() : null,
         createdBy: user.id,
         updatedBy: user.id,
       },
@@ -145,6 +149,16 @@ export class OpportunitiesService {
       data: {
         stage,
         updatedBy: user.id,
+        // DASH-06: nadie escribia `closedAt`, asi que el contador
+        // "Ventas cerradas 30d" (stage=venta_cerrada AND closedAt >= T-30d)
+        // era 0 por construccion: la columna siempre era NULL.
+        //
+        // No se limpia al SALIR de venta_cerrada a proposito: el mapa de
+        // transiciones declara `venta_cerrada: []` (estado terminal), asi que
+        // esa rama seria codigo inalcanzable. Si algun dia se permite reabrir,
+        // hay que limpiarlo aqui, o un re-cierre conservaria la fecha del
+        // primer cierre y caeria en la ventana equivocada.
+        ...(stage === OpportunityStage.venta_cerrada ? { closedAt: new Date() } : {}),
       },
     });
 

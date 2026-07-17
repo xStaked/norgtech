@@ -298,7 +298,12 @@ export class FollowUpTasksService {
         title: dto.title,
         dueAt: parseInstant(dto.dueAt),
         notes: dto.notes,
-        assignedToUserId: dto.assignedToUserId,
+        // DASH-03: `assignedToUserId` es nullable y NINGUN formulario del web lo
+        // envia, asi que toda tarea creada desde la UI quedaba con NULL y no
+        // aparecia en la cola de nadie ("Mi cola de trabajo" filtra por
+        // assignedToUserId = user.id). Solo createFromNora lo pasaba explicito.
+        // El creador es el dueño por defecto; un assignedToUserId explicito manda.
+        assignedToUserId: dto.assignedToUserId ?? user.id,
         createdBy: user.id,
         updatedBy: user.id,
       },

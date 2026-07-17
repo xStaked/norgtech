@@ -218,6 +218,41 @@ describe("FollowUpTasks", () => {
     expect(response.body.status).toBe(FollowUpTaskStatus.pendiente);
   });
 
+  // DASH-03: ningun formulario del web manda `assignedToUserId`, asi que sin
+  // este default toda tarea creada desde la UI nace con NULL y "Mi cola de
+  // trabajo" (filtra assignedToUserId = user.id) sale vacia para todos.
+  it("assigns a new task to its creator when no assignee is sent (DASH-03)", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/follow-up-tasks")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        type: FollowUpTaskType.llamada,
+        title: "Sin responsable explicito",
+        dueAt: "2026-04-30T10:00:00.000Z",
+      })
+      .expect(201);
+
+    expect(response.body.assignedToUserId).toBe("admin-user-id");
+    expect(response.body.assignedToUserId).not.toBeNull();
+  });
+
+  it("keeps an explicit assignee over the creator (DASH-03)", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/follow-up-tasks")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        type: FollowUpTaskType.llamada,
+        title: "Con responsable explicito",
+        dueAt: "2026-04-30T10:00:00.000Z",
+        assignedToUserId: "other-user-id",
+      })
+      .expect(201);
+
+    expect(response.body.assignedToUserId).toBe("other-user-id");
+  });
+
   it("completes a pending task", async () => {
     const createResponse = await request(globalThis.__APP__)
       .post("/follow-up-tasks")

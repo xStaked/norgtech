@@ -1,6 +1,12 @@
 import { Injectable } from "@nestjs/common";
-import { FollowUpTaskStatus, UserRole, VisitStatus } from "@prisma/client";
+import { Prisma, UserRole, VisitStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import {
+  FOLLOW_UP_TASK_SETTLED_STATUSES,
+  dayRangeInZone,
+  followUpTaskOverdueWhere,
+  weekRangeInZone,
+} from "../../shared/overdue";
 import { AuthUser } from "../auth/types/authenticated-request";
 
 type CommercialCustomer = {
@@ -17,6 +23,7 @@ type CommercialOrder = {
   orderDate: Date;
   zone?: string | null;
   total: unknown;
+  sellerUserId?: string | null;
   customer?: CommercialCustomer | null;
   customerZone?: { zone: { name: string }; assignedTo?: { name: string } | null } | null;
 };
@@ -58,24 +65,40 @@ type ProductAccumulator = {
 export class DashboardService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * ALCANCE POR EMPRESA (DASH-05).
+   *
+   * El selector de empresa manda `companyId` a los tres endpoints, pero solo
+   * `activeOrders` puede honrarlo: en el schema, la UNICA entidad de este
+   * resumen con relacion a `Company` es `Order` (`Order.companyId`, no nulo).
+   *
+   * NO son company-scoped, porque NO EXISTE la relacion en el modelo de datos:
+   *   - openQuotes        (Quote        -> customer; sin companyId)
+   *   - pipelineValue     (Opportunity  -> customer; sin companyId)
+   *   - closedDeals       (Opportunity  -> customer; sin companyId)
+   *   - weeklyVisits      (Visit        -> customer; sin companyId)
+   *   - pendingFollowUps  (FollowUpTask -> customer; sin companyId)
+   *   - overdueFollowUps  (FollowUpTask -> customer; sin companyId)
+   *   - todayVisits       (Visit        -> customer; sin companyId)
+   *   - myQueue           (FollowUpTask + Visit; idem)
+   *   - recentActivity    (AuditLog; no tiene entidad de negocio tipada)
+   *
+   * Se podria derivar una empresa indirecta (p.ej. Opportunity -> orders ->
+   * companyId), pero seria INVENTARLA: una oportunidad sin pedidos desapareceria
+   * del pipeline al elegir empresa, que es peor que no filtrar. La decision es
+   * explicita: estos contadores son globales aunque haya empresa seleccionada.
+   */
   async getSummary(user: AuthUser, companyId?: string) {
     const now = new Date();
 
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const day = now.getDay();
-    const diffToMonday = day === 0 ? -6 : 1 - day;
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() + diffToMonday);
-    startOfWeek.setHours(0, 0, 0, 0);
-
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    endOfWeek.setHours(23, 59, 59, 999);
-
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    // Los limites de dia/semana se calculan en America/Bogota, NO en la zona del
+    // proceso: en un host UTC (produccion) "hoy" empezaba 5 horas antes y la
+    // agenda mostraba el dia equivocado (clase de bug VIS-03/FUP-01).
+    const { start: startOfWeek, end: endOfWeek } = weekRangeInZone(now);
+    const { start: todayStart, end: todayEnd } = dayRangeInZone(now);
 
     const [
       openQuotes,
@@ -118,16 +141,20 @@ export class DashboardService {
           scheduledAt: { gte: startOfWeek, lte: endOfWeek },
         },
       }),
+      // PENDIENTE = abierta y AUN NO vencida.
+      // Antes contaba `status=pendiente AND dueAt <= now`, que es EXACTAMENTE el
+      // conjunto de vencidas: las dos tarjetas estaban intercambiadas.
       this.prisma.followUpTask.count({
         where: {
-          status: FollowUpTaskStatus.pendiente,
-          dueAt: { lte: now },
+          status: { notIn: FOLLOW_UP_TASK_SETTLED_STATUSES },
+          dueAt: { gte: now },
         },
       }),
+      // VENCIDA se deriva con la regla compartida (src/shared/overdue.ts), no
+      // leyendo la columna `status=vencida`: no hay scheduler que la escriba, asi
+      // que ese contador solo veia filas del difunto markOverdue.
       this.prisma.followUpTask.count({
-        where: {
-          status: FollowUpTaskStatus.vencida,
-        },
+        where: followUpTaskOverdueWhere(now),
       }),
       this.prisma.visit.count({
         where: {
@@ -135,10 +162,15 @@ export class DashboardService {
           status: VisitStatus.programada,
         },
       }),
+      // DASH-03: la cola se llena porque create() ya asigna al creador por
+      // defecto; antes ninguna tarea/visita creada desde la UI tenia
+      // assignedToUserId y esto salia vacio para todo el mundo.
+      // "Abierta" = no zanjada por un humano (regla compartida), en vez de
+      // enumerar [pendiente, vencida] a mano.
       this.prisma.followUpTask.findMany({
         where: {
           assignedToUserId: user.id,
-          status: { in: [FollowUpTaskStatus.pendiente, FollowUpTaskStatus.vencida] },
+          status: { notIn: FOLLOW_UP_TASK_SETTLED_STATUSES },
         },
         orderBy: { dueAt: "asc" },
         take: 5,
@@ -221,15 +253,22 @@ export class DashboardService {
     const from = new Date(to);
     from.setDate(to.getDate() - days);
     const isSellerScoped = user.role === UserRole.comercial;
+    // La cartera (clientes dormidos) SI es un concepto de asignacion: son "mis
+    // clientes", los tenga o no atendidos otro vendedor en un pedido suelto.
     const customerScope = isSellerScoped ? { assignedToUserId: user.id } : {};
-    const orderCustomerScope = isSellerScoped ? { customer: { assignedToUserId: user.id } } : {};
+    // DASH-04: la venta se atribuye por `Order.sellerUserId`, NO por el vendedor
+    // asignado al cliente. Con el criterio viejo, un comercial que le vende a un
+    // cliente asignado a otro veia CEROS en todo el panel. Es la misma regla que
+    // usa seller-goals (`sellerUserId: goal.userId`), y hay indice compuesto
+    // [sellerUserId, orderDate] para sostenerla.
+    const orderSellerScope = isSellerScoped ? { sellerUserId: user.id } : {};
     const orderWhereExtra = companyId ? { companyId } : {};
 
     const [orders, orderItems, customers, activeProducts] = await Promise.all([
       this.prisma.order.findMany({
         where: {
           orderDate: { gte: from, lte: to },
-          ...orderCustomerScope,
+          ...orderSellerScope,
           ...orderWhereExtra,
         },
         include: {
@@ -251,7 +290,7 @@ export class DashboardService {
         where: {
           order: {
             orderDate: { lte: to },
-            ...orderCustomerScope,
+            ...orderSellerScope,
             ...orderWhereExtra,
           },
         },
@@ -283,11 +322,17 @@ export class DashboardService {
       }) as Promise<CommercialProduct[]>,
     ]);
 
+    // Los nombres deben cubrir DOS conjuntos distintos: el vendedor asignado a
+    // cada cliente (cartera / dormantCustomers) y el vendedor de cada pedido
+    // (bySeller, ahora atribuido por Order.sellerUserId). Un comercial que vende
+    // a un cliente ajeno solo aparece en el segundo: si no se resolviera aqui,
+    // saldria como "Sin nombre".
     const sellerIds = [
       ...new Set(
-        customers
-          .map((customer) => customer.assignedToUserId)
-          .filter((id): id is string => !!id),
+        [
+          ...customers.map((customer) => customer.assignedToUserId),
+          ...orders.map((order) => order.sellerUserId),
+        ].filter((id): id is string => !!id),
       ),
     ];
     const sellers =
@@ -336,7 +381,8 @@ export class DashboardService {
     for (const order of orders) {
       const revenue = this.toNumber(order.total);
       const customer = order.customer ?? customerById.get(order.customerId);
-      const sellerId = customer?.assignedToUserId ?? null;
+      // DASH-04: quien VENDIO el pedido, no a quien esta asignado el cliente.
+      const sellerId = order.sellerUserId ?? null;
       const sellerKey = sellerId ?? "unassigned";
       const sellerBucket = this.getOrSet(bySellerMap, sellerKey, {
         sellerId,
@@ -433,17 +479,39 @@ export class DashboardService {
       );
     }
 
-    // Devoluciones en la ventana: restan de la venta neta (ponytail: no se filtra por
-    // companyId porque una devolución puede no tener pedido asociado).
+    // DEVOLUCIONES (RET-02). Restan de la venta neta, asi que DEBEN acotarse con
+    // el mismo criterio que los pedidos o la resta cruza universos:
+    // `netRevenue = ventas(empresa X) - devoluciones(TODAS las empresas)`
+    // sub-reportaba el neto de cada empresa. Igual con el vendedor.
+    //
+    // Una devolucion no tiene `companyId` propio: la empresa se deriva de su
+    // pedido o de su factura (ambos opcionales en el schema).
+    //
+    // REGLA para devoluciones SIN pedido NI factura (sin empresa derivable):
+    // con empresa seleccionada NO se cuentan. No se pueden atribuir a la empresa
+    // elegida sin adivinar, y contarlas en todas restaria el mismo dinero varias
+    // veces (una por empresa), inflando la perdida. Sin empresa seleccionada si
+    // cuentan: la vista global las incluye todas. Es decir, filtran igual que los
+    // pedidos, que siempre tienen empresa.
+    const returnCompanyScope: Prisma.ReturnWhereInput = companyId
+      ? { OR: [{ order: { companyId } }, { invoice: { companyId } }] }
+      : {};
+    // El vendedor de una devolucion es el del pedido devuelto (misma regla de
+    // atribucion que la venta). Una devolucion sin pedido no tiene vendedor
+    // determinable y por eso no entra en el panel de un comercial.
+    const returnSellerScope: Prisma.ReturnWhereInput = isSellerScoped
+      ? { order: { sellerUserId: user.id } }
+      : {};
     const returns = await this.prisma.return.findMany({
       where: {
         returnDate: { gte: from, lte: to },
-        ...(isSellerScoped ? { customer: { assignedToUserId: user.id } } : {}),
+        ...returnCompanyScope,
+        ...returnSellerScope,
       },
       select: {
         amount: true,
         customerId: true,
-        customer: { select: { assignedToUserId: true } },
+        order: { select: { sellerUserId: true } },
       },
     });
     const returnsByCustomer = new Map<string, number>();
@@ -456,7 +524,10 @@ export class DashboardService {
         ret.customerId,
         (returnsByCustomer.get(ret.customerId) ?? 0) + amount,
       );
-      const sellerKey = ret.customer?.assignedToUserId ?? "unassigned";
+      // Debe usar la MISMA clave que `bySellerMap` (Order.sellerUserId). Con
+      // customer.assignedToUserId, la devolucion se le restaba a un vendedor
+      // distinto del que registro la venta.
+      const sellerKey = ret.order?.sellerUserId ?? "unassigned";
       returnsBySeller.set(sellerKey, (returnsBySeller.get(sellerKey) ?? 0) + amount);
     }
 
@@ -526,6 +597,12 @@ export class DashboardService {
           orders.reduce((sum, order) => sum + this.toNumber(order.total), 0),
         ),
         returns: this.roundMoney(returnsTotal),
+        // RET-02: este total es de la VENTANA (`window.days`), no historico. El
+        // modulo de Devoluciones suma todas las devoluciones de siempre, asi que
+        // los dos numeros no tienen por que coincidir; ninguno esta mal, pero la
+        // tarjeta debe decir de que ventana habla. `returnsWindowDays` existe
+        // para que el front lo etiquete sin recalcularlo.
+        returnsWindowDays: days,
         netRevenue: this.roundMoney(
           orders.reduce((sum, order) => sum + this.toNumber(order.total), 0) - returnsTotal,
         ),
