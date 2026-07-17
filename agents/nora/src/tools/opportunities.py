@@ -4,6 +4,23 @@ from langgraph.prebuilt import InjectedState
 from .nestjs_client import NestJSClient
 from typing import Annotated, Optional
 
+# Etapas validas, EXACTAS al enum OpportunityStage del API (apps/api/prisma/
+# schema.prisma). El API valida con @IsEnum, asi que cualquier otro valor da 400.
+# Antes las docstrings anunciaban un vocabulario inventado (prospeccion,
+# contacto_inicial, diagnostico, propuesta, cerrada_ganada...) que el LLM copiaba
+# literal y reventaba cada cambio de etapa (AI-02). Fuente unica aqui.
+OPPORTUNITY_STAGES = (
+    "prospecto",
+    "contacto",
+    "visita",
+    "cotizacion",
+    "negociacion",
+    "orden_facturacion",
+    "venta_cerrada",  # ganada
+    "perdida",
+)
+_STAGES_DOC = ", ".join(OPPORTUNITY_STAGES)
+
 @tool
 async def get_customer_opportunities(
     customer_id: str,
@@ -50,10 +67,12 @@ async def create_opportunity(
     Args:
         customer_id: ID del cliente
         title: Título descriptivo de la oportunidad
-        stage: Etapa inicial (prospeccion, contacto_inicial, diagnostico, propuesta, negociacion)
+        stage: Etapa inicial. Valores validos: prospecto, contacto, visita, cotizacion, negociacion, orden_facturacion, venta_cerrada (ganada), perdida
         description: Descripción detallada (opcional)
         estimated_value: Valor estimado en pesos (opcional)
     """
+    if stage not in OPPORTUNITY_STAGES:
+        return f"Etapa invalida '{stage}'. Usa una de: {_STAGES_DOC}"
     try:
         nestjs_client = NestJSClient(auth_token)
         payload = {
@@ -82,8 +101,10 @@ async def update_opportunity_stage(
     
     Args:
         opportunity_id: ID de la oportunidad
-        new_stage: Nueva etapa (prospeccion, contacto_inicial, diagnostico, propuesta, negociacion, cerrada_ganada, cerrada_perdida)
+        new_stage: Nueva etapa. Valores validos: prospecto, contacto, visita, cotizacion, negociacion, orden_facturacion, venta_cerrada (ganada), perdida
     """
+    if new_stage not in OPPORTUNITY_STAGES:
+        return f"Etapa invalida '{new_stage}'. Usa una de: {_STAGES_DOC}"
     try:
         nestjs_client = NestJSClient(auth_token)
         result = await nestjs_client.patch(f"/opportunities/{opportunity_id}/stage", {"stage": new_stage})
