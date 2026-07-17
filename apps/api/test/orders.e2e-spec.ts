@@ -4,6 +4,8 @@ import { InvoiceStatus, Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
+import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 
 const outboundMessages: Array<Record<string, unknown>> = [];
 
@@ -23,6 +25,27 @@ describe("Orders", () => {
   const auditLogs: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
   const orderItems: Array<Record<string, any>> = [
+    {
+      // Aprobado y ya comprometiendo cupo: resolver este item reescribe
+      // order.total, que es justo lo que la exposicion de credito suma.
+      id: "item-approved-order",
+      orderId: "order-approved-credit",
+      productId: null,
+      productSnapshotName: "Producto por resolver",
+      productSnapshotSku: "CUSTOM",
+      unit: "unit",
+      quantity: 100,
+      unitPrice: new Prisma.Decimal(1000),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(190),
+      subtotal: new Prisma.Decimal(100000),
+      totalWithTax: new Prisma.Decimal(119000),
+      needsResolution: true,
+      originalUnitPrice: null,
+      discountPercent: null,
+      customProductName: "Producto por resolver",
+      notes: null,
+    },
     {
       id: "item-unresolved",
       orderId: "order-unresolved",
@@ -189,7 +212,7 @@ describe("Orders", () => {
             creditLimit: new Prisma.Decimal(5000000),
             paymentDays: 30,
             assignedToUserId: "comercial-user-id",
-            segment: { discountPercent: 0 },
+            segment: { discountPercent: 0, minGoalAmount: 0 },
           };
         }
         if (id === "customer-2") {
@@ -203,7 +226,51 @@ describe("Orders", () => {
             creditLimit: null,
             paymentDays: null,
             assignedToUserId: null,
-            segment: { discountPercent: 10 },
+            segment: { discountPercent: 10, minGoalAmount: 0 },
+          };
+        }
+        // Clientes con descuento de segmento positivo, para probar que
+        // resolveOrderItem tarifa por catalogo + descuento condicionado a meta.
+        // El stub de order.aggregate devuelve 999.999.999 de ventas YTD, asi
+        // que un minGoalAmount por encima de eso = meta NO cumplida.
+        const segmentCustomers: Record<string, { discountPercent: number; minGoalAmount: number }> = {
+          "customer-goal-met": { discountPercent: 10, minGoalAmount: 0 },
+          "customer-goal-missed": { discountPercent: 10, minGoalAmount: 10_000_000_000 },
+        };
+        if (segmentCustomers[id]) {
+          return {
+            id,
+            displayName: "Agro Segmento",
+            taxId: "900777888-1",
+            address: "Calle 1",
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+            creditLimit: null,
+            paymentDays: 30,
+            assignedToUserId: null,
+            segment: { name: "Oro", ...segmentCustomers[id] },
+          };
+        }
+        // Clientes de cupo ajustado para las pruebas de credito en
+        // aprobacion/avance/facturacion (ORD-01).
+        const creditCustomers: Record<string, number> = {
+          "customer-credit-tight": 1000000,
+          "customer-credit-exact": 1000000,
+          "customer-credit-status": 1000000,
+          "customer-credit-invoice": 1000000,
+        };
+        if (creditCustomers[id] !== undefined) {
+          return {
+            id,
+            displayName: "Agro Cupo",
+            taxId: "900555666-1",
+            address: "Calle 99",
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+            creditLimit: new Prisma.Decimal(creditCustomers[id]),
+            paymentDays: 30,
+            assignedToUserId: null,
+            segment: { discountPercent: 0, minGoalAmount: 0 },
           };
         }
         return null;
@@ -279,6 +346,7 @@ describe("Orders", () => {
 
     const prismaStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       company: {
         findUnique: async ({ where }: { where: { id?: string; prefix?: string } }) => {
@@ -353,6 +421,12 @@ describe("Orders", () => {
         create: async () => {
           throw new Error("order.create must run inside a transaction");
         },
+        // PricingService.resolveSegmentDiscount queries this to check whether
+        // a customer with a positive segment discount has met their YTD
+        // sales goal. Return a large sum so the (zero, in these fixtures)
+        // minGoalAmount is always satisfied and existing discount-dependent
+        // assertions keep holding.
+        aggregate: async () => ({ _sum: { total: 999_999_999 } }),
         count: async () => orders.length,
         findFirst: async ({ where }: { where: any }) => {
           const startsWith = where.orderNumber?.startsWith;
@@ -373,6 +447,8 @@ describe("Orders", () => {
           if (where?.approvalStatus) {
             result = result.filter((o) => o.approvalStatus === where.approvalStatus);
           }
+          // El where de exposicion de credito (status/invoices/id) debe respetarse.
+          result = result.filter((o) => matchesOrderWhere(o, where, invoices));
           return result.map((o) => JSON.parse(JSON.stringify(withOrderIncludes(o, { items: true, customer: true, company: true }))));
         },
         update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, unknown> }) => {
@@ -419,6 +495,10 @@ describe("Orders", () => {
           company: prismaStub.company,
           customer,
           user: prismaStub.user,
+          // Row lock de CreditService.assertCreditLimit. El stub no tiene
+          // transacciones reales, asi que solo debe devolver una fila (no
+          // vacia, o el lock lanzaria "Cliente no encontrado").
+          $queryRaw: async () => [{ id: "locked" }],
           invoice: {
             findFirst: async ({ where }: { where: any }) => findInvoice(where, [...invoices, ...pendingInvoices]),
             findMany: async ({ where }: { where: any }) =>
@@ -473,6 +553,11 @@ describe("Orders", () => {
             },
           },
           order: {
+            // CreditService.getCustomerExposure consulta pedidos dentro de la tx.
+            findMany: async ({ where }: { where?: OrderWhereStub } = {}) =>
+              [...orders, ...pendingOrders].filter((o) =>
+                matchesOrderWhere(o, where, [...invoices, ...pendingInvoices]),
+              ),
             create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
               const order = {
                 id: `order-${orders.length + pendingOrders.length + 1}`,
@@ -578,6 +663,21 @@ describe("Orders", () => {
 
     // Seed orders (must happen after app.init() so Prisma.Decimal is available)
     orders.push({
+      // customer-1 tiene cupo 5.000.000. Este pedido ya esta aprobado y
+      // comprometiendo cupo con 119.000.
+      id: "order-approved-credit",
+      customerId: "customer-1",
+      companyId: "company-1",
+      status: "orden_facturacion",
+      approvalStatus: "aprobado",
+      subtotal: new Prisma.Decimal(100000),
+      total: new Prisma.Decimal(119000),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push({
       id: "order-unresolved",
       customerId: "customer-1",
       companyId: "company-1",
@@ -650,6 +750,139 @@ describe("Orders", () => {
       notes: null,
     });
 
+    // --- Fixtures de tarifacion al resolver (ORD-05) ------------------------
+    // Cada caso necesita su propio pedido/item porque resolver muta el fixture.
+    const unresolvedItem = (id: string, orderId: string) => ({
+      id,
+      orderId,
+      productId: null,
+      productSnapshotName: "Producto desconocido",
+      productSnapshotSku: "CUSTOM",
+      unit: "unit",
+      quantity: 2,
+      unitPrice: new Prisma.Decimal(0),
+      taxPercent: new Prisma.Decimal(19),
+      taxAmount: new Prisma.Decimal(0),
+      subtotal: new Prisma.Decimal(0),
+      totalWithTax: new Prisma.Decimal(0),
+      needsResolution: true,
+      originalUnitPrice: null,
+      discountPercent: null,
+      customProductName: "Producto desconocido",
+      notes: null,
+    });
+    const segmentOrder = (id: string, customerId: string) => ({
+      id,
+      customerId,
+      companyId: "company-1",
+      status: "recibido",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(0),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+    orders.push(segmentOrder("order-goal-met", "customer-goal-met"));
+    orderItems.push(unresolvedItem("item-goal-met", "order-goal-met"));
+    orders.push(segmentOrder("order-goal-missed", "customer-goal-missed"));
+    orderItems.push(unresolvedItem("item-goal-missed", "order-goal-missed"));
+    orders.push(segmentOrder("order-ignore-price", "customer-goal-met"));
+    orderItems.push(unresolvedItem("item-ignore-price", "order-ignore-price"));
+
+    // --- Fixtures de credito (ORD-01) ---------------------------------------
+    const creditOrder = (over: Record<string, unknown>) => ({
+      companyId: "company-1",
+      status: "recibido",
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+      ...over,
+    });
+
+    // customer-credit-tight: cupo 1.000.000, ya con 500.000 comprometidos.
+    orders.push(creditOrder({
+      id: "order-credit-blocker",
+      customerId: "customer-credit-tight",
+      status: "orden_facturacion",
+      subtotal: new Prisma.Decimal(500000),
+      total: new Prisma.Decimal(500000),
+    }));
+    orders.push(creditOrder({
+      id: "order-credit-exceed",
+      customerId: "customer-credit-tight",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(900000),
+      total: new Prisma.Decimal(900000),
+      items: [],
+    }));
+    orders.push(creditOrder({
+      id: "order-credit-ok",
+      customerId: "customer-credit-tight",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(400000),
+      total: new Prisma.Decimal(400000),
+      items: [],
+    }));
+
+    // customer-credit-exact: el pedido YA cuenta en la exposicion y agota el
+    // cupo exacto. Solo aprueba si no se cuenta a si mismo (excludeOrderId).
+    orders.push(creditOrder({
+      id: "order-credit-atlimit",
+      customerId: "customer-credit-exact",
+      status: "orden_facturacion",
+      approvalStatus: "en_revision",
+      subtotal: new Prisma.Decimal(1000000),
+      total: new Prisma.Decimal(1000000),
+      items: [],
+    }));
+
+    // customer-credit-status: avance manual a orden_facturacion.
+    orders.push(creditOrder({
+      id: "order-status-blocker",
+      customerId: "customer-credit-status",
+      status: "orden_facturacion",
+      subtotal: new Prisma.Decimal(800000),
+      total: new Prisma.Decimal(800000),
+    }));
+    orders.push(creditOrder({
+      id: "order-status-excess",
+      customerId: "customer-credit-status",
+      subtotal: new Prisma.Decimal(400000),
+      total: new Prisma.Decimal(400000),
+    }));
+    // Mismo cliente en exceso, pero una transicion que NO compromete cupo nuevo.
+    orders.push(creditOrder({
+      id: "order-status-dispatch",
+      customerId: "customer-credit-status",
+      status: "facturado",
+      subtotal: new Prisma.Decimal(700000),
+      total: new Prisma.Decimal(700000),
+    }));
+
+    // customer-credit-invoice: pedido que ya agota el cupo y se va a facturar.
+    orders.push(creditOrder({
+      id: "order-credit-invoice",
+      customerId: "customer-credit-invoice",
+      orderNumber: "NOR-900",
+      status: "orden_facturacion",
+      subtotal: new Prisma.Decimal(840336.13),
+      total: new Prisma.Decimal(1000000),
+      items: [
+        {
+          id: "item-credit-invoice",
+          orderId: "order-credit-invoice",
+          quantity: 1,
+          subtotal: new Prisma.Decimal(840336.13),
+          taxAmount: new Prisma.Decimal(159663.87),
+          totalWithTax: new Prisma.Decimal(1000000),
+          needsResolution: false,
+        },
+      ],
+    }));
+
     const loginResponse = await request(globalThis.__APP__)
       .post("/auth/login")
       .send({ email: "admin@norgtech.local", password: "Admin123*" })
@@ -700,6 +933,23 @@ describe("Orders", () => {
     expect(Number(response.body.items[0].taxAmount)).toBe(9500);
     expect(Number(response.body.items[0].totalWithTax)).toBe(119000);
     expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("snapshots the billing company name from company, not the customer, when omitted", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-1",
+        items: [
+          { productId: "product-1", quantity: 1, unitPrice: 50000 },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.billingCompanyNameSnapshot).toBe("Nortech");
+    expect(response.body.billingCompanyNameSnapshot).not.toBe("Agro Norte");
   });
 
   it("creates a product-backed order with automatic segment discount pricing", async () => {
@@ -793,7 +1043,9 @@ describe("Orders", () => {
     expect(response.body.purchaseOrderNumber).toBe("OC-7788");
     expect(response.body.customerNameSnapshot).toBe("Agro Norte");
     expect(response.body.customerNitSnapshot).toBe("900111222-1");
-    expect(response.body.billingCompanyNameSnapshot).toBe("Norgtech Facturacion SAS");
+    // billingCompanyNameSnapshot always reflects the billing company (company.name),
+    // regardless of any dto.billingCompanyNameSnapshot override (ORD-03).
+    expect(response.body.billingCompanyNameSnapshot).toBe("Nortech");
     expect(response.body.branchNameSnapshot).toBe("Sede Norte");
     expect(response.body.dispatchAddressSnapshot).toBe("Bodega cliente");
     expect(response.body.requesterName).toBe("Laura Cliente");
@@ -1418,8 +1670,84 @@ describe("Orders", () => {
     expect(item.productId).toBe("product-1");
     expect(item.needsResolution).toBe(false);
     expect(Number(item.unitPrice)).toBe(50000);
+    // customer-1 tiene segmento con 0% de descuento: el precio de catalogo
+    // pasa intacto, pero la linea queda internamente consistente.
+    expect(Number(item.originalUnitPrice)).toBe(50000);
+    // No basta Number(x) === 0: null tambien lo satisface, y "discountPercent
+    // null con originalUnitPrice seteado" es justo el registro inconsistente
+    // que este fix elimina.
+    expect(item.discountPercent).not.toBeNull();
+    expect(Number(item.discountPercent)).toBe(0);
     expect(Number(response.body.subtotal)).toBe(100000);
     expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("prices a resolved item from the catalog with the segment discount when the goal is met", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-goal-met/items/item-goal-met/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-goal-met");
+    // basePrice 50.000 - 10% = 45.000; IVA 19% = 8.550; qty 2.
+    expect(Number(item.originalUnitPrice)).toBe(50000);
+    expect(Number(item.discountPercent)).toBe(10);
+    expect(Number(item.unitPrice)).toBe(45000);
+    expect(Number(item.taxAmount)).toBe(8550);
+    expect(Number(item.subtotal)).toBe(90000);
+    expect(Number(item.totalWithTax)).toBe(107100);
+    expect(Number(response.body.subtotal)).toBe(90000);
+    expect(Number(response.body.total)).toBe(107100);
+  });
+
+  it("prices a resolved item at full base price when the segment goal is not met", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-goal-missed/items/item-goal-missed/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-goal-missed");
+    expect(item.discountPercent).not.toBeNull();
+    expect(Number(item.discountPercent)).toBe(0);
+    expect(Number(item.originalUnitPrice)).toBe(50000);
+    expect(Number(item.unitPrice)).toBe(50000);
+    expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("ignores dto.unitPrice when resolving: the catalog price rules", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-ignore-price/items/item-ignore-price/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .set("Content-Type", "application/json")
+      // Precio absurdo tecleado por el operador: no debe llegar a la linea.
+      .send({ productId: "product-1", unitPrice: 1 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-ignore-price");
+    expect(Number(item.unitPrice)).toBe(45000);
+    expect(Number(response.body.total)).toBe(107100);
+  });
+
+  it("blocks resolving an item when the new price would exceed the credit limit", async () => {
+    // order-approved-credit ya esta en orden_facturacion (consume cupo) por
+    // 119.000 de un limite de 5.000.000. El item pide 100 unidades; a precio
+    // de catalogo (50.000 + IVA) eso reescribe order.total a 5.950.000: debe
+    // bloquearse, no encogerse el cupo.
+    // NOTA: el cupo se revienta por CANTIDAD x precio de catalogo, no por un
+    // unitPrice tecleado, porque dto.unitPrice ya no tarifa la linea.
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-approved-credit/items/item-approved-order/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(400);
+
+    expect(response.body.message).toContain("Credito excedido");
+
+    // Y el pedido NO quedo reescrito.
+    const order = orders.find((o) => o.id === "order-approved-credit");
+    expect(Number(order?.total)).toBe(119000);
   });
 
   it("approves a fully resolved order and advances it to orden_facturacion", async () => {
@@ -1504,5 +1832,96 @@ describe("Orders", () => {
       .expect(200);
     expect(response.body.approvalStatus).toBe("rechazado");
     expect(outboundMessages.some((m) => m.direction === "outbound")).toBe(true);
+  });
+
+  /**
+   * ORD-01: aprobar/avanzar un pedido es el momento en que COMPROMETE cupo,
+   * y hasta ahora ninguna de las dos rutas miraba el credito. Ademas, el propio
+   * pedido ya puede estar contado en la exposicion, asi que la validacion debe
+   * excluirlo de si mismo o se cuenta doble.
+   */
+  describe("credit gating on approve / advance / invoice (ORD-01)", () => {
+    const admin = () => `Bearer ${global.__ADMIN_TOKEN__}`;
+
+    it("blocks approving an order that exceeds available credit, and leaves it unapproved", async () => {
+      // customer-credit-tight: cupo 1.000.000, 500.000 ya comprometidos.
+      // order-credit-exceed vale 900.000 -> 1.400.000 > 1.000.000.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-credit-exceed/approve")
+        .set("Authorization", admin())
+        .expect(400);
+
+      expect(response.body.message).toContain("Credito excedido");
+
+      const after = await request(global.__APP__)
+        .get("/orders/order-credit-exceed")
+        .set("Authorization", admin())
+        .expect(200);
+      expect(after.body.approvalStatus).toBe("en_revision");
+      expect(after.body.status).toBe("recibido");
+    });
+
+    it("approves an order that fits within available credit", async () => {
+      // 500.000 comprometidos + 400.000 = 900.000 <= 1.000.000.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-credit-ok/approve")
+        .set("Authorization", admin())
+        .expect(200);
+
+      expect(response.body.approvalStatus).toBe("aprobado");
+      expect(response.body.status).toBe("orden_facturacion");
+    });
+
+    it("does not count an order against itself when approving (excludeOrderId)", async () => {
+      // order-credit-atlimit YA esta en orden_facturacion (ya suma exposicion)
+      // y vale exactamente el cupo. Sin excludeOrderId la exposicion seria
+      // 1.000.000 y aprobarlo pediria otro 1.000.000 -> falso "Credito excedido".
+      const response = await request(global.__APP__)
+        .patch("/orders/order-credit-atlimit/approve")
+        .set("Authorization", admin())
+        .expect(200);
+
+      expect(response.body.approvalStatus).toBe("aprobado");
+    });
+
+    it("blocks a manual advance to orden_facturacion that exceeds available credit", async () => {
+      // customer-credit-status: 800.000 comprometidos + este pedido 400.000.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-status-excess/status")
+        .set("Authorization", admin())
+        .send({ status: "orden_facturacion" })
+        .expect(400);
+
+      expect(response.body.message).toContain("Credito excedido");
+
+      const after = await request(global.__APP__)
+        .get("/orders/order-status-excess")
+        .set("Authorization", admin())
+        .expect(200);
+      expect(after.body.status).toBe("recibido");
+    });
+
+    it("does not check credit on transitions that commit no new cupo", async () => {
+      // Mismo cliente en exceso, pero facturado -> despachado no compromete
+      // cupo nuevo: no debe bloquearse.
+      const response = await request(global.__APP__)
+        .patch("/orders/order-status-dispatch/status")
+        .set("Authorization", admin())
+        .send({ status: "despachado" })
+        .expect(200);
+
+      expect(response.body.status).toBe("despachado");
+    });
+
+    it("does not double-count an already-exposed order when invoicing it", async () => {
+      // order-credit-invoice ya suma 1.000.000 de exposicion (cupo 1.000.000).
+      // Facturarlo por 1.000.000 no puede leerse como 2.000.000.
+      const response = await request(global.__APP__)
+        .post("/orders/order-credit-invoice/invoice")
+        .set("Authorization", admin())
+        .expect(201);
+
+      expect(Number(response.body.totalAmount)).toBe(1000000);
+    });
   });
 });

@@ -4,6 +4,7 @@ import { OrderStatus, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -64,7 +65,11 @@ describe("SellerGoals", () => {
     },
   ];
 
-  const customers = [
+  const customers: Array<{
+    id: string;
+    displayName: string;
+    assignedToUserId: string | null;
+  }> = [
     {
       id: "assigned-customer-id",
       displayName: "Agro Norte",
@@ -85,11 +90,19 @@ describe("SellerGoals", () => {
       displayName: "Agro Inactive",
       assignedToUserId: "inactive-seller-id",
     },
+    // GOAL-02: cliente sin vendedor asignado. Sus pedidos antes no contaban
+    // para nadie; ahora deben atribuirse por order.sellerUserId.
+    {
+      id: "unassigned-customer-id",
+      displayName: "Agro Sin Vendedor",
+      assignedToUserId: null,
+    },
   ];
 
   const orders = [
     {
       id: "order-1",
+      sellerUserId: "seller-user-id",
       customerId: "assigned-customer-id",
       customer: customers[0],
       status: OrderStatus.facturado,
@@ -100,6 +113,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-2",
+      sellerUserId: "seller-user-id",
       customerId: "assigned-customer-id",
       customer: customers[0],
       status: OrderStatus.entregado,
@@ -110,6 +124,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-different-seller",
+      sellerUserId: "other-seller-id",
       customerId: "other-customer-id",
       customer: customers[1],
       status: OrderStatus.facturado,
@@ -120,6 +135,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-draft-status",
+      sellerUserId: "seller-user-id",
       customerId: "assigned-customer-id",
       customer: customers[0],
       status: OrderStatus.recibido,
@@ -130,6 +146,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-outside-period",
+      sellerUserId: "seller-user-id",
       customerId: "assigned-customer-id",
       customer: customers[0],
       status: OrderStatus.facturado,
@@ -140,6 +157,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-other-company",
+      sellerUserId: "seller-user-id",
       customerId: "assigned-customer-id",
       customer: customers[0],
       status: OrderStatus.facturado,
@@ -150,6 +168,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-billing-user",
+      sellerUserId: "billing-user-id",
       customerId: "billing-customer-id",
       customer: customers[2],
       status: OrderStatus.facturado,
@@ -160,6 +179,7 @@ describe("SellerGoals", () => {
     },
     {
       id: "order-inactive-seller",
+      sellerUserId: "inactive-seller-id",
       customerId: "inactive-customer-id",
       customer: customers[3],
       status: OrderStatus.facturado,
@@ -167,6 +187,32 @@ describe("SellerGoals", () => {
       companyId: "company-1",
       orderDate: new Date("2026-06-13T12:00:00.000Z"),
       createdAt: new Date("2026-06-13T12:00:00.000Z"),
+    },
+    // GOAL-02, periodo 2026-05 (aislado de los asserts de junio):
+    // cliente SIN vendedor asignado -> antes no contaba para nadie.
+    {
+      id: "order-unassigned-customer",
+      sellerUserId: "seller-user-id",
+      customerId: "unassigned-customer-id",
+      customer: customers[4],
+      status: OrderStatus.facturado,
+      total: 25000000,
+      companyId: "company-1",
+      orderDate: new Date("2026-05-10T12:00:00.000Z"),
+      createdAt: new Date("2026-05-10T12:00:00.000Z"),
+    },
+    // GOAL-02: cliente asignado a other-seller-id pero vendido por
+    // seller-user-id -> debe contar para el vendedor real, no para el asignado.
+    {
+      id: "order-seller-overrides-assignment",
+      sellerUserId: "seller-user-id",
+      customerId: "other-customer-id",
+      customer: customers[1],
+      status: OrderStatus.facturado,
+      total: 15000000,
+      companyId: "company-1",
+      orderDate: new Date("2026-05-12T12:00:00.000Z"),
+      createdAt: new Date("2026-05-12T12:00:00.000Z"),
     },
   ];
 
@@ -186,6 +232,7 @@ describe("SellerGoals", () => {
           return found ? { ...found } : null;
         },
       },
+      refreshToken: refreshTokenStub(),
       sellerGoal: {
         create: async ({ data }: { data: Record<string, unknown> }) => {
           goalCounter++;
@@ -293,27 +340,44 @@ describe("SellerGoals", () => {
           where,
         }: {
           where?: {
-            customer?: { assignedToUserId?: string | { in?: string[] } };
+            sellerUserId?: string | { in?: string[] };
             status?: { in?: string[] };
             orderDate?: { gte?: Date; lte?: Date };
             companyId?: string;
           };
         }) => {
           orderFindManyCalls++;
+          // Un filtro que este stub no entienda sería IGNORADO en silencio y
+          // devolvería todos los pedidos, haciendo pasar los tests por la
+          // razón equivocada. Mejor fallar ruidosamente.
+          const KNOWN_WHERE_KEYS = [
+            "sellerUserId",
+            "status",
+            "orderDate",
+            "companyId",
+          ];
+          for (const key of Object.keys(where ?? {})) {
+            if (!KNOWN_WHERE_KEYS.includes(key)) {
+              throw new Error(
+                `order.findMany stub: filtro no soportado "${key}". Enséñale el filtro al stub antes de usarlo.`,
+              );
+            }
+          }
           return orders
             .filter((order) => {
-              const assignedToUserId = where?.customer?.assignedToUserId;
-              if (assignedToUserId) {
+              // GOAL-02: atribución por el vendedor real del pedido.
+              const sellerUserId = where?.sellerUserId;
+              if (sellerUserId) {
                 if (
-                  typeof assignedToUserId === "string" &&
-                  order.customer.assignedToUserId !== assignedToUserId
+                  typeof sellerUserId === "string" &&
+                  order.sellerUserId !== sellerUserId
                 ) {
                   return false;
                 }
                 if (
-                  typeof assignedToUserId !== "string" &&
-                  assignedToUserId.in &&
-                  !assignedToUserId.in.includes(order.customer.assignedToUserId)
+                  typeof sellerUserId !== "string" &&
+                  sellerUserId.in &&
+                  !sellerUserId.in.includes(order.sellerUserId)
                 ) {
                   return false;
                 }
@@ -441,7 +505,9 @@ describe("SellerGoals", () => {
       .expect(409);
   });
 
-  it("calculates progress from orders for customers assigned to the seller", async () => {
+  // Mismo escenario y mismas cifras que antes, pero la atribución ahora se
+  // deriva de order.sellerUserId (GOAL-02), no de customer.assignedToUserId.
+  it("calculates progress from orders attributed to the seller", async () => {
     await request(globalThis.__APP__)
       .post("/users/seller-user-id/seller-goals")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
@@ -467,7 +533,84 @@ describe("SellerGoals", () => {
     expect(response.body.percentage).toBe(40);
   });
 
-  it("returns seller goals dashboard totals and items for the selected period", async () => {
+  // GOAL-02: la atribución se hace por order.sellerUserId, no por
+  // customer.assignedToUserId. Antes, un pedido de un cliente sin vendedor
+  // asignado no contaba para NADIE ("Sin vendedor").
+  it("counts an order whose customer has no assigned seller toward the order's sellerUserId goal", async () => {
+    await request(globalThis.__APP__)
+      .post("/users/seller-user-id/seller-goals")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        periodType: "mensual",
+        periodValue: "2026-05",
+        targetAmount: 100000000,
+      })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get(
+        "/users/seller-user-id/seller-goals/progress?periodType=mensual&periodValue=2026-05&companyId=company-1",
+      )
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    // 25.000.000 (cliente sin asignar) + 15.000.000 (cliente asignado a otro)
+    expect(response.body.soldAmount).toBe(40000000);
+    expect(response.body.ordersCount).toBe(2);
+    expect(response.body.customersCount).toBe(2);
+    expect(response.body.percentage).toBe(40);
+    expect(response.body.remainingAmount).toBe(60000000);
+  });
+
+  // GOAL-02: el vendedor del pedido gana sobre el vendedor asignado al cliente.
+  it("attributes an order to its sellerUserId and not to the customer's assigned seller", async () => {
+    await request(globalThis.__APP__)
+      .post("/users/seller-user-id/seller-goals")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        periodType: "mensual",
+        periodValue: "2026-05",
+        targetAmount: 100000000,
+      })
+      .expect(201);
+
+    await request(globalThis.__APP__)
+      .post("/users/other-seller-id/seller-goals")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        periodType: "mensual",
+        periodValue: "2026-05",
+        targetAmount: 100000000,
+      })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-05")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    const items: Array<{
+      userId: string;
+      soldAmount: number;
+      ordersCount: number;
+    }> = response.body.items;
+
+    const seller = items.find((item) => item.userId === "seller-user-id");
+    const other = items.find((item) => item.userId === "other-seller-id");
+
+    // order-seller-overrides-assignment: cliente de other-seller-id, vendido
+    // por seller-user-id. Cuenta para el vendedor real...
+    expect(seller).toEqual(
+      expect.objectContaining({ soldAmount: 40000000, ordersCount: 2 }),
+    );
+    // ...y NO para el vendedor asignado al cliente.
+    expect(other).toEqual(
+      expect.objectContaining({ soldAmount: 0, ordersCount: 0 }),
+    );
+  });
+
+  // Igual que antes (mismas cifras), con la atribución por order.sellerUserId.
+  it("returns seller goals dashboard totals and items attributed by sellerUserId for the selected period", async () => {
     await request(globalThis.__APP__)
       .post("/users/seller-user-id/seller-goals")
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)

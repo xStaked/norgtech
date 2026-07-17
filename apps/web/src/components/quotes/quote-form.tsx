@@ -1,8 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { formatMoney, formatPercent } from "@/lib/pricing-preview";
+import { usePricingPreview } from "@/lib/use-pricing-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,9 +39,6 @@ interface Opportunity {
 interface QuoteItem {
   productId: string;
   quantity: number;
-  unitPrice: number;
-  originalUnitPrice: number;
-  discountPercent: number;
   notes: string;
 }
 
@@ -58,11 +57,11 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   const [loading, setLoading] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [items, setItems] = useState<QuoteItem[]>([
-    { productId: "", quantity: 1, unitPrice: 0, originalUnitPrice: 0, discountPercent: 0, notes: "" },
+    { productId: "", quantity: 1, notes: "" },
   ]);
 
   function addItem() {
-    setItems([...items, { productId: "", quantity: 1, unitPrice: 0, originalUnitPrice: 0, discountPercent: 0, notes: "" }]);
+    setItems([...items, { productId: "", quantity: 1, notes: "" }]);
   }
 
   function removeItem(index: number) {
@@ -72,26 +71,37 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   function updateItem(index: number, field: keyof QuoteItem, value: string | number) {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
-    if (field === "productId") {
-      const product = products.find((p) => p.id === value);
-      if (product) {
-        const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
-        const discountPercent = Number(selectedCustomer?.segment?.discountPercent ?? 0);
-        const basePrice = Number(product.basePrice);
-        const discountedPrice = Math.round(basePrice * (1 - discountPercent / 100) * 100) / 100;
-        updated[index].originalUnitPrice = basePrice;
-        updated[index].discountPercent = discountPercent;
-        updated[index].unitPrice = discountedPrice;
-      }
-    }
     setItems(updated);
   }
 
-  const subtotal = items.reduce((sum, item) => sum + item.quantity * item.originalUnitPrice, 0);
-  const totalDiscount = items.reduce((sum, item) => sum + item.quantity * (item.originalUnitPrice - item.unitPrice), 0);
-  const finalTotal = subtotal - totalDiscount;
+  // Indices of the lines the backend will actually price, so each rendered row
+  // can find its own priced line in the preview.
+  const validIndices = useMemo(
+    () => items.map((item, i) => (item.productId && item.quantity > 0 ? i : -1)).filter((i) => i >= 0),
+    [items],
+  );
 
-  const selectedCustomer = customers.find((c) => c.id === selectedCustomerId);
+  const previewItems = useMemo(
+    () =>
+      validIndices.map((i) => ({
+        productId: items[i].productId,
+        quantity: items[i].quantity,
+        // Ignored by the backend for catalog lines, but the DTO requires it.
+        unitPrice: 0,
+      })),
+    [items, validIndices],
+  );
+
+  const { preview, loading: previewLoading } = usePricingPreview(
+    "/quotes/preview",
+    selectedCustomerId,
+    previewItems,
+  );
+
+  const lineFor = (index: number) => {
+    const position = validIndices.indexOf(index);
+    return position >= 0 ? preview?.lines[position] : undefined;
+  };
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -110,14 +120,14 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
       opportunityId: optionalString("opportunityId"),
       notes: optionalString("notes"),
       validUntil: optionalString("validUntil"),
-      items: items
-        .filter((item) => item.productId && item.quantity > 0)
-        .map((item) => ({
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          notes: item.notes,
-        })),
+      items: validIndices.map((i) => ({
+        productId: items[i].productId,
+        quantity: items[i].quantity,
+        // The backend re-derives this from the catalog + segment discount; it
+        // is sent only because the DTO requires the field.
+        unitPrice: 0,
+        notes: items[i].notes,
+      })),
     };
 
     if (body.items.length === 0) {
@@ -167,12 +177,21 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
             </option>
           ))}
         </select>
-        {selectedCustomerId && selectedCustomer?.segment && (
+        {selectedCustomerId && preview?.segmentName && (
           <div className="text-sm text-muted-foreground">
             Segmento:{" "}
-            <span className="font-medium text-foreground">{selectedCustomer.segment.name}</span>
-            {" "}• Descuento: {" "}
-            <span className="font-medium text-foreground">{Number(selectedCustomer.segment.discountPercent)}%</span>
+            <span className="font-medium text-foreground">{preview.segmentName}</span>
+            {" "}• Descuento:{" "}
+            <span className="font-medium text-foreground">
+              {formatPercent(preview.discountPercent)}
+            </span>
+            {!preview.meetsGoal && preview.goalThreshold > 0 && (
+              <span className="text-amber-700 dark:text-amber-500">
+                {" "}• No aplica: faltan{" "}
+                {formatMoney(Math.max(preview.goalThreshold - preview.salesYTD, 0))} para cumplir la
+                meta del segmento
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -223,15 +242,23 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
                   </option>
                 ))}
               </select>
-              {item.discountPercent > 0 && (
-                <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-1.5 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-                  <span className="font-medium">Descuento {item.discountPercent}% aplicado</span>
-                  <span className="text-muted-foreground">•</span>
-                  <span>Precio base: ${item.originalUnitPrice.toLocaleString("es-CO")}</span>
-                  <span className="text-muted-foreground">→</span>
-                  <span className="font-semibold">${item.unitPrice.toLocaleString("es-CO")}</span>
-                </div>
-              )}
+              {(() => {
+                const line = lineFor(index);
+                if (!line || line.discountPercent <= 0 || line.originalUnitPrice === null) {
+                  return null;
+                }
+                return (
+                  <div className="flex items-center gap-2 rounded-md bg-amber-50 px-3 py-1.5 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                    <span className="font-medium">
+                      Descuento {formatPercent(line.discountPercent)} aplicado
+                    </span>
+                    <span className="text-muted-foreground">•</span>
+                    <span className="line-through">{formatMoney(line.originalUnitPrice)}</span>
+                    <span className="text-muted-foreground">→</span>
+                    <span className="font-semibold">{formatMoney(line.unitPrice)}</span>
+                  </div>
+                );
+              })()}
             </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -247,18 +274,16 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
               </div>
               <div className="grid gap-1">
                 <Label>Precio unitario</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={0.01}
-                  value={String(item.unitPrice)}
-                  onChange={(e) => updateItem(index, "unitPrice", Number(e.target.value))}
-                />
+                {/* Read-only: the price comes from the catalog and the segment
+                    discount, both resolved by the backend. */}
+                <div className="flex h-8 items-center rounded-lg border border-border bg-card px-2.5 text-sm text-card-foreground">
+                  {lineFor(index) ? formatMoney(lineFor(index)!.unitPrice) : "—"}
+                </div>
               </div>
               <div className="grid gap-1">
                 <Label>Subtotal</Label>
                 <div className="flex h-8 items-center rounded-lg border border-border bg-card px-2.5 text-sm font-semibold text-card-foreground">
-                  ${(item.quantity * item.unitPrice).toLocaleString("es-CO")}
+                  {lineFor(index) ? formatMoney(lineFor(index)!.subtotal) : "—"}
                 </div>
               </div>
             </div>
@@ -298,20 +323,26 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         + Agregar item
       </Button>
 
+      {/* Every figure here comes from POST /quotes/preview, which runs the same
+          PricingService as create() — so this summary is what gets saved. */}
       <div className="grid gap-2 rounded-lg bg-muted p-4">
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Subtotal</span>
-          <span>${subtotal.toLocaleString("es-CO")}</span>
+          <span>
+            {preview ? formatMoney(preview.subtotal + preview.discountAmount) : "—"}
+          </span>
         </div>
-        {totalDiscount > 0 && (
+        {preview && preview.discountAmount > 0 && (
           <div className="flex justify-between text-sm text-emerald-600">
-            <span>Descuento por segmento</span>
-            <span>-${totalDiscount.toLocaleString("es-CO")}</span>
+            <span>Descuento por segmento ({formatPercent(preview.discountPercent)})</span>
+            <span>-{formatMoney(preview.discountAmount)}</span>
           </div>
         )}
         <div className="flex justify-between border-t border-border pt-2 text-lg font-semibold">
           <span>Total</span>
-          <span>${finalTotal.toLocaleString("es-CO")}</span>
+          <span data-testid="quote-total">
+            {previewLoading && !preview ? "Calculando..." : preview ? formatMoney(preview.total) : "—"}
+          </span>
         </div>
       </div>
 

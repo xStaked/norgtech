@@ -17,6 +17,7 @@ import { AppModule } from "../src/app.module";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { WhatsAppOrderAutomationService } from "../src/modules/whatsapp/whatsapp-order-automation.service";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 describe("WhatsApp inbox", () => {
@@ -603,6 +604,7 @@ describe("WhatsApp inbox", () => {
             return true;
           }).map((user) => (select ? applySelect(user, select) : user)),
       },
+      refreshToken: refreshTokenStub(),
       customer: {
         findUnique: async ({
           where: { id },
@@ -1643,7 +1645,9 @@ describe("WhatsApp inbox", () => {
     expect(response.body.sourceConversationId).toBe("conversation-1");
     expect(response.body.sourceConversation.id).toBe("conversation-1");
     expect(response.body.approvalStatus).toBe("en_revision");
-    expect(response.body.billingCompanyNameSnapshot).toBe("Facturadora WhatsApp SAS");
+    // billingCompanyNameSnapshot always reflects the billing company (company.name),
+    // regardless of any dto.billingCompanyNameSnapshot override (ORD-03).
+    expect(response.body.billingCompanyNameSnapshot).toBe("Norgtech");
     expect(response.body.branchNameSnapshot).toBe("Sucursal WhatsApp");
     expect(response.body.requesterName).toBe("Laura Cliente");
   });

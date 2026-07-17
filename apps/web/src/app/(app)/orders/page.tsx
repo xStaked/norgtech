@@ -10,7 +10,7 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
-import { canCreate } from "@/lib/auth";
+import { canAccess, canCreate } from "@/lib/auth";
 
 interface Customer {
   id: string;
@@ -197,9 +197,11 @@ export default async function OrdersPage({
         actions={
           <>
             {canCreate(userRole, "order") && <ButtonLink href="/orders/new">Nuevo pedido</ButtonLink>}
-            <ButtonLink href="/billing-requests" variant="secondary">
-              Ver facturación
-            </ButtonLink>
+            {canAccess(userRole, "/billing-requests") && (
+              <ButtonLink href="/billing-requests" variant="secondary">
+                Ver facturación
+              </ButtonLink>
+            )}
           </>
         }
       />

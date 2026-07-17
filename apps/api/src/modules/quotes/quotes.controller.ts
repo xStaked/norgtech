@@ -14,12 +14,28 @@ import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateQuoteDto } from "./dto/create-quote.dto";
+import { PreviewQuoteDto } from "./dto/preview-quote.dto";
 import { UpdateQuoteStatusDto } from "./dto/update-quote-status.dto";
 import { QuotesService } from "./quotes.service";
 
 @Controller("quotes")
 export class QuotesController {
   constructor(private readonly quotesService: QuotesService) {}
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "comercial", "director_comercial")
+  @Post("preview")
+  preview(
+    @Body(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+      }),
+    )
+    dto: PreviewQuoteDto,
+  ) {
+    return this.quotesService.preview(dto);
+  }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial")

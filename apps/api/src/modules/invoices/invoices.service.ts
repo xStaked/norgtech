@@ -78,7 +78,15 @@ export class InvoicesService {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
         return await this.prisma.$transaction(async (tx) => {
-          await this.credit.assertCreditLimit(dto.customerId, totalAmount, tx);
+          // Factura suelta -> nada que excluir. Si viene atada a un pedido, ese
+          // pedido ya puede estar en la exposicion y contarlo junto a su propia
+          // factura duplicaria el cupo (mismo defecto que createInvoiceFromOrder).
+          await this.credit.assertCreditLimit(
+            dto.customerId,
+            totalAmount,
+            tx,
+            dto.orderId ? { excludeOrderId: dto.orderId } : undefined,
+          );
 
           const invoiceNumber =
             dto.invoiceNumber?.trim() || (await this.nextInvoiceNumber(company.prefix, tx));

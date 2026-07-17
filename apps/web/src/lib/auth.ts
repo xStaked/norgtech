@@ -32,6 +32,16 @@ export function getSessionTokenClient(): string | null {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+export function setSessionTokenClient(token: string): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; path=/; SameSite=Lax`;
+}
+
+export function clearSessionClient(): void {
+  if (typeof document === "undefined") return;
+  document.cookie = `${SESSION_COOKIE_NAME}=; path=/; Max-Age=0`;
+}
+
 export function decodeJwtPayload(token: string): Record<string, unknown> | null {
   try {
     const payload = token.split(".")[1];
@@ -75,6 +85,8 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/segments": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
     "/users": ["administrador"],
+    "/companies": ["administrador", "director_comercial"],
+    "/zones": ["administrador", "director_comercial"],
   };
 
   const allowedRoles = moduleAccess[moduleHref];

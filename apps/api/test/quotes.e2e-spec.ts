@@ -4,6 +4,7 @@ import { UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -45,10 +46,20 @@ describe("Quotes", () => {
         if (id !== customerId && id !== discountCustomerId) return null;
         const result: Record<string, unknown> = { id };
         if (include?.segment) {
-          result.segment = { discountPercent: id === discountCustomerId ? 10 : 0 };
+          result.segment = {
+            discountPercent: id === discountCustomerId ? 10 : 0,
+            minGoalAmount: 0,
+          };
         }
         return result;
       },
+    };
+
+    // discountCustomerId's segment has a positive discount, so PricingService
+    // conditions it on YTD sales meeting the (zero, in this fixture)
+    // minGoalAmount. Returning 0 here still satisfies the >= 0 goal.
+    const order = {
+      aggregate: async () => ({ _sum: { total: 0 } }),
     };
 
     const product = {
@@ -66,8 +77,10 @@ describe("Quotes", () => {
 
     const prismaStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       product,
+      order,
       quote: {
         create: async () => {
           throw new Error("quote.create must run inside a transaction");
@@ -268,8 +281,8 @@ describe("Quotes", () => {
     expect(response.body.subtotal).toBe("405000");
     expect(response.body.total).toBe("405000");
     expect(response.body.items).toHaveLength(1);
-    expect(response.body.items[0].originalUnitPrice).toBe(45000);
-    expect(response.body.items[0].discountPercent).toBe(10);
+    expect(response.body.items[0].originalUnitPrice).toBe("45000");
+    expect(response.body.items[0].discountPercent).toBe("10");
     expect(response.body.items[0].unitPrice).toBe("40500");
     expect(response.body.items[0].subtotal).toBe("405000");
   });
@@ -292,7 +305,7 @@ describe("Quotes", () => {
     expect(response.body.items).toHaveLength(1);
     expect(response.body.items[0].originalUnitPrice).toBeNull();
     expect(response.body.items[0].discountPercent).toBeNull();
-    expect(response.body.items[0].unitPrice).toBe(20000);
+    expect(response.body.items[0].unitPrice).toBe("20000");
     expect(response.body.items[0].subtotal).toBe("100000");
   });
 });

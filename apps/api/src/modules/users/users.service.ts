@@ -5,6 +5,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
+import { SELLER_ROLES } from "../seller-goals/seller-eligibility";
 
 type BcryptModule = {
   hash(value: string, rounds: number): Promise<string>;
@@ -33,6 +34,21 @@ export class UsersService {
     return this.prisma.user.findMany({
       orderBy: { name: "asc" },
       select: publicUserSelect,
+    });
+  }
+
+  /**
+   * Vendedores elegibles para el selector "Vendedor" del formulario de pedido
+   * (GOAL-02). Endpoint aparte de `findAll` a proposito: `GET /users` es solo
+   * para administrador, y un comercial creando un pedido necesita la lista.
+   * Se expone id+name y nada mas, en vez de ampliar los roles de `findAll` y
+   * filtrar cada usuario y cada campo a mas gente.
+   */
+  async findSellers(): Promise<Array<{ id: string; name: string }>> {
+    return this.prisma.user.findMany({
+      where: { active: true, role: { in: SELLER_ROLES } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
     });
   }
 

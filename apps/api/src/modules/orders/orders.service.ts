@@ -3,7 +3,9 @@ import { InvoiceStatus, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { PricingService } from "../pricing/pricing.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
+import { PreviewOrderDto } from "./dto/preview-order.dto";
 import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
 import { UpdateOrderLogisticsDto } from "./dto/update-order-logistics.dto";
 import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
@@ -12,6 +14,7 @@ import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
 import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { allowedTransitions } from "./order-status-transition-map";
+import { isEligibleSeller } from "../seller-goals/seller-eligibility";
 
 const INVOICE_ALLOWED_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.orden_facturacion,
@@ -50,16 +53,16 @@ export class OrdersService {
     private readonly credit: CreditService,
     @Inject(forwardRef(() => WhatsAppService))
     private readonly whatsApp: WhatsAppService,
+    private readonly pricingService: PricingService,
   ) {}
 
+  async preview(dto: PreviewOrderDto) {
+    const customer = await this.loadCustomerOrThrow(dto.customerId);
+    return this.pricingService.buildPreview(customer, dto.items, "order");
+  }
+
   async create(user: AuthUser, dto: CreateOrderDto) {
-    const customer = await this.prisma.customer.findUnique({
-      where: { id: dto.customerId },
-      include: { segment: true },
-    });
-    if (!customer) {
-      throw new NotFoundException("Customer not found");
-    }
+    const customer = await this.loadCustomerOrThrow(dto.customerId);
     const company = await this.prisma.company.findUnique({
       where: { id: dto.companyId },
     });
@@ -90,23 +93,23 @@ export class OrdersService {
       await this.assertUserExists(dto.assignedLogisticsUserId);
     }
 
-    const orderSubtotal = dto.items.reduce(
-      (sum, item) =>
-        sum.plus(
-          new Prisma.Decimal(item.quantity).times(new Prisma.Decimal(item.unitPrice)),
-        ),
-      new Prisma.Decimal(0),
-    );
+    const sellerUserId = await this.resolveSellerUserId(user, dto, customer);
 
-    await this.credit.assertCreditLimit(dto.customerId, orderSubtotal);
+    // Price first, then gate: for catalog lines priceLines() derives unitPrice
+    // from product.basePrice and ignores dto's unitPrice, so checking credit
+    // against the DTO would guard a number the client controls.
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
 
-    const discountPercent = customer.segment?.discountPercent ?? new Prisma.Decimal(0);
+    // Se valida contra el TOTAL (con IVA), no el subtotal: es lo que termina en
+    // invoice.totalAmount y lo que la exposicion suma (order.total). Validar el
+    // subtotal dejaba pasar el IVA sin cupo.
+    await this.credit.assertCreditLimit(dto.customerId, pricing.total);
+
     const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
     const customerNameSnapshot = customer.displayName;
     const customerNitSnapshot = customer.taxId ?? null;
-    const billingCompanyNameSnapshot =
-      dto.billingCompanyNameSnapshot?.trim() || customerNameSnapshot || null;
+    const billingCompanyNameSnapshot = company.name;
     const branchNameSnapshot = dto.branchNameSnapshot?.trim() || null;
     const dispatchAddressSnapshot =
       dto.dispatchAddressSnapshot?.trim() || customer.address || null;
@@ -115,86 +118,52 @@ export class OrdersService {
       (await this.prisma.user.findUnique({ where: { id: user.id } }))?.name ||
       user.email;
 
-    const itemsWithSnapshot = await Promise.all(
-      dto.items.map(async (item) => {
-        const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
-
-        if (item.productId) {
-          const product = await this.prisma.product.findUnique({
-            where: { id: item.productId },
-          });
-          if (!product) {
-            throw new NotFoundException(`Product ${item.productId} not found`);
-          }
-          const discountMultiplier = new Prisma.Decimal(1).minus(
-            new Prisma.Decimal(discountPercent).dividedBy(100),
-          );
-          const unitPriceRounded = new Prisma.Decimal(product.basePrice)
-            .times(discountMultiplier)
-            .toDecimalPlaces(2);
-          const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-          const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
-          const totalWithTax = new Prisma.Decimal(item.quantity)
-            .times(unitPriceRounded.plus(taxAmount))
-            .toDecimalPlaces(2);
-
-          return {
-            productId: item.productId,
-            productSnapshotName: product.name,
-            productSnapshotSku: product.sku,
-            unit: product.unit,
-            presentationSnapshot: item.presentation?.trim() || product.presentation || null,
-            customProductName: null,
-            quantity: item.quantity,
-            originalUnitPrice: product.basePrice,
-            discountPercent,
-            unitPrice: unitPriceRounded,
-            taxPercent,
-            taxAmount,
-            totalWithTax,
-            subtotal,
-            notes: item.notes,
-            needsResolution: false,
-          };
-        }
-        const customProductName = item.productName?.trim() || null;
-        const presentationSnapshot = item.presentation?.trim() || null;
-        const unitPriceRounded = new Prisma.Decimal(item.unitPrice).toDecimalPlaces(2);
-        const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-        const subtotal = new Prisma.Decimal(item.quantity).times(unitPriceRounded).toDecimalPlaces(2);
-        const totalWithTax = new Prisma.Decimal(item.quantity)
-          .times(unitPriceRounded.plus(taxAmount))
-          .toDecimalPlaces(2);
-
+    const itemsWithSnapshot = pricing.rawItems.map((line, index) => {
+      const item = dto.items[index];
+      if (line.productId) {
         return {
-          productId: null,
-          productSnapshotName: customProductName || "Custom item",
-          productSnapshotSku: "CUSTOM",
-          unit: "unit",
-          presentationSnapshot,
-          customProductName,
-          quantity: item.quantity,
-          originalUnitPrice: null,
-          discountPercent: null,
-          unitPrice: unitPriceRounded,
-          taxPercent,
-          taxAmount,
-          totalWithTax,
-          subtotal,
-          notes: item.notes,
-          needsResolution: item.needsResolution ?? false,
+          productId: line.productId,
+          productSnapshotName: line.productSnapshotName,
+          productSnapshotSku: line.productSnapshotSku,
+          unit: line.unit,
+          presentationSnapshot: item.presentation?.trim() || line.productPresentation || null,
+          customProductName: null,
+          quantity: line.quantity,
+          originalUnitPrice: line.originalUnitPrice,
+          discountPercent: line.discountPercent,
+          unitPrice: line.unitPrice,
+          taxPercent: line.taxPercent,
+          taxAmount: line.taxAmount,
+          totalWithTax: line.totalWithTax,
+          subtotal: line.subtotal,
+          notes: line.notes,
+          needsResolution: false,
         };
-      }),
-    );
+      }
+      const customProductName = item.productName?.trim() || null;
+      const presentationSnapshot = item.presentation?.trim() || null;
+      return {
+        productId: null,
+        productSnapshotName: customProductName || "Custom item",
+        productSnapshotSku: "CUSTOM",
+        unit: "unit",
+        presentationSnapshot,
+        customProductName,
+        quantity: line.quantity,
+        originalUnitPrice: line.originalUnitPrice,
+        discountPercent: line.discountPercent,
+        unitPrice: line.unitPrice,
+        taxPercent: line.taxPercent,
+        taxAmount: line.taxAmount,
+        totalWithTax: line.totalWithTax,
+        subtotal: line.subtotal,
+        notes: line.notes,
+        needsResolution: item.needsResolution ?? false,
+      };
+    });
 
-    const subtotal = itemsWithSnapshot.reduce(
-      (sum, item) => sum.plus(new Prisma.Decimal(item.subtotal)),
-      new Prisma.Decimal(0),
-    );
-    const total = itemsWithSnapshot.reduce(
-      (sum, item) => sum.plus(new Prisma.Decimal(item.totalWithTax)),
-      new Prisma.Decimal(0),
-    );
+    const subtotal = pricing.subtotal;
+    const total = pricing.total;
 
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
@@ -239,6 +208,7 @@ export class OrdersService {
             ? new Date(dto.committedDeliveryDate)
             : null,
           logisticsNotes: dto.logisticsNotes,
+          sellerUserId,
           subtotal,
           total,
           createdBy: user.id,
@@ -312,7 +282,11 @@ export class OrdersService {
           }
 
           const totals = this.calculateInvoiceTotalsFromOrder(order);
-          await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx);
+          // El pedido YA cuenta en la exposicion: sin excluirlo, facturarlo se
+          // leeria como pedido + factura y duplicaria el consumo de cupo.
+          await this.credit.assertCreditLimit(order.customerId, totals.totalAmount, tx, {
+            excludeOrderId: order.id,
+          });
 
           const issueDate = new Date();
           const dueDate = this.calculateInvoiceDueDate(issueDate, order.customer.paymentDays);
@@ -411,12 +385,16 @@ export class OrdersService {
       where: { id },
       include: {
         customer: true,
+        company: true,
         opportunity: true,
         sourceQuote: true,
         sourceConversation: true,
         items: true,
         billingRequests: true,
         assignedLogisticsUser: true,
+        // GOAL-02: el detalle mostraba "Vendedor" desde preparedByName (texto
+        // libre, sin FK). Ahora lee el mismo vendedor que atribuye las metas.
+        seller: { select: { id: true, name: true } },
         customerZone: { include: { zone: true, assignedTo: { select: { id: true, name: true } } } },
       },
     });
@@ -431,6 +409,14 @@ export class OrdersService {
 
       if (!this.isTransitionAllowed(order.status, dto.status)) {
         throw new BadRequestException("Invalid order status transition");
+      }
+
+      // Avance manual a orden_facturacion = mismo momento de compromiso que
+      // approveOrder(). El resto de transiciones no compromete cupo nuevo.
+      if (dto.status === OrderStatus.orden_facturacion) {
+        await this.credit.assertCreditLimit(order.customerId, order.total, tx, {
+          excludeOrderId: order.id,
+        });
       }
 
       const previousState = JSON.parse(JSON.stringify(order));
@@ -585,31 +571,49 @@ export class OrdersService {
       if (!item || item.orderId !== orderId) {
         throw new NotFoundException("Order item not found");
       }
-      const product = await tx.product.findUnique({ where: { id: dto.productId } });
-      if (!product) {
-        throw new NotFoundException(`Product ${dto.productId} not found`);
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        select: { customerId: true },
+      });
+      if (!order) {
+        throw new NotFoundException("Order not found");
       }
 
-      const quantity = new Prisma.Decimal(item.quantity);
-      const taxPercent = new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2);
-      const unitPrice = new Prisma.Decimal(dto.unitPrice).toDecimalPlaces(2);
-      const taxAmount = unitPrice.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-      const subtotal = quantity.times(unitPrice).toDecimalPlaces(2);
-      const totalWithTax = quantity.times(unitPrice.plus(taxAmount)).toDecimalPlaces(2);
+      // La linea resuelta se tarifa como cualquier linea de catalogo en
+      // create(): precio derivado de product.basePrice y descuento de segmento
+      // condicionado a la meta. dto.unitPrice se ignora a proposito -- si el
+      // precio tecleado por el operador mandara, el mismo producto tendria dos
+      // precios segun la puerta por la que entro, y la linea quedaba
+      // inconsistente (originalUnitPrice seteado y discountPercent null).
+      const customer = await this.loadCustomerOrThrow(order.customerId);
+      const pricing = await this.pricingService.priceLines(
+        customer,
+        [
+          {
+            productId: dto.productId,
+            quantity: Number(item.quantity),
+            taxPercent: item.taxPercent ?? 19,
+          },
+        ],
+        "order",
+      );
+      const line = pricing.rawItems[0];
 
       await tx.orderItem.update({
         where: { id: itemId },
         data: {
-          productId: product.id,
-          productSnapshotName: product.name,
-          productSnapshotSku: product.sku,
-          unit: product.unit,
+          productId: line.productId,
+          productSnapshotName: line.productSnapshotName,
+          productSnapshotSku: line.productSnapshotSku,
+          unit: line.unit,
           customProductName: null,
-          originalUnitPrice: product.basePrice,
-          unitPrice,
-          taxAmount,
-          subtotal,
-          totalWithTax,
+          originalUnitPrice: line.originalUnitPrice,
+          discountPercent: line.discountPercent,
+          unitPrice: line.unitPrice,
+          taxPercent: line.taxPercent,
+          taxAmount: line.taxAmount,
+          subtotal: line.subtotal,
+          totalWithTax: line.totalWithTax,
           needsResolution: false,
         },
       });
@@ -623,6 +627,16 @@ export class OrdersService {
         (sum, current) => sum.plus(new Prisma.Decimal(current.totalWithTax)),
         new Prisma.Decimal(0),
       );
+
+      // Resolver un item reescribe order.total, que es exactamente lo que la
+      // exposicion de credito suma. Sin este chequeo se podia aprobar un pedido
+      // barato y despues subirle el precio sin limite: el unico gate estaba en
+      // la transicion a orden_facturacion, que ya habia pasado.
+      // El pedido ya se cargo arriba (hace falta el customerId para tarifar);
+      // el chequeo sigue DESPUES de recomputar los totales, a proposito.
+      await this.credit.assertCreditLimit(order.customerId, orderTotal, tx, {
+        excludeOrderId: orderId,
+      });
 
       const updated = await tx.order.update({
         where: { id: orderId },
@@ -671,6 +685,13 @@ export class OrdersService {
       if (order.items.some((item) => item.needsResolution)) {
         throw new BadRequestException("Order has unresolved items");
       }
+
+      // Aprobar es el momento en que el pedido COMPROMETE cupo (pasa a
+      // orden_facturacion). Se excluye a si mismo: si ya figura en la
+      // exposicion, contarlo otra vez lo bloquearia contra su propio importe.
+      await this.credit.assertCreditLimit(order.customerId, order.total, tx, {
+        excludeOrderId: order.id,
+      });
 
       const previousState = JSON.parse(JSON.stringify(order));
       const reviewer =
@@ -822,6 +843,57 @@ export class OrdersService {
     if (!user) {
       throw new NotFoundException("User not found");
     }
+  }
+
+  /**
+   * Vendedor al que se atribuye la venta (GOAL-02).
+   *
+   * Precedencia: dto.sellerUserId -> customer.assignedToUserId -> creador (si es
+   * seller elegible) -> null. El ultimo caso es el default documentado: un
+   * administrador creando para un cliente sin asignado deja el pedido sin
+   * vendedor en vez de atribuirselo a alguien que no vende.
+   *
+   * `dto.sellerUserId` es un limite de confianza: lo elige el cliente, asi que
+   * se valida contra la MISMA regla de elegibilidad que usan las metas en vez
+   * de persistir un id arbitrario. `customer.assignedToUserId` no se revalida:
+   * es dato ya curado del CRM y revalidarlo dejaria pedidos sin atribuir si el
+   * asignado cambia de rol.
+   */
+  private async resolveSellerUserId(
+    user: AuthUser,
+    dto: CreateOrderDto,
+    customer: { assignedToUserId: string | null },
+  ): Promise<string | null> {
+    if (dto.sellerUserId) {
+      const seller = await this.prisma.user.findUnique({
+        where: { id: dto.sellerUserId },
+      });
+      if (!seller) {
+        throw new NotFoundException("Seller not found");
+      }
+      if (!isEligibleSeller(seller)) {
+        throw new BadRequestException("User is not an active eligible seller");
+      }
+      return seller.id;
+    }
+
+    if (customer.assignedToUserId) {
+      return customer.assignedToUserId;
+    }
+
+    const creator = await this.prisma.user.findUnique({ where: { id: user.id } });
+    return isEligibleSeller(creator) ? user.id : null;
+  }
+
+  private async loadCustomerOrThrow(customerId: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      include: { segment: true },
+    });
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
+    return customer;
   }
 
   private isTransitionAllowed(currentStatus: OrderStatus, nextStatus: OrderStatus) {

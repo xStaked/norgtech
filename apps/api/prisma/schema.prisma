@@ -256,6 +256,7 @@ model User {
   updatedAt                     DateTime                   @updatedAt
   assignedCustomers             Customer[]                 @relation("CustomerAssignedUser")
   assignedOrders                Order[]
+  soldOrders                    Order[]                    @relation("OrderSeller")
   createdReports                ExecutiveReport[]
   lauraSessions                 LauraSession[]
   assignedWhatsAppConversations WhatsAppConversation[]     @relation("WhatsAppAssignedUser")
@@ -270,6 +271,19 @@ model User {
   uploadedPaymentSupports       PaymentSupport[]
   assignedCustomerZones         CustomerZone[]             @relation("CustomerZoneAssignedUser")
   sellerGoals                   SellerGoal[]
+  refreshTokens                 RefreshToken[]
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model LauraSession {
@@ -707,6 +721,8 @@ model Order {
   opportunity                Opportunity?          @relation(fields: [opportunityId], references: [id])
   sourceQuote                Quote?                @relation(fields: [sourceQuoteId], references: [id])
   assignedLogisticsUser      User?                 @relation(fields: [assignedLogisticsUserId], references: [id])
+  sellerUserId               String?
+  seller                     User?                 @relation("OrderSeller", fields: [sellerUserId], references: [id])
   sourceConversation         WhatsAppConversation? @relation(fields: [sourceConversationId], references: [id])
   customerZoneId             String?
   customerZone               CustomerZone?         @relation(fields: [customerZoneId], references: [id])
@@ -717,6 +733,12 @@ model Order {
 
   @@index([orderDate])
   @@index([sourceConversationId])
+  // seller-goals filtra por sellerUserId (igualdad) + orderDate (rango) y
+  // opcionalmente companyId. Igualdad primero, rango despues: este indice sirve
+  // esa consulta y, por prefijo izquierdo, tambien el lookup simple por
+  // sellerUserId. companyId queda fuera porque es opcional en el filtro y
+  // meterlo antes de orderDate inutilizaria el rango cuando no viene.
+  @@index([sellerUserId, orderDate])
 }
 
 model OrderItem {

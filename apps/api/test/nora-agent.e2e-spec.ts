@@ -6,6 +6,7 @@ import { CommercialExpenseCategory, NoraConversationCaseStatus, UserRole } from 
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { NoraCaseService } from "../src/modules/whatsapp/nora-case.service";
 import { CommercialExpensesService } from "../src/modules/commercial-expenses/commercial-expenses.service";
@@ -569,6 +570,7 @@ describe("POST /whatsapp/agent/expenses (full-app)", () => {
           users.find((u) => u.email === where.email || u.id === where.id) ?? null,
         findMany: async () => users,
       },
+      refreshToken: refreshTokenStub(),
       whatsAppConversation: {
         findUnique: async ({ where }: { where: { id: string } }) =>
           where.id === conversation.id ? { ...conversation } : null,

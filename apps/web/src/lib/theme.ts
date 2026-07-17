@@ -182,7 +182,7 @@ export const primaryNavItems = [
     shortLabel: "EM",
     description: "Empresas facturadoras del sistema",
     group: "Admin",
-    requiredRoles: ["administrador"] as const,
+    requiredRoles: ["administrador", "director_comercial"] as const,
   },
 ] as const satisfies readonly NavItem[];
 

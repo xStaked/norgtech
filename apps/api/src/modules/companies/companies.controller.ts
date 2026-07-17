@@ -11,6 +11,7 @@ import {
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
+import { ROLE_GROUPS } from "../auth/permissions";
 import { CompaniesService } from "./companies.service";
 import { CreateCompanyDto } from "./dto/create-company.dto";
 import { UpdateCompanyDto } from "./dto/update-company.dto";
@@ -20,7 +21,7 @@ export class CompaniesController {
   constructor(private readonly companiesService: CompaniesService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador")
+  @Roles(...ROLE_GROUPS.ADMIN_AND_DIRECTOR)
   @Post()
   create(
     @Body(
@@ -44,7 +45,7 @@ export class CompaniesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador")
+  @Roles(...ROLE_GROUPS.ADMIN_AND_DIRECTOR)
   @Patch(":id")
   update(
     @Param("id") id: string,

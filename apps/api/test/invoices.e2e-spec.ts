@@ -5,6 +5,8 @@ import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { R2StorageService } from "../src/shared/r2-storage.service";
+import { refreshTokenStub } from "./helpers/login-as";
+import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -68,6 +70,16 @@ describe("Invoices", () => {
       updatedBy: "admin-user-id",
       assignedToUserId: null,
     },
+    {
+      id: "customer-tight",
+      displayName: "Agro Cupo",
+      taxId: "900555666-1",
+      creditLimit: new Prisma.Decimal(1000000),
+      paymentDays: 30,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      assignedToUserId: null,
+    },
   ];
 
   const orders = [
@@ -76,6 +88,20 @@ describe("Invoices", () => {
       customerId: "customer-1",
       orderNumber: "PED-000001",
       status: "entregado",
+      subtotal: new Prisma.Decimal(100000),
+      total: new Prisma.Decimal(119000),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+    },
+    // Pedido que ya agota el cupo de customer-tight (entregado => ya suma
+    // exposicion) y que todavia no tiene factura.
+    {
+      id: "order-tight",
+      customerId: "customer-tight",
+      orderNumber: "PED-000900",
+      status: "entregado",
+      subtotal: new Prisma.Decimal(840336.13),
+      total: new Prisma.Decimal(1000000),
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
     },
@@ -153,10 +179,14 @@ describe("Invoices", () => {
       findUnique: async ({ where: { id } }: { where: { id: string } }) => {
         return orders.find((o) => o.id === id) ?? null;
       },
+      // CreditService.getCustomerExposure suma pedidos aprobados sin factura activa.
+      findMany: async ({ where }: { where?: OrderWhereStub } = {}) =>
+        orders.filter((o) => matchesOrderWhere(o, where, invoices as any)),
     };
 
     const txStub = {
       user,
+      refreshToken: refreshTokenStub(),
       customer,
       company,
       order,
@@ -205,6 +235,9 @@ describe("Invoices", () => {
         aggregate: async ({ where }: { where: any }) => ({
           _sum: {
             totalAmount: invoices
+              // Honrar customerId: sin esto la exposicion de un cliente incluia
+              // las facturas de todos los demas y de cualquier test previo.
+              .filter((invoice) => !where?.customerId || (invoice as any).customerId === where.customerId)
               .filter((invoice) => !where?.status?.notIn?.includes(invoice.status))
               .reduce((sum, invoice) => sum + Number(invoice.totalAmount), 0),
           },
@@ -244,6 +277,10 @@ describe("Invoices", () => {
         create: async () => undefined,
         findMany: async () => auditLogs,
       },
+      // Row lock de CreditService.assertCreditLimit. El stub no tiene
+      // transacciones reales, asi que solo debe devolver una fila (no vacia,
+      // o el lock lanzaria "Cliente no encontrado").
+      $queryRaw: async () => [{ id: "locked" }],
     };
 
     const prismaStub = {
@@ -305,6 +342,27 @@ describe("Invoices", () => {
     expect(response.body.customerId).toBe("customer-1");
     expect(response.body.status).toBe("emitida");
     expect(Number(response.body.totalAmount)).toBe(119000);
+  });
+
+  it("does not double-count the linked order when invoicing it directly (ORD-01)", async () => {
+    // order-tight ya consume los 1.000.000 de cupo de customer-tight. Emitir su
+    // factura por ese mismo importe no puede leerse como 2.000.000: sin
+    // excludeOrderId el pedido y su factura se cuentan dos veces.
+    const token = await getToken("admin@norgtech.local");
+    const response = await request(app.getHttpServer())
+      .post("/invoices")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        companyId: "company-1",
+        customerId: "customer-tight",
+        orderId: "order-tight",
+        subtotal: 840336.13,
+        taxAmount: 159663.87,
+        totalAmount: 1000000,
+      });
+
+    expect(response.status).toBe(201);
+    expect(Number(response.body.totalAmount)).toBe(1000000);
   });
 
   it("should reject duplicate invoice numbers", async () => {

@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
+import { formatPercent, type PreviewItemInput } from "@/lib/pricing-preview";
+import { usePricingPreview } from "@/lib/use-pricing-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -80,16 +82,8 @@ function money(value: number) {
   })}`;
 }
 
-function rowSubtotal(item: OrderItem) {
-  return item.quantity * item.unitPrice;
-}
-
-function rowTax(item: OrderItem) {
-  return rowSubtotal(item) * (item.taxPercent / 100);
-}
-
-function rowTotal(item: OrderItem) {
-  return rowSubtotal(item) + rowTax(item);
+function isValidItem(item: OrderItem) {
+  return Boolean(item.productId || item.productName.trim()) && item.quantity > 0;
 }
 
 export function OrderForm({ customers, opportunities, products, quotes }: OrderFormProps) {
@@ -100,10 +94,20 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   const [customerZones, setCustomerZones] = useState<Array<{ id: string; zone: { name: string }; assignedTo: { name: string } | null }>>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
   const [creditSummary, setCreditSummary] = useState<{
     availableCredit: number | null;
     utilizationPercent: number | null;
   } | null>(null);
+
+  // Vendedor al que se atribuye el pedido (GOAL-02). Si falla la carga el
+  // selector queda vacio y el backend resuelve la atribucion: no bloquea.
+  useEffect(() => {
+    apiFetchClient("/users/sellers")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => setSellers(Array.isArray(data) ? data : []))
+      .catch(() => setSellers([]));
+  }, []);
 
   useEffect(() => {
     if (!selectedCustomerId) {
@@ -153,9 +157,40 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
     setItems(updated);
   }
 
-  const subtotal = items.reduce((sum, item) => sum + rowSubtotal(item), 0);
-  const taxTotal = items.reduce((sum, item) => sum + rowTax(item), 0);
-  const total = items.reduce((sum, item) => sum + rowTotal(item), 0);
+  // Indices of the lines the backend will price, so each row can find its own
+  // priced line in the preview.
+  const validIndices = useMemo(
+    () => items.map((item, i) => (isValidItem(item) ? i : -1)).filter((i) => i >= 0),
+    [items],
+  );
+
+  const previewItems = useMemo(
+    () =>
+      validIndices.map((i) => ({
+        // Catalog lines are repriced from basePrice + segment discount; custom
+        // lines keep the typed unitPrice.
+        productId: items[i].productId || undefined,
+        quantity: items[i].quantity,
+        unitPrice: items[i].unitPrice,
+        taxPercent: optionalNumber(items[i].taxPercent),
+      })),
+    [items, validIndices],
+  );
+
+  const { preview, loading: previewLoading } = usePricingPreview(
+    "/orders/preview",
+    selectedCustomerId,
+    previewItems as PreviewItemInput[],
+  );
+
+  const lineFor = (index: number) => {
+    const position = validIndices.indexOf(index);
+    return position >= 0 ? preview?.lines[position] : undefined;
+  };
+
+  const subtotal = preview?.subtotal ?? 0;
+  const taxTotal = preview?.taxAmount ?? 0;
+  const total = preview?.total ?? 0;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -163,22 +198,21 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
     setLoading(true);
 
     const formData = new FormData(event.currentTarget);
-    const payloadItems = items
-      .filter((item) => (item.productId || item.productName.trim()) && item.quantity > 0)
-      .map((item) => ({
-        productId: item.productId || undefined,
-        productName: item.productName.trim() || undefined,
-        presentation: item.presentation.trim() || undefined,
-        quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        taxPercent: optionalNumber(item.taxPercent),
-        notes: item.notes.trim() || undefined,
-      }));
+    const payloadItems = validIndices.map((i) => ({
+      productId: items[i].productId || undefined,
+      productName: items[i].productName.trim() || undefined,
+      presentation: items[i].presentation.trim() || undefined,
+      quantity: items[i].quantity,
+      unitPrice: items[i].unitPrice,
+      taxPercent: optionalNumber(items[i].taxPercent),
+      notes: items[i].notes.trim() || undefined,
+    }));
 
     const body = {
       companyId: String(formData.get("companyId")),
       customerZoneId: optionalString(formData.get("customerZoneId")),
       customerId: String(formData.get("customerId")),
+      sellerUserId: optionalString(formData.get("sellerUserId")),
       opportunityId: optionalString(formData.get("opportunityId")),
       sourceQuoteId: optionalString(formData.get("sourceQuoteId")),
       requestedDeliveryDate: optionalString(formData.get("requestedDeliveryDate")),
@@ -226,9 +260,16 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       return;
     }
 
-    if (creditSummary?.availableCredit != null && subtotal > creditSummary.availableCredit) {
+    // Gate on the preview's total WITH IVA: that is what the backend validates
+    // and what exposure sums (order.total). Gating on the subtotal under-blocked
+    // by the tax amount. The backend re-checks anyway — this only fails fast.
+    if (
+      preview &&
+      creditSummary?.availableCredit != null &&
+      total > creditSummary.availableCredit
+    ) {
       setError(
-        `Credito excedido. Disponible: $${creditSummary.availableCredit.toLocaleString("es-CO", { maximumFractionDigits: 0 })}, Pedido: $${subtotal.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`,
+        `Credito excedido. Disponible: $${creditSummary.availableCredit.toLocaleString("es-CO", { maximumFractionDigits: 0 })}, Pedido: $${total.toLocaleString("es-CO", { maximumFractionDigits: 0 })}`,
       );
       setLoading(false);
       return;
@@ -301,6 +342,22 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                 {creditSummary.availableCredit <= 0 && " - Sin credito disponible"}
               </div>
             )}
+          </Field>
+          {/* Vendedor real al que se atribuye el pedido para las metas (GOAL-02).
+              Distinto de "Elaboro" (preparedByName), que es texto libre y dice
+              quien redacto el documento. Se deja sin preseleccionar: al omitirlo,
+              el backend aplica su precedencia (cliente asignado -> creador si es
+              vendedor -> ninguno). Adivinar aqui haria que el formulario mienta
+              sobre lo que se guarda. */}
+          <Field label="Vendedor" htmlFor="sellerUserId">
+            <select id="sellerUserId" name="sellerUserId" className={selectClasses}>
+              <option value="">Automatico (segun el cliente)</option>
+              {sellers.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
           </Field>
           <Field label="Orden de compra" htmlFor="purchaseOrderNumber">
             <Input id="purchaseOrderNumber" name="purchaseOrderNumber" />
@@ -409,16 +466,26 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                     onChange={(e) => updateItem(index, "quantity", Number(e.target.value))}
                   />
                 </Field>
-                <Field label="Valor unidad" htmlFor={`unitPrice-${index}`}>
-                  <Input
-                    id={`unitPrice-${index}`}
-                    type="number"
-                    min={0}
-                    step={0.01}
-                    value={String(item.unitPrice)}
-                    onChange={(e) => updateItem(index, "unitPrice", Number(e.target.value))}
+                {item.productId ? (
+                  // Catalog line: the backend reprices from basePrice + the
+                  // goal-conditional segment discount and ignores any value
+                  // typed here, so showing an editable field would lie.
+                  <ReadOnlyMetric
+                    label="Valor unidad"
+                    value={lineFor(index) ? money(lineFor(index)!.unitPrice) : "—"}
                   />
-                </Field>
+                ) : (
+                  <Field label="Valor unidad" htmlFor={`unitPrice-${index}`}>
+                    <Input
+                      id={`unitPrice-${index}`}
+                      type="number"
+                      min={0}
+                      step={0.01}
+                      value={String(item.unitPrice)}
+                      onChange={(e) => updateItem(index, "unitPrice", Number(e.target.value))}
+                    />
+                  </Field>
+                )}
                 <Field label="% IVA" htmlFor={`taxPercent-${index}`}>
                   <Input
                     id={`taxPercent-${index}`}
@@ -429,8 +496,18 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                     onChange={(e) => updateItem(index, "taxPercent", Number(e.target.value))}
                   />
                 </Field>
-                <ReadOnlyMetric label="IVA" value={money(rowTax(item))} />
-                <ReadOnlyMetric label="Total incl. IVA" value={money(rowTotal(item))} />
+                <ReadOnlyMetric
+                  label="IVA"
+                  value={
+                    lineFor(index)
+                      ? money(lineFor(index)!.taxAmount * lineFor(index)!.quantity)
+                      : "—"
+                  }
+                />
+                <ReadOnlyMetric
+                  label="Total incl. IVA"
+                  value={lineFor(index) ? money(lineFor(index)!.totalWithTax) : "—"}
+                />
               </div>
 
               <Field label="Notas del item" htmlFor={`notes-${index}`}>
@@ -461,11 +538,29 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
           + Agregar item
         </Button>
 
+        {/* Every figure comes from POST /orders/preview, which runs the same
+            PricingService as create() — so this is what gets saved (ORD-04). */}
         <div className="grid gap-2 rounded-lg bg-muted p-4 text-sm md:ml-auto md:w-80">
-          <SummaryLine label="Subtotal" value={money(subtotal)} />
-          <SummaryLine label="IVA" value={money(taxTotal)} />
+          {preview && preview.discountAmount > 0 && (
+            <>
+              <SummaryLine
+                label="Subtotal sin descuento"
+                value={money(subtotal + preview.discountAmount)}
+              />
+              <SummaryLine
+                label={`Descuento segmento (${formatPercent(preview.discountPercent)})`}
+                value={`-${money(preview.discountAmount)}`}
+              />
+            </>
+          )}
+          <SummaryLine label="Subtotal" value={preview ? money(subtotal) : "—"} />
+          <SummaryLine label="IVA" value={preview ? money(taxTotal) : "—"} />
           <Separator />
-          <SummaryLine label="Total pedido" value={money(total)} strong />
+          <SummaryLine
+            label="Total pedido"
+            value={previewLoading && !preview ? "Calculando..." : preview ? money(total) : "—"}
+            strong
+          />
         </div>
       </FormSection>
 

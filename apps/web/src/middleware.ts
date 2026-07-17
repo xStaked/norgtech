@@ -1,30 +1,14 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
-import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { SESSION_COOKIE_NAME, getUserRoleFromToken } from "@/lib/auth";
+import { matchesPrefix, protectedPaths, resolveRoleRedirect } from "@/lib/route-guards";
 
-const protectedPaths = [
-  "/dashboard",
-  "/customers",
-  "/opportunities",
-  "/quotes",
-  "/orders",
-  "/billing-requests",
-  "/products",
-  "/segments",
-  "/visits",
-  "/expenses",
-  "/follow-ups",
-  "/agenda",
-  "/nora",
-];
+export { resolveRoleRedirect } from "@/lib/route-guards";
 
 export function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
-  const isProtectedPath = protectedPaths.some(
-    (protectedPath) =>
-      pathname === protectedPath || pathname.startsWith(`${protectedPath}/`),
-  );
+  const isProtectedPath = protectedPaths.some((protectedPath) => matchesPrefix(pathname, protectedPath));
 
   if (!isProtectedPath) {
     return NextResponse.next();
@@ -32,11 +16,18 @@ export function middleware(request: NextRequest) {
 
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
 
-  if (token) {
-    return NextResponse.next();
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  return NextResponse.redirect(new URL("/login", request.url));
+  const role = getUserRoleFromToken(token);
+  const redirectPath = resolveRoleRedirect(pathname, role);
+
+  if (redirectPath) {
+    return NextResponse.redirect(new URL(redirectPath, request.url));
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
@@ -55,5 +46,8 @@ export const config = {
     "/agenda/:path*",
     "/nora",
     "/nora/:path*",
+    "/companies/:path*",
+    "/zones/:path*",
+    "/invoices/:path*",
   ],
 };

@@ -4,6 +4,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { refreshTokenStub } from "./helpers/login-as";
 
 type MockUser = {
   id: string;
@@ -156,6 +157,7 @@ describe("Users", () => {
         return applySelect(updated, select);
       },
     },
+    refreshToken: refreshTokenStub(),
   };
 
   beforeEach(() => {

@@ -27,6 +27,8 @@ interface QuoteItem {
   unit: string;
   quantity: string;
   unitPrice: string;
+  originalUnitPrice: string | null;
+  discountPercent: string | null;
   subtotal: string;
   notes: string | null;
 }
@@ -98,7 +100,23 @@ const quoteItemColumns: readonly DataTableColumn<QuoteItem>[] = [
     key: "unitPrice",
     header: "Precio unit.",
     align: "right",
-    render: (item) => formatCurrency(item.unitPrice),
+    // Show the discount that produced this price, otherwise the saved unitPrice
+    // looks arbitrary next to the catalog's base price (QUO-03).
+    render: (item) => {
+      const discount = Number(item.discountPercent ?? 0);
+      if (!(discount > 0) || !item.originalUnitPrice) {
+        return formatCurrency(item.unitPrice);
+      }
+      return (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="text-muted-foreground line-through">
+            {formatCurrency(item.originalUnitPrice)}
+          </span>
+          <span>{formatCurrency(item.unitPrice)}</span>
+          <span className="text-xs text-emerald-600">-{discount.toFixed(2)}%</span>
+        </span>
+      );
+    },
   },
   {
     key: "subtotal",
@@ -121,6 +139,14 @@ export default async function QuoteDetailPage({
   }
 
   const quote: Quote = await response.json();
+
+  // Derived from the saved lines, so it always reconciles with the stored
+  // subtotal — no recomputing of prices on the client (QUO-03).
+  const discountAmount = quote.items.reduce((sum, item) => {
+    if (!item.originalUnitPrice) return sum;
+    const perUnit = Number(item.originalUnitPrice) - Number(item.unitPrice);
+    return sum + perUnit * Number(item.quantity);
+  }, 0);
 
   return (
     <div
@@ -168,6 +194,20 @@ export default async function QuoteDetailPage({
               gap: 12,
             }}
           >
+            {discountAmount > 0 && (
+              <>
+                <InlineMetric
+                  label="Subtotal sin descuento"
+                  value={formatCurrency(String(Number(quote.subtotal) + discountAmount))}
+                  tone="info"
+                />
+                <InlineMetric
+                  label="Descuento por segmento"
+                  value={`-${formatCurrency(String(discountAmount))}`}
+                  tone="success"
+                />
+              </>
+            )}
             <InlineMetric label="Subtotal" value={formatCurrency(quote.subtotal)} tone="info" />
             <InlineMetric label="Total" value={formatCurrency(quote.total)} tone="success" />
             <InlineMetric
