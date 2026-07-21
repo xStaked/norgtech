@@ -235,6 +235,8 @@ export class CustomersService {
         city: true,
         department: true,
         creditLimit: true,
+        paymentCondition: true,
+        paymentDays: true,
         active: true,
         segment: { select: { id: true, name: true } },
         company: { select: { id: true, name: true } },

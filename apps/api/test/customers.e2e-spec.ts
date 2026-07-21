@@ -234,6 +234,8 @@ describe("Customers", () => {
             "city",
             "department",
             "creditLimit",
+            "paymentCondition",
+            "paymentDays",
             "active",
             "segment",
             "company",
@@ -823,6 +825,47 @@ describe("Customers", () => {
       id: "clx_default_norgtech",
       name: "Norgtech",
     });
+  });
+
+  it("expone la condicion de pago en el listado", async () => {
+    customers.push({
+      id: "customer-credito-30",
+      legalName: "Distribuidora Credito SAS",
+      displayName: "Distribuidora Credito",
+      taxId: "800555666",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      paymentCondition: "credito_30",
+      paymentDays: 30,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .get("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`);
+
+    expect(response.status).toBe(200);
+    const target = (
+      response.body as Array<{
+        legalName: string;
+        paymentCondition: unknown;
+        paymentDays: unknown;
+      }>
+    ).find((c) => c.legalName === "Distribuidora Credito SAS");
+    expect(target).toBeDefined();
+    expect(target?.paymentCondition).toBe("credito_30");
+    expect(target?.paymentDays).toBe(30);
   });
 
   it("no deja cambiar la empresa de un cliente que ya tiene ordenes", async () => {
