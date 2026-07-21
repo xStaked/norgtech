@@ -132,7 +132,20 @@ Esperado exactamente:
 
 Si `Nanonutrición` sale con 0 clientes, el `LIKE` no está casando la tilde: revisar que el `notes` del import diga literalmente `hoja Nanonutrición`.
 
-- [ ] **Step 5: Regenerar el cliente de Prisma**
+- [ ] **Step 5: Aplicar la migración también a la base local**
+
+12 specs e2e corren contra Postgres real (`app.e2e-spec.ts`, `credit-concurrency.e2e-spec.ts`,
+`permissions.e2e-spec.ts`, etc.), así que la base local tiene que tener la columna o toda esa
+mitad de la suite falla.
+
+```bash
+cd apps/api && npx prisma migrate deploy
+```
+
+Esperado: `All migrations have been successfully applied.` La base local tiene clientes de seed
+sin `notes` de import; el fallback los manda a Norgtech, que es lo correcto.
+
+- [ ] **Step 6: Regenerar el cliente de Prisma**
 
 ```bash
 cd apps/api && npx prisma generate
@@ -140,10 +153,33 @@ cd apps/api && npx prisma generate
 
 Esperado: `Generated Prisma Client`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Arreglar los dos sitios que crean clientes sin empresa**
+
+`companyId` pasa a ser requerido, así que estos dos dejan de compilar/correr:
+
+En `apps/api/prisma/seed.ts`, en el `data` del `customer.upsert` (línea ~170), agregar:
+
+```typescript
+      companyId: "clx_default_norgtech",
+```
+
+En `apps/api/test/credit-concurrency.e2e-spec.ts`, en el `data` del `prisma.customer.create`
+(línea ~60), agregar la misma línea. Este spec escribe en Postgres real, así que sin esto tira
+error de constraint, no de tipos.
+
+- [ ] **Step 8: Verificar que compila y que la suite real sigue verde**
 
 ```bash
-git add apps/api/prisma/schema.prisma apps/api/prisma/migrations/20260721000000_customer_company
+cd apps/api && npx tsc --noEmit -p tsconfig.json
+npx jest --watchman=false --config ./test/jest-e2e.json credit-concurrency
+```
+
+Esperado: tsc sin errores nuevos; `credit-concurrency` en verde.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add apps/api/prisma/schema.prisma apps/api/prisma/migrations/20260721000000_customer_company apps/api/prisma/seed.ts apps/api/test/credit-concurrency.e2e-spec.ts
 git commit -m "feat(clientes): Customer.companyId obligatorio + empresa Nanonutricion"
 ```
 
