@@ -128,6 +128,7 @@ describe("Customers", () => {
         name: "Nanonutrición",
         isActive: true,
       },
+      clx_inactive_company: { id: "clx_inactive_company", name: "Inactive Company", isActive: false },
     };
 
     const company = {
@@ -890,5 +891,73 @@ describe("Customers", () => {
 
     const customerAfter = customers.find((c) => c.id === "customer-without-orders");
     expect(customerAfter?.companyId).toBe("clx_default_nanonutricion");
+  });
+
+  it("rechaza cambiar a una empresa inexistente (404)", async () => {
+    customers.push({
+      id: "customer-no-orders-test-404",
+      legalName: "Cliente Test 404 SAS",
+      displayName: "Cliente Test 404",
+      taxId: "800555666",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-no-orders-test-404")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "nonexistent-company-id" });
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toContain("Company");
+
+    const customerAfter = customers.find((c) => c.id === "customer-no-orders-test-404");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  it("rechaza cambiar a una empresa inactiva (404)", async () => {
+    customers.push({
+      id: "customer-no-orders-inactive-test",
+      legalName: "Cliente Test Inactive SAS",
+      displayName: "Cliente Test Inactive",
+      taxId: "800777888",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-no-orders-inactive-test")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_inactive_company" });
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toContain("Company");
+
+    const customerAfter = customers.find((c) => c.id === "customer-no-orders-inactive-test");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
   });
 });
