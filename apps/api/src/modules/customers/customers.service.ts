@@ -38,6 +38,10 @@ export class CustomersService {
             department: dto.department,
             notes: dto.notes,
             segmentId: dto.segmentId,
+            // TODO(cliente-empresa): el brief de Task 1 no cubre este sitio; se
+            // hardcodea el default del sistema hasta que una tarea futura
+            // agregue selección de empresa al DTO/UI de creación de clientes.
+            companyId: "clx_default_norgtech",
             assignedToUserId: dto.assignedToUserId,
             customerType: dto.customerType || undefined,
             creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,

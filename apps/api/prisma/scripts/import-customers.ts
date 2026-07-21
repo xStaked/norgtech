@@ -22,6 +22,9 @@ const SELLER_ALIASES: Record<string, string> = {
   BREYNER: "BREYNER VALLE",
 };
 
+const NORGTECH_COMPANY_ID = "clx_default_norgtech";
+const NANONUTRICION_COMPANY_ID = "clx_default_nanonutricion";
+
 type Row = {
   legalName: string;
   taxId: string;
@@ -35,6 +38,7 @@ type Row = {
   address?: string;
   city?: string;
   notes: string;
+  companyId: string;
 };
 
 /** Las celdas de correo llegan como hyperlink ({text, hyperlink}) y las de
@@ -155,6 +159,7 @@ function readSheets(wb: ExcelJS.Workbook): { rows: Row[]; skipped: string[]; dvF
       ...parsePayment(dias),
       seller: normalizeSeller(vendedor),
       notes: `Importado del listado del cliente (hoja NORGTECH). Año: ${clean(anio) || "no registra"}. Propiedades: ${clean(props) || "no registra"}.`,
+      companyId: NORGTECH_COMPANY_ID,
     });
   });
 
@@ -182,6 +187,7 @@ function readSheets(wb: ExcelJS.Workbook): { rows: Row[]; skipped: string[]; dvF
       address: clean(direccion) || undefined,
       city: clean(ciudad) || undefined,
       notes: `Importado del listado del cliente (hoja Nanonutrición). Tercero: ${clean(tercero) || "no registra"}. Estado: ${clean(estado) || "no registra"}.`,
+      companyId: NANONUTRICION_COMPANY_ID,
     });
   });
 
@@ -283,7 +289,7 @@ export async function importCustomers(prisma: PrismaClient, filePath: string) {
       updated++;
     } else {
       await prisma.customer.create({
-        data: { ...data, taxId: row.taxId, segmentId: segment.id, createdBy: admin.id },
+        data: { ...data, taxId: row.taxId, segmentId: segment.id, createdBy: admin.id, companyId: row.companyId },
       });
       inserted++;
     }

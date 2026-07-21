@@ -242,6 +242,7 @@ model Company {
   orders          Order[]
   billingRequests BillingRequest[]
   invoices        Invoice[]
+  customers       Customer[]
 }
 
 model User {
@@ -500,6 +501,7 @@ model Customer {
   department            String?
   notes                 String?
   segmentId             String
+  companyId             String
   assignedToUserId      String?
   active                Boolean                @default(true)
   createdBy             String
@@ -507,6 +509,7 @@ model Customer {
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
   segment               CustomerSegment        @relation(fields: [segmentId], references: [id])
+  company               Company                @relation(fields: [companyId], references: [id])
   assignedToUser        User?                  @relation("CustomerAssignedUser", fields: [assignedToUserId], references: [id])
   contacts              Contact[]
   opportunities         Opportunity[]
