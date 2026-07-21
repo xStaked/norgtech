@@ -22,8 +22,12 @@ const SELLER_ALIASES: Record<string, string> = {
   BREYNER: "BREYNER VALLE",
 };
 
-const NORGTECH_COMPANY_ID = "clx_default_norgtech";
-const NANONUTRICION_COMPANY_ID = "clx_default_nanonutricion";
+// Cada hoja del Excel es una razon social distinta. Se resuelve por prefijo y no
+// por id para que el script sirva en cualquier base.
+export const COMPANY_PREFIX_BY_SHEET = {
+  NORGTECH: "NT",
+  NANONUTRICION: "NN",
+} as const;
 
 type Row = {
   legalName: string;
@@ -38,7 +42,7 @@ type Row = {
   address?: string;
   city?: string;
   notes: string;
-  companyId: string;
+  companyPrefix: string;
 };
 
 /** Las celdas de correo llegan como hyperlink ({text, hyperlink}) y las de
@@ -159,7 +163,7 @@ function readSheets(wb: ExcelJS.Workbook): { rows: Row[]; skipped: string[]; dvF
       ...parsePayment(dias),
       seller: normalizeSeller(vendedor),
       notes: `Importado del listado del cliente (hoja NORGTECH). Año: ${clean(anio) || "no registra"}. Propiedades: ${clean(props) || "no registra"}.`,
-      companyId: NORGTECH_COMPANY_ID,
+      companyPrefix: COMPANY_PREFIX_BY_SHEET.NORGTECH,
     });
   });
 
@@ -187,7 +191,7 @@ function readSheets(wb: ExcelJS.Workbook): { rows: Row[]; skipped: string[]; dvF
       address: clean(direccion) || undefined,
       city: clean(ciudad) || undefined,
       notes: `Importado del listado del cliente (hoja Nanonutrición). Tercero: ${clean(tercero) || "no registra"}. Estado: ${clean(estado) || "no registra"}.`,
-      companyId: NANONUTRICION_COMPANY_ID,
+      companyPrefix: COMPANY_PREFIX_BY_SHEET.NANONUTRICION,
     });
   });
 
@@ -257,6 +261,18 @@ export async function importCustomers(prisma: PrismaClient, filePath: string) {
   const segment = await prisma.customerSegment.findUnique({ where: { name: DEFAULT_SEGMENT } });
   if (!segment) throw new Error(`Falta el segmento "${DEFAULT_SEGMENT}"; corre db:seed primero.`);
 
+  const companies = await prisma.company.findMany({
+    where: { prefix: { in: Object.values(COMPANY_PREFIX_BY_SHEET) } },
+    select: { id: true, prefix: true },
+  });
+  const companyIdByPrefix = new Map(companies.map((c) => [c.prefix, c.id]));
+
+  for (const prefix of Object.values(COMPANY_PREFIX_BY_SHEET)) {
+    if (!companyIdByPrefix.has(prefix)) {
+      throw new Error(`Falta la empresa con prefijo "${prefix}"; corre las migraciones primero.`);
+    }
+  }
+
   const admin = await prisma.user.findFirst({ where: { role: "administrador" }, select: { id: true } });
   if (!admin) throw new Error("No hay usuario administrador para atribuir createdBy.");
 
@@ -289,7 +305,13 @@ export async function importCustomers(prisma: PrismaClient, filePath: string) {
       updated++;
     } else {
       await prisma.customer.create({
-        data: { ...data, taxId: row.taxId, segmentId: segment.id, createdBy: admin.id, companyId: row.companyId },
+        data: {
+          ...data,
+          taxId: row.taxId,
+          segmentId: segment.id,
+          createdBy: admin.id,
+          companyId: companyIdByPrefix.get(row.companyPrefix)!,
+        },
       });
       inserted++;
     }
