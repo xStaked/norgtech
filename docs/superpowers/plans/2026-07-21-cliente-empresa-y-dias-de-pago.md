@@ -760,3 +760,59 @@ Esperado: Norgtech 506, Nanonutrición 12.
 ## Pendiente con el cliente
 
 El prefijo `NN` y la razón social `Nanonutrición S.A.S.` son supuestos. El prefijo numera las facturas, así que hay que confirmarlo **antes** de que se emita la primera factura de Nanonutrición. Cambiarlo después implica migrar numeración ya emitida.
+
+---
+
+### Task 7: Guard de empresa también al facturar directo
+
+Añadida durante la ejecución. La review de la Task 3 encontró que `POST /invoices` deja abierto el
+mismo agujero que la feature existe para cerrar.
+
+**Files:**
+- Modify: `apps/api/src/modules/invoices/invoices.service.ts` (`create`, líneas 61-68)
+- Test: `apps/api/test/invoices.e2e-spec.ts`
+
+**Interfaces:**
+- Consumes: `Customer.companyId` (Task 1).
+- Produces: `400 "Invoice company does not match customer company"`.
+
+`createInvoiceFromOrder` ya está protegido transitivamente porque deriva `companyId` de una orden que
+pasó por el guard de la Task 3. El hueco es la factura suelta.
+
+- [ ] **Step 1: Escribir el test que falla**
+
+En `apps/api/test/invoices.e2e-spec.ts`, siguiendo la convención de stubs del archivo, agregar un test
+que haga `POST /invoices` con un `companyId` distinto al del cliente y espere `400`. El payload debe
+ser válido en todo lo demás: si falta cualquier campo requerido del DTO, el 400 vendría de la
+validación y el test sería un falso positivo.
+
+- [ ] **Step 2: Correr y verificar que falla**
+
+```bash
+cd apps/api && npx jest --watchman=false --config ./test/jest-e2e.json invoices -t "empresa"
+```
+
+Esperado: FAIL con 201 en vez de 400.
+
+- [ ] **Step 3: Agregar el guard**
+
+En `apps/api/src/modules/invoices/invoices.service.ts`, dentro de `create`, después de que se resuelva
+el cliente y se valide la empresa:
+
+```typescript
+    if (customer.companyId !== dto.companyId) {
+      throw new BadRequestException("Invoice company does not match customer company");
+    }
+```
+
+- [ ] **Step 4: Verificar que pasa y que muerde**
+
+Correr el test. Luego neutralizar el guard, confirmar que el test falla, y restaurar.
+
+- [ ] **Step 5: Suite completa y commit**
+
+```bash
+cd apps/api && npx jest --watchman=false --config ./test/jest-e2e.json
+git add apps/api/src/modules/invoices apps/api/test/invoices.e2e-spec.ts
+git commit -m "feat(facturacion): la empresa de la factura debe coincidir con la del cliente"
+```
