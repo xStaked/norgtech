@@ -116,10 +116,24 @@ describe("Customers", () => {
       }),
     };
 
+    const companies: Record<string, { id: string; name: string; isActive: boolean }> = {
+      clx_default_norgtech: { id: "clx_default_norgtech", name: "Norgtech", isActive: true },
+      clx_default_nanonutricion: {
+        id: "clx_default_nanonutricion",
+        name: "Nanonutrición",
+        isActive: true,
+      },
+    };
+
+    const company = {
+      findUnique: async ({ where: { id } }: { where: { id: string } }) => companies[id] ?? null,
+    };
+
     const prismaStub = {
       user,
       refreshToken: refreshTokenStub(),
       customerSegment,
+      company,
       order: orderAggregate,
       customer: {
         create: async () => {
@@ -222,6 +236,7 @@ describe("Customers", () => {
                 department?: string;
                 notes?: string;
                 segmentId: string;
+                companyId: string;
                 assignedToUserId?: string;
                 createdBy: string;
                 updatedBy: string;
@@ -272,6 +287,7 @@ describe("Customers", () => {
                 department?: string;
                 notes?: string;
                 segmentId: string;
+                companyId: string;
                 assignedToUserId?: string;
                 createdBy: string;
                 updatedBy: string;
@@ -312,6 +328,10 @@ describe("Customers", () => {
                 department: data.department ?? null,
                 notes: data.notes ?? null,
                 segmentId: data.segmentId,
+                companyId: data.companyId,
+                company: companies[data.companyId]
+                  ? { id: companies[data.companyId].id, name: companies[data.companyId].name }
+                  : null,
                 assignedToUserId: data.assignedToUserId ?? null,
                 createdBy: data.createdBy,
                 updatedBy: data.updatedBy,
@@ -420,6 +440,7 @@ describe("Customers", () => {
         displayName: "Agro Norte",
         taxId: "900123456",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -450,6 +471,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -467,6 +489,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -491,6 +514,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: "missing-segment-id",
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -508,6 +532,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         assignedToUserId: "missing-user-id",
         contacts: [
           {
@@ -528,6 +553,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         assignedToUserId: "",
         contacts: [
           {
@@ -548,6 +574,7 @@ describe("Customers", () => {
         legalName: "",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -566,6 +593,7 @@ describe("Customers", () => {
         displayName: "Agro Norte",
         email: "not-an-email",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "",
@@ -586,6 +614,7 @@ describe("Customers", () => {
         displayName: "Cliente 360",
         taxId: "900999999",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Ana Lopez",
@@ -624,6 +653,7 @@ describe("Customers", () => {
       displayName: "Duplicada",
       taxId: "901555444",
       segmentId: globalThis.__SEGMENT_ID__,
+      companyId: "clx_default_norgtech",
       contacts: [
         {
           fullName: "Carlos Perez",
@@ -663,6 +693,8 @@ describe("Customers", () => {
       department: null,
       notes: null,
       segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
       assignedToUserId: null,
       creditLimit: null,
       active: false,
@@ -704,5 +736,31 @@ describe("Customers", () => {
     expect(response.body.totalCustomers).toBeDefined();
     expect(response.body.updated).toBeDefined();
     expect(Array.isArray(response.body.details)).toBe(true);
+  });
+
+  it("rechaza crear un cliente sin empresa", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        legalName: "Cliente Sin Empresa SAS",
+        displayName: "Cliente Sin Empresa",
+        segmentId: globalThis.__SEGMENT_ID__,
+        contacts: [{ fullName: "Contacto", isPrimary: true }],
+      });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("expone la empresa en el listado", async () => {
+    const response = await request(globalThis.__APP__)
+      .get("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body[0].company).toEqual({
+      id: "clx_default_norgtech",
+      name: "Norgtech",
+    });
   });
 });

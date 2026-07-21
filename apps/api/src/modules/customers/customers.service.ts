@@ -38,10 +38,7 @@ export class CustomersService {
             department: dto.department,
             notes: dto.notes,
             segmentId: dto.segmentId,
-            // TODO(cliente-empresa): el brief de Task 1 no cubre este sitio; se
-            // hardcodea el default del sistema hasta que una tarea futura
-            // agregue selección de empresa al DTO/UI de creación de clientes.
-            companyId: "clx_default_norgtech",
+            companyId: dto.companyId,
             assignedToUserId: dto.assignedToUserId,
             customerType: dto.customerType || undefined,
             creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
@@ -109,6 +106,14 @@ export class CustomersService {
 
     if (!segment) {
       throw new NotFoundException("Customer segment not found");
+    }
+
+    const company = await this.prisma.company.findUnique({
+      where: { id: dto.companyId },
+    });
+
+    if (!company || !company.isActive) {
+      throw new NotFoundException("Company not found or inactive");
     }
 
     if (!dto.assignedToUserId) {
@@ -211,6 +216,7 @@ export class CustomersService {
         creditLimit: true,
         active: true,
         segment: { select: { id: true, name: true } },
+        company: { select: { id: true, name: true } },
         contacts: {
           select: {
             id: true,
@@ -230,6 +236,7 @@ export class CustomersService {
       where: { id },
       include: {
         segment: true,
+        company: true,
         contacts: {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
         },

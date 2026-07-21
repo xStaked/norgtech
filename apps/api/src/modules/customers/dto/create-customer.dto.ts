@@ -75,6 +75,10 @@ export class CreateCustomerDto {
   @IsString()
   segmentId!: string;
 
+  @IsString()
+  @IsNotEmpty()
+  companyId!: string;
+
   @IsOptional()
   @IsString()
   @IsNotEmpty()
