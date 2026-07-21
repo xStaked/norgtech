@@ -132,6 +132,7 @@ describe("Orders", () => {
       prefix: "NOR",
       isActive: true,
     },
+    { id: "company-2", name: "Nanonutricion", prefix: "NN", isActive: true },
   ];
   const users = [
     {
@@ -212,6 +213,7 @@ describe("Orders", () => {
             creditLimit: new Prisma.Decimal(5000000),
             paymentDays: 30,
             assignedToUserId: "comercial-user-id",
+            companyId: "company-1",
             segment: { discountPercent: 0, minGoalAmount: 0 },
           };
         }
@@ -226,6 +228,7 @@ describe("Orders", () => {
             creditLimit: null,
             paymentDays: null,
             assignedToUserId: null,
+            companyId: "company-1",
             segment: { discountPercent: 10, minGoalAmount: 0 },
           };
         }
@@ -933,6 +936,20 @@ describe("Orders", () => {
     expect(Number(response.body.items[0].taxAmount)).toBe(9500);
     expect(Number(response.body.items[0].totalWithTax)).toBe(119000);
     expect(Number(response.body.total)).toBe(119000);
+  });
+
+  it("rechaza una orden cuya empresa no es la del cliente", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-2",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("customer company");
   });
 
   it("snapshots the billing company name from company, not the customer, when omitted", async () => {

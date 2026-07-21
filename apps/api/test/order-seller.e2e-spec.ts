@@ -49,6 +49,7 @@ describe("Order seller attribution (GOAL-02)", () => {
     updatedBy: ADMIN.id,
     creditLimit: null,
     paymentDays: 30,
+    companyId: "company-1",
     segment: { discountPercent: 0, minGoalAmount: 0 },
   };
 
