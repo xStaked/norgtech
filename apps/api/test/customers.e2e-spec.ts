@@ -196,12 +196,63 @@ describe("Customers", () => {
         // Honors the `where.active` filter so the includeInactive e2e below is
         // real: the admin list passes `where: { active: true }` by default and
         // `where: undefined` when includeInactive is set.
-        findMany: async ({ where }: { where?: { active?: boolean } } = {}) =>
-          customers.filter(
+        //
+        // Also honors `select`: a field the caller didn't ask for must not
+        // show up in the response. A field this stub doesn't recognize would
+        // otherwise be IGNORED in silence, making tests pass for the wrong
+        // reason. Better to fail loudly.
+        findMany: async ({
+          where,
+          select,
+        }: {
+          where?: { active?: boolean };
+          select?: Record<string, boolean>;
+        } = {}) => {
+          const filtered = customers.filter(
             (c) =>
               where?.active === undefined ||
               ((c as { active?: boolean }).active ?? true) === where.active,
-          ),
+          );
+
+          if (!select) {
+            return filtered;
+          }
+
+          const KNOWN_SELECT_KEYS = [
+            "id",
+            "legalName",
+            "displayName",
+            "taxId",
+            "phone",
+            "email",
+            "city",
+            "department",
+            "creditLimit",
+            "active",
+            "segment",
+            "company",
+            "contacts",
+          ];
+
+          for (const key of Object.keys(select)) {
+            if (select[key] && !KNOWN_SELECT_KEYS.includes(key)) {
+              throw new Error(
+                `customer.findMany stub: campo de select no soportado "${key}". Enséñale el campo al stub antes de usarlo.`,
+              );
+            }
+          }
+
+          return filtered.map((c) => {
+            const record = c as Record<string, unknown>;
+            const projected: Record<string, unknown> = {};
+            for (const key of KNOWN_SELECT_KEYS) {
+              if (select[key]) {
+                projected[key] = record[key];
+              }
+            }
+            return projected;
+          });
+        },
         update: async () => {
           throw new Error("customer.update must run inside a transaction");
         },
@@ -758,7 +809,11 @@ describe("Customers", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`);
 
     expect(response.status).toBe(200);
-    expect(response.body[0].company).toEqual({
+    const target = (response.body as Array<{ legalName: string; company: unknown }>).find(
+      (c) => c.legalName === "Agropecuaria Norte SAS",
+    );
+    expect(target).toBeDefined();
+    expect(target?.company).toEqual({
       id: "clx_default_norgtech",
       name: "Norgtech",
     });
