@@ -151,23 +151,17 @@ export function SidebarNav({
     <div className="flex h-full flex-col pb-3.5">
       {/* Brand */}
       <div className="px-[18px] pt-4">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-white p-1">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/norgtech-flame.png"
-              alt="Norgtech"
-              className="h-full w-full object-contain"
-            />
-          </div>
-          <div>
-            <div className="text-[17px] font-extrabold leading-none tracking-[-0.03em] text-white">
-              norgtech
-            </div>
-            <div className="mt-0.5 text-[9.5px] font-semibold tracking-[0.04em] text-[#7fa9c4]">
-              ERP COMERCIAL
-            </div>
-          </div>
+        {/* ponytail: logo con fondo blanco porque el webp no es transparente */}
+        <div className="rounded-[9px] bg-white px-3 py-2.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/norgtech-wordmark.webp"
+            alt="Norgtech — Tecnologías en nutrición orgánica"
+            className="h-auto w-full object-contain"
+          />
+        </div>
+        <div className="mt-2 text-center text-[9.5px] font-semibold tracking-[0.04em] text-[#7fa9c4]">
+          ERP COMERCIAL
         </div>
         <div
           className="mt-3.5 h-[3px] rounded-sm"
