@@ -59,6 +59,7 @@ describe("Invoices", () => {
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
       assignedToUserId: "comercial-user-id",
+      companyId: "company-1",
     },
     {
       id: "customer-2",
@@ -69,6 +70,7 @@ describe("Invoices", () => {
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
       assignedToUserId: null,
+      companyId: "company-1",
     },
     {
       id: "customer-tight",
@@ -79,6 +81,7 @@ describe("Invoices", () => {
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
       assignedToUserId: null,
+      companyId: "company-1",
     },
   ];
 
@@ -114,6 +117,14 @@ describe("Invoices", () => {
       legalName: "Tecnologia de Nutricion Organica SAS",
       nit: "900999888-1",
       prefix: "NOR",
+      isActive: true,
+    },
+    {
+      id: "company-2",
+      name: "Otra Empresa",
+      legalName: "Otra Empresa SAS",
+      nit: "900777666-1",
+      prefix: "OTR",
       isActive: true,
     },
   ];
@@ -363,6 +374,23 @@ describe("Invoices", () => {
 
     expect(response.status).toBe(201);
     expect(Number(response.body.totalAmount)).toBe(1000000);
+  });
+
+  it("should reject invoice whose empresa does not match customer empresa", async () => {
+    const token = await getToken("admin@norgtech.local");
+    const response = await request(app.getHttpServer())
+      .post("/invoices")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        companyId: "company-2",
+        customerId: "customer-1",
+        subtotal: 100000,
+        taxAmount: 19000,
+        totalAmount: 119000,
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toBe("Invoice company does not match customer company");
   });
 
   it("should reject duplicate invoice numbers", async () => {
