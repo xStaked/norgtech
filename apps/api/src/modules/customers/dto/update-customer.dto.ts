@@ -2,6 +2,7 @@ import { Type } from "class-transformer";
 import {
   IsEmail,
   IsEnum,
+  IsNotEmpty,
   IsNumber,
   IsOptional,
   IsString,
@@ -49,6 +50,11 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsString()
   segmentId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  companyId?: string;
 
   @IsOptional()
   @IsString()

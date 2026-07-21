@@ -20,6 +20,7 @@ interface Customer {
   department: string | null;
   notes: string | null;
   segmentId: string | null;
+  companyId: string | null;
   assignedToUserId: string | null;
   customerType: string | null;
   creditLimit: string | null;
@@ -35,9 +36,10 @@ export default async function CustomerEditPage({
 }) {
   const { id } = await params;
 
-  const [customerResponse, segmentsResponse] = await Promise.all([
+  const [customerResponse, segmentsResponse, companiesResponse] = await Promise.all([
     apiFetch(`/customers/${id}`),
     apiFetch("/customer-segments"),
+    apiFetch("/companies"),
   ]);
 
   if (!customerResponse.ok) {
@@ -48,6 +50,7 @@ export default async function CustomerEditPage({
   const segments: Segment[] = segmentsResponse.ok
     ? await segmentsResponse.json()
     : [];
+  const companies = companiesResponse.ok ? await companiesResponse.json() : [];
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -57,7 +60,7 @@ export default async function CustomerEditPage({
         description={customer.displayName}
       />
 
-      <CustomerForm segments={segments} customer={customer} />
+      <CustomerForm segments={segments} companies={companies} customer={customer} />
     </div>
   );
 }

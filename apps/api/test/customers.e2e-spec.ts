@@ -114,13 +114,42 @@ describe("Customers", () => {
       aggregate: async () => ({
         _sum: { total: 0 },
       }),
+      // Honors where.customerId instead of returning a fixed value: a stub
+      // that always returned 0 (or always 1) would make the guard test pass
+      // for the wrong reason regardless of which customer was patched.
+      count: async ({ where }: { where: { customerId: string } }) =>
+        where.customerId === "customer-with-orders" ? 1 : 0,
+    };
+
+    // Honors where.customerId the same way orderAggregate does above: a stub
+    // that ignored its argument would make the invoices-only guard test pass
+    // for the wrong reason (a vacuous pass).
+    const invoiceCount = {
+      count: async ({ where }: { where: { customerId: string } }) =>
+        where.customerId === "customer-with-invoices" ? 1 : 0,
+    };
+
+    const companies: Record<string, { id: string; name: string; isActive: boolean }> = {
+      clx_default_norgtech: { id: "clx_default_norgtech", name: "Norgtech", isActive: true },
+      clx_default_nanonutricion: {
+        id: "clx_default_nanonutricion",
+        name: "Nanonutrición",
+        isActive: true,
+      },
+      clx_inactive_company: { id: "clx_inactive_company", name: "Inactive Company", isActive: false },
+    };
+
+    const company = {
+      findUnique: async ({ where: { id } }: { where: { id: string } }) => companies[id] ?? null,
     };
 
     const prismaStub = {
       user,
       refreshToken: refreshTokenStub(),
       customerSegment,
+      company,
       order: orderAggregate,
+      invoice: invoiceCount,
       customer: {
         create: async () => {
           throw new Error("customer.create must run inside a transaction");
@@ -182,12 +211,65 @@ describe("Customers", () => {
         // Honors the `where.active` filter so the includeInactive e2e below is
         // real: the admin list passes `where: { active: true }` by default and
         // `where: undefined` when includeInactive is set.
-        findMany: async ({ where }: { where?: { active?: boolean } } = {}) =>
-          customers.filter(
+        //
+        // Also honors `select`: a field the caller didn't ask for must not
+        // show up in the response. A field this stub doesn't recognize would
+        // otherwise be IGNORED in silence, making tests pass for the wrong
+        // reason. Better to fail loudly.
+        findMany: async ({
+          where,
+          select,
+        }: {
+          where?: { active?: boolean };
+          select?: Record<string, boolean>;
+        } = {}) => {
+          const filtered = customers.filter(
             (c) =>
               where?.active === undefined ||
               ((c as { active?: boolean }).active ?? true) === where.active,
-          ),
+          );
+
+          if (!select) {
+            return filtered;
+          }
+
+          const KNOWN_SELECT_KEYS = [
+            "id",
+            "legalName",
+            "displayName",
+            "taxId",
+            "phone",
+            "email",
+            "city",
+            "department",
+            "creditLimit",
+            "paymentCondition",
+            "paymentDays",
+            "active",
+            "segment",
+            "company",
+            "contacts",
+          ];
+
+          for (const key of Object.keys(select)) {
+            if (select[key] && !KNOWN_SELECT_KEYS.includes(key)) {
+              throw new Error(
+                `customer.findMany stub: campo de select no soportado "${key}". Enséñale el campo al stub antes de usarlo.`,
+              );
+            }
+          }
+
+          return filtered.map((c) => {
+            const record = c as Record<string, unknown>;
+            const projected: Record<string, unknown> = {};
+            for (const key of KNOWN_SELECT_KEYS) {
+              if (select[key]) {
+                projected[key] = record[key];
+              }
+            }
+            return projected;
+          });
+        },
         update: async () => {
           throw new Error("customer.update must run inside a transaction");
         },
@@ -222,6 +304,7 @@ describe("Customers", () => {
                 department?: string;
                 notes?: string;
                 segmentId: string;
+                companyId: string;
                 assignedToUserId?: string;
                 createdBy: string;
                 updatedBy: string;
@@ -272,6 +355,7 @@ describe("Customers", () => {
                 department?: string;
                 notes?: string;
                 segmentId: string;
+                companyId: string;
                 assignedToUserId?: string;
                 createdBy: string;
                 updatedBy: string;
@@ -312,6 +396,10 @@ describe("Customers", () => {
                 department: data.department ?? null,
                 notes: data.notes ?? null,
                 segmentId: data.segmentId,
+                companyId: data.companyId,
+                company: companies[data.companyId]
+                  ? { id: companies[data.companyId].id, name: companies[data.companyId].name }
+                  : null,
                 assignedToUserId: data.assignedToUserId ?? null,
                 createdBy: data.createdBy,
                 updatedBy: data.updatedBy,
@@ -420,6 +508,7 @@ describe("Customers", () => {
         displayName: "Agro Norte",
         taxId: "900123456",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -450,6 +539,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -467,6 +557,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -491,6 +582,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: "missing-segment-id",
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -508,6 +600,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         assignedToUserId: "missing-user-id",
         contacts: [
           {
@@ -528,6 +621,7 @@ describe("Customers", () => {
         legalName: "Agropecuaria Norte SAS",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         assignedToUserId: "",
         contacts: [
           {
@@ -548,6 +642,7 @@ describe("Customers", () => {
         legalName: "",
         displayName: "Agro Norte",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Carlos Perez",
@@ -566,6 +661,7 @@ describe("Customers", () => {
         displayName: "Agro Norte",
         email: "not-an-email",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "",
@@ -586,6 +682,7 @@ describe("Customers", () => {
         displayName: "Cliente 360",
         taxId: "900999999",
         segmentId: globalThis.__SEGMENT_ID__,
+        companyId: "clx_default_norgtech",
         contacts: [
           {
             fullName: "Ana Lopez",
@@ -624,6 +721,7 @@ describe("Customers", () => {
       displayName: "Duplicada",
       taxId: "901555444",
       segmentId: globalThis.__SEGMENT_ID__,
+      companyId: "clx_default_norgtech",
       contacts: [
         {
           fullName: "Carlos Perez",
@@ -663,6 +761,8 @@ describe("Customers", () => {
       department: null,
       notes: null,
       segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
       assignedToUserId: null,
       creditLimit: null,
       active: false,
@@ -704,5 +804,246 @@ describe("Customers", () => {
     expect(response.body.totalCustomers).toBeDefined();
     expect(response.body.updated).toBeDefined();
     expect(Array.isArray(response.body.details)).toBe(true);
+  });
+
+  it("rechaza crear un cliente sin empresa", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        legalName: "Cliente Sin Empresa SAS",
+        displayName: "Cliente Sin Empresa",
+        segmentId: globalThis.__SEGMENT_ID__,
+        contacts: [{ fullName: "Contacto", isPrimary: true }],
+      });
+
+    expect(response.status).toBe(400);
+  });
+
+  it("expone la empresa en el listado", async () => {
+    const response = await request(globalThis.__APP__)
+      .get("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`);
+
+    expect(response.status).toBe(200);
+    const target = (response.body as Array<{ legalName: string; company: unknown }>).find(
+      (c) => c.legalName === "Agropecuaria Norte SAS",
+    );
+    expect(target).toBeDefined();
+    expect(target?.company).toEqual({
+      id: "clx_default_norgtech",
+      name: "Norgtech",
+    });
+  });
+
+  it("expone la condicion de pago en el listado", async () => {
+    customers.push({
+      id: "customer-credito-30",
+      legalName: "Distribuidora Credito SAS",
+      displayName: "Distribuidora Credito",
+      taxId: "800555666",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      paymentCondition: "credito_30",
+      paymentDays: 30,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .get("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`);
+
+    expect(response.status).toBe(200);
+    const target = (
+      response.body as Array<{
+        legalName: string;
+        paymentCondition: unknown;
+        paymentDays: unknown;
+      }>
+    ).find((c) => c.legalName === "Distribuidora Credito SAS");
+    expect(target).toBeDefined();
+    expect(target?.paymentCondition).toBe("credito_30");
+    expect(target?.paymentDays).toBe(30);
+  });
+
+  it("no deja cambiar la empresa de un cliente que ya tiene ordenes", async () => {
+    customers.push({
+      id: "customer-with-orders",
+      legalName: "Cliente Con Ordenes SAS",
+      displayName: "Cliente Con Ordenes",
+      taxId: "800111222",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-with-orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_default_nanonutricion" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("with orders");
+
+    const customerAfter = customers.find((c) => c.id === "customer-with-orders");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  it("no deja cambiar la empresa de un cliente que ya tiene facturas sueltas (sin ordenes)", async () => {
+    customers.push({
+      id: "customer-with-invoices",
+      legalName: "Cliente Con Facturas SAS",
+      displayName: "Cliente Con Facturas",
+      taxId: "800222333",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-with-invoices")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_default_nanonutricion" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("with orders");
+
+    const customerAfter = customers.find((c) => c.id === "customer-with-invoices");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  it("permite cambiar la empresa de un cliente sin ordenes", async () => {
+    customers.push({
+      id: "customer-without-orders",
+      legalName: "Cliente Sin Ordenes SAS",
+      displayName: "Cliente Sin Ordenes",
+      taxId: "800333444",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-without-orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_default_nanonutricion" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.companyId).toBe("clx_default_nanonutricion");
+
+    const customerAfter = customers.find((c) => c.id === "customer-without-orders");
+    expect(customerAfter?.companyId).toBe("clx_default_nanonutricion");
+  });
+
+  it("rechaza cambiar a una empresa inexistente (404)", async () => {
+    customers.push({
+      id: "customer-no-orders-test-404",
+      legalName: "Cliente Test 404 SAS",
+      displayName: "Cliente Test 404",
+      taxId: "800555666",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-no-orders-test-404")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "nonexistent-company-id" });
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toContain("Company");
+
+    const customerAfter = customers.find((c) => c.id === "customer-no-orders-test-404");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  it("rechaza cambiar a una empresa inactiva (404)", async () => {
+    customers.push({
+      id: "customer-no-orders-inactive-test",
+      legalName: "Cliente Test Inactive SAS",
+      displayName: "Cliente Test Inactive",
+      taxId: "800777888",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-no-orders-inactive-test")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_inactive_company" });
+
+    expect(response.status).toBe(404);
+    expect(response.body.message).toContain("Company");
+
+    const customerAfter = customers.find((c) => c.id === "customer-no-orders-inactive-test");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
   });
 });

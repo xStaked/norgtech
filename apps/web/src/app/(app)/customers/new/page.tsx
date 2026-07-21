@@ -13,6 +13,9 @@ export default async function NewCustomerPage() {
   const response = await apiFetch("/customer-segments");
   const segments: Segment[] = response.ok ? await response.json() : [];
 
+  const companiesResponse = await apiFetch("/companies");
+  const companies = companiesResponse.ok ? await companiesResponse.json() : [];
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -25,7 +28,7 @@ export default async function NewCustomerPage() {
         }
       />
       <SectionCard>
-        <CustomerForm segments={segments} />
+        <CustomerForm segments={segments} companies={companies} />
       </SectionCard>
     </div>
   );

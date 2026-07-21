@@ -69,6 +69,9 @@ export class OrdersService {
     if (!company || !company.isActive) {
       throw new NotFoundException("Company not found or inactive");
     }
+    if (customer.companyId !== dto.companyId) {
+      throw new BadRequestException("Order company does not match customer company");
+    }
     if (dto.customerZoneId) {
       const customerZone = await this.prisma.customerZone.findUnique({
         where: { id: dto.customerZoneId },

@@ -123,7 +123,7 @@ export class QuotesService {
   async createBillingRequest(user: AuthUser, quoteId: string) {
     const quote = await this.prisma.quote.findUnique({
       where: { id: quoteId },
-      include: { items: true },
+      include: { items: true, customer: true },
     });
 
     if (!quote) {
@@ -134,12 +134,15 @@ export class QuotesService {
       throw new BadRequestException("Billing request can only be created from closed quotes");
     }
 
-    const defaultCompany = await this.prisma.company.findFirst({
-      where: { isActive: true },
-      orderBy: { createdAt: "asc" },
+    // La billing request debe facturarse desde la empresa del cliente de la
+    // cotizacion, no desde la empresa activa mas antigua (siempre Norgtech):
+    // para un cliente de Nanonutricion eso generaba una billing request que
+    // InvoicesService.create despues rechazaba por no coincidir empresas.
+    const company = await this.prisma.company.findUnique({
+      where: { id: quote.customer.companyId },
     });
-    if (!defaultCompany) {
-      throw new BadRequestException("No active company found. Please create a company first.");
+    if (!company || !company.isActive) {
+      throw new NotFoundException("Company not found or inactive");
     }
 
     return this.prisma.$transaction(async (tx) => {
@@ -149,7 +152,7 @@ export class QuotesService {
           opportunityId: quote.opportunityId,
           sourceType: "quote",
           sourceQuoteId: quote.id,
-          companyId: defaultCompany.id,
+          companyId: company.id,
           status: "pendiente",
           requestedByUserId: user.id,
           createdBy: user.id,

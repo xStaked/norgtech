@@ -170,7 +170,7 @@ async function main() {
     await prisma.customer.upsert({
       where: { id: c.id },
       update: {},
-      create: { ...c, active: true, createdBy: user_comercial, updatedBy: user_comercial },
+      create: { ...c, companyId: "clx_default_norgtech", active: true, createdBy: user_comercial, updatedBy: user_comercial },
     });
   }
 

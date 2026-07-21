@@ -6,6 +6,8 @@
 
 **Architecture:** Se agrega `Customer.companyId` obligatorio con una migración en tres pasos que crea Nanonutrición, puebla la columna desde el campo `notes` (que ya registra la hoja de origen del import) y recién entonces la marca `NOT NULL`. `OrdersService.create` rechaza órdenes cuya empresa no coincide con la del cliente. En la web, la columna `Crédito` de la lista —hoy vacía— pasa a mostrar la condición de pago.
 
+**Nota:** la base de desarrollo se pasa por la variable `DEV_DATABASE_URL` (exportarla en la shell). Nunca escribir credenciales en archivos versionados.
+
 **Tech Stack:** NestJS 11, Prisma 6, PostgreSQL 18, Next.js (App Router), Jest + supertest para e2e.
 
 ## Global Constraints
@@ -103,7 +105,7 @@ DELETE FROM "Company" WHERE prefix IN ('EP', 'INAC', 'EPP');
 
 ```bash
 cd apps/api
-DATABASE_URL='postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' npx prisma migrate deploy
+DATABASE_URL="$DEV_DATABASE_URL" npx prisma migrate deploy
 ```
 
 Esperado: `1 migration found` seguido de `Applying migration '20260721000000_customer_company'` y `All migrations have been successfully applied.`
@@ -111,7 +113,7 @@ Esperado: `1 migration found` seguido de `Applying migration '20260721000000_cus
 - [ ] **Step 4: Verificar el reparto y que no quedaron empresas de prueba**
 
 ```bash
-psql 'postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' \
+psql "$DEV_DATABASE_URL" \
   -c 'select co.name, count(*) from "Customer" c join "Company" co on co.id=c."companyId" group by 1 order by 2 desc;' \
   -c 'select name, nit, prefix from "Company" order by name;'
 ```
@@ -132,7 +134,20 @@ Esperado exactamente:
 
 Si `Nanonutrición` sale con 0 clientes, el `LIKE` no está casando la tilde: revisar que el `notes` del import diga literalmente `hoja Nanonutrición`.
 
-- [ ] **Step 5: Regenerar el cliente de Prisma**
+- [ ] **Step 5: Aplicar la migración también a la base local**
+
+12 specs e2e corren contra Postgres real (`app.e2e-spec.ts`, `credit-concurrency.e2e-spec.ts`,
+`permissions.e2e-spec.ts`, etc.), así que la base local tiene que tener la columna o toda esa
+mitad de la suite falla.
+
+```bash
+cd apps/api && npx prisma migrate deploy
+```
+
+Esperado: `All migrations have been successfully applied.` La base local tiene clientes de seed
+sin `notes` de import; el fallback los manda a Norgtech, que es lo correcto.
+
+- [ ] **Step 6: Regenerar el cliente de Prisma**
 
 ```bash
 cd apps/api && npx prisma generate
@@ -140,10 +155,33 @@ cd apps/api && npx prisma generate
 
 Esperado: `Generated Prisma Client`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Arreglar los dos sitios que crean clientes sin empresa**
+
+`companyId` pasa a ser requerido, así que estos dos dejan de compilar/correr:
+
+En `apps/api/prisma/seed.ts`, en el `data` del `customer.upsert` (línea ~170), agregar:
+
+```typescript
+      companyId: "clx_default_norgtech",
+```
+
+En `apps/api/test/credit-concurrency.e2e-spec.ts`, en el `data` del `prisma.customer.create`
+(línea ~60), agregar la misma línea. Este spec escribe en Postgres real, así que sin esto tira
+error de constraint, no de tipos.
+
+- [ ] **Step 8: Verificar que compila y que la suite real sigue verde**
 
 ```bash
-git add apps/api/prisma/schema.prisma apps/api/prisma/migrations/20260721000000_customer_company
+cd apps/api && npx tsc --noEmit -p tsconfig.json
+npx jest --watchman=false --config ./test/jest-e2e.json credit-concurrency
+```
+
+Esperado: tsc sin errores nuevos; `credit-concurrency` en verde.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add apps/api/prisma/schema.prisma apps/api/prisma/migrations/20260721000000_customer_company apps/api/prisma/seed.ts apps/api/test/credit-concurrency.e2e-spec.ts
 git commit -m "feat(clientes): Customer.companyId obligatorio + empresa Nanonutricion"
 ```
 
@@ -539,7 +577,7 @@ Esperado: `import-customers: OK`.
 
 ```bash
 cd apps/api
-DATABASE_URL='postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' \
+DATABASE_URL="$DEV_DATABASE_URL" \
   npx ts-node --transpile-only prisma/scripts/import-customers.ts \
   "/Users/xstaked/Downloads/LISTA DE CLIENTES NORGTECH Y NANONUTRICÓN.xlsx"
 ```
@@ -713,7 +751,7 @@ cd apps/api && npx ts-node --transpile-only prisma/scripts/import-customers.chec
 - [ ] Reparto final por empresa:
 
 ```bash
-psql 'postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' \
+psql "$DEV_DATABASE_URL" \
   -c 'select co.name, count(*) from "Customer" c join "Company" co on co.id=c."companyId" group by 1;'
 ```
 
@@ -722,3 +760,59 @@ Esperado: Norgtech 506, Nanonutrición 12.
 ## Pendiente con el cliente
 
 El prefijo `NN` y la razón social `Nanonutrición S.A.S.` son supuestos. El prefijo numera las facturas, así que hay que confirmarlo **antes** de que se emita la primera factura de Nanonutrición. Cambiarlo después implica migrar numeración ya emitida.
+
+---
+
+### Task 7: Guard de empresa también al facturar directo
+
+Añadida durante la ejecución. La review de la Task 3 encontró que `POST /invoices` deja abierto el
+mismo agujero que la feature existe para cerrar.
+
+**Files:**
+- Modify: `apps/api/src/modules/invoices/invoices.service.ts` (`create`, líneas 61-68)
+- Test: `apps/api/test/invoices.e2e-spec.ts`
+
+**Interfaces:**
+- Consumes: `Customer.companyId` (Task 1).
+- Produces: `400 "Invoice company does not match customer company"`.
+
+`createInvoiceFromOrder` ya está protegido transitivamente porque deriva `companyId` de una orden que
+pasó por el guard de la Task 3. El hueco es la factura suelta.
+
+- [ ] **Step 1: Escribir el test que falla**
+
+En `apps/api/test/invoices.e2e-spec.ts`, siguiendo la convención de stubs del archivo, agregar un test
+que haga `POST /invoices` con un `companyId` distinto al del cliente y espere `400`. El payload debe
+ser válido en todo lo demás: si falta cualquier campo requerido del DTO, el 400 vendría de la
+validación y el test sería un falso positivo.
+
+- [ ] **Step 2: Correr y verificar que falla**
+
+```bash
+cd apps/api && npx jest --watchman=false --config ./test/jest-e2e.json invoices -t "empresa"
+```
+
+Esperado: FAIL con 201 en vez de 400.
+
+- [ ] **Step 3: Agregar el guard**
+
+En `apps/api/src/modules/invoices/invoices.service.ts`, dentro de `create`, después de que se resuelva
+el cliente y se valide la empresa:
+
+```typescript
+    if (customer.companyId !== dto.companyId) {
+      throw new BadRequestException("Invoice company does not match customer company");
+    }
+```
+
+- [ ] **Step 4: Verificar que pasa y que muerde**
+
+Correr el test. Luego neutralizar el guard, confirmar que el test falla, y restaurar.
+
+- [ ] **Step 5: Suite completa y commit**
+
+```bash
+cd apps/api && npx jest --watchman=false --config ./test/jest-e2e.json
+git add apps/api/src/modules/invoices apps/api/test/invoices.e2e-spec.ts
+git commit -m "feat(facturacion): la empresa de la factura debe coincidir con la del cliente"
+```

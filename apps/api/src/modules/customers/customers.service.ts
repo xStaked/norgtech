@@ -38,6 +38,7 @@ export class CustomersService {
             department: dto.department,
             notes: dto.notes,
             segmentId: dto.segmentId,
+            companyId: dto.companyId,
             assignedToUserId: dto.assignedToUserId,
             customerType: dto.customerType || undefined,
             creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
@@ -107,6 +108,14 @@ export class CustomersService {
       throw new NotFoundException("Customer segment not found");
     }
 
+    const company = await this.prisma.company.findUnique({
+      where: { id: dto.companyId },
+    });
+
+    if (!company || !company.isActive) {
+      throw new NotFoundException("Company not found or inactive");
+    }
+
     if (!dto.assignedToUserId) {
       return;
     }
@@ -147,6 +156,30 @@ export class CustomersService {
       }
     }
 
+    if (dto.companyId && dto.companyId !== customer.companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: dto.companyId },
+      });
+
+      if (!company || !company.isActive) {
+        throw new NotFoundException("Company not found or inactive");
+      }
+
+      // Cambiar de empresa dejaria ordenes o facturas sueltas cuya empresa ya
+      // no coincide con la del cliente, que es justo lo que validan
+      // OrdersService.create e InvoicesService.create.
+      const [orderCount, invoiceCount] = await Promise.all([
+        this.prisma.order.count({ where: { customerId: id } }),
+        this.prisma.invoice.count({ where: { customerId: id } }),
+      ]);
+
+      if (orderCount > 0 || invoiceCount > 0) {
+        throw new BadRequestException(
+          "Cannot change company for a customer with orders or invoices",
+        );
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.customer.update({
         where: { id },
@@ -161,6 +194,7 @@ export class CustomersService {
           ...(dto.department !== undefined && { department: dto.department }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
           ...(dto.segmentId !== undefined && { segmentId: dto.segmentId }),
+          ...(dto.companyId !== undefined && { companyId: dto.companyId }),
           ...(dto.assignedToUserId !== undefined && {
             assignedToUserId: dto.assignedToUserId,
           }),
@@ -205,8 +239,11 @@ export class CustomersService {
         city: true,
         department: true,
         creditLimit: true,
+        paymentCondition: true,
+        paymentDays: true,
         active: true,
         segment: { select: { id: true, name: true } },
+        company: { select: { id: true, name: true } },
         contacts: {
           select: {
             id: true,
@@ -226,6 +263,7 @@ export class CustomersService {
       where: { id },
       include: {
         segment: true,
+        company: true,
         contacts: {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
         },

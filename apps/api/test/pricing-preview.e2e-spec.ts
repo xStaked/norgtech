@@ -61,6 +61,7 @@ describe("Pricing preview parity (ORD-04 / QUO-03)", () => {
             displayName: "Cliente Meta Cumplida",
             taxId: "900000001-1",
             address: "Calle Meta 1",
+            companyId,
             segment: {
               name: "Oro",
               discountPercent: 10,
@@ -74,6 +75,7 @@ describe("Pricing preview parity (ORD-04 / QUO-03)", () => {
             displayName: "Cliente Meta Pendiente",
             taxId: "900000002-1",
             address: "Calle Meta 2",
+            companyId,
             segment: {
               name: "Oro",
               discountPercent: 10,

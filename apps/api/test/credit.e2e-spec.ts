@@ -38,6 +38,7 @@ describe("Credit", () => {
       purchaseBudget: new Prisma.Decimal(2000000),
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
+      companyId: "company-a",
       segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
     {
@@ -60,6 +61,7 @@ describe("Credit", () => {
       purchaseBudget: null,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
+      companyId: "company-a",
       segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
     {
@@ -104,6 +106,7 @@ describe("Credit", () => {
       purchaseBudget: null,
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
+      companyId: "company-a",
       segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
   ];

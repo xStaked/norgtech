@@ -63,6 +63,7 @@ describe("CreditService.assertCreditLimit concurrencia (TOCTOU)", () => {
         legalName: `${MARKER} SAS`,
         displayName: `${MARKER}`,
         segmentId: segment.id,
+        companyId: "clx_default_norgtech",
         creditLimit: new Prisma.Decimal(CREDIT_LIMIT),
         createdBy: MARKER,
         updatedBy: MARKER,

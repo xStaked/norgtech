@@ -82,6 +82,16 @@ describe("BillingRequests", () => {
           return {
             id: "customer-1",
             displayName: "Agro Norte",
+            companyId: "company-1",
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+          };
+        }
+        if (id === "customer-other-company") {
+          return {
+            id: "customer-other-company",
+            displayName: "Otra Compania",
+            companyId: "company-2",
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
           };
@@ -119,6 +129,16 @@ describe("BillingRequests", () => {
             legalName: "Tecnologia de Nutricion Organica SAS",
             nit: "900999888-1",
             prefix: "NOR",
+            isActive: true,
+          };
+        }
+        if (id === "company-2") {
+          return {
+            id: "company-2",
+            name: "Otra Compania",
+            legalName: "Otra Compania SAS",
+            nit: "900111222-3",
+            prefix: "OTR",
             isActive: true,
           };
         }
@@ -286,6 +306,20 @@ describe("BillingRequests", () => {
     expect(response.body.customerId).toBe("customer-1");
     expect(response.body.sourceOrderId).toBe("order-1");
     expect(response.body.companyId).toBe("company-1");
+  });
+
+  it("rejects a direct billing request whose company does not match the customer's company", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/billing-requests")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        companyId: "company-2",
+        notes: "Empresa equivocada",
+      })
+      .expect(400);
+
+    expect(response.body.message).toBe("Billing request company does not match customer company");
   });
 
   it("transitions billing request status", async () => {

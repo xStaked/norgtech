@@ -1,5 +1,14 @@
 import { strict as assert } from "assert";
-import { clean, isActive, nitCheckDigit, normalizeSeller, parseCustomerType, parsePayment, parseTaxId } from "./import-customers";
+import {
+  clean,
+  COMPANY_PREFIX_BY_SHEET,
+  isActive,
+  nitCheckDigit,
+  normalizeSeller,
+  parseCustomerType,
+  parsePayment,
+  parseTaxId,
+} from "./import-customers";
 
 // DV DIAN: solo se usa para reportar, nunca para reescribir el NIT.
 assert.equal(nitCheckDigit("900561013"), 7);
@@ -56,5 +65,9 @@ assert.equal(normalizeSeller(""), null);
 
 assert.equal(clean({ text: "a@b.com", hyperlink: "mailto:a@b.com" }), "a@b.com");
 assert.equal(clean(6053448029), "6053448029");
+
+// Cada hoja pertenece a una empresa distinta.
+assert.equal(COMPANY_PREFIX_BY_SHEET.NORGTECH, "NT");
+assert.equal(COMPANY_PREFIX_BY_SHEET.NANONUTRICION, "NN");
 
 console.log("import-customers: OK");

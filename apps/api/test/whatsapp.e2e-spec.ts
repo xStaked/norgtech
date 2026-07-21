@@ -62,8 +62,8 @@ describe("WhatsApp inbox", () => {
   ];
 
   const customers = [
-    { id: "customer-1", displayName: "Agro Norte", legalName: "Agro Norte SAS" },
-    { id: "customer-2", displayName: "Agro Sur", legalName: "Agro Sur SAS" },
+    { id: "customer-1", displayName: "Agro Norte", legalName: "Agro Norte SAS", companyId: "company-1" },
+    { id: "customer-2", displayName: "Agro Sur", legalName: "Agro Sur SAS", companyId: "company-1" },
   ];
   const companies = [
     { id: "company-1", name: "Norgtech", prefix: "NOR", isActive: true },
@@ -4002,6 +4002,7 @@ describe("WhatsApp inbox", () => {
         id: "customer-porci",
         displayName: "Porcicultura caribe SAS",
         legalName: "Porcicultura caribe SAS",
+        companyId: "company-1",
       };
       accounts.push(account);
       conversations.push(conversation as unknown as (typeof conversations)[number]);

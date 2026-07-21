@@ -58,6 +58,10 @@ export class InvoicesService {
       throw new NotFoundException("Company not found or inactive");
     }
 
+    if (customer.companyId !== dto.companyId) {
+      throw new BadRequestException("Invoice company does not match customer company");
+    }
+
     if (dto.orderId) {
       const order = await this.prisma.order.findUnique({
         where: { id: dto.orderId },
