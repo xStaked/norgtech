@@ -6,6 +6,8 @@
 
 **Architecture:** Se agrega `Customer.companyId` obligatorio con una migración en tres pasos que crea Nanonutrición, puebla la columna desde el campo `notes` (que ya registra la hoja de origen del import) y recién entonces la marca `NOT NULL`. `OrdersService.create` rechaza órdenes cuya empresa no coincide con la del cliente. En la web, la columna `Crédito` de la lista —hoy vacía— pasa a mostrar la condición de pago.
 
+**Nota:** la base de desarrollo se pasa por la variable `DEV_DATABASE_URL` (exportarla en la shell). Nunca escribir credenciales en archivos versionados.
+
 **Tech Stack:** NestJS 11, Prisma 6, PostgreSQL 18, Next.js (App Router), Jest + supertest para e2e.
 
 ## Global Constraints
@@ -103,7 +105,7 @@ DELETE FROM "Company" WHERE prefix IN ('EP', 'INAC', 'EPP');
 
 ```bash
 cd apps/api
-DATABASE_URL='postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' npx prisma migrate deploy
+DATABASE_URL="$DEV_DATABASE_URL" npx prisma migrate deploy
 ```
 
 Esperado: `1 migration found` seguido de `Applying migration '20260721000000_customer_company'` y `All migrations have been successfully applied.`
@@ -111,7 +113,7 @@ Esperado: `1 migration found` seguido de `Applying migration '20260721000000_cus
 - [ ] **Step 4: Verificar el reparto y que no quedaron empresas de prueba**
 
 ```bash
-psql 'postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' \
+psql "$DEV_DATABASE_URL" \
   -c 'select co.name, count(*) from "Customer" c join "Company" co on co.id=c."companyId" group by 1 order by 2 desc;' \
   -c 'select name, nit, prefix from "Company" order by name;'
 ```
@@ -575,7 +577,7 @@ Esperado: `import-customers: OK`.
 
 ```bash
 cd apps/api
-DATABASE_URL='postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' \
+DATABASE_URL="$DEV_DATABASE_URL" \
   npx ts-node --transpile-only prisma/scripts/import-customers.ts \
   "/Users/xstaked/Downloads/LISTA DE CLIENTES NORGTECH Y NANONUTRICÓN.xlsx"
 ```
@@ -749,7 +751,7 @@ cd apps/api && npx ts-node --transpile-only prisma/scripts/import-customers.chec
 - [ ] Reparto final por empresa:
 
 ```bash
-psql 'postgresql://postgres:m4utmuto7hgutovy@2.25.165.144:5432/norgtech' \
+psql "$DEV_DATABASE_URL" \
   -c 'select co.name, count(*) from "Customer" c join "Company" co on co.id=c."companyId" group by 1;'
 ```
 
