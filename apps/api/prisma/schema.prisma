@@ -530,6 +530,8 @@ model Customer {
   paymentCondition      PaymentCondition?      @default(contado)
   paymentDays           Int?                   @default(0)
   purchaseBudget        Decimal?               @db.Decimal(14, 2)
+
+  @@index([companyId])
 }
 
 model Contact {

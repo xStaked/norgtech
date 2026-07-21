@@ -165,14 +165,18 @@ export class CustomersService {
         throw new NotFoundException("Company not found or inactive");
       }
 
-      // Cambiar de empresa dejaria ordenes cuya empresa ya no coincide con la
-      // del cliente, que es justo lo que valida OrdersService.create.
-      const orderCount = await this.prisma.order.count({
-        where: { customerId: id },
-      });
+      // Cambiar de empresa dejaria ordenes o facturas sueltas cuya empresa ya
+      // no coincide con la del cliente, que es justo lo que validan
+      // OrdersService.create e InvoicesService.create.
+      const [orderCount, invoiceCount] = await Promise.all([
+        this.prisma.order.count({ where: { customerId: id } }),
+        this.prisma.invoice.count({ where: { customerId: id } }),
+      ]);
 
-      if (orderCount > 0) {
-        throw new BadRequestException("Cannot change company for a customer with orders");
+      if (orderCount > 0 || invoiceCount > 0) {
+        throw new BadRequestException(
+          "Cannot change company for a customer with orders or invoices",
+        );
       }
     }
 

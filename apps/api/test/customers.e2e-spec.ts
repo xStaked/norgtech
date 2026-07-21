@@ -121,6 +121,14 @@ describe("Customers", () => {
         where.customerId === "customer-with-orders" ? 1 : 0,
     };
 
+    // Honors where.customerId the same way orderAggregate does above: a stub
+    // that ignored its argument would make the invoices-only guard test pass
+    // for the wrong reason (a vacuous pass).
+    const invoiceCount = {
+      count: async ({ where }: { where: { customerId: string } }) =>
+        where.customerId === "customer-with-invoices" ? 1 : 0,
+    };
+
     const companies: Record<string, { id: string; name: string; isActive: boolean }> = {
       clx_default_norgtech: { id: "clx_default_norgtech", name: "Norgtech", isActive: true },
       clx_default_nanonutricion: {
@@ -141,6 +149,7 @@ describe("Customers", () => {
       customerSegment,
       company,
       order: orderAggregate,
+      invoice: invoiceCount,
       customer: {
         create: async () => {
           throw new Error("customer.create must run inside a transaction");
@@ -899,6 +908,40 @@ describe("Customers", () => {
     expect(response.body.message).toContain("with orders");
 
     const customerAfter = customers.find((c) => c.id === "customer-with-orders");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  it("no deja cambiar la empresa de un cliente que ya tiene facturas sueltas (sin ordenes)", async () => {
+    customers.push({
+      id: "customer-with-invoices",
+      legalName: "Cliente Con Facturas SAS",
+      displayName: "Cliente Con Facturas",
+      taxId: "800222333",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-with-invoices")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_default_nanonutricion" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("with orders");
+
+    const customerAfter = customers.find((c) => c.id === "customer-with-invoices");
     expect(customerAfter?.companyId).toBe("clx_default_norgtech");
   });
 

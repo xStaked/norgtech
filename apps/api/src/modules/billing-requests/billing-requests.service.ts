@@ -38,6 +38,11 @@ export class BillingRequestsService {
   }
 
   async createDirect(user: AuthUser, dto: CreateBillingRequestDto) {
+    const customer = await this.prisma.customer.findUnique({ where: { id: dto.customerId } });
+    if (!customer) {
+      throw new NotFoundException("Customer not found");
+    }
+
     if (dto.sourceOrderId) {
       const order = await this.prisma.order.findUnique({ where: { id: dto.sourceOrderId } });
       if (!order) {
@@ -62,6 +67,10 @@ export class BillingRequestsService {
     });
     if (!company || !company.isActive) {
       throw new NotFoundException("Company not found or inactive");
+    }
+
+    if (customer.companyId !== dto.companyId) {
+      throw new BadRequestException("Billing request company does not match customer company");
     }
 
     return this.prisma.$transaction(async (tx) => {
