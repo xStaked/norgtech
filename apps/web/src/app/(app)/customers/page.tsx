@@ -36,6 +36,8 @@ interface Customer {
   active: boolean;
   segment: Segment | null;
   contacts: Contact[];
+  paymentCondition: string | null;
+  company: { id: string; name: string } | null;
 }
 
 interface CustomerRow {
@@ -48,6 +50,8 @@ interface CustomerRow {
   primaryContactMeta: string | null;
   creditLimit: string | null;
   active: boolean;
+  paymentCondition: string | null;
+  company: { id: string; name: string } | null;
 }
 
 function buildLocation(customer: Customer) {
@@ -56,6 +60,19 @@ function buildLocation(customer: Customer) {
   }
 
   return customer.city ?? customer.department ?? "Sin ubicación";
+}
+
+const PAYMENT_LABELS: Record<string, string> = {
+  contado: "Contado",
+  credito_15: "Crédito 15 días",
+  credito_30: "Crédito 30 días",
+  credito_60: "Crédito 60 días",
+  credito_90: "Crédito 90 días",
+};
+
+function paymentLabel(condition: string | null) {
+  if (!condition) return "Contado";
+  return PAYMENT_LABELS[condition] ?? condition;
 }
 
 function getPrimaryContact(customer: Customer) {
@@ -84,6 +101,7 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
           {row.displayName}
         </Link>
         <span style={{ fontSize: 13, color: "#44556e" }}>{row.legalName}</span>
+        <span style={{ fontSize: 12, color: "#6b7787" }}>{row.company?.name}</span>
       </div>
     ),
   },
@@ -107,14 +125,16 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     ),
   },
   {
-    key: "credit",
-    header: "Crédito",
-    render: (row) =>
-      row.creditLimit ? (
-        <span style={{ fontWeight: 600 }}>{row.creditLimit}</span>
-      ) : (
-        <span style={{ color: "#6b7787" }}>—</span>
-      ),
+    key: "payment",
+    header: "Pago",
+    render: (row) => (
+      <div style={{ display: "grid", gap: 2 }}>
+        <span>{paymentLabel(row.paymentCondition)}</span>
+        {row.creditLimit && (
+          <span style={{ fontSize: 12, color: "#6b7787" }}>Cupo {row.creditLimit}</span>
+        )}
+      </div>
+    ),
   },
   {
     key: "contact",
@@ -165,6 +185,8 @@ export default async function CustomersPage() {
         ? `$${Number(customer.creditLimit).toLocaleString("es-CO", { maximumFractionDigits: 0 })}`
         : null,
       active: customer.active,
+      paymentCondition: customer.paymentCondition,
+      company: customer.company,
     };
   });
 

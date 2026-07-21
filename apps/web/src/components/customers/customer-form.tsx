@@ -27,6 +27,7 @@ interface Customer {
   department: string | null;
   notes: string | null;
   segmentId: string | null;
+  companyId: string | null;
   assignedToUserId: string | null;
   customerType: string | null;
   creditLimit: string | null;
@@ -37,6 +38,7 @@ interface Customer {
 
 interface CustomerFormProps {
   segments: Segment[];
+  companies: { id: string; name: string }[];
   customer?: Customer;
 }
 
@@ -54,7 +56,7 @@ function periodPlaceholder(periodType: string): string {
   }
 }
 
-export function CustomerForm({ segments, customer }: CustomerFormProps) {
+export function CustomerForm({ segments, companies, customer }: CustomerFormProps) {
   const router = useRouter();
   const isEditing = Boolean(customer);
   const [error, setError] = useState<string | null>(null);
@@ -89,6 +91,7 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
       department: optionalString("department"),
       notes: optionalString("notes"),
       segmentId: String(formData.get("segmentId")),
+      companyId: String(formData.get("companyId")),
       assignedToUserId: optionalString("assignedToUserId") || undefined,
       customerType: optionalString("customerType") || undefined,
       creditLimit: formData.get("creditLimit")
@@ -167,6 +170,23 @@ export function CustomerForm({ segments, customer }: CustomerFormProps) {
           {segments.map((s) => (
             <option key={s.id} value={s.id}>
               {s.name}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="grid gap-1">
+        <Label>Empresa *</Label>
+        <select
+          name="companyId"
+          required
+          className={selectClasses}
+          defaultValue={customer?.companyId ?? ""}
+        >
+          <option value="">Seleccionar empresa</option>
+          {companies.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
             </option>
           ))}
         </select>
