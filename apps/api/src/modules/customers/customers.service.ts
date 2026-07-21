@@ -156,6 +156,26 @@ export class CustomersService {
       }
     }
 
+    if (dto.companyId && dto.companyId !== customer.companyId) {
+      const company = await this.prisma.company.findUnique({
+        where: { id: dto.companyId },
+      });
+
+      if (!company || !company.isActive) {
+        throw new NotFoundException("Company not found or inactive");
+      }
+
+      // Cambiar de empresa dejaria ordenes cuya empresa ya no coincide con la
+      // del cliente, que es justo lo que valida OrdersService.create.
+      const orderCount = await this.prisma.order.count({
+        where: { customerId: id },
+      });
+
+      if (orderCount > 0) {
+        throw new BadRequestException("Cannot change company for a customer with orders");
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.customer.update({
         where: { id },
@@ -170,6 +190,7 @@ export class CustomersService {
           ...(dto.department !== undefined && { department: dto.department }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
           ...(dto.segmentId !== undefined && { segmentId: dto.segmentId }),
+          ...(dto.companyId !== undefined && { companyId: dto.companyId }),
           ...(dto.assignedToUserId !== undefined && {
             assignedToUserId: dto.assignedToUserId,
           }),

@@ -114,6 +114,11 @@ describe("Customers", () => {
       aggregate: async () => ({
         _sum: { total: 0 },
       }),
+      // Honors where.customerId instead of returning a fixed value: a stub
+      // that always returned 0 (or always 1) would make the guard test pass
+      // for the wrong reason regardless of which customer was patched.
+      count: async ({ where }: { where: { customerId: string } }) =>
+        where.customerId === "customer-with-orders" ? 1 : 0,
     };
 
     const companies: Record<string, { id: string; name: string; isActive: boolean }> = {
@@ -817,5 +822,73 @@ describe("Customers", () => {
       id: "clx_default_norgtech",
       name: "Norgtech",
     });
+  });
+
+  it("no deja cambiar la empresa de un cliente que ya tiene ordenes", async () => {
+    customers.push({
+      id: "customer-with-orders",
+      legalName: "Cliente Con Ordenes SAS",
+      displayName: "Cliente Con Ordenes",
+      taxId: "800111222",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-with-orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_default_nanonutricion" });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("with orders");
+
+    const customerAfter = customers.find((c) => c.id === "customer-with-orders");
+    expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  it("permite cambiar la empresa de un cliente sin ordenes", async () => {
+    customers.push({
+      id: "customer-without-orders",
+      legalName: "Cliente Sin Ordenes SAS",
+      displayName: "Cliente Sin Ordenes",
+      taxId: "800333444",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-without-orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ companyId: "clx_default_nanonutricion" });
+
+    expect(response.status).toBe(200);
+    expect(response.body.companyId).toBe("clx_default_nanonutricion");
+
+    const customerAfter = customers.find((c) => c.id === "customer-without-orders");
+    expect(customerAfter?.companyId).toBe("clx_default_nanonutricion");
   });
 });
