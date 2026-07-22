@@ -1,6 +1,6 @@
 import { PaymentCondition } from "@prisma/client";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsEnum, IsOptional, IsString } from "class-validator";
+import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 import { IncludeInactiveQueryDto } from "../../../common/dto/include-inactive.query";
 
 /**
@@ -11,14 +11,17 @@ import { IncludeInactiveQueryDto } from "../../../common/dto/include-inactive.qu
 export class ListCustomersQueryDto extends IncludeInactiveQueryDto {
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   search?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   companyId?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(120)
   segmentId?: string;
 
   @IsOptional()
@@ -29,9 +32,20 @@ export class ListCustomersQueryDto extends IncludeInactiveQueryDto {
   // class-transformer no invoque @Transform con la clave ausente. Si llegara a
   // invocarlo, `undefined === "true"` colapsaria a false y el caso "sin filtro"
   // pasaria a significar "solo inactivos".
+  //
+  // Un valor que no es reconocible como booleano ("basura") se deja pasar tal
+  // cual para que @IsBoolean lo rechace con 400, en vez de colapsarlo a false
+  // (que significaria "solo inactivos" de forma silenciosa e incoherente con
+  // como se comporta paymentCondition ante un valor invalido).
   @IsOptional()
   @Transform(({ value }) =>
-    value === undefined ? undefined : value === true || value === "true",
+    value === undefined
+      ? undefined
+      : value === true || value === "true"
+        ? true
+        : value === false || value === "false"
+          ? false
+          : value,
   )
   @IsBoolean()
   active?: boolean;
