@@ -486,6 +486,9 @@ describe("Orders", () => {
         },
         findMany: async () => auditLogs,
       },
+      notification: {
+        createMany: async () => ({ count: 0 }),
+      },
       $transaction: async <T>(
         callback: (tx: any) => Promise<T>,
       ) => {
@@ -498,6 +501,9 @@ describe("Orders", () => {
           company: prismaStub.company,
           customer,
           user: prismaStub.user,
+          notification: {
+            createMany: async () => ({ count: 0 }),
+          },
           // Row lock de CreditService.assertCreditLimit. El stub no tiene
           // transacciones reales, asi que solo debe devolver una fila (no
           // vacia, o el lock lanzaria "Cliente no encontrado").
