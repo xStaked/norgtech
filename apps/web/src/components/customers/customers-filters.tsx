@@ -29,11 +29,14 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const urlSearch = searchParams.get("search") ?? "";
+  const [search, setSearch] = useState(urlSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchParamsRef = useRef(searchParams);
+  searchParamsRef.current = searchParams;
 
   const setParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const params = new URLSearchParams(searchParamsRef.current.toString());
     if (value) {
       params.set(key, value);
     } else {
@@ -47,6 +50,10 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => setParam("search", value.trim()), 300);
   };
+
+  useEffect(() => {
+    setSearch(urlSearch);
+  }, [urlSearch]);
 
   useEffect(() => {
     return () => {
@@ -67,6 +74,10 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
           <button
             type="button"
             onClick={() => {
+              if (debounceRef.current) {
+                clearTimeout(debounceRef.current);
+                debounceRef.current = null;
+              }
               setSearch("");
               router.replace(pathname);
             }}
