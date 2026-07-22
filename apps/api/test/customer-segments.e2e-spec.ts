@@ -4,7 +4,7 @@ import { UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
-import { refreshTokenStub } from "./helpers/login-as";
+import { findMockUserByEmail, loginAs, refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   // eslint-disable-next-line no-var
@@ -55,7 +55,7 @@ describe("Customer segments", () => {
                   role: UserRole.administrador,
                   active: true,
                 }
-              : null,
+              : findMockUserByEmail(email),
         },
         refreshToken: refreshTokenStub(),
         customerSegment: {
@@ -175,6 +175,21 @@ describe("Customer segments", () => {
 
     expect(Array.isArray(response.body)).toBe(true);
     expect(response.body.length).toBeGreaterThanOrEqual(1);
+  });
+
+  // El select "Filtrar por segmento" de la web lo usan tambien tecnico,
+  // facturacion y logistica (via el listado de clientes, que ya expone
+  // segment: { id, name } a esos roles). Sin estos 3 roles en el @Roles
+  // del listado, la web recibe 403 y el select se pinta vacio.
+  it("permite a facturacion listar segmentos", async () => {
+    const facturacionToken = await loginAs(app, UserRole.facturacion);
+
+    const response = await request(app.getHttpServer())
+      .get("/customer-segments")
+      .set("Authorization", `Bearer ${facturacionToken}`)
+      .expect(200);
+
+    expect(Array.isArray(response.body)).toBe(true);
   });
 
   it("gets a segment by id", async () => {
