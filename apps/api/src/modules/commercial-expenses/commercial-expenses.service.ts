@@ -11,6 +11,7 @@ import {
 import {
   CommercialExpense,
   CommercialExpenseStatus,
+  NotificationType,
   Prisma,
   UserRole,
 } from "@prisma/client";
@@ -18,6 +19,7 @@ import { Readable } from "node:stream";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { NotificationsService } from "../notifications/notifications.service";
 import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import {
   EXPENSE_SUPPORT_ALLOWED_MIME_TYPES,
@@ -78,6 +80,7 @@ export class CommercialExpensesService {
     private readonly exportService: CommercialExpensesExportService,
     @Inject(forwardRef(() => WhatsAppService))
     private readonly whatsAppService: WhatsAppService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(
@@ -417,6 +420,24 @@ export class CommercialExpensesService {
         },
         tx,
       );
+
+      if (
+        dto.status === CommercialExpenseStatus.aprobado ||
+        dto.status === CommercialExpenseStatus.rechazado
+      ) {
+        await this.notifications.emit(
+          {
+            userIds: [updated.submittedByUserId],
+            type: NotificationType.gasto_resuelto,
+            title: `Tu gasto fue ${dto.status}`,
+            body: updated.description,
+            entityType: "commercial_expense",
+            entityId: updated.id,
+            discriminator: dto.status,
+          },
+          tx,
+        );
+      }
 
       return updated;
     });

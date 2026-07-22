@@ -1,6 +1,7 @@
 import { forwardRef, Module } from "@nestjs/common";
 import { AuditModule } from "../audit/audit.module";
 import { AuthModule } from "../auth/auth.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { WhatsAppModule } from "../whatsapp/whatsapp.module";
 import {
   ExpenseExtractionProvider,
@@ -13,7 +14,12 @@ import { CommercialExpensesService } from "./commercial-expenses.service";
 import { R2StorageService } from "./r2-storage.service";
 
 @Module({
-  imports: [AuthModule, AuditModule, forwardRef(() => WhatsAppModule)],
+  imports: [
+    AuthModule,
+    AuditModule,
+    NotificationsModule,
+    forwardRef(() => WhatsAppModule),
+  ],
   controllers: [CommercialExpensesController],
   providers: [
     CommercialExpensesService,

@@ -17,6 +17,7 @@ import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
 import { NoraExpenseExecutionService } from "../src/modules/whatsapp/nora-expense-execution.service";
 import { NoraAgentController } from "../src/modules/whatsapp/nora-agent.controller";
 import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
+import { NotificationsService } from "../src/modules/notifications/notifications.service";
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId
@@ -93,6 +94,7 @@ describe("CommercialExpensesService.createFromBuffer", () => {
         { provide: R2StorageService, useValue: storageService },
         { provide: CommercialExpensesExportService, useValue: exportService },
         { provide: WhatsAppService, useValue: { notifyExpenseCorrection: jest.fn() } },
+        { provide: NotificationsService, useValue: { emit: jest.fn().mockResolvedValue({ count: 0 }) } },
       ],
     }).compile();
 
