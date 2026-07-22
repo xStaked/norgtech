@@ -25,11 +25,10 @@ export class ListCustomersQueryDto extends IncludeInactiveQueryDto {
   @IsEnum(PaymentCondition)
   paymentCondition?: PaymentCondition;
 
-  // El ternario preserva undefined de forma explicita: no depende de que
-  // class-transformer omita la llamada a @Transform cuando el param no vino
-  // (de hecho no la omite en este stack). Sin el ternario, un
-  // `undefined === "true"` colapsaria a false (= filtrar solo inactivos)
-  // el caso "sin filtro".
+  // El ternario preserva undefined de forma explicita, sin depender de que
+  // class-transformer no invoque @Transform con la clave ausente. Si llegara a
+  // invocarlo, `undefined === "true"` colapsaria a false y el caso "sin filtro"
+  // pasaria a significar "solo inactivos".
   @IsOptional()
   @Transform(({ value }) =>
     value === undefined ? undefined : value === true || value === "true",
