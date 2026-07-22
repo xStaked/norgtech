@@ -29,44 +29,68 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const currentQuery = searchParams.toString();
   const urlSearch = searchParams.get("search") ?? "";
   const [search, setSearch] = useState(urlSearch);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchParamsRef = useRef(searchParams);
-  searchParamsRef.current = searchParams;
-  // Ultimo valor que este componente escribio en la URL. El router.replace del
-  // debounce tarda un round-trip al server component en reflejarse; sin esta
-  // marca, ese eco tardio llega como "cambio de URL" y el efecto de resync de
-  // abajo pisa lo que el usuario siguio tecleando entre medias (comprobado:
-  // tecleando "agropecuaria" quedaba "agrocuaria").
-  const committedSearchRef = useRef(urlSearch);
+  // Cola de query strings que este componente escribio y todavia no ha visto
+  // llegar. router.replace sobre esta ruta no commitea hasta que vuelve el
+  // payload RSC (3-4 fetch al API), asi que dentro de esa ventana la URL del
+  // ultimo render esta vieja: dos escrituras seguidas se pisarian. Cada
+  // escritura se apila sobre la anterior y su eco se consume en orden, lo que
+  // ademas distingue nuestros propios ecos de una navegacion externa.
+  const pendingRef = useRef<string[]>([]);
+  // Ultima query string ya vista (se actualiza en el efecto, no en el render).
+  const seenQueryRef = useRef(currentQuery);
+
+  const commit = (query: string) => {
+    const pending = pendingRef.current;
+    // Base = lo ultimo que escribimos y sigue en vuelo, o la URL vigente.
+    const base = pending.length > 0 ? pending[pending.length - 1] : seenQueryRef.current;
+    // Mismo destino que el actual: no gastes un round-trip RSC.
+    if (query === base) return;
+    pending.push(query);
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  };
 
   const setParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParamsRef.current.toString());
+    const pending = pendingRef.current;
+    const base = pending.length > 0 ? pending[pending.length - 1] : seenQueryRef.current;
+    const params = new URLSearchParams(base);
     if (value) {
       params.set(key, value);
     } else {
       params.delete(key);
     }
-    router.replace(params.size ? `${pathname}?${params.toString()}` : pathname);
+    commit(params.toString());
   };
 
   const onSearchChange = (value: string) => {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      committedSearchRef.current = value.trim();
+      debounceRef.current = null;
       setParam("search", value.trim());
     }, 300);
   };
 
   // Resincroniza el input cuando la URL cambia por fuera de este componente
-  // (navegacion atras/adelante), ignorando el eco de nuestros propios commits.
+  // (navegacion atras/adelante, o el Link del sidebar a esta misma ruta, que no
+  // remonta el componente), ignorando el eco de nuestros propios commits.
   useEffect(() => {
-    if (urlSearch === committedSearchRef.current) return;
-    committedSearchRef.current = urlSearch;
-    setSearch(urlSearch);
-  }, [urlSearch]);
+    seenQueryRef.current = currentQuery;
+    const pending = pendingRef.current;
+    const echoIndex = pending.indexOf(currentQuery);
+    if (echoIndex >= 0) {
+      // Es nuestro eco: consume hasta el (Next puede fusionar navegaciones
+      // seguidas y saltarse las intermedias) y no toques lo tecleado.
+      pending.splice(0, echoIndex + 1);
+      return;
+    }
+    // Navegacion externa: la cola ya no vale y el estado se resiembra de la URL.
+    pending.length = 0;
+    setSearch(new URLSearchParams(currentQuery).get("search") ?? "");
+  }, [currentQuery]);
 
   useEffect(() => {
     return () => {
@@ -91,9 +115,8 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
                 clearTimeout(debounceRef.current);
                 debounceRef.current = null;
               }
-              committedSearchRef.current = "";
               setSearch("");
-              router.replace(pathname);
+              commit("");
             }}
             className="h-8 rounded-lg border border-input px-2.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
           >
