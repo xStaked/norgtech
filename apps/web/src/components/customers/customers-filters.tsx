@@ -34,6 +34,12 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchParamsRef = useRef(searchParams);
   searchParamsRef.current = searchParams;
+  // Ultimo valor que este componente escribio en la URL. El router.replace del
+  // debounce tarda un round-trip al server component en reflejarse; sin esta
+  // marca, ese eco tardio llega como "cambio de URL" y el efecto de resync de
+  // abajo pisa lo que el usuario siguio tecleando entre medias (comprobado:
+  // tecleando "agropecuaria" quedaba "agrocuaria").
+  const committedSearchRef = useRef(urlSearch);
 
   const setParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParamsRef.current.toString());
@@ -48,10 +54,17 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
   const onSearchChange = (value: string) => {
     setSearch(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setParam("search", value.trim()), 300);
+    debounceRef.current = setTimeout(() => {
+      committedSearchRef.current = value.trim();
+      setParam("search", value.trim());
+    }, 300);
   };
 
+  // Resincroniza el input cuando la URL cambia por fuera de este componente
+  // (navegacion atras/adelante), ignorando el eco de nuestros propios commits.
   useEffect(() => {
+    if (urlSearch === committedSearchRef.current) return;
+    committedSearchRef.current = urlSearch;
     setSearch(urlSearch);
   }, [urlSearch]);
 
@@ -78,6 +91,7 @@ export function CustomersFilters({ companies, segments, shown, total }: Customer
                 clearTimeout(debounceRef.current);
                 debounceRef.current = null;
               }
+              committedSearchRef.current = "";
               setSearch("");
               router.replace(pathname);
             }}
