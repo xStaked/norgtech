@@ -129,13 +129,20 @@ describe("Emisor de cliente_asignado", () => {
           ...data,
           contacts: [],
         }),
+        create: async ({ data }: { data: Record<string, unknown> }) => ({
+          id: "customer-new-1",
+          ...data,
+          contacts: [],
+        }),
       },
+      customerGoal: { create: async () => ({}) },
       auditLog: { create: async () => ({}) },
     };
 
     const prisma = {
       customer: { findUnique: async () => existing },
       customerSegment: { findUnique: async () => ({ id: "seg-1" }) },
+      company: { findUnique: async () => ({ id: "company-1", isActive: true }) },
       user: { findUnique: async () => ({ id: "seller-2", active: true }) },
       $transaction: async (fn: (client: unknown) => Promise<unknown>) => fn(tx),
     };
@@ -198,6 +205,45 @@ describe("Emisor de cliente_asignado", () => {
     } as never);
 
     expect(emitted).toHaveLength(0);
+  });
+
+  it("emite cuando el cliente nace con responsable", async () => {
+    const { service, prisma, tx } = makeCustomersService({});
+
+    const created = await service.create({ id: "admin-1" } as never, {
+      legalName: "Agro Sur SA",
+      displayName: "Agro Sur",
+      segmentId: "seg-1",
+      companyId: "company-1",
+      assignedToUserId: "seller-2",
+      contacts: [
+        {
+          fullName: "Juan Perez",
+          isPrimary: true,
+          phone: "3000000000",
+          email: "juan@example.com",
+        },
+      ],
+    } as never);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0]).toMatchObject({
+      userIds: ["seller-2"],
+      type: NotificationType.cliente_asignado,
+      entityType: "customer",
+      entityId: (created as Record<string, unknown>).id,
+    });
+
+    // Sin discriminante: una sola notificacion por (usuario, cliente) para
+    // siempre, igual que en el emisor de update().
+    expect(emitted[0].discriminator).toBeUndefined();
+
+    // El emit debe recibir el mismo cliente transaccional que
+    // CustomersService.create usa para crear el cliente, no el cliente de
+    // nivel superior ni nada indefinido.
+    expect(emittedWriters[0]).toBeDefined();
+    expect(emittedWriters[0]).toBe(tx);
+    expect(emittedWriters[0]).not.toBe(prisma);
   });
 });
 
