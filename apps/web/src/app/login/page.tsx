@@ -1,15 +1,24 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { crmTheme } from "@/components/ui/theme";
+import { Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { AuthShell } from "@/components/auth-shell";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group";
 import { apiFetchClient } from "@/lib/api.client";
-import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { setSessionTokenClient } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -36,7 +45,7 @@ export default function LoginPage() {
       const token = data.accessToken;
 
       if (token) {
-        document.cookie = `${SESSION_COOKIE_NAME}=${token};path=/;max-age=86400`;
+        setSessionTokenClient(token);
         router.push("/dashboard");
       } else {
         setError("Respuesta inesperada del servidor");
@@ -49,154 +58,114 @@ export default function LoginPage() {
   }
 
   return (
-    <main
-      style={{
-        minHeight: "100vh",
-        display: "grid",
-        placeItems: "center",
-        padding: "24px",
-        background:
-          "radial-gradient(circle at top left, rgba(45, 108, 223, 0.12), transparent 28%), linear-gradient(180deg, #f8fbff 0%, #eef4fa 100%)",
-      }}
+    <AuthShell
+      headline={
+        <>
+          Tu operación comercial,
+          <br />
+          en un solo lugar.
+        </>
+      }
+      blurb="Pedidos, cartera, visitas y metas — con Nora, tu asistente de IA, integrada a WhatsApp."
+      stats={[
+        { value: "2.4k", label: "pedidos / mes" },
+        { value: "98%", label: "entregas a tiempo" },
+        { value: "24/7", label: "asistente Nora" },
+      ]}
     >
-      <section
-        style={{
-          width: "min(100%, 430px)",
-          display: "grid",
-          gap: 24,
-          padding: "32px",
-          borderRadius: crmTheme.radius.xl,
-          background: "rgba(255,255,255,0.92)",
-          border: `1px solid ${crmTheme.colors.border}`,
-          boxShadow: crmTheme.shadow.floating,
-          backdropFilter: "blur(12px)",
-        }}
-      >
-        <div style={{ display: "grid", gap: 10 }}>
-          <div
-            style={{
-              display: "inline-grid",
-              placeItems: "center",
-              width: 56,
-              height: 56,
-              borderRadius: 18,
-              background: "linear-gradient(135deg, #f0b543 0%, #f7d06b 100%)",
-              color: crmTheme.colors.primary,
-              fontSize: 18,
-              fontWeight: 800,
-            }}
-          >
-            NT
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              letterSpacing: "0.1em",
-              textTransform: "uppercase",
-              fontWeight: 700,
-              color: crmTheme.colors.info,
-            }}
-          >
-            Acceso operativo
-          </div>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 34,
-              lineHeight: 1,
-              letterSpacing: "-0.04em",
-              color: crmTheme.colors.text,
-            }}
-          >
-            Ingresar
-          </h1>
-          <p style={{ margin: 0, color: crmTheme.colors.textMuted, lineHeight: 1.5 }}>
-            Accede al CRM comercial para gestionar clientes, pipeline, cotizaciones y ejecución diaria.
-          </p>
+      <h1 className="text-[25px] font-extrabold tracking-[-0.02em] text-[#0c2c44]">
+        Iniciar sesión
+      </h1>
+      <p className="mt-1.5 text-[13.5px] text-muted-foreground">
+        Ingresa a tu cuenta de Norgtech.
+      </p>
+
+      {error ? (
+        <div
+          role="alert"
+          className="mt-5 rounded-lg bg-destructive/8 px-3.5 py-3 text-sm font-semibold text-destructive"
+        >
+          {error}
         </div>
+      ) : null}
 
-        {error ? (
-          <div
-            style={{
-              padding: "12px 14px",
-              borderRadius: crmTheme.radius.md,
-              background: "rgba(186, 58, 47, 0.08)",
-              color: crmTheme.colors.danger,
-              fontSize: 14,
-              fontWeight: 600,
-            }}
+      <form onSubmit={handleSubmit} className="mt-6">
+        <label
+          htmlFor="email"
+          className="mb-[7px] block text-[12.5px] font-semibold text-[#3a4658]"
+        >
+          Correo electrónico
+        </label>
+        <InputGroup className="h-11 rounded-[9px]">
+          <InputGroupAddon>
+            <Mail />
+          </InputGroupAddon>
+          <InputGroupInput
+            id="email"
+            name="email"
+            type="email"
+            required
+            autoComplete="email"
+            placeholder="tu@norgtech.co"
+            className="h-11 text-[13.5px]"
+          />
+        </InputGroup>
+
+        <div className="mt-4 mb-[7px] flex items-center justify-between">
+          <label
+            htmlFor="password"
+            className="text-[12.5px] font-semibold text-[#3a4658]"
           >
-            {error}
-          </div>
-        ) : null}
-
-        <form onSubmit={handleSubmit} style={{ display: "grid", gap: 16 }}>
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: crmTheme.colors.text }}>
-              Correo
-            </span>
-            <input
-              name="email"
-              type="email"
-              required
-              autoComplete="email"
-              aria-label="Correo"
-              style={{
-                minHeight: 46,
-                padding: "0 14px",
-                borderRadius: crmTheme.radius.md,
-                border: `1px solid ${crmTheme.colors.borderStrong}`,
-                background: "#ffffff",
-                color: crmTheme.colors.text,
-                fontSize: 15,
-                outline: "none",
-              }}
-            />
+            Contraseña
           </label>
-
-          <label style={{ display: "grid", gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: crmTheme.colors.text }}>
-              Contraseña
-            </span>
-            <input
-              name="password"
-              type="password"
-              required
-              autoComplete="current-password"
-              aria-label="Contraseña"
-              style={{
-                minHeight: 46,
-                padding: "0 14px",
-                borderRadius: crmTheme.radius.md,
-                border: `1px solid ${crmTheme.colors.borderStrong}`,
-                background: "#ffffff",
-                color: crmTheme.colors.text,
-                fontSize: 15,
-                outline: "none",
-              }}
-            />
-          </label>
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              minHeight: 48,
-              border: 0,
-              borderRadius: crmTheme.radius.md,
-              background: crmTheme.colors.primary,
-              color: "#ffffff",
-              fontSize: 15,
-              fontWeight: 700,
-              cursor: loading ? "not-allowed" : "pointer",
-              opacity: loading ? 0.72 : 1,
-              boxShadow: crmTheme.shadow.card,
-            }}
+          <Link
+            href="/forgot-password"
+            className="text-xs font-bold text-primary hover:underline"
           >
-            {loading ? "Ingresando..." : "Ingresar"}
-          </button>
-        </form>
-      </section>
-    </main>
+            ¿Olvidaste tu contraseña?
+          </Link>
+        </div>
+        <InputGroup className="h-11 rounded-[9px]">
+          <InputGroupAddon>
+            <Lock />
+          </InputGroupAddon>
+          <InputGroupInput
+            id="password"
+            name="password"
+            type={showPassword ? "text" : "password"}
+            required
+            autoComplete="current-password"
+            className="h-11 text-[13.5px]"
+          />
+          <InputGroupAddon align="inline-end">
+            <InputGroupButton
+              size="icon-xs"
+              aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+              onClick={() => setShowPassword((v) => !v)}
+            >
+              {showPassword ? <EyeOff /> : <Eye />}
+            </InputGroupButton>
+          </InputGroupAddon>
+        </InputGroup>
+
+        <button
+          type="submit"
+          disabled={loading}
+          className="mt-[22px] h-[46px] w-full rounded-[10px] bg-primary text-[14.5px] font-bold text-primary-foreground shadow-[0_8px_20px_rgba(15,92,138,.25)] disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {loading ? "Ingresando…" : "Entrar"}
+        </button>
+      </form>
+
+      <p className="mt-6 text-center text-[12.5px] text-[#9aa3b1]">
+        ¿Problemas para entrar?{" "}
+        <a
+          href="mailto:soporte@norgtech.co"
+          className="font-bold text-primary hover:underline"
+        >
+          Contacta a soporte
+        </a>
+      </p>
+    </AuthShell>
   );
 }

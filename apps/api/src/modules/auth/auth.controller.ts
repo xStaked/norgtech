@@ -10,11 +10,13 @@ import {
   UseGuards,
   ValidationPipe,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import type { Request, Response } from "express";
 import { CurrentUser } from "./decorators/current-user.decorator";
 import { JwtAuthGuard } from "./jwt-auth.guard";
 import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
+import { ForgotPasswordDto, ResetPasswordDto } from "./dto/password-reset.dto";
 import { AuthUser } from "./types/authenticated-request";
 
 const REFRESH_COOKIE = "refresh_token";
@@ -87,6 +89,32 @@ export class AuthController {
     if (raw) {
       await this.authService.logout(raw);
     }
+    this.clearRefreshCookie(res);
+    return { ok: true };
+  }
+
+  // Límite propio (el global es 100/min): el envío de correo y el bcrypt del
+  // reset son caros, y son la superficie natural para enumerar cuentas.
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Post("forgot-password")
+  @HttpCode(200)
+  async forgotPassword(
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    body: ForgotPasswordDto,
+  ) {
+    await this.authService.requestPasswordReset(body.email);
+    return { ok: true };
+  }
+
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Post("reset-password")
+  @HttpCode(200)
+  async resetPassword(
+    @Body(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }))
+    body: ResetPasswordDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    await this.authService.resetPassword(body.token, body.password);
     this.clearRefreshCookie(res);
     return { ok: true };
   }

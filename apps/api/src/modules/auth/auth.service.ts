@@ -1,12 +1,15 @@
-import { Injectable, UnauthorizedException } from "@nestjs/common";
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AUTH_JWT_SECRET } from "./auth.constants";
+import { sendPasswordResetEmail } from "./password-reset-email";
 import type { UserRole } from "@prisma/client";
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const PASSWORD_RESET_TTL_MINUTES = 30;
 
 type BcryptModule = {
   compare(value: string, hash: string): Promise<boolean>;
+  hash(value: string, rounds: number): Promise<string>;
 };
 
 type JsonWebTokenModule = {
@@ -24,6 +27,8 @@ const crypto = require("crypto");
 
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   private signAccess(user: { id: string; role: UserRole; email: string }): string {
@@ -102,6 +107,70 @@ export class AuthService {
         role: user.role,
       },
     };
+  }
+
+  /**
+   * Siempre resuelve sin error: el endpoint no debe revelar si el correo existe.
+   * Un fallo de Resend se registra pero no se propaga al cliente.
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    const user = await this.prisma.user.findUnique({ where: { email } });
+    if (!user || !user.active) {
+      return;
+    }
+
+    const raw = crypto.randomBytes(32).toString("hex");
+    await this.prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: this.hashToken(raw),
+        expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MINUTES * 60 * 1000),
+      },
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL ?? "http://localhost:3000";
+    try {
+      await sendPasswordResetEmail({
+        name: user.name,
+        email: user.email,
+        resetUrl: `${frontendUrl}/restablecer?token=${raw}`,
+        expiresInMinutes: PASSWORD_RESET_TTL_MINUTES,
+      });
+    } catch (error) {
+      this.logger.error(`No se pudo enviar el correo de recuperación: ${String(error)}`);
+    }
+  }
+
+  async resetPassword(rawToken: string, newPassword: string): Promise<void> {
+    const record = await this.prisma.passwordResetToken.findUnique({
+      where: { tokenHash: this.hashToken(rawToken) },
+    });
+
+    if (!record || record.usedAt || record.expiresAt <= new Date()) {
+      throw new BadRequestException("El enlace es inválido o ya expiró");
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Reclamar el token primero: si dos peticiones llegan con el mismo token
+      // solo una encuentra usedAt=null, y la otra aborta sin tocar la clave.
+      const claimed = await tx.passwordResetToken.updateMany({
+        where: { id: record.id, usedAt: null },
+        data: { usedAt: new Date() },
+      });
+      if (claimed.count === 0) {
+        throw new BadRequestException("El enlace es inválido o ya expiró");
+      }
+
+      await tx.user.update({ where: { id: record.userId }, data: { passwordHash } });
+
+      // Cerrar las sesiones abiertas: quien haya robado la cuenta pierde acceso.
+      await tx.refreshToken.updateMany({
+        where: { userId: record.userId, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+    });
   }
 
   async me(userId: string) {
