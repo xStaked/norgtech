@@ -10,6 +10,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AssignZoneDto } from "./dto/assign-zone.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
+import { ListCustomersQueryDto } from "./dto/list-customers.query.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 import { UpdateCustomerZoneDto } from "./dto/update-customer-zone.dto";
 
@@ -226,9 +227,28 @@ export class CustomersService {
     return updated;
   }
 
-  findAll(includeInactive = false) {
+  findAll(query: ListCustomersQueryDto = {}) {
+    const { includeInactive, search, companyId, segmentId, paymentCondition, active } = query;
+
+    const where: Prisma.CustomerWhereInput = {};
+    if (active !== undefined) {
+      where.active = active;
+    } else if (!includeInactive) {
+      where.active = true;
+    }
+    if (companyId) where.companyId = companyId;
+    if (segmentId) where.segmentId = segmentId;
+    if (paymentCondition) where.paymentCondition = paymentCondition;
+    if (search) {
+      where.OR = [
+        { displayName: { contains: search, mode: "insensitive" } },
+        { legalName: { contains: search, mode: "insensitive" } },
+        { taxId: { contains: search, mode: "insensitive" } },
+      ];
+    }
+
     return this.prisma.customer.findMany({
-      where: includeInactive ? undefined : { active: true },
+      where,
       select: {
         id: true,
         legalName: true,

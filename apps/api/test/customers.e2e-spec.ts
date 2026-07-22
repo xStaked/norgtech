@@ -220,14 +220,59 @@ describe("Customers", () => {
           where,
           select,
         }: {
-          where?: { active?: boolean };
+          where?: Record<string, unknown>;
           select?: Record<string, boolean>;
         } = {}) => {
-          const filtered = customers.filter(
-            (c) =>
-              where?.active === undefined ||
-              ((c as { active?: boolean }).active ?? true) === where.active,
-          );
+          // Allowlist de where: una clave que el stub no simule haría pasar
+          // tests por la razon equivocada. Mejor reventar.
+          const KNOWN_WHERE_KEYS = [
+            "active",
+            "companyId",
+            "segmentId",
+            "paymentCondition",
+            "OR",
+          ];
+          for (const key of Object.keys(where ?? {})) {
+            if (!KNOWN_WHERE_KEYS.includes(key)) {
+              throw new Error(
+                `customer.findMany stub: clave de where no soportada "${key}". Enséñale la clave al stub antes de usarla.`,
+              );
+            }
+          }
+
+          const w = (where ?? {}) as {
+            active?: boolean;
+            companyId?: string;
+            segmentId?: string;
+            paymentCondition?: string;
+            OR?: Array<Record<string, { contains: string; mode?: string }>>;
+          };
+
+          const filtered = customers.filter((raw) => {
+            const c = raw as Record<string, unknown>;
+            if (
+              w.active !== undefined &&
+              ((c.active as boolean | undefined) ?? true) !== w.active
+            ) {
+              return false;
+            }
+            if (w.companyId && c.companyId !== w.companyId) return false;
+            if (w.segmentId && c.segmentId !== w.segmentId) return false;
+            if (w.paymentCondition && c.paymentCondition !== w.paymentCondition) {
+              return false;
+            }
+            if (w.OR) {
+              const hit = w.OR.some((clause) =>
+                Object.entries(clause).some(([field, cond]) =>
+                  String(c[field] ?? "")
+                    .toLowerCase()
+                    .includes(cond.contains.toLowerCase()),
+                ),
+              );
+              if (!hit) return false;
+            }
+            return true;
+          });
 
           if (!select) {
             return filtered;
@@ -1045,5 +1090,168 @@ describe("Customers", () => {
 
     const customerAfter = customers.find((c) => c.id === "customer-no-orders-inactive-test");
     expect(customerAfter?.companyId).toBe("clx_default_norgtech");
+  });
+
+  describe("GET /customers con filtros", () => {
+    const filterFixtures = [
+      {
+        id: "filtro-alfa-id",
+        legalName: "FILTRO-ALFA SAS",
+        displayName: "FILTRO-ALFA",
+        taxId: "900111222-3",
+        phone: null,
+        email: null,
+        city: "Bogota",
+        department: "Cundinamarca",
+        creditLimit: null,
+        paymentCondition: "contado",
+        paymentDays: 0,
+        active: true,
+        companyId: "company-filtros-a",
+        company: { id: "company-filtros-a", name: "Norgtech" },
+        segmentId: "segment-bronze",
+        segment: { id: "segment-bronze", name: "Bronce" },
+        contacts: [],
+      },
+      {
+        id: "filtro-beta-id",
+        legalName: "FILTRO-BETA LTDA",
+        displayName: "FILTRO-BETA",
+        taxId: "800333444-5",
+        phone: null,
+        email: null,
+        city: "Cali",
+        department: "Valle",
+        creditLimit: null,
+        paymentCondition: "credito_30",
+        paymentDays: 30,
+        active: true,
+        companyId: "company-filtros-b",
+        company: { id: "company-filtros-b", name: "Nanonutricion" },
+        segmentId: "segment-silver",
+        segment: { id: "segment-silver", name: "Plata" },
+        contacts: [],
+      },
+      {
+        id: "filtro-gamma-id",
+        legalName: "FILTRO-GAMMA SA",
+        displayName: "FILTRO-GAMMA",
+        taxId: "700555666-7",
+        phone: null,
+        email: null,
+        city: "Medellin",
+        department: "Antioquia",
+        creditLimit: null,
+        paymentCondition: "contado",
+        paymentDays: 0,
+        active: false,
+        companyId: "company-filtros-a",
+        company: { id: "company-filtros-a", name: "Norgtech" },
+        segmentId: "segment-bronze",
+        segment: { id: "segment-bronze", name: "Bronce" },
+        contacts: [],
+      },
+    ];
+
+    beforeAll(() => {
+      customers.push(...filterFixtures);
+    });
+
+    afterAll(() => {
+      for (const fixture of filterFixtures) {
+        const index = customers.findIndex((c) => c.id === fixture.id);
+        if (index >= 0) customers.splice(index, 1);
+      }
+    });
+
+    const namesOf = (body: Array<{ legalName: string }>) =>
+      body
+        .map((c) => c.legalName)
+        .filter((name) => name.startsWith("FILTRO-"))
+        .sort();
+
+    it("search encuentra por nombre sin importar mayusculas", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?search=filtro-alfa&includeInactive=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual(["FILTRO-ALFA SAS"]);
+    });
+
+    it("search encuentra por NIT", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?search=800333444&includeInactive=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual(["FILTRO-BETA LTDA"]);
+    });
+
+    it("companyId filtra por empresa", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?companyId=company-filtros-b&includeInactive=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual(["FILTRO-BETA LTDA"]);
+    });
+
+    it("segmentId filtra por segmento", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?segmentId=segment-silver&includeInactive=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual(["FILTRO-BETA LTDA"]);
+    });
+
+    it("paymentCondition filtra por condicion de pago", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?paymentCondition=credito_30&includeInactive=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual(["FILTRO-BETA LTDA"]);
+    });
+
+    it("paymentCondition invalida responde 400", async () => {
+      await request(app.getHttpServer())
+        .get("/customers?paymentCondition=credito_45")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(400);
+    });
+
+    it("active=false trae solo inactivos y manda sobre includeInactive", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?active=false")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual(["FILTRO-GAMMA SA"]);
+    });
+
+    it("los filtros se combinan con AND", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?companyId=company-filtros-a&search=FILTRO&includeInactive=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      expect(namesOf(response.body)).toEqual([
+        "FILTRO-ALFA SAS",
+        "FILTRO-GAMMA SA",
+      ]);
+    });
+
+    it("sin params nuevos el default sigue siendo solo activos", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      const names = namesOf(response.body);
+      expect(names).toContain("FILTRO-ALFA SAS");
+      expect(names).not.toContain("FILTRO-GAMMA SA");
+    });
   });
 });
