@@ -487,7 +487,9 @@ describe("Orders", () => {
         findMany: async () => auditLogs,
       },
       notification: {
-        createMany: async () => ({ count: 0 }),
+        createMany: async () => {
+          throw new Error("notification.createMany must run inside a transaction");
+        },
       },
       $transaction: async <T>(
         callback: (tx: any) => Promise<T>,

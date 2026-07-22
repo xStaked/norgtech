@@ -4,6 +4,7 @@ import { OrdersService } from "../src/modules/orders/orders.service";
 
 describe("Emisor de pedido_hito", () => {
   const emitted: Array<Record<string, unknown>> = [];
+  const emittedWriters: Array<unknown> = [];
 
   function makeOrdersService(order: Record<string, unknown>) {
     const tx = {
@@ -23,8 +24,9 @@ describe("Emisor de pedido_hito", () => {
     };
 
     const notifications = {
-      emit: async (input: Record<string, unknown>) => {
+      emit: async (input: Record<string, unknown>, writer: unknown) => {
         emitted.push(input);
+        emittedWriters.push(writer);
         return { count: 1 };
       },
     } as unknown as NotificationsService;
@@ -32,23 +34,28 @@ describe("Emisor de pedido_hito", () => {
     // Orden real del constructor de OrdersService:
     // (prisma, auditService, orderXlsxExportService, credit, whatsApp,
     //  pricingService, notifications)
-    return new OrdersService(
-      prisma as never,
-      { record: async () => ({}) } as never,
-      {} as never,
-      { assertCreditLimit: async () => undefined } as never,
-      {} as never,
-      {} as never,
-      notifications,
-    );
+    return {
+      service: new OrdersService(
+        prisma as never,
+        { record: async () => ({}) } as never,
+        {} as never,
+        { assertCreditLimit: async () => undefined } as never,
+        {} as never,
+        {} as never,
+        notifications,
+      ),
+      prisma,
+      tx,
+    };
   }
 
   beforeEach(() => {
     emitted.length = 0;
+    emittedWriters.length = 0;
   });
 
   it("emite al pasar a facturado, con el estado como discriminante", async () => {
-    const service = makeOrdersService({
+    const { service, prisma, tx } = makeOrdersService({
       id: "order-1",
       orderNumber: "NN-1042",
       status: OrderStatus.orden_facturacion,
@@ -73,10 +80,17 @@ describe("Emisor de pedido_hito", () => {
       discriminator: OrderStatus.facturado,
     });
     expect(emitted[0].title).toContain("NN-1042");
+
+    // El emit debe recibir el mismo cliente transaccional que
+    // OrdersService.updateStatus usa para el cambio de estado, no el
+    // cliente de nivel superior ni nada indefinido.
+    expect(emittedWriters[0]).toBeDefined();
+    expect(emittedWriters[0]).toBe(tx);
+    expect(emittedWriters[0]).not.toBe(prisma);
   });
 
   it("no emite en las transiciones intermedias", async () => {
-    const service = makeOrdersService({
+    const { service } = makeOrdersService({
       id: "order-2",
       orderNumber: "NN-1043",
       status: OrderStatus.recibido,
