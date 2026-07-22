@@ -3,10 +3,12 @@ import { FollowUpTaskStatus, Prisma, VisitStatus } from "@prisma/client";
 /**
  * REGLA UNICA DE "VENCIDO".
  *
- * En este repo NO hay scheduler (ni @Cron, ni ScheduleModule, ni colas). El
- * paso del tiempo, por tanto, no puede cambiar ninguna columna: `status` solo
- * cambia cuando un humano lo cambia. Cualquier codigo que lea la columna
- * esperando que signifique "ya paso la fecha" esta roto por construccion.
+ * En este repo hay UN scheduler (`NotificationsCron`), y solo inserta filas en
+ * `Notification`: no escribe `status` de ninguna entidad. El paso del tiempo,
+ * por tanto, sigue sin poder cambiar ninguna columna de estado; `status` solo
+ * cambia cuando lo cambia un humano. Cualquier codigo que lea la columna
+ * esperando que signifique "ya paso la fecha" sigue estando roto por
+ * construccion.
  *
  * Por eso "vencido" se DERIVA en lectura:
  *

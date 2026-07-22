@@ -152,7 +152,7 @@ export class CustomerGoalsService {
     };
   }
 
-  private getPeriodRange(periodType: string, periodValue: string) {
+  getPeriodRange(periodType: string, periodValue: string) {
     switch (periodType) {
       case "anual": {
         const year = parseInt(periodValue, 10);
