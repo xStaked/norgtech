@@ -1,37 +1,107 @@
-import { NotificationType } from "@prisma/client";
+import { FollowUpTaskStatus, NotificationType, VisitStatus } from "@prisma/client";
 import { NotificationsCron } from "../src/modules/notifications/notifications.cron";
+
+/**
+ * Filtro Prisma en memoria: soporta solo las formas concretas que
+ * `notifications.cron.ts` usa (`notIn`, `lt`, `not: null`). No es un
+ * interprete general de `where`.
+ */
+function matchesWhere(
+  row: Record<string, unknown>,
+  where: Record<string, unknown>,
+): boolean {
+  return Object.entries(where).every(([key, condition]) => {
+    const value = row[key];
+    if (condition && typeof condition === "object") {
+      if ("notIn" in condition) {
+        return !(condition as { notIn: unknown[] }).notIn.includes(value);
+      }
+      if ("lt" in condition) {
+        const limit = (condition as { lt: Date }).lt;
+        return new Date(value as Date).getTime() < limit.getTime();
+      }
+      if ("not" in condition) {
+        return value !== (condition as { not: unknown }).not;
+      }
+    }
+    return value === condition;
+  });
+}
 
 describe("NotificationsCron.sweep", () => {
   const now = new Date("2026-07-22T12:00:00.000Z");
 
+  const VISITS = [
+    {
+      id: "visit-1",
+      assignedToUserId: "seller-1",
+      status: VisitStatus.programada,
+      scheduledAt: new Date("2026-07-15T14:00:00.000Z"),
+      customer: { displayName: "Agro Norte" },
+    },
+    {
+      id: "visit-2",
+      assignedToUserId: null,
+      status: VisitStatus.programada,
+      scheduledAt: new Date("2026-07-16T14:00:00.000Z"),
+      customer: { displayName: "Sin responsable" },
+    },
+    // NO vencida: fecha futura respecto de `now`.
+    {
+      id: "visit-3",
+      assignedToUserId: "seller-2",
+      status: VisitStatus.programada,
+      scheduledAt: new Date("2026-08-01T14:00:00.000Z"),
+      customer: { displayName: "Futura" },
+    },
+    // Zanjada por un humano: vencida por fecha pero completada.
+    {
+      id: "visit-4",
+      assignedToUserId: "seller-3",
+      status: VisitStatus.completada,
+      scheduledAt: new Date("2026-07-10T14:00:00.000Z"),
+      customer: { displayName: "Ya atendida" },
+    },
+  ];
+
+  const FOLLOW_UP_TASKS = [
+    {
+      id: "task-1",
+      assignedToUserId: "seller-1",
+      title: "Llamar por la cotizacion",
+      status: FollowUpTaskStatus.pendiente,
+      dueAt: new Date("2026-07-18T14:00:00.000Z"),
+      customer: { displayName: "Agro Norte" },
+    },
+    // NO vencida: fecha futura respecto de `now`.
+    {
+      id: "task-2",
+      assignedToUserId: "seller-2",
+      title: "Enviar catalogo",
+      status: FollowUpTaskStatus.pendiente,
+      dueAt: new Date("2026-08-05T14:00:00.000Z"),
+      customer: { displayName: "Futura" },
+    },
+    // Zanjada por un humano: vencida por fecha pero completada.
+    {
+      id: "task-3",
+      assignedToUserId: "seller-3",
+      title: "Confirmar entrega",
+      status: FollowUpTaskStatus.completada,
+      dueAt: new Date("2026-07-05T14:00:00.000Z"),
+      customer: { displayName: "Ya atendida" },
+    },
+  ];
+
   function makeCron(emitted: Array<Record<string, unknown>>, deleted: number[]) {
     const prisma = {
       visit: {
-        findMany: async () => [
-          {
-            id: "visit-1",
-            assignedToUserId: "seller-1",
-            scheduledAt: new Date("2026-07-15T14:00:00.000Z"),
-            customer: { displayName: "Agro Norte" },
-          },
-          {
-            id: "visit-2",
-            assignedToUserId: null,
-            scheduledAt: new Date("2026-07-16T14:00:00.000Z"),
-            customer: { displayName: "Sin responsable" },
-          },
-        ],
+        findMany: async ({ where }: { where: Record<string, unknown> }) =>
+          VISITS.filter((visit) => matchesWhere(visit, where)),
       },
       followUpTask: {
-        findMany: async () => [
-          {
-            id: "task-1",
-            assignedToUserId: "seller-1",
-            title: "Llamar por la cotizacion",
-            dueAt: new Date("2026-07-18T14:00:00.000Z"),
-            customer: { displayName: "Agro Norte" },
-          },
-        ],
+        findMany: async ({ where }: { where: Record<string, unknown> }) =>
+          FOLLOW_UP_TASKS.filter((task) => matchesWhere(task, where)),
       },
       customerGoal: {
         findMany: async () => [
@@ -101,9 +171,15 @@ describe("NotificationsCron.sweep", () => {
 
     await cron.sweep(now);
 
-    expect(
-      emitted.filter((e) => e.type === NotificationType.seguimiento_vencido),
-    ).toHaveLength(1);
+    const seguimientos = emitted.filter(
+      (e) => e.type === NotificationType.seguimiento_vencido,
+    );
+    expect(seguimientos).toHaveLength(1);
+    expect(seguimientos[0]).toMatchObject({
+      userIds: ["seller-1"],
+      entityType: "follow_up_task",
+      entityId: "task-1",
+    });
 
     const metas = emitted.filter(
       (e) => e.type === NotificationType.meta_cumplida,
