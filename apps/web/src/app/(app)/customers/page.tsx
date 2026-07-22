@@ -2,13 +2,15 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
+import { CustomersFilters } from "@/components/customers/customers-filters";
+import { buildQueryString } from "@/lib/query-string";
+import { paymentLabel } from "@/lib/labels";
 
 interface Contact {
   id: string;
@@ -60,19 +62,6 @@ function buildLocation(customer: Customer) {
   }
 
   return customer.city ?? customer.department ?? "Sin ubicación";
-}
-
-const PAYMENT_LABELS: Record<string, string> = {
-  contado: "Contado",
-  credito_15: "Crédito 15 días",
-  credito_30: "Crédito 30 días",
-  credito_60: "Crédito 60 días",
-  credito_90: "Crédito 90 días",
-};
-
-function paymentLabel(condition: string | null) {
-  if (!condition) return "Contado";
-  return PAYMENT_LABELS[condition] ?? condition;
 }
 
 function getPrimaryContact(customer: Customer) {
@@ -163,12 +152,59 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
   },
 ] as const;
 
-export default async function CustomersPage() {
+export default async function CustomersPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
-  const response = await apiFetch("/customers?includeInactive=true");
+  // Sin filtro de estado explicito la lista muestra Todos (activos+inactivos),
+  // igual que antes de los filtros.
+  const single = (key: string) => {
+    const value = params[key];
+    return Array.isArray(value) ? value[0] : value;
+  };
+  const apiParams: Record<string, string | undefined> = {
+    search: single("search") || undefined,
+    companyId: single("companyId") || undefined,
+    segmentId: single("segmentId") || undefined,
+    paymentCondition: single("paymentCondition") || undefined,
+    active: single("active") || undefined,
+  };
+  if (apiParams.active === undefined) {
+    apiParams.includeInactive = "true";
+  }
+  const queryString = buildQueryString(apiParams);
+
+  const [response, companiesResponse, segmentsResponse] = await Promise.all([
+    apiFetch(`/customers?${queryString}`),
+    apiFetch("/companies"),
+    apiFetch("/customer-segments"),
+  ]);
+
   const customers: Customer[] = response.ok ? await response.json() : [];
+  const companies: { id: string; name: string }[] = companiesResponse.ok
+    ? await companiesResponse.json()
+    : [];
+  const segments: { id: string; name: string }[] = segmentsResponse.ok
+    ? await segmentsResponse.json()
+    : [];
+
+  const hasFilters = Object.entries(apiParams).some(
+    ([key, value]) => key !== "includeInactive" && value !== undefined,
+  );
+  // "N de M": el total sin filtrar solo se necesita (y se consulta) cuando hay
+  // filtros activos. ponytail: segunda consulta completa; endpoint de conteo
+  // cuando la tabla crezca.
+  let total = customers.length;
+  if (hasFilters) {
+    const totalResponse = await apiFetch("/customers?includeInactive=true");
+    const all: unknown[] = totalResponse.ok ? await totalResponse.json() : [];
+    total = all.length;
+  }
 
   const rows: CustomerRow[] = customers.map((customer) => {
     const primary = getPrimaryContact(customer);
@@ -199,7 +235,12 @@ export default async function CustomersPage() {
         actions={canCreate(userRole, "customer") && <ButtonLink href="/customers/new">Nuevo cliente</ButtonLink>}
       />
 
-      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} clientes registrados`} />
+      <CustomersFilters
+        companies={companies}
+        segments={segments}
+        shown={rows.length}
+        total={total}
+      />
 
       <SectionCard
         title="Cartera de clientes"
