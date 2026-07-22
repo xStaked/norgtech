@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, NotFoundException } from "@nestjs/common";
 import { NotificationType, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 
@@ -84,6 +84,48 @@ export class NotificationsService {
         ),
       })),
       skipDuplicates: true,
+    });
+  }
+
+  list(userId: string, opts: { unread?: boolean; limit?: number } = {}) {
+    return this.prisma.notification.findMany({
+      where: {
+        userId,
+        ...(opts.unread ? { readAt: null } : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      take: opts.limit ?? 20,
+    });
+  }
+
+  async unreadCount(userId: string): Promise<{ count: number }> {
+    const count = await this.prisma.notification.count({
+      where: { userId, readAt: null },
+    });
+    return { count };
+  }
+
+  /**
+   * 404 y no 403 cuando la fila es de otro: responder 403 confirmaria que
+   * existe una notificacion ajena con ese id.
+   */
+  async markRead(userId: string, id: string): Promise<{ ok: true }> {
+    const result = await this.prisma.notification.updateMany({
+      where: { id, userId, readAt: null },
+      data: { readAt: new Date() },
+    });
+
+    if (result.count === 0) {
+      throw new NotFoundException("Notification not found");
+    }
+
+    return { ok: true };
+  }
+
+  markAllRead(userId: string): Promise<{ count: number }> {
+    return this.prisma.notification.updateMany({
+      where: { userId, readAt: null },
+      data: { readAt: new Date() },
     });
   }
 

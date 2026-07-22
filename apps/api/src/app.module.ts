@@ -25,6 +25,7 @@ import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.mod
 import { SellerGoalsModule } from "./modules/seller-goals/seller-goals.module";
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
 import { InvoicesModule } from "./modules/invoices/invoices.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { ReturnsModule } from "./modules/returns/returns.module";
 import { UsersModule } from "./modules/users/users.module";
 import { ZonesModule } from "./modules/zones/zones.module";
@@ -43,6 +44,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     ContactsModule,
     DashboardModule,
     AuditModule,
+    NotificationsModule,
     CustomersModule,
     OpportunitiesModule,
     ProductsModule,
