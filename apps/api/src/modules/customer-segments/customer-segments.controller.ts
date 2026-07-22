@@ -40,8 +40,19 @@ export class CustomerSegmentsController {
     return this.customerSegmentsService.create(user, dto);
   }
 
+  // El listado de clientes ya expone segment: { id, name } a estos mismos
+  // roles (tecnico, facturacion, logistica), asi que abrir este endpoint no
+  // filtra nada nuevo. Sin esto, el select "Filtrar por segmento" de la web
+  // recibe 403 para esos roles y se pinta vacio.
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles(
+    "administrador",
+    "director_comercial",
+    "comercial",
+    "tecnico",
+    "facturacion",
+    "logistica",
+  )
   @Get()
   findAll() {
     return this.customerSegmentsService.findAll();

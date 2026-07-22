@@ -15,9 +15,9 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
-import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { AssignZoneDto } from "./dto/assign-zone.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
+import { ListCustomersQueryDto } from "./dto/list-customers.query.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 import { UpdateCustomerZoneDto } from "./dto/update-customer-zone.dto";
 import { CustomersService } from "./customers.service";
@@ -53,9 +53,9 @@ export class CustomersController {
   @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get()
   findAll(
-    @Query(new ValidationPipe({ transform: true, whitelist: true })) query: IncludeInactiveQueryDto,
+    @Query(new ValidationPipe({ transform: true, whitelist: true })) query: ListCustomersQueryDto,
   ) {
-    return this.customersService.findAll(query.includeInactive);
+    return this.customersService.findAll(query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

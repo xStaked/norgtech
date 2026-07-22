@@ -132,3 +132,18 @@ export const BILLING_SOURCE_TYPE_LABELS: Record<string, string> = {
   quote: "Cotización",
   direct: "Directa",
 };
+
+// --- Clientes ---------------------------------------------------------------
+
+export const PAYMENT_LABELS: Record<string, string> = {
+  contado: "Contado",
+  credito_15: "Crédito 15 días",
+  credito_30: "Crédito 30 días",
+  credito_60: "Crédito 60 días",
+  credito_90: "Crédito 90 días",
+};
+
+export function paymentLabel(condition: string | null): string {
+  if (!condition) return "Contado";
+  return PAYMENT_LABELS[condition] ?? condition;
+}

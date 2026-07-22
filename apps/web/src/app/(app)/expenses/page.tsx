@@ -12,6 +12,7 @@ import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 import { canCreate, type UserRole } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth.server";
+import { buildQueryString } from "@/lib/query-string";
 
 interface ExpenseUser {
   id: string;
@@ -102,21 +103,6 @@ function formatCurrency(amount: number, currency: string) {
     currency,
     maximumFractionDigits: 0,
   }).format(amount);
-}
-
-function buildQueryString(params: Record<string, string | string[] | undefined>) {
-  const query = new URLSearchParams();
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value === undefined) return;
-    if (Array.isArray(value)) {
-      value.forEach((item) => query.append(key, item));
-      return;
-    }
-    query.set(key, value);
-  });
-
-  return query.toString();
 }
 
 function countByStatus(rows: ExpenseRow[], status: string) {
