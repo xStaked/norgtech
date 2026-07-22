@@ -1,25 +1,8 @@
 import { redirect } from "next/navigation";
 import { UserManagementClient } from "@/components/users/user-management-client";
-import { type ManagedUser } from "@/components/users/types";
+import { type ManagedUser, type SellerGoalProgress } from "@/components/users/types";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
-
-function UsersPageErrorState() {
-  return (
-    <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-normal">Usuarios</h1>
-        <p className="text-sm text-muted-foreground">
-          Administra altas, roles y estado de acceso del CRM.
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-        No se pudo cargar la administracion de usuarios. Intenta de nuevo en unos minutos.
-      </div>
-    </div>
-  );
-}
 
 export default async function UsersPage() {
   const currentUser = await getCurrentUser();
@@ -28,12 +11,22 @@ export default async function UsersPage() {
     redirect("/dashboard");
   }
 
+  const errorState = (
+    <UserManagementClient users={[]} goalProgress={[]} currentUserId={currentUser.id} loadError />
+  );
+
   let response: Response;
+  let goalsResponse: Response | null = null;
 
   try {
-    response = await apiFetch("/users?includeInactive=true");
+    // El avance de metas alimenta una columna informativa: va en paralelo y su
+    // fallo no debe tumbar el listado.
+    [response, goalsResponse] = await Promise.all([
+      apiFetch("/users?includeInactive=true"),
+      apiFetch("/dashboard/seller-goals").catch(() => null),
+    ]);
   } catch {
-    return <UsersPageErrorState />;
+    return errorState;
   }
 
   if (response.status === 401 || response.status === 403) {
@@ -41,21 +34,22 @@ export default async function UsersPage() {
   }
 
   if (!response.ok) {
-    return <UsersPageErrorState />;
+    return errorState;
   }
 
   const users: ManagedUser[] = await response.json();
 
-  return (
-    <div className="grid gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-normal">Usuarios</h1>
-        <p className="text-sm text-muted-foreground">
-          Administra altas, roles y estado de acceso del CRM.
-        </p>
-      </div>
+  let goalProgress: SellerGoalProgress[] = [];
+  if (goalsResponse?.ok) {
+    const dashboard = (await goalsResponse.json()) as { items?: SellerGoalProgress[] };
+    goalProgress = dashboard.items ?? [];
+  }
 
-      <UserManagementClient users={users} currentUserId={currentUser.id} />
-    </div>
+  return (
+    <UserManagementClient
+      users={users}
+      goalProgress={goalProgress}
+      currentUserId={currentUser.id}
+    />
   );
 }

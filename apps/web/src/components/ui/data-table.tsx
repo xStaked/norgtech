@@ -16,6 +16,8 @@ interface DataTableProps<T> {
   getRowKey: (row: T, index: number) => string;
   emptyState?: ReactNode;
   caption?: ReactNode;
+  /** Barra dentro del borde de la tabla: conteo, paginacion, nota de ayuda. */
+  footer?: ReactNode;
   rowStyle?: (row: T, index: number) => CSSProperties | undefined;
 }
 
@@ -30,6 +32,7 @@ export function DataTable<T>({
   getRowKey,
   emptyState,
   caption,
+  footer,
   rowStyle,
 }: DataTableProps<T>) {
   if (rows.length === 0 && emptyState) {
@@ -76,6 +79,11 @@ export function DataTable<T>({
           ))}
         </tbody>
       </table>
+      {footer ? (
+        <div className="bg-[#fafbfc] px-4 py-2.5 text-xs text-muted-foreground">
+          {footer}
+        </div>
+      ) : null}
     </div>
   );
 }
