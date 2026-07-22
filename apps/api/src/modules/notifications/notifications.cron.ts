@@ -14,6 +14,14 @@ import { NotificationsService } from "./notifications.service";
 const READ_RETENTION_DAYS = 60;
 
 /**
+ * Ventana de vencidos que el cron NOTIFICA. Lo mas viejo que esto sigue en la
+ * lista de vencidos (definida en `shared/overdue.ts`, sin tope), pero no genera
+ * campanazo: evita que el primer barrido contra datos historicos inunde las
+ * bandejas con backlog antiguo. Subir o quitar si se quiere avisar lo muy viejo.
+ */
+const OVERDUE_NOTIFY_LOOKBACK_DAYS = 90;
+
+/**
  * Barrido diario de lo que el reloj vuelve notificable.
  *
  * REGLA DURA: este cron solo INSERTA en `Notification` y purga leidas viejas.
@@ -47,7 +55,11 @@ export class NotificationsCron {
 
   private async sweepOverdueVisits(now: Date): Promise<void> {
     const visits = await this.prisma.visit.findMany({
-      where: { ...visitOverdueWhere(now), assignedToUserId: { not: null } },
+      where: {
+        ...visitOverdueWhere(now),
+        scheduledAt: { lt: now, gte: this.lookbackFloor(now) },
+        assignedToUserId: { not: null },
+      },
       select: {
         id: true,
         assignedToUserId: true,
@@ -76,6 +88,7 @@ export class NotificationsCron {
     const tasks = await this.prisma.followUpTask.findMany({
       where: {
         ...followUpTaskOverdueWhere(now),
+        dueAt: { lt: now, gte: this.lookbackFloor(now) },
         assignedToUserId: { not: null },
       },
       select: {
@@ -113,33 +126,47 @@ export class NotificationsCron {
     });
 
     for (const goal of goals) {
-      const ownerId = goal.customer.assignedToUserId;
-      if (!ownerId) continue;
+      // Una meta con `periodValue` corrupto hace throw en getPeriodRange y, sin
+      // este aislamiento, tumbaria el resto del barrido Y el purgeRead. Se
+      // registra y se sigue con las demas.
+      try {
+        const ownerId = goal.customer.assignedToUserId;
+        if (!ownerId) continue;
 
-      // Solo el periodo en curso: una meta cumplida en 2025 no es noticia hoy.
-      const { start, end } = this.customerGoals.getPeriodRange(
-        goal.periodType,
-        goal.periodValue,
-      );
-      if (now < start || now > end) continue;
+        // Solo el periodo en curso: una meta cumplida en 2025 no es noticia hoy.
+        const { start, end } = this.customerGoals.getPeriodRange(
+          goal.periodType,
+          goal.periodValue,
+        );
+        if (now < start || now > end) continue;
 
-      const progress = await this.customerGoals.getProgress(
-        goal.customerId,
-        goal.periodType,
-        goal.periodValue,
-      );
-      if (progress.soldAmount < progress.targetAmount) continue;
+        const progress = await this.customerGoals.getProgress(
+          goal.customerId,
+          goal.periodType,
+          goal.periodValue,
+        );
+        if (progress.soldAmount < progress.targetAmount) continue;
 
-      await this.notifications.emit({
-        userIds: [ownerId],
-        type: NotificationType.meta_cumplida,
-        title: `${goal.customer.displayName} cumplió su meta ${goal.periodValue}`,
-        body: `${progress.percentage}% del objetivo.`,
-        entityType: "customer",
-        entityId: goal.customerId,
-        discriminator: goal.periodValue,
-      });
+        await this.notifications.emit({
+          userIds: [ownerId],
+          type: NotificationType.meta_cumplida,
+          title: `${goal.customer.displayName} cumplió su meta ${goal.periodValue}`,
+          body: `${progress.percentage}% del objetivo.`,
+          entityType: "customer",
+          entityId: goal.customerId,
+          discriminator: goal.periodValue,
+        });
+      } catch (error) {
+        this.logger.warn(`Meta ${goal.id} omitida en el barrido: ${error}`);
+      }
     }
+  }
+
+  /** Piso de la ventana de vencidos notificables (ver OVERDUE_NOTIFY_LOOKBACK_DAYS). */
+  private lookbackFloor(now: Date): Date {
+    return new Date(
+      now.getTime() - OVERDUE_NOTIFY_LOOKBACK_DAYS * 24 * 60 * 60 * 1000,
+    );
   }
 
   private async purgeRead(now: Date): Promise<void> {

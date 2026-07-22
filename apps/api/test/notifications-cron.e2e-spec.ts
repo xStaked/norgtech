@@ -3,8 +3,9 @@ import { NotificationsCron } from "../src/modules/notifications/notifications.cr
 
 /**
  * Filtro Prisma en memoria: soporta solo las formas concretas que
- * `notifications.cron.ts` usa (`notIn`, `lt`, `not: null`). No es un
- * interprete general de `where`.
+ * `notifications.cron.ts` usa (`notIn`, `lt`, `gte`, `not: null`). No es un
+ * interprete general de `where`. Un mismo campo puede traer varios operadores
+ * (p.ej. `scheduledAt: { lt, gte }`): se exigen TODOS (AND).
  */
 function matchesWhere(
   row: Record<string, unknown>,
@@ -13,16 +14,16 @@ function matchesWhere(
   return Object.entries(where).every(([key, condition]) => {
     const value = row[key];
     if (condition && typeof condition === "object") {
-      if ("notIn" in condition) {
-        return !(condition as { notIn: unknown[] }).notIn.includes(value);
+      const c = condition as Record<string, unknown>;
+      if ("notIn" in c && (c.notIn as unknown[]).includes(value)) return false;
+      if ("lt" in c && !(new Date(value as Date).getTime() < (c.lt as Date).getTime())) {
+        return false;
       }
-      if ("lt" in condition) {
-        const limit = (condition as { lt: Date }).lt;
-        return new Date(value as Date).getTime() < limit.getTime();
+      if ("gte" in c && !(new Date(value as Date).getTime() >= (c.gte as Date).getTime())) {
+        return false;
       }
-      if ("not" in condition) {
-        return value !== (condition as { not: unknown }).not;
-      }
+      if ("not" in c && value === c.not) return false;
+      return true;
     }
     return value === condition;
   });
@@ -62,6 +63,15 @@ describe("NotificationsCron.sweep", () => {
       scheduledAt: new Date("2026-07-10T14:00:00.000Z"),
       customer: { displayName: "Ya atendida" },
     },
+    // Vencida pero anterior a la ventana de aviso (90d): sigue en la lista,
+    // no debe generar campanazo.
+    {
+      id: "visit-5",
+      assignedToUserId: "seller-4",
+      status: VisitStatus.programada,
+      scheduledAt: new Date("2026-01-01T14:00:00.000Z"),
+      customer: { displayName: "Backlog viejo" },
+    },
   ];
 
   const FOLLOW_UP_TASKS = [
@@ -91,9 +101,22 @@ describe("NotificationsCron.sweep", () => {
       dueAt: new Date("2026-07-05T14:00:00.000Z"),
       customer: { displayName: "Ya atendida" },
     },
+    // Vencida pero anterior a la ventana de aviso (90d): no debe notificarse.
+    {
+      id: "task-4",
+      assignedToUserId: "seller-4",
+      title: "Seguimiento olvidado",
+      status: FollowUpTaskStatus.pendiente,
+      dueAt: new Date("2026-01-01T14:00:00.000Z"),
+      customer: { displayName: "Backlog viejo" },
+    },
   ];
 
-  function makeCron(emitted: Array<Record<string, unknown>>, deleted: number[]) {
+  function makeCron(
+    emitted: Array<Record<string, unknown>>,
+    deleted: number[],
+    opts: { getPeriodRange?: () => { start: Date; end: Date } } = {},
+  ) {
     const prisma = {
       visit: {
         findMany: async ({ where }: { where: Record<string, unknown> }) =>
@@ -130,10 +153,12 @@ describe("NotificationsCron.sweep", () => {
     };
 
     const customerGoals = {
-      getPeriodRange: () => ({
-        start: new Date("2026-01-01T00:00:00.000Z"),
-        end: new Date("2026-12-31T23:59:59.999Z"),
-      }),
+      getPeriodRange:
+        opts.getPeriodRange ??
+        (() => ({
+          start: new Date("2026-01-01T00:00:00.000Z"),
+          end: new Date("2026-12-31T23:59:59.999Z"),
+        })),
       getProgress: async () => ({
         soldAmount: 1200,
         targetAmount: 1000,
@@ -191,6 +216,38 @@ describe("NotificationsCron.sweep", () => {
       entityId: "customer-1",
       discriminator: "2026",
     });
+  });
+
+  it("no notifica vencidos anteriores a la ventana de aviso", async () => {
+    const emitted: Array<Record<string, unknown>> = [];
+    const cron = makeCron(emitted, []);
+
+    await cron.sweep(now);
+
+    const ids = emitted.map((e) => e.entityId);
+    expect(ids).not.toContain("visit-5");
+    expect(ids).not.toContain("task-4");
+  });
+
+  it("una meta con periodo invalido no tumba el barrido ni la purga", async () => {
+    const emitted: Array<Record<string, unknown>> = [];
+    const deleted: number[] = [];
+    const cron = makeCron(emitted, deleted, {
+      getPeriodRange: () => {
+        throw new Error("periodValue corrupto");
+      },
+    });
+
+    await expect(cron.sweep(now)).resolves.toBeUndefined();
+
+    expect(
+      emitted.filter((e) => e.type === NotificationType.meta_cumplida),
+    ).toHaveLength(0);
+    // Las visitas/seguimientos y la purga corren pese al error de la meta.
+    expect(emitted.some((e) => e.type === NotificationType.visita_vencida)).toBe(
+      true,
+    );
+    expect(deleted).toHaveLength(1);
   });
 
   it("purga las leidas viejas", async () => {
