@@ -179,10 +179,18 @@ export default async function CustomersPage({
   }
   const queryString = buildQueryString(apiParams);
 
-  const [response, companiesResponse, segmentsResponse] = await Promise.all([
+  const hasFilters = Object.entries(apiParams).some(
+    ([key, value]) => key !== "includeInactive" && value !== undefined,
+  );
+
+  const [response, companiesResponse, segmentsResponse, totalResponse] = await Promise.all([
     apiFetch(`/customers?${queryString}`),
     apiFetch("/companies"),
     apiFetch("/customer-segments"),
+    // "N de M": el total sin filtrar solo se necesita (y se consulta) cuando hay
+    // filtros activos, y va en paralelo con el listado filtrado. ponytail:
+    // segunda consulta completa; endpoint de conteo cuando la tabla crezca.
+    hasFilters ? apiFetch("/customers?includeInactive=true") : null,
   ]);
 
   const customers: Customer[] = response.ok ? await response.json() : [];
@@ -193,16 +201,9 @@ export default async function CustomersPage({
     ? await segmentsResponse.json()
     : [];
 
-  const hasFilters = Object.entries(apiParams).some(
-    ([key, value]) => key !== "includeInactive" && value !== undefined,
-  );
-  // "N de M": el total sin filtrar solo se necesita (y se consulta) cuando hay
-  // filtros activos. ponytail: segunda consulta completa; endpoint de conteo
-  // cuando la tabla crezca.
   let total = customers.length;
-  if (hasFilters) {
-    const totalResponse = await apiFetch("/customers?includeInactive=true");
-    const all: unknown[] = totalResponse.ok ? await totalResponse.json() : [];
+  if (totalResponse?.ok) {
+    const all: unknown[] = await totalResponse.json();
     total = all.length;
   }
 
