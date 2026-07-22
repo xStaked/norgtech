@@ -1232,11 +1232,32 @@ describe("Customers", () => {
 
     it("active=false trae solo inactivos y manda sobre includeInactive", async () => {
       const response = await request(app.getHttpServer())
-        .get("/customers?active=false")
+        .get("/customers?active=false&includeInactive=true")
         .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
         .expect(200);
 
       expect(namesOf(response.body)).toEqual(["FILTRO-GAMMA SA"]);
+    });
+
+    // Un valor de active que no es "true"/"false" no debe colapsar
+    // silenciosamente a "solo inactivos": debe rechazarse igual que
+    // paymentCondition=credito_45 lo hace arriba.
+    it("active con valor invalido responde 400", async () => {
+      await request(app.getHttpServer())
+        .get("/customers?active=basura")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(400);
+    });
+
+    it("active=true trae solo activos", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/customers?active=true")
+        .set("Authorization", `Bearer ${global.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      const names = namesOf(response.body);
+      expect(names).toContain("FILTRO-ALFA SAS");
+      expect(names).not.toContain("FILTRO-GAMMA SA");
     });
 
     it("los filtros se combinan con AND", async () => {
