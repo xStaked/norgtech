@@ -105,6 +105,7 @@ interface Customer {
   city: string | null;
   department: string | null;
   notes: string | null;
+  company: { id: string; name: string } | null;
   segment: Segment | null;
   contacts: Contact[];
   opportunities: Opportunity[];
@@ -311,6 +312,7 @@ export default async function CustomerDetailPage({
       <DetailSection
         title="Informacion de contacto"
         fields={[
+          { label: "Empresa", value: customer.company?.name ?? "—" },
           { label: "NIT", value: customer.taxId ?? "—" },
           { label: "Telefono", value: customer.phone ?? "—" },
           { label: "Correo", value: customer.email ?? "—" },
