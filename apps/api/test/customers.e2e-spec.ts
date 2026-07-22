@@ -263,11 +263,19 @@ describe("Customers", () => {
             }
             if (w.OR) {
               const hit = w.OR.some((clause) =>
-                Object.entries(clause).some(([field, cond]) =>
-                  String(c[field] ?? "")
-                    .toLowerCase()
-                    .includes(cond.contains.toLowerCase()),
-                ),
+                Object.entries(clause).some(([field, cond]) => {
+                  // Solo baja a minusculas cuando el service pide mode:
+                  // "insensitive", igual que Postgres. Si el service dejara
+                  // de mandar mode, esta comparacion pasa a ser sensible a
+                  // mayusculas y el test de busqueda case-insensitive falla
+                  // de verdad en vez de seguir pasando por casualidad.
+                  const value = String(c[field] ?? "");
+                  const needle = cond.contains;
+                  if (cond.mode === "insensitive") {
+                    return value.toLowerCase().includes(needle.toLowerCase());
+                  }
+                  return value.includes(needle);
+                }),
               );
               if (!hit) return false;
             }
