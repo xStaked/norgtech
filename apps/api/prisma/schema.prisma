@@ -553,6 +553,8 @@ model Customer {
   paymentCondition      PaymentCondition?      @default(contado)
   paymentDays           Int?                   @default(0)
   purchaseBudget        Decimal?               @db.Decimal(14, 2)
+  priceListId           String?
+  priceList             PriceList?             @relation(fields: [priceListId], references: [id])
 
   @@index([companyId])
 }
@@ -612,6 +614,64 @@ model Product {
   updatedAt    DateTime    @updatedAt
   quoteItems   QuoteItem[]
   orderItems   OrderItem[]
+  presentations ProductPresentation[]
+}
+
+// Una presentación vendible de un producto (empaque + forma). Los precios
+// reales viven aquí abajo, en PriceListItem, no en Product.basePrice.
+model ProductPresentation {
+  id         String          @id @default(cuid())
+  productId  String
+  empaque    String // "Bolsa x 500 g", "Saco x 25 Kg."
+  form       String? // Presentación física: Polvo soluble / Líquido / Premix
+  dosage     String? // Dosificación tal cual el Excel
+  active     Boolean         @default(true)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  priceItems PriceListItem[]
+
+  @@unique([productId, empaque])
+}
+
+// Una hoja del Excel = una lista de precios (segmento, cliente, export o línea).
+model PriceList {
+  id        String          @id @default(cuid())
+  name      String          @unique // nombre de la hoja: DIRECTOS, CALASAN...
+  kind      PriceListKind
+  currency  String          @default("COP") // COP | USD
+  active    Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  items     PriceListItem[]
+  customers Customer[]
+}
+
+// Precio de una presentación dentro de una lista. Se guardan sin/con IVA TAL
+// CUAL el cliente los mandó (IVA observado 0% o 5%, nunca derivado). Los pares
+// 2/3 son opcionales: algunas hojas traen niveles extra (AVSA tiene 3).
+model PriceListItem {
+  id             String              @id @default(cuid())
+  priceListId    String
+  presentationId String
+  priceSinIva    Decimal?            @db.Decimal(14, 2)
+  priceConIva    Decimal?            @db.Decimal(14, 2)
+  taxPercent     Decimal?            @db.Decimal(5, 2)
+  priceSinIva2   Decimal?            @db.Decimal(14, 2)
+  priceConIva2   Decimal?            @db.Decimal(14, 2)
+  priceSinIva3   Decimal?            @db.Decimal(14, 2)
+  priceConIva3   Decimal?            @db.Decimal(14, 2)
+  priceList      PriceList           @relation(fields: [priceListId], references: [id], onDelete: Cascade)
+  presentation   ProductPresentation @relation(fields: [presentationId], references: [id], onDelete: Cascade)
+
+  @@unique([priceListId, presentationId])
+}
+
+enum PriceListKind {
+  segmento
+  cliente
+  export
+  linea
 }
 
 model Quote {
