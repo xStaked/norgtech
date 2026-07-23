@@ -2,8 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
-import { apiFetchClient } from "@/lib/api.client";
+import { usePollCount } from "@/lib/use-poll-count";
 import {
   navGroups,
   type NavItem,
@@ -129,23 +128,7 @@ export function SidebarNav({
   const displayName = userName ?? "Usuario";
   const roleLabel = userRole ? ROLE_LABELS[userRole] : "";
 
-  const [pending, setPending] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    async function poll() {
-      const res = await apiFetchClient("/whatsapp/conversations/pending-count");
-      if (alive && res.ok) {
-        const data = (await res.json()) as { count: number };
-        setPending(data.count);
-      }
-    }
-    void poll();
-    const id = setInterval(poll, 15000);
-    return () => {
-      alive = false;
-      clearInterval(id);
-    };
-  }, []);
+  const { count: pending } = usePollCount("/whatsapp/conversations/pending-count");
 
   return (
     <div className="flex h-full flex-col pb-3.5">

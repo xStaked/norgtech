@@ -43,4 +43,20 @@ export const ALLOWLIST_OPEN: AllowlistedEndpoint[] = [
     reason:
       "SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.",
   },
+  {
+    method: "PATCH",
+    path: "/notifications/:id/read",
+    // Personal resource per user — authorization is row ownership (userId = token
+    // subject), not role; no @Roles applies by design.
+    reason:
+      "Personal resource per user — authorization is row ownership (userId = token subject), not role; no @Roles applies by design",
+  },
+  {
+    method: "POST",
+    path: "/notifications/read-all",
+    // Personal resource per user — authorization is row ownership (userId = token
+    // subject), not role; no @Roles applies by design.
+    reason:
+      "Personal resource per user — authorization is row ownership (userId = token subject), not role; no @Roles applies by design",
+  },
 ];

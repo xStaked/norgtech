@@ -667,8 +667,14 @@ describe("CommercialExpenses", () => {
       const prisma = { $transaction: (fn: (c: typeof tx) => unknown) => fn(tx) } as never;
       const auditService = { record: jest.fn() };
       const whatsapp = { notifyExpenseCorrection: jest.fn().mockResolvedValue(undefined) };
+      const notifications = { emit: jest.fn().mockResolvedValue({ count: 0 }) };
       const service = new CommercialExpensesService(
-        prisma, auditService as never, {} as never, {} as never, whatsapp as never,
+        prisma,
+        auditService as never,
+        {} as never,
+        {} as never,
+        whatsapp as never,
+        notifications as never,
       );
       (service as any).isControlRole = () => true;
       (service as any).assertCanRead = () => undefined;

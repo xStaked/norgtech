@@ -4,9 +4,10 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { NotificationType, Prisma } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AssignZoneDto } from "./dto/assign-zone.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
@@ -19,6 +20,7 @@ export class CustomersService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async create(user: AuthUser, dto: CreateCustomerDto) {
@@ -88,6 +90,19 @@ export class CustomersService {
           },
           tx,
         );
+
+        if (dto.assignedToUserId) {
+          await this.notifications.emit(
+            {
+              userIds: [dto.assignedToUserId],
+              type: NotificationType.cliente_asignado,
+              title: `Te asignaron el cliente ${customer.displayName}`,
+              entityType: "customer",
+              entityId: customer.id,
+            },
+            tx,
+          );
+        }
 
         return customer;
       });
@@ -220,6 +235,25 @@ export class CustomersService {
         },
         tx,
       );
+
+      // "cambio", no "es": reguardar el cliente con el mismo responsable no
+      // debe re-notificar. Y sin discriminante en el dedupeKey: una sola
+      // notificacion por (usuario, cliente) para siempre.
+      if (
+        dto.assignedToUserId &&
+        dto.assignedToUserId !== customer.assignedToUserId
+      ) {
+        await this.notifications.emit(
+          {
+            userIds: [dto.assignedToUserId],
+            type: NotificationType.cliente_asignado,
+            title: `Te asignaron el cliente ${result.displayName}`,
+            entityType: "customer",
+            entityId: id,
+          },
+          tx,
+        );
+      }
 
       return result;
     });

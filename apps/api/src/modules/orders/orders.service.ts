@@ -1,8 +1,9 @@
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { InvoiceStatus, OrderStatus, Prisma } from "@prisma/client";
+import { InvoiceStatus, NotificationType, OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { NotificationsService } from "../notifications/notifications.service";
 import { PricingService } from "../pricing/pricing.service";
 import { CreateOrderDto } from "./dto/create-order.dto";
 import { PreviewOrderDto } from "./dto/preview-order.dto";
@@ -32,6 +33,16 @@ const ORDER_STATUS_RANK: Record<OrderStatus, number> = {
   entregado: 5,
 };
 
+/**
+ * Hitos que notifican. Los intermedios (orden_facturacion, en_transito) se ven
+ * entrando al pedido; notificar los cinco saltos convierte la campana en ruido.
+ */
+const NOTIFIED_ORDER_MILESTONES: OrderStatus[] = [
+  OrderStatus.facturado,
+  OrderStatus.despachado,
+  OrderStatus.entregado,
+];
+
 const includeInvoiceRelations = {
   company: true,
   customer: { select: { id: true, displayName: true, taxId: true, creditLimit: true, paymentDays: true } },
@@ -54,6 +65,7 @@ export class OrdersService {
     @Inject(forwardRef(() => WhatsAppService))
     private readonly whatsApp: WhatsAppService,
     private readonly pricingService: PricingService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async preview(dto: PreviewOrderDto) {
@@ -469,6 +481,29 @@ export class OrdersService {
         },
         tx,
       );
+
+      // La condicion es "cambio", no "es": guardar el pedido de nuevo en el
+      // mismo estado no debe re-notificar.
+      if (
+        order.status !== dto.status &&
+        NOTIFIED_ORDER_MILESTONES.includes(dto.status)
+      ) {
+        const ownerId = updated.sellerUserId ?? updated.customer?.assignedToUserId;
+        if (ownerId) {
+          await this.notifications.emit(
+            {
+              userIds: [ownerId],
+              type: NotificationType.pedido_hito,
+              title: `Pedido ${updated.orderNumber ?? updated.id} pasó a ${dto.status}`,
+              body: updated.customer?.displayName ?? undefined,
+              entityType: "order",
+              entityId: updated.id,
+              discriminator: dto.status,
+            },
+            tx,
+          );
+        }
+      }
 
       return updated;
     });

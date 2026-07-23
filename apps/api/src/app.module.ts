@@ -1,6 +1,7 @@
 import { Module } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { HealthController } from "./health.controller";
 import { AuditModule } from "./modules/audit/audit.module";
@@ -25,6 +26,7 @@ import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.mod
 import { SellerGoalsModule } from "./modules/seller-goals/seller-goals.module";
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
 import { InvoicesModule } from "./modules/invoices/invoices.module";
+import { NotificationsModule } from "./modules/notifications/notifications.module";
 import { ReturnsModule } from "./modules/returns/returns.module";
 import { UsersModule } from "./modules/users/users.module";
 import { ZonesModule } from "./modules/zones/zones.module";
@@ -35,6 +37,7 @@ import { PrismaModule } from "./prisma/prisma.module";
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 100 }]),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -43,6 +46,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     ContactsModule,
     DashboardModule,
     AuditModule,
+    NotificationsModule,
     CustomersModule,
     OpportunitiesModule,
     ProductsModule,

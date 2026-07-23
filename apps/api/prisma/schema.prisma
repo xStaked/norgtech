@@ -200,6 +200,15 @@ enum NoraCaseRiskLevel {
   high
 }
 
+enum NotificationType {
+  meta_cumplida
+  pedido_hito
+  cliente_asignado
+  visita_vencida
+  seguimiento_vencido
+  gasto_resuelto
+}
+
 model Zone {
   id         String   @id @default(cuid())
   name       String   @unique
@@ -274,6 +283,7 @@ model User {
   sellerGoals                   SellerGoal[]
   refreshTokens                 RefreshToken[]
   passwordResetTokens           PasswordResetToken[]
+  notifications                 Notification[]
 }
 
 model RefreshToken {
@@ -995,4 +1005,23 @@ model PaymentSupport {
 
   @@unique([bucket, objectKey])
   @@index([paymentId])
+}
+
+model Notification {
+  id         String           @id @default(cuid())
+  userId     String
+  type       NotificationType
+  title      String
+  body       String?
+  entityType String
+  entityId   String
+  /// `${userId}:${type}:${entityId}:${discriminante}`. El indice unico es lo
+  /// que hace idempotente al cron: correrlo dos veces choca y no duplica, y
+  /// con varias replicas del API hace de lock sin lock distribuido.
+  dedupeKey  String           @unique
+  readAt     DateTime?
+  createdAt  DateTime         @default(now())
+  user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
 }

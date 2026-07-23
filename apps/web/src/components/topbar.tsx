@@ -4,6 +4,7 @@ import { startTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,7 +12,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Bell,
   ChevronDown,
   LogOut,
   MapPin,
@@ -62,10 +62,7 @@ export function Topbar() {
       </Link>
 
       {/* Bell */}
-      <button className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground">
-        <Bell className="h-[18px] w-[18px]" />
-        <span className="absolute right-2 top-1.5 h-[7px] w-[7px] rounded-full border-2 border-card bg-destructive" />
-      </button>
+      <NotificationBell />
 
       {/* User */}
       <DropdownMenu>
