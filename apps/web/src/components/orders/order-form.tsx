@@ -211,7 +211,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
     [items, validIndices],
   );
 
-  const { preview, loading: previewLoading } = usePricingPreview(
+  const { preview, loading: previewLoading, error: previewError } = usePricingPreview(
     "/orders/preview",
     selectedCustomerId,
     previewItems as PreviewItemInput[],
@@ -618,6 +618,14 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             value={previewLoading && !preview ? "Calculando..." : preview ? money(total) : "—"}
             strong
           />
+          {/* El backend rechaza la linea cuando el producto tiene varios
+              empaques con precio en la lista del cliente. El mensaje trae los
+              empaques, que es lo que va en el campo Presentacion. */}
+          {previewError ? (
+            <p className="rounded-md bg-[#fcebe9] px-3 py-2 text-[12.5px] text-destructive">
+              {previewError}
+            </p>
+          ) : null}
         </div>
       </FormSection>
 

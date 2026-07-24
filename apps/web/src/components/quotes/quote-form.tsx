@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import { LinePriceResolution } from "./line-price-resolution";
 
 interface Segment {
   id: string;
@@ -40,6 +41,8 @@ interface QuoteItem {
   productId: string;
   quantity: number;
   notes: string;
+  /** Empaque elegido. Sin esto el backend rechaza los productos ambiguos. */
+  presentationId: string;
 }
 
 interface QuoteFormProps {
@@ -57,11 +60,11 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   const [loading, setLoading] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [items, setItems] = useState<QuoteItem[]>([
-    { productId: "", quantity: 1, notes: "" },
+    { productId: "", quantity: 1, notes: "", presentationId: "" },
   ]);
 
   function addItem() {
-    setItems([...items, { productId: "", quantity: 1, notes: "" }]);
+    setItems([...items, { productId: "", quantity: 1, notes: "", presentationId: "" }]);
   }
 
   function removeItem(index: number) {
@@ -71,6 +74,10 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   function updateItem(index: number, field: keyof QuoteItem, value: string | number) {
     const updated = [...items];
     updated[index] = { ...updated[index], [field]: value };
+    // Otro producto, otros empaques: la presentacion elegida ya no aplica.
+    if (field === "productId") {
+      updated[index].presentationId = "";
+    }
     setItems(updated);
   }
 
@@ -86,13 +93,14 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
       validIndices.map((i) => ({
         productId: items[i].productId,
         quantity: items[i].quantity,
+        presentationId: items[i].presentationId || undefined,
         // Ignored by the backend for catalog lines, but the DTO requires it.
         unitPrice: 0,
       })),
     [items, validIndices],
   );
 
-  const { preview, loading: previewLoading } = usePricingPreview(
+  const { preview, loading: previewLoading, error: previewError } = usePricingPreview(
     "/quotes/preview",
     selectedCustomerId,
     previewItems,
@@ -123,6 +131,7 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
       items: validIndices.map((i) => ({
         productId: items[i].productId,
         quantity: items[i].quantity,
+        presentationId: items[i].presentationId || undefined,
         // The backend re-derives this from the catalog + segment discount; it
         // is sent only because the DTO requires the field.
         unitPrice: 0,
@@ -242,6 +251,16 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
                   </option>
                 ))}
               </select>
+              {item.productId && selectedCustomerId ? (
+                <LinePriceResolution
+                  productId={item.productId}
+                  customerId={selectedCustomerId}
+                  presentationId={item.presentationId}
+                  onSelectPresentation={(presentationId) =>
+                    updateItem(index, "presentationId", presentationId)
+                  }
+                />
+              ) : null}
               {(() => {
                 const line = lineFor(index);
                 if (!line || line.discountPercent <= 0 || line.originalUnitPrice === null) {
@@ -344,6 +363,11 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
             {previewLoading && !preview ? "Calculando..." : preview ? formatMoney(preview.total) : "—"}
           </span>
         </div>
+        {previewError ? (
+          <p className="rounded-md bg-[#fcebe9] px-3 py-2 text-[12.5px] text-destructive">
+            {previewError}
+          </p>
+        ) : null}
       </div>
 
       <div className="flex gap-3 pt-2">

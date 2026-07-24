@@ -41,17 +41,21 @@ export async function fetchPricingPreview(
   endpoint: "/quotes/preview" | "/orders/preview",
   customerId: string,
   items: PreviewItemInput[],
-): Promise<PricingPreview | null> {
+): Promise<{ preview: PricingPreview | null; error: string | null }> {
   const response = await apiFetchClient(endpoint, {
     method: "POST",
     body: JSON.stringify({ customerId, items }),
   });
 
   if (!response.ok) {
-    return null;
+    // El backend rechaza la línea cuando el producto tiene varios empaques con
+    // precio en la lista del cliente. Tragarse ese mensaje dejaba el total en
+    // "—" sin decir por qué.
+    const data = await response.json().catch(() => ({}));
+    return { preview: null, error: data?.message ?? "No se pudo calcular el precio." };
   }
 
-  return (await response.json()) as PricingPreview;
+  return { preview: (await response.json()) as PricingPreview, error: null };
 }
 
 export function formatMoney(value: number): string {

@@ -18,6 +18,7 @@ export function usePricingPreview(
   items: PreviewItemInput[],
 ) {
   const [preview, setPreview] = useState<PricingPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Serializing the inputs keeps the effect from re-firing on every render
@@ -32,6 +33,7 @@ export function usePricingPreview(
 
     if (!cid || lines.length === 0) {
       setPreview(null);
+      setError(null);
       setLoading(false);
       return;
     }
@@ -43,7 +45,8 @@ export function usePricingPreview(
       const result = await fetchPricingPreview(endpoint, cid, lines);
       // Guard against an earlier, slower response overwriting a newer one.
       if (cancelled) return;
-      setPreview(result);
+      setPreview(result.preview);
+      setError(result.error);
       setLoading(false);
     }, 300);
 
@@ -53,5 +56,5 @@ export function usePricingPreview(
     };
   }, [endpoint, key]);
 
-  return { preview, loading };
+  return { preview, loading, error };
 }
