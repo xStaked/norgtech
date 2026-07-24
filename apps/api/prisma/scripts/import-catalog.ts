@@ -318,8 +318,14 @@ async function matchCustomers(prisma: PrismaClient, items: ParsedItem[], dry: bo
     if (matches.length === 1) {
       linked.push(`${sheet} → ${matches[0].displayName}`);
       if (!dry) {
-        const list = await prisma.priceList.findUnique({ where: { name: sheet }, select: { id: true } });
-        if (list) await prisma.customer.update({ where: { id: matches[0].id }, data: { priceListId: list.id } });
+        // El cliente hereda el país de su lista: quien compra de una lista de
+        // exportación no es colombiano, y el default "Colombia" mentiría.
+        const list = await prisma.priceList.findUnique({ where: { name: sheet }, select: { id: true, country: true } });
+        if (list)
+          await prisma.customer.update({
+            where: { id: matches[0].id },
+            data: { priceListId: list.id, country: list.country },
+          });
       }
     } else {
       ambiguousOrNone.push(`${sheet} (${matches.length} coincidencias) → asignar a mano`);
