@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { apiFetch } from "@/lib/api.server";
+import { formatPrice } from "@/lib/catalog";
 import { PageHeader } from "@/components/ui/page-header";
 import { ButtonLink } from "@/components/ui/button-link";
 import { FilterBar } from "@/components/ui/filter-bar";
@@ -10,9 +12,11 @@ interface Product {
   name: string;
   description: string | null;
   unit: string;
-  presentation: string | null;
-  basePrice: string;
   active: boolean;
+  presentationCount: number;
+  priceListCount: number;
+  /** Mínimo y máximo por moneda. COP y USD nunca se mezclan. */
+  priceRange: Record<string, { min: number; max: number }>;
 }
 
 const AVATAR_COLORS = [
@@ -83,9 +87,10 @@ export default async function ProductsPage() {
       ) : (
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (
-            <div
+            <Link
               key={product.id}
-              className="group rounded-[11px] border border-border bg-card p-4 transition-all hover:border-[#c7d3df] hover:shadow-[0_6px_18px_rgba(12,44,68,.08)]"
+              href={`/products/${product.id}`}
+              className="group block rounded-[11px] border border-border bg-card p-4 transition-all hover:border-[#c7d3df] hover:shadow-[0_6px_18px_rgba(12,44,68,.08)]"
             >
               <div className="flex items-start gap-2.5">
                 <span
@@ -106,10 +111,24 @@ export default async function ProductsPage() {
                   ) : null}
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="text-[15px] font-extrabold tabular-nums text-[#167c4a]">
-                    ${Number(product.basePrice).toLocaleString("es-CO")}
-                  </div>
-                  <div className="text-[10.5px] text-muted-foreground">precio base</div>
+                  {/* Rango, no un precio único: el mismo producto vale distinto
+                      en cada lista. Una moneda por línea, nunca convertidas. */}
+                  {Object.entries(product.priceRange).length === 0 ? (
+                    <div className="text-[12px] text-muted-foreground">Sin precio</div>
+                  ) : (
+                    Object.entries(product.priceRange).map(([currency, range]) => (
+                      <div key={currency}>
+                        <div className="font-mono text-[12.5px] font-bold tabular-nums text-[#167c4a]">
+                          {range.min === range.max
+                            ? formatPrice(range.min, currency)
+                            : `${formatPrice(range.min, currency)} – ${formatPrice(range.max, currency)}`}
+                        </div>
+                        <div className="text-[10.5px] text-muted-foreground">
+                          {currency} · sin IVA
+                        </div>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
 
@@ -120,11 +139,12 @@ export default async function ProductsPage() {
                 <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
                   {product.unit}
                 </span>
-                {product.presentation ? (
-                  <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
-                    {product.presentation}
-                  </span>
-                ) : null}
+                <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
+                  {product.presentationCount} presentaciones
+                </span>
+                <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
+                  {product.priceListCount} listas
+                </span>
               </div>
 
               {product.description ? (
@@ -132,7 +152,7 @@ export default async function ProductsPage() {
                   {product.description}
                 </p>
               ) : null}
-            </div>
+            </Link>
           ))}
         </div>
       )}

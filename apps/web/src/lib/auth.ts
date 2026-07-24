@@ -94,7 +94,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
   return allowedRoles.includes(role);
 }
 
-export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "invoice" | "returns" | "report"): boolean {
+export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "invoice" | "returns" | "report" | "product"): boolean {
   if (!role) return false;
 
   const createAccess: Record<typeof entity, readonly UserRole[]> = {
@@ -109,6 +109,8 @@ export function canCreate(role: UserRole | null, entity: "customer" | "opportuni
     invoice: ["administrador", "director_comercial", "facturacion"],
     returns: ["administrador", "director_comercial", "facturacion", "comercial"],
     report: ["administrador", "director_comercial", "tecnico"],
+    // Espeja el @Roles del backend en products.controller.
+    product: ["administrador", "director_comercial"],
   };
 
   return createAccess[entity].includes(role);
