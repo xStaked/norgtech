@@ -52,8 +52,16 @@ export const deriveTaxPercent = (
   return Math.round((con / sin - 1) * 100);
 };
 
-const SKIP_SHEETS = new Set(["LEVANIA"]); // formato COP+USD sin confirmar
+// LEVANIA: el cliente confirmó "tener en cuenta solo el dólar" (ya son clientes
+// de otros países). Falta el xlsx para saber cuál columna es la USD → override.
+const SKIP_SHEETS = new Set(["LEVANIA"]);
 const USD_SHEETS = new Set(["GUATEMALA", "ECUADOR", "REDIVENCA"]);
+// País destino de las listas de exportación. El resto queda en Colombia.
+const COUNTRY: Record<string, string> = {
+  GUATEMALA: "Guatemala",
+  ECUADOR: "Ecuador",
+  REDIVENCA: "Venezuela",
+};
 const KIND: Record<string, PriceListKind> = {
   DIRECTOS: PriceListKind.segmento,
   DISTRIBUIDORES: PriceListKind.segmento,
@@ -255,10 +263,15 @@ async function run(filePath: string, dry: boolean) {
 
   // 3. Listas + ítems.
   for (const sheet of new Set(items.map((i) => i.sheet))) {
+    const listData = {
+      currency: USD_SHEETS.has(sheet) ? "USD" : "COP",
+      country: COUNTRY[sheet] ?? "Colombia",
+      kind: KIND[sheet] ?? PriceListKind.cliente,
+    };
     const list = await prisma.priceList.upsert({
       where: { name: sheet },
-      update: { currency: USD_SHEETS.has(sheet) ? "USD" : "COP", kind: KIND[sheet] ?? PriceListKind.cliente },
-      create: { name: sheet, currency: USD_SHEETS.has(sheet) ? "USD" : "COP", kind: KIND[sheet] ?? PriceListKind.cliente },
+      update: listData,
+      create: { name: sheet, ...listData },
       select: { id: true },
     });
     for (const it of items.filter((i) => i.sheet === sheet)) {

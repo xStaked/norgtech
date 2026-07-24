@@ -522,6 +522,7 @@ model Customer {
   address               String?
   city                  String?
   department            String?
+  country               String?                @default("Colombia") // se vende fuera de CO: Guatemala, Ecuador, Venezuela...
   notes                 String?
   segmentId             String
   companyId             String
@@ -640,6 +641,7 @@ model PriceList {
   name      String          @unique // nombre de la hoja: DIRECTOS, CALASAN...
   kind      PriceListKind
   currency  String          @default("COP") // COP | USD
+  country   String?         @default("Colombia") // lista de exportación → país destino
   active    Boolean         @default(true)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
