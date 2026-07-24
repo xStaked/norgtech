@@ -99,6 +99,50 @@ Tienen entre 3 y 75 ítems cada una. **No todas las listas tienen todos los
 productos** — GUAMITO tiene 38 ítems y CALASAN 75. El diseño debe soportar
 "este producto no está en esta lista" sin que se vea como un error.
 
+### Precios por país — cómo funciona
+
+Norgtech vende fuera de Colombia y el cliente pidió "precios por país". Está
+resuelto, pero **no con un campo de precio por país**: un producto no tiene "un
+costo por país", tiene un precio por cada par (presentación, lista). El país es
+un **atributo de la lista**, no una dimensión del precio.
+
+```
+GUATEMALA   kind=export   currency=USD   country=Guatemala    46 ítems
+ECUADOR     kind=export   currency=USD   country=Ecuador      49 ítems
+REDIVENCA   kind=export   currency=USD   country=Venezuela    48 ítems
+LEVANIA     kind=cliente  currency=USD   country=(vacío)       7 ítems
+DIRECTOS…   kind=…        currency=COP   country=Colombia
+```
+
+Tres cosas que el diseño tiene que tener claras:
+
+1. **`country` no decide el precio.** El precio se resuelve por
+   `Customer.priceListId`, punto. Un cliente guatemalteco recibe precios de
+   Guatemala porque su lista asignada es GUATEMALA, no porque su país diga
+   Guatemala. Es deliberado: si el país decidiera el precio, cambiarle el país a
+   un cliente le cambiaría lo que se le cobra sin que nadie lo haya autorizado.
+   La asignación es explícita y auditable.
+
+2. **La relación es 1 país : N listas.** Colombia tiene 15 listas (DIRECTOS,
+   DISTRIBUIDORES, y las de cada cliente). El país no es una llave, es una
+   etiqueta. Y moneda y país son independientes: LEVANIA cotiza en USD sin
+   tener país asignado.
+
+3. **No existe un "cliente país".** Se evaluó crear un `Customer` llamado
+   GUATEMALA y se descartó: ensucia cartera, comisiones y reportes por cliente,
+   no tiene NIT ni contacto, y se duplicaría el día que entre el comprador
+   guatemalteco real. Ese comprador se crea como cliente normal con
+   `country: "Guatemala"` y `priceListId → GUATEMALA`.
+
+**Para qué sirve entonces `country` en el front:**
+
+- filtrar y agrupar las listas por país en `/price-lists`
+- al crear o editar un cliente con `country` distinto de Colombia, **sugerir**
+  la lista de ese país (sugerir y dejar que el usuario confirme, nunca aplicarla
+  sola)
+- dejar obvio en la matriz de precios qué columnas son de exportación y en qué
+  moneda están, que es donde más fácil se confunde alguien
+
 ### PriceListItem
 
 | Campo | Tipo | Ejemplo |
@@ -211,6 +255,29 @@ En el detalle de cliente hay que agregar:
 - **`priceListId`**: selector de lista de precios. Es lo que determina a qué
   precio se le cotiza. Hoy no existe en ninguna pantalla.
 - **`country`**: campo nuevo, texto. Ya existe en la base (default `Colombia`).
+  Si no es Colombia, sugerir la lista de ese país (ver "Precios por país").
+
+### F. Cotización — elegir presentación
+
+No es una pantalla nueva, pero es donde el catálogo se vuelve plata y hay que
+tocarla. Al agregar una línea de cotización, hoy se elige solo el producto. Con
+presentaciones eso ya no alcanza: el mismo producto en `Bolsa x 1 Kg` y en
+`Saco x 25 Kg.` son precios completamente distintos.
+
+El backend resuelve el precio con `GET /products/:id/price-for-customer/:customerId`
+y responde una de tres cosas en el campo `source`:
+
+| `source` | Qué pasó | Qué debe hacer el front |
+|---|---|---|
+| `price_list` | El cliente tiene lista y el producto está en ella | Mostrar el precio y de qué lista salió (`priceListName`, `currency`, `empaque`) |
+| `ambiguous` | El producto tiene **varias presentaciones con precio** en esa lista | Mostrar `options[]` y **obligar a elegir** antes de continuar |
+| `base_price` | El cliente no tiene lista, o el producto no está en ella | Precio base con descuento de segmento, como siempre |
+
+El caso `ambiguous` es el que necesita diseño: la API devuelve las opciones con
+su empaque y su precio en vez de escoger una sola, porque cotizar el empaque
+equivocado despacha el producto equivocado. Si el usuario ya eligió la
+presentación, se manda `?presentationId=…` y la respuesta vuelve a ser
+`price_list`.
 
 ---
 
@@ -234,11 +301,11 @@ En el detalle de cliente hay que agregar:
 - **`Product.basePrice` quedó vestigial.** Existe porque el modelo viejo lo
   exigía y hoy tiene un valor provisional. No debe aparecer en ninguna pantalla
   nueva. Se elimina cuando cotización deje de usarlo.
-- **Descuento de segmento vs precio de lista.** Hoy cotización calcula
-  `basePrice × (1 − descuento del segmento)`. Con listas, el precio de lista
-  gana y el descuento de segmento **no** se aplica encima: la lista ya es el
-  precio negociado. El fallback a `basePrice` + descuento se mantiene para
-  productos sin lista.
+- **Descuento de segmento vs precio de lista** — ya resuelto en el backend. El
+  precio de lista gana y el descuento de segmento **no** se aplica encima: la
+  lista ya es el precio negociado con ese cliente, descontarle otra vez sería
+  descontar dos veces. El fallback a `basePrice` + descuento sigue vivo para
+  clientes sin lista.
 - **Los niveles 2 y 3 no tienen semántica confirmada.** En casi todas las listas
   el nivel 2 es ~5% por encima del 1, pero en CALASAN es mucho menor. Está
   pendiente preguntarle al cliente qué significan. Diseñarlos como "niveles
@@ -265,7 +332,11 @@ GET    /price-lists                   índice + nº ítems y nº clientes
 GET    /price-lists/:id               detalle con ítems y clientes
 PUT    /price-lists/:id/items         fijar el precio de una presentación en la lista
 
-GET    /products/:id/price-for-customer/:customerId
-                                      precio efectivo: resuelve por la lista del
-                                      cliente, con fallback a basePrice
+GET    /products/:id/price-for-customer/:customerId[?presentationId=…]
+                                      precio efectivo. Responde source =
+                                      price_list | ambiguous | base_price
+                                      (ver §3.F)
 ```
+
+`Customer` acepta además `country` y `priceListId` al crear y editar; su detalle
+devuelve la lista completa en `priceList`.
