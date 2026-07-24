@@ -7,8 +7,12 @@ import { clean, normalizeSeller, parseTaxId } from "./import-customers";
  * actualización que manda el cliente ("Clientes <VENDEDOR>.xlsx").
  *
  * Manda la columna **Vendedor**, no el nombre del archivo: el archivo dice de
- * quién era la cartera y la columna a quién pasa. Las filas con Vendedor vacío
- * no se tocan — vacío significa "sin dato", no "quitarle el vendedor".
+ * quién era la cartera y la columna a quién pasa.
+ *
+ * Vendedor vacío no se toca por defecto — vacío es "sin dato". Con
+ * `--vaciar-sin-vendedor` sí se interpreta como "dejarlo sin vendedor", que es
+ * el caso de las carteras que quedan huérfanas cuando alguien sale de la
+ * empresa y todavía no se sabe quién las recibe.
  *
  * Solo mueve `assignedToUserId`. No crea clientes, no los activa y no toca
  * ningún otro campo: para eso está import-customers.
@@ -16,7 +20,7 @@ import { clean, normalizeSeller, parseTaxId } from "./import-customers";
  * Escribe SOLO con --apply. Sin el flag es un dry-run, porque reasignar
  * cambia a quién se le comisiona.
  *
- *   pnpm --filter @norgtech/api exec tsx prisma/scripts/reassign-customer-sellers.ts <a.xlsx> [b.xlsx…] [--apply]
+ *   pnpm --filter @norgtech/api exec tsx prisma/scripts/reassign-customer-sellers.ts <a.xlsx> [b.xlsx…] [--vaciar-sin-vendedor] [--apply]
  */
 
 type Planned = {
@@ -43,7 +47,7 @@ export function readSellerSheet(ws: ExcelJS.Worksheet): SheetRow[] {
   return rows;
 }
 
-async function run(files: string[], apply: boolean) {
+async function run(files: string[], apply: boolean, emptyUnassigns: boolean) {
   const prisma = new PrismaClient();
 
   const users = await prisma.user.findMany({ select: { id: true, name: true, active: true } });
@@ -61,13 +65,13 @@ async function run(files: string[], apply: boolean) {
     const label = file.split("/").pop() ?? file;
 
     for (const row of readSellerSheet(wb.worksheets[0])) {
-      if (!row.seller) {
+      if (!row.seller && !emptyUnassigns) {
         noSeller.push(`${label}: ${row.legalName}`);
         continue;
       }
 
-      const target = userByName.get(row.seller);
-      if (!target) {
+      const target = row.seller ? userByName.get(row.seller) : null;
+      if (row.seller && !target) {
         unknownSeller.add(row.seller);
         continue;
       }
@@ -81,7 +85,7 @@ async function run(files: string[], apply: boolean) {
         continue;
       }
 
-      if (customer.assignedToUser?.id === target.id) {
+      if ((customer.assignedToUser?.id ?? null) === (target?.id ?? null)) {
         unchanged.push(customer.legalName);
         continue;
       }
@@ -91,13 +95,13 @@ async function run(files: string[], apply: boolean) {
         legalName: customer.legalName,
         file: label,
         from: customer.assignedToUser?.name ?? "(sin vendedor)",
-        to: target.name,
+        to: target?.name ?? "(sin vendedor)",
       });
 
       if (apply) {
         await prisma.customer.update({
           where: { id: customer.id },
-          data: { assignedToUserId: target.id },
+          data: { assignedToUserId: target?.id ?? null },
         });
       }
     }
@@ -110,13 +114,20 @@ async function run(files: string[], apply: boolean) {
 async function main() {
   const args = process.argv.slice(2);
   const apply = args.includes("--apply");
+  const emptyUnassigns = args.includes("--vaciar-sin-vendedor");
   const files = args.filter((a) => !a.startsWith("--"));
   if (files.length === 0) {
-    console.error("Uso: tsx prisma/scripts/reassign-customer-sellers.ts <a.xlsx> [b.xlsx…] [--apply]");
+    console.error(
+      "Uso: tsx prisma/scripts/reassign-customer-sellers.ts <a.xlsx> [b.xlsx…] [--vaciar-sin-vendedor] [--apply]",
+    );
     process.exit(1);
   }
 
-  const { planned, unchanged, noSeller, missing, unknownSeller } = await run(files, apply);
+  const { planned, unchanged, noSeller, missing, unknownSeller } = await run(
+    files,
+    apply,
+    emptyUnassigns,
+  );
 
   console.log(apply ? "\n═══ REASIGNADO ═══" : "\n═══ DRY-RUN (no escribe) ═══");
 

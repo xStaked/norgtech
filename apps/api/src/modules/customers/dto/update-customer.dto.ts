@@ -65,9 +65,15 @@ export class UpdateCustomerDto {
   @IsNotEmpty()
   companyId?: string;
 
+  /**
+   * Vendedor. `null` lo deja sin vendedor: cuando alguien sale de la empresa
+   * su cartera queda huérfana hasta que la reasignen. El servicio ya distingue
+   * null de undefined (undefined = no lo toques), así que el tipo solo lo hace
+   * explícito.
+   */
   @IsOptional()
   @IsString()
-  assignedToUserId?: string;
+  assignedToUserId?: string | null;
 
   @IsOptional()
   @IsEnum(CustomerType)

@@ -121,7 +121,12 @@ export function CustomerForm({
       notes: optionalString("notes"),
       segmentId: String(formData.get("segmentId")),
       companyId: String(formData.get("companyId")),
-      assignedToUserId: optionalString("assignedToUserId") || undefined,
+      // null, no undefined: "Sin asignar" tiene que poder quitarle el vendedor
+      // a un cliente. Con undefined el backend no tocaba el campo y la opción
+      // no hacía nada. Al crear no aplica, ahí sí es "no vino el dato".
+      assignedToUserId: isEditing
+        ? (optionalString("assignedToUserId") ?? null)
+        : optionalString("assignedToUserId") || undefined,
       customerType: optionalString("customerType") || undefined,
       creditLimit: formData.get("creditLimit")
         ? Number(formData.get("creditLimit"))

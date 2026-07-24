@@ -1032,6 +1032,42 @@ describe("Customers", () => {
     expect(customerAfter?.companyId).toBe("clx_default_nanonutricion");
   });
 
+  it("deja quitarle el vendedor a un cliente (assignedToUserId null)", async () => {
+    customers.push({
+      id: "customer-vendedor-fuera",
+      legalName: "Cliente Vendedor Fuera SAS",
+      displayName: "Cliente Vendedor Fuera",
+      taxId: "800777888",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: "user-comercial-id",
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    // Cuando un vendedor sale de la empresa su cartera queda sin dueño hasta
+    // que alguien la reasigne. Antes el DTO no aceptaba null y "Sin asignar"
+    // en el formulario no hacía nada.
+    const response = await request(globalThis.__APP__)
+      .patch("/customers/customer-vendedor-fuera")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ assignedToUserId: null });
+
+    expect(response.status).toBe(200);
+
+    const customerAfter = customers.find((c) => c.id === "customer-vendedor-fuera");
+    expect(customerAfter?.assignedToUserId).toBeNull();
+  });
+
   it("rechaza cambiar a una empresa inexistente (404)", async () => {
     customers.push({
       id: "customer-no-orders-test-404",
