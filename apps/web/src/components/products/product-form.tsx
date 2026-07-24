@@ -5,7 +5,13 @@ import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import type { PriceListRef, ProductDetail } from "@/lib/catalog";
+import {
+  PRICE_LIST_KIND_LABEL,
+  priceListContext,
+  priceListOwner,
+  type PriceListRef,
+  type ProductDetail,
+} from "@/lib/catalog";
 
 interface ProductFormProps {
   priceLists: PriceListRef[];
@@ -416,27 +422,45 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
                       key={row.key}
                       className="mb-2 grid grid-cols-1 items-center gap-2 sm:grid-cols-[1.3fr_110px_110px_76px_70px] sm:gap-x-2.5"
                     >
-                      <select
-                        className={inputClasses}
-                        aria-label="Lista de precios"
-                        value={row.priceListId}
-                        onChange={(event) =>
-                          setPrices((all) =>
-                            all.map((item) =>
-                              item.key === row.key
-                                ? { ...item, priceListId: event.target.value }
-                                : item,
-                            ),
-                          )
-                        }
-                      >
-                        <option value="">Seleccionar lista</option>
-                        {priceLists.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.name} · {item.currency}
-                          </option>
-                        ))}
-                      </select>
+                      <div>
+                        <select
+                          className={inputClasses}
+                          aria-label="Para quién es este precio"
+                          value={row.priceListId}
+                          onChange={(event) =>
+                            setPrices((all) =>
+                              all.map((item) =>
+                                item.key === row.key
+                                  ? { ...item, priceListId: event.target.value }
+                                  : item,
+                              ),
+                            )
+                          }
+                        >
+                          <option value="">¿Para quién?</option>
+                          {(
+                            ["cliente", "segmento", "export", "linea"] as const
+                          ).map((kind) => {
+                            const group = priceLists.filter((item) => item.kind === kind);
+                            if (group.length === 0) return null;
+                            return (
+                              <optgroup key={kind} label={PRICE_LIST_KIND_LABEL[kind]}>
+                                {group.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {priceListOwner(item)}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            );
+                          })}
+                        </select>
+                        {/* Moneda y país no se digitan: salen de a quién le vendes. */}
+                        {list ? (
+                          <p className="mt-1 text-[10.5px] text-muted-foreground">
+                            {priceListContext(list)}
+                          </p>
+                        ) : null}
+                      </div>
                       {(["sinIva", "conIva", "taxPercent"] as const).map((field) => (
                         <input
                           key={field}
@@ -508,7 +532,7 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
           <h2 className="mb-3 text-[14.5px] font-extrabold text-foreground">Resumen</h2>
           {[
             ["Presentaciones", String(livePresentations.length)],
-            ["Listas con precio", `${new Set(prices.map((p) => p.priceListId).filter(Boolean)).size} de ${priceLists.length}`],
+            ["Con precio asignado", `${new Set(prices.map((p) => p.priceListId).filter(Boolean)).size} de ${priceLists.length}`],
             ["Monedas", currencies.join(" · ") || "—"],
           ].map(([label, value]) => (
             <div

@@ -523,6 +523,9 @@ model Customer {
   city                  String?
   department            String?
   country               String?                @default("Colombia") // se vende fuera de CO: Guatemala, Ecuador, Venezuela...
+  // Moneda en la que compra este cliente. Es la fuente de verdad: al ponerle
+  // precio a un producto para él, la moneda sale de aquí y no se vuelve a pedir.
+  currency              String                 @default("COP")
   notes                 String?
   segmentId             String
   companyId             String

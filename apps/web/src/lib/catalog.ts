@@ -9,6 +9,35 @@ export interface PriceListRef {
   kind: "segmento" | "cliente" | "export" | "linea";
   currency: string;
   country: string | null;
+  /** Clientes enganchados. Una lista `cliente` sin ninguno es un estado inválido. */
+  customers?: { id: string; displayName: string; currency: string; country: string | null }[];
+}
+
+export const PRICE_LIST_KIND_LABEL: Record<PriceListRef["kind"], string> = {
+  cliente: "Clientes",
+  segmento: "Segmentos",
+  export: "Países",
+  linea: "Líneas de producto",
+};
+
+/**
+ * A quién pertenece la lista, tal como debe verse en pantalla. Para las de
+ * cliente es el nombre del cliente real, no el de la hoja del Excel: mostrar
+ * "NANONUTRICION · cliente" cuando no existe tal cliente es lo que hacía
+ * parecer que había compradores inventados.
+ */
+export function priceListOwner(list: PriceListRef): string {
+  if (list.kind !== "cliente") return list.name;
+  const customer = list.customers?.[0];
+  return customer ? customer.displayName : `${list.name} — sin cliente asignado`;
+}
+
+/** Moneda y país salen de la lista (y para las de cliente, del cliente). */
+export function priceListContext(list: PriceListRef): string {
+  const customer = list.kind === "cliente" ? list.customers?.[0] : undefined;
+  const currency = customer?.currency ?? list.currency;
+  const country = customer?.country ?? list.country;
+  return country ? `${currency} · ${country}` : currency;
 }
 
 export interface PriceCell {

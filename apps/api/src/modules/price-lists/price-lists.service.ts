@@ -11,11 +11,22 @@ export class PriceListsService {
    * de segmento/línea/país no se enganchan a un cliente único, y hay clientes
    * del Excel que todavía no existen en el CRM.
    */
+  /**
+   * Índice de listas. Trae los clientes enganchados porque el front muestra a
+   * QUIÉN pertenece cada lista, no el nombre de la hoja del Excel: una lista
+   * `cliente` sin cliente se ve como un comprador que no existe.
+   */
   findAll(includeInactive = false) {
     return this.prisma.priceList.findMany({
       where: includeInactive ? undefined : { active: true },
       orderBy: [{ kind: "asc" }, { name: "asc" }],
-      include: { _count: { select: { items: true, customers: true } } },
+      include: {
+        _count: { select: { items: true, customers: true } },
+        customers: {
+          select: { id: true, displayName: true, currency: true, country: true },
+          orderBy: { displayName: "asc" },
+        },
+      },
     });
   }
 

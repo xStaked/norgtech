@@ -6,6 +6,7 @@ import {
   formatPrice,
   formatTax,
   priceLevels,
+  priceListOwner,
   type PriceCell,
   type PriceListRef,
   type Presentation,
@@ -26,8 +27,16 @@ function currencyBadge(currency: string) {
   return CURRENCY_BADGE[currency] ?? CURRENCY_BADGE.COP;
 }
 
+/**
+ * Qué es esta columna. Para las de cliente el encabezado ya trae el nombre del
+ * cliente, así que el subtítulo solo aclara la naturaleza de la lista: sin
+ * esto, un segmento y una línea de producto se leían como si fueran clientes.
+ */
 function columnSubtitle(list: PriceListRef) {
-  return list.country && list.kind === "export" ? `${list.kind} · ${list.country}` : list.kind;
+  if (list.kind === "export") return `país${list.country ? ` · ${list.country}` : ""}`;
+  if (list.kind === "linea") return "línea de producto";
+  if (list.kind === "segmento") return "segmento";
+  return list.customers?.length ? "cliente" : "sin cliente asignado";
 }
 
 /**
@@ -113,8 +122,11 @@ export function PriceMatrix({ presentations, priceLists, totalLists }: PriceMatr
                   key={list.id}
                   className="flex h-[52px] flex-col justify-end border-r border-[#f0f2f6] px-3.5 pb-2"
                 >
-                  <div className="truncate text-[11.5px] font-extrabold tracking-[.02em] text-foreground">
-                    {list.name}
+                  <div
+                    className="truncate text-[11.5px] font-extrabold tracking-[.02em] text-foreground"
+                    title={priceListOwner(list)}
+                  >
+                    {priceListOwner(list)}
                   </div>
                   <div className="mt-0.5 flex items-center gap-[5px]">
                     <span

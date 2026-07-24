@@ -129,6 +129,13 @@ export class ProductsService {
                     currency: true,
                     country: true,
                     active: true,
+                    // La matriz muestra a QUIÉN pertenece cada columna. Sin
+                    // esto, una lista de cliente se ve como un comprador
+                    // inventado en vez de con su nombre real.
+                    customers: {
+                      select: { id: true, displayName: true, currency: true, country: true },
+                      orderBy: { displayName: "asc" },
+                    },
                   },
                 },
               },

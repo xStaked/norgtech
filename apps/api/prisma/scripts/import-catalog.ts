@@ -63,9 +63,10 @@ const COUNTRY: Record<string, string> = {
 const KIND: Record<string, PriceListKind> = {
   DIRECTOS: PriceListKind.segmento,
   DISTRIBUIDORES: PriceListKind.segmento,
+  // Guatemala y Ecuador son países. REDIVENCA no: es un distribuidor
+  // venezolano, o sea un cliente que cobra en USD, como LEVANIA.
   GUATEMALA: PriceListKind.export,
   ECUADOR: PriceListKind.export,
-  REDIVENCA: PriceListKind.export,
   AGRICOLA: PriceListKind.linea,
   AQUAVET: PriceListKind.linea,
   QUANTICA: PriceListKind.linea,
