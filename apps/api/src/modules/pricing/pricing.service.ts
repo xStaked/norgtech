@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
 import { OrderStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
@@ -48,6 +48,8 @@ interface RawPricedLine {
   totalWithTax: Prisma.Decimal;
   notes?: string;
   productPresentation?: string | null;
+  /** Lista de la que salió el precio, o null si vino de basePrice. */
+  priceListName?: string | null;
 }
 
 export interface PriceLinesResult {
@@ -117,7 +119,9 @@ export class PricingService {
     product: { id: string; basePrice: Prisma.Decimal },
     presentationId?: string,
   ) {
-    const matches = await this.findListPrices(customer.priceListId, product.id, presentationId);
+    const matches = await this.resolveListMatches(customer.priceListId, product.id, {
+      presentationId,
+    });
 
     if (matches.length > 1) {
       return {
@@ -184,26 +188,35 @@ export class PricingService {
   }
 
   /**
-   * Ítems de la lista del cliente que corresponden a este producto. Con
-   * `presentationId` es a lo sumo uno; sin él pueden ser varios (el producto
-   * tiene varios empaques con precio en esa lista).
+   * Ítems de la lista del cliente para este producto, reducidos por lo que se
+   * sepa de la presentación. Escalera, de más a menos explícito:
+   *
+   *   1. `presentationId` — quien cotiza ya eligió.
+   *   2. `presentation` en texto — lo que escribió el cliente (WhatsApp).
+   *      Solo cuenta si empata con UN empaque; "bolsa" contra tres bolsas no
+   *      desambigua nada.
+   *   3. Nada — si el producto tiene un solo empaque con precio, es ese.
+   *
+   * Si quedan varios, el llamador decide qué hacer: no hay un precio correcto
+   * que adivinar, y cotizar el empaque equivocado despacha el producto
+   * equivocado.
    */
-  private async findListPrices(
+  private async resolveListMatches(
     priceListId: string | null | undefined,
     productId: string,
-    presentationId?: string,
+    hint: { presentationId?: string | null; presentation?: string | null },
   ) {
     if (!priceListId) {
       return [];
     }
 
-    return this.prisma.priceListItem.findMany({
+    const matches = await this.prisma.priceListItem.findMany({
       where: {
         priceListId,
         presentation: {
           productId,
           active: true,
-          ...(presentationId ? { id: presentationId } : {}),
+          ...(hint.presentationId ? { id: hint.presentationId } : {}),
         },
         priceList: { active: true },
       },
@@ -213,6 +226,49 @@ export class PricingService {
       },
       orderBy: { presentation: { empaque: "asc" } },
     });
+
+    if (matches.length <= 1 || hint.presentationId) {
+      return matches;
+    }
+
+    const wanted = normalizeEmpaque(hint.presentation);
+    if (!wanted) {
+      return matches;
+    }
+
+    const byText = matches.filter(
+      (item) => normalizeEmpaque(item.presentation.empaque) === wanted,
+    );
+    return byText.length === 1 ? byText : matches;
+  }
+
+  /**
+   * El ítem de lista que aplica a esta línea, o null si el cliente no tiene
+   * lista / el producto no está en ella (→ se cae a basePrice).
+   *
+   * Si quedan varias presentaciones con precio y nadie dijo cuál, se rechaza
+   * la línea en vez de escoger. No hay precio correcto que adivinar: cada
+   * empaque vale distinto y el que se cotiza es el que se despacha.
+   */
+  private async requireSingleListMatch(
+    customer: PricingCustomer,
+    product: { id: string; name: string },
+    item: PricingItemInput,
+  ) {
+    const matches = await this.resolveListMatches(customer.priceListId, product.id, {
+      presentationId: item.presentationId,
+      presentation: item.presentation,
+    });
+
+    if (matches.length <= 1) {
+      return matches[0] ?? null;
+    }
+
+    const options = matches.map((match) => match.presentation.empaque).join(", ");
+    throw new BadRequestException(
+      `${product.name} tiene varias presentaciones con precio en la lista ` +
+        `${matches[0].priceList.name}: ${options}. Indica cuál con presentationId.`,
+    );
   }
 
   /**
@@ -247,11 +303,29 @@ export class PricingService {
             throw new NotFoundException(`Product ${item.productId} not found`);
           }
 
-          const basePrice = product.basePrice;
-          const unitPriceRounded = new Prisma.Decimal(basePrice)
-            .times(discountMultiplier)
-            .toDecimalPlaces(2);
-          const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
+          const listItem = await this.requireSingleListMatch(customer, product, item);
+
+          // El precio de lista ya es el negociado con este cliente: gana sobre
+          // basePrice y no lleva el descuento de segmento encima.
+          const usesList = listItem !== null && listItem.priceSinIva !== null;
+          const basePrice = usesList
+            ? new Prisma.Decimal(listItem.priceSinIva!)
+            : new Prisma.Decimal(product.basePrice);
+          const lineDiscount = usesList
+            ? new Prisma.Decimal(0)
+            : new Prisma.Decimal(effectiveDiscount);
+          const unitPriceRounded = usesList
+            ? basePrice.toDecimalPlaces(2)
+            : basePrice.times(discountMultiplier).toDecimalPlaces(2);
+
+          // El IVA de la lista manda sobre el 19% por defecto, que en este
+          // catálogo no existe (es 0%, 5% o 10%).
+          const lineTax =
+            mode === "order" && item.taxPercent === undefined && listItem?.taxPercent !== null
+              ? new Prisma.Decimal(listItem?.taxPercent ?? taxPercent).toDecimalPlaces(2)
+              : taxPercent;
+
+          const taxAmount = unitPriceRounded.times(lineTax).dividedBy(100).toDecimalPlaces(2);
           const subtotal = new Prisma.Decimal(item.quantity)
             .times(unitPriceRounded)
             .toDecimalPlaces(2);
@@ -265,15 +339,17 @@ export class PricingService {
             productSnapshotSku: product.sku,
             unit: product.unit,
             quantity: item.quantity,
-            originalUnitPrice: new Prisma.Decimal(basePrice),
-            discountPercent: new Prisma.Decimal(effectiveDiscount),
+            originalUnitPrice: basePrice,
+            discountPercent: lineDiscount,
             unitPrice: unitPriceRounded,
-            taxPercent,
+            taxPercent: lineTax,
             taxAmount,
             subtotal,
             totalWithTax,
             notes: item.notes,
-            productPresentation: product.presentation ?? null,
+            productPresentation:
+              listItem?.presentation.empaque ?? product.presentation ?? null,
+            priceListName: listItem?.priceList.name ?? null,
           };
         }
 
@@ -343,6 +419,8 @@ export class PricingService {
 
     const lines: PricedLine[] = result.rawItems.map((line) => ({
       productId: line.productId,
+      priceListName: line.priceListName ?? null,
+      presentation: line.productPresentation ?? null,
       originalUnitPrice: line.originalUnitPrice ? line.originalUnitPrice.toNumber() : null,
       discountPercent: line.discountPercent ? line.discountPercent.toNumber() : 0,
       unitPrice: line.unitPrice.toNumber(),
@@ -375,4 +453,9 @@ export class PricingService {
       discountAmount: discountAmount.toNumber(),
     };
   }
+}
+
+/** Empaques como "Bolsa x 500 g" vs "bolsa x 500 g" son el mismo. */
+function normalizeEmpaque(value: string | null | undefined): string {
+  return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 }

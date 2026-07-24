@@ -31,6 +31,13 @@ export interface PricingItemInput {
   unitPrice?: number | Prisma.Decimal;
   taxPercent?: number | Prisma.Decimal | null;
   notes?: string;
+  /** Presentación elegida. Es lo que desambigua el precio de lista. */
+  presentationId?: string | null;
+  /**
+   * Empaque en texto (lo que escribió el cliente por WhatsApp, p.ej.). Se usa
+   * como segundo intento cuando no viene `presentationId`.
+   */
+  presentation?: string | null;
 }
 
 export interface SegmentDiscountResolution {
@@ -42,6 +49,10 @@ export interface SegmentDiscountResolution {
 
 export interface PricedLine {
   productId: string | null;
+  /** Lista de la que salió el precio; null si vino de basePrice. */
+  priceListName: string | null;
+  /** Empaque cotizado, cuando el precio salió de una lista. */
+  presentation: string | null;
   originalUnitPrice: number | null;
   discountPercent: number;
   unitPrice: number;

@@ -13,6 +13,11 @@ export class CreateOrderItemDto {
   @IsString()
   presentation?: string;
 
+  /** Presentación elegida. Desambigua el precio cuando el cliente tiene lista. */
+  @IsOptional()
+  @IsString()
+  presentationId?: string;
+
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0.0001)
   quantity!: number;

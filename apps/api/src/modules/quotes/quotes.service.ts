@@ -36,6 +36,7 @@ export class QuotesService {
       productSnapshotName: line.productSnapshotName,
       productSnapshotSku: line.productSnapshotSku,
       unit: line.unit,
+      presentationSnapshot: line.productPresentation ?? null,
       quantity: line.quantity,
       originalUnitPrice: line.originalUnitPrice,
       discountPercent: line.discountPercent,

@@ -264,6 +264,17 @@ tocarla. Al agregar una línea de cotización, hoy se elige solo el producto. Co
 presentaciones eso ya no alcanza: el mismo producto en `Bolsa x 1 Kg` y en
 `Saco x 25 Kg.` son precios completamente distintos.
 
+**El backend ya cotiza por lista.** `priceLines` — la función que crea
+cotizaciones y pedidos — resuelve el precio de la lista del cliente antes de
+caer a `basePrice`. La respuesta de `POST /quotes/preview` trae por línea
+`priceListName` y `presentation` para que el front muestre de dónde salió cada
+precio.
+
+**Si la presentación es ambigua, la línea se rechaza con 400.** Cuando el
+cliente tiene lista y el producto tiene varios empaques con precio, no hay un
+precio correcto que adivinar: el mensaje lista los empaques y el front debe
+hacer elegir. Por eso el selector de presentación no es opcional.
+
 El backend resuelve el precio con `GET /products/:id/price-for-customer/:customerId`
 y responde una de tres cosas en el campo `source`:
 
@@ -298,9 +309,14 @@ presentación, se manda `?presentationId=…` y la respuesta vuelve a ser
 
 ## 5. Deuda conocida (contexto, no hay que diseñarlo)
 
-- **`Product.basePrice` quedó vestigial.** Existe porque el modelo viejo lo
-  exigía y hoy tiene un valor provisional. No debe aparecer en ninguna pantalla
-  nueva. Se elimina cuando cotización deje de usarlo.
+- **`Product.basePrice` es el fallback, ya no el precio.** Se usa solo cuando el
+  cliente no tiene lista, o el producto no está en ella. No debe aparecer en
+  ninguna pantalla nueva.
+- **Los pedidos que crea la automatización de WhatsApp** no mandan
+  `presentationId`. Si el producto es ambiguo para ese cliente, la creación
+  falla y la automatización ya lo degrada a `human_review` con el mensaje que
+  lista los empaques — que es el comportamiento correcto: mejor que lo revise
+  alguien a que salga despachado el empaque equivocado.
 - **Descuento de segmento vs precio de lista** — ya resuelto en el backend. El
   precio de lista gana y el descuento de segmento **no** se aplica encima: la
   lista ya es el precio negociado con ese cliente, descontarle otra vez sería

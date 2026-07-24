@@ -703,6 +703,9 @@ model QuoteItem {
   productSnapshotName String
   productSnapshotSku  String
   unit                String
+  // Qué empaque se cotizó: el precio sale del par (presentación, lista), así
+  // que sin esto la cotización no dice a qué se le puso precio.
+  presentationSnapshot String?
   quantity            Decimal  @db.Decimal(14, 4)
   originalUnitPrice   Decimal? @db.Decimal(14, 2)
   discountPercent     Decimal? @db.Decimal(5, 2)

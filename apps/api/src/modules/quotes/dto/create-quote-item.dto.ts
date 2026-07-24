@@ -5,6 +5,16 @@ export class CreateQuoteItemDto {
   @IsString()
   productId?: string;
 
+  /** Presentación elegida. Desambigua el precio cuando el cliente tiene lista. */
+  @IsOptional()
+  @IsString()
+  presentationId?: string;
+
+  /** Empaque en texto, para cuando no hay presentationId. */
+  @IsOptional()
+  @IsString()
+  presentation?: string;
+
   @IsNumber({ maxDecimalPlaces: 4 })
   @Min(0.0001)
   quantity!: number;
