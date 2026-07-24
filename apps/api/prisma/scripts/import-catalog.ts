@@ -52,11 +52,9 @@ export const deriveTaxPercent = (
   return Math.round((con / sin - 1) * 100);
 };
 
-// LEVANIA: el cliente confirmó "tener en cuenta solo el dólar" (ya son clientes
-// de otros países). Falta el xlsx para saber cuál columna es la USD → override.
-const SKIP_SHEETS = new Set(["LEVANIA"]);
-const USD_SHEETS = new Set(["GUATEMALA", "ECUADOR", "REDIVENCA"]);
-// País destino de las listas de exportación. El resto queda en Colombia.
+const SKIP_SHEETS = new Set<string>();
+const USD_SHEETS = new Set(["GUATEMALA", "ECUADOR", "REDIVENCA", "LEVANIA"]);
+// País destino. Las hojas en USD sin país conocido quedan en null (no se inventa).
 const COUNTRY: Record<string, string> = {
   GUATEMALA: "Guatemala",
   ECUADOR: "Ecuador",
@@ -86,6 +84,9 @@ type Override = {
 const OVERRIDES: Record<string, Override> = {
   // AQUAVET no tiene fila "Producto"; datos corridos a la derecha.
   AQUAVET: { dataStartRow: 5, productCol: 4, formCol: 5, empaqueCol: 6, priceCols: [10, 11] },
+  // LEVANIA trae 3 columnas de precio: 6 = COP, 7/8 = USD sin/con.
+  // El cliente confirmó "tener en cuenta solo el dólar" → se ignora la de pesos.
+  LEVANIA: { dataStartRow: 3, productCol: 2, formCol: 3, empaqueCol: 4, dosageCol: 5, priceCols: [7, 8] },
 };
 
 export type ParsedItem = {
@@ -265,7 +266,7 @@ async function run(filePath: string, dry: boolean) {
   for (const sheet of new Set(items.map((i) => i.sheet))) {
     const listData = {
       currency: USD_SHEETS.has(sheet) ? "USD" : "COP",
-      country: COUNTRY[sheet] ?? "Colombia",
+      country: COUNTRY[sheet] ?? (USD_SHEETS.has(sheet) ? null : "Colombia"),
       kind: KIND[sheet] ?? PriceListKind.cliente,
     };
     const list = await prisma.priceList.upsert({
