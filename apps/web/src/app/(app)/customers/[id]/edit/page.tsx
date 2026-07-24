@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { CustomerForm } from "@/components/customers/customer-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch } from "@/lib/api.server";
+import type { PriceListRef } from "@/lib/catalog";
 
 interface Segment {
   id: string;
@@ -18,6 +19,8 @@ interface Customer {
   address: string | null;
   city: string | null;
   department: string | null;
+  country: string | null;
+  priceListId: string | null;
   notes: string | null;
   segmentId: string | null;
   companyId: string | null;
@@ -36,11 +39,13 @@ export default async function CustomerEditPage({
 }) {
   const { id } = await params;
 
-  const [customerResponse, segmentsResponse, companiesResponse] = await Promise.all([
-    apiFetch(`/customers/${id}`),
-    apiFetch("/customer-segments"),
-    apiFetch("/companies"),
-  ]);
+  const [customerResponse, segmentsResponse, companiesResponse, priceListsResponse] =
+    await Promise.all([
+      apiFetch(`/customers/${id}`),
+      apiFetch("/customer-segments"),
+      apiFetch("/companies"),
+      apiFetch("/price-lists"),
+    ]);
 
   if (!customerResponse.ok) {
     notFound();
@@ -51,6 +56,9 @@ export default async function CustomerEditPage({
     ? await segmentsResponse.json()
     : [];
   const companies = companiesResponse.ok ? await companiesResponse.json() : [];
+  const priceLists: PriceListRef[] = priceListsResponse.ok
+    ? await priceListsResponse.json()
+    : [];
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -60,7 +68,12 @@ export default async function CustomerEditPage({
         description={customer.displayName}
       />
 
-      <CustomerForm segments={segments} companies={companies} customer={customer} />
+      <CustomerForm
+        segments={segments}
+        companies={companies}
+        priceLists={priceLists}
+        customer={customer}
+      />
     </div>
   );
 }

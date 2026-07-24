@@ -104,9 +104,11 @@ interface Customer {
   address: string | null;
   city: string | null;
   department: string | null;
+  country: string | null;
   notes: string | null;
   company: { id: string; name: string } | null;
   segment: Segment | null;
+  priceList: { id: string; name: string; currency: string } | null;
   contacts: Contact[];
   opportunities: Opportunity[];
   visits: Visit[];
@@ -319,7 +321,15 @@ export default async function CustomerDetailPage({
           { label: "Direccion", value: customer.address ?? "—" },
           { label: "Ciudad", value: customer.city ?? "—" },
           { label: "Departamento", value: customer.department ?? "—" },
+          { label: "Pais", value: customer.country ?? "—" },
           { label: "Segmento", value: customer.segment?.name ?? "—" },
+          {
+            // Sin lista, se cotiza con precio base + descuento de segmento.
+            label: "Lista de precios",
+            value: customer.priceList
+              ? `${customer.priceList.name} · ${customer.priceList.currency}`
+              : "Sin asignar — usa precio base",
+          },
           {
             label: "Notas",
             value: customer.notes ?? "—",

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
+import type { PriceListRef } from "@/lib/catalog";
 import { UserSelect } from "@/components/users/user-select";
 
 interface Segment {
@@ -25,6 +26,8 @@ interface Customer {
   address: string | null;
   city: string | null;
   department: string | null;
+  country: string | null;
+  priceListId: string | null;
   notes: string | null;
   segmentId: string | null;
   companyId: string | null;
@@ -39,6 +42,7 @@ interface Customer {
 interface CustomerFormProps {
   segments: Segment[];
   companies: { id: string; name: string }[];
+  priceLists?: PriceListRef[];
   customer?: Customer;
 }
 
@@ -56,11 +60,34 @@ function periodPlaceholder(periodType: string): string {
   }
 }
 
-export function CustomerForm({ segments, companies, customer }: CustomerFormProps) {
+export function CustomerForm({
+  segments,
+  companies,
+  priceLists = [],
+  customer,
+}: CustomerFormProps) {
   const router = useRouter();
   const isEditing = Boolean(customer);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const [country, setCountry] = useState(customer?.country ?? "Colombia");
+  const [priceListId, setPriceListId] = useState(customer?.priceListId ?? "");
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
+
+  // El país solo SUGIERE la lista, nunca la cambia solo: asignarla altera lo
+  // que se le cobra al cliente, y eso lo decide una persona.
+  const suggestedList = priceLists.find(
+    (list) =>
+      list.country &&
+      country.trim().toLowerCase() === list.country.toLowerCase() &&
+      list.kind === "export",
+  );
+  const showSuggestion =
+    Boolean(suggestedList) && suggestedList?.id !== priceListId && !suggestionDismissed;
+  const countryOptions = [
+    ...new Set(["Colombia", ...priceLists.map((list) => list.country).filter(Boolean)]),
+  ] as string[];
 
   const [hasInitialGoal, setHasInitialGoal] = useState(false);
   const [initialGoalPeriodType, setInitialGoalPeriodType] = useState("anual");
@@ -89,6 +116,8 @@ export function CustomerForm({ segments, companies, customer }: CustomerFormProp
       address: optionalString("address"),
       city: optionalString("city"),
       department: optionalString("department"),
+      country: country.trim() || undefined,
+      priceListId: priceListId || undefined,
       notes: optionalString("notes"),
       segmentId: String(formData.get("segmentId")),
       companyId: String(formData.get("companyId")),
@@ -244,6 +273,79 @@ export function CustomerForm({ segments, companies, customer }: CustomerFormProp
       <div className="grid gap-1">
         <Label>Direccion</Label>
         <Input name="address" type="text" defaultValue={customer?.address ?? ""} />
+      </div>
+
+      <div className="rounded-[11px] border border-border bg-card px-5 py-[18px]">
+        <div className="text-[14.5px] font-extrabold text-foreground">Precios y facturación</div>
+        <p className="mt-1 mb-4 text-xs text-muted-foreground">
+          La lista asignada determina a qué precio se cotiza. El país nunca la cambia solo —
+          solo sugiere.
+        </p>
+
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          <div className="grid gap-1">
+            <Label>País</Label>
+            <Input
+              list="customer-country-options"
+              value={country}
+              onChange={(event) => {
+                setCountry(event.target.value);
+                setSuggestionDismissed(false);
+              }}
+            />
+            <datalist id="customer-country-options">
+              {countryOptions.map((option) => (
+                <option key={option} value={option} />
+              ))}
+            </datalist>
+          </div>
+          <div className="grid gap-1">
+            <Label>Lista de precios</Label>
+            <select
+              className={selectClasses}
+              value={priceListId}
+              onChange={(event) => setPriceListId(event.target.value)}
+            >
+              <option value="">Sin asignar — usa precio base</option>
+              {priceLists.map((list) => (
+                <option key={list.id} value={list.id}>
+                  {list.name} · {list.kind} · {list.currency}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {showSuggestion && suggestedList ? (
+          <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-[10px] border border-[#bcdcf0] bg-[#e4f1f9] px-3.5 py-3">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[#0288c4]" />
+            <span className="flex-1 text-[12.5px] leading-snug text-[#3f6a86]">
+              El país es <b>{suggestedList.country}</b>. Existe la lista{" "}
+              <b>{suggestedList.name}</b> ({suggestedList.kind} · {suggestedList.currency}).
+              ¿Asignarla a este cliente?
+            </span>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => setPriceListId(suggestedList.id)}
+                className="h-[30px] rounded-[7px] bg-[#0f5c8a] px-3 text-xs font-bold text-white"
+              >
+                Asignar {suggestedList.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => setSuggestionDismissed(true)}
+                className="h-[30px] rounded-[7px] border border-[#bcdcf0] bg-card px-2.5 text-xs font-bold text-[#3f6a86]"
+              >
+                Ahora no
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        <p className="mt-3 text-[11.5px] text-muted-foreground">
+          Sin lista asignada, las cotizaciones usan precio base + descuento de segmento.
+        </p>
       </div>
 
       <div className="grid gap-1">
