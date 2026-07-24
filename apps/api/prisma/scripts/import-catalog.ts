@@ -281,8 +281,8 @@ async function run(filePath: string, dry: boolean) {
       const [p1, p2, p3] = it.prices;
       await prisma.priceListItem.upsert({
         where: { priceListId_presentationId: { priceListId: list.id, presentationId } },
-        update: itemData(it, p1, p2, p3),
-        create: { priceListId: list.id, presentationId, ...itemData(it, p1, p2, p3) },
+        update: itemData(p1, p2, p3),
+        create: { priceListId: list.id, presentationId, ...itemData(p1, p2, p3) },
       });
     }
   }
@@ -292,7 +292,7 @@ async function run(filePath: string, dry: boolean) {
   return { report, customerLinks };
 }
 
-function itemData(it: ParsedItem, p1: any, p2: any, p3: any) {
+function itemData(p1: any, p2: any, p3: any) {
   return {
     priceSinIva: p1?.sin ?? null,
     priceConIva: p1?.con ?? null,
