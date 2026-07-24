@@ -23,6 +23,39 @@ describe("Products", () => {
   const customerId = "customer-id";
   const discountCustomerId = "discount-customer-id";
   const goalMissCustomerId = "goal-miss-customer-id";
+  // Cliente con lista negociada. Tiene además 5% de descuento de segmento y
+  // cumple la meta: el precio de lista debe ignorarlo igual.
+  const listCustomerId = "list-customer-id";
+  const ambiguousCustomerId = "ambiguous-customer-id";
+  const listPriceItems = [
+    {
+      priceListId: "list-1",
+      presentationId: "presentation-a",
+      priceSinIva: new Prisma.Decimal(84238.1),
+      priceConIva: new Prisma.Decimal(88450),
+      taxPercent: new Prisma.Decimal(5),
+      priceList: { name: "AVSA", currency: "COP" },
+      presentation: { empaque: "Bolsa x 500 g", form: "Polvo soluble" },
+    },
+    {
+      priceListId: "list-2",
+      presentationId: "presentation-b",
+      priceSinIva: new Prisma.Decimal(156400),
+      priceConIva: new Prisma.Decimal(164220),
+      taxPercent: new Prisma.Decimal(5),
+      priceList: { name: "CALASAN", currency: "COP" },
+      presentation: { empaque: "Bolsa x 1 Kg", form: "Polvo soluble" },
+    },
+    {
+      priceListId: "list-2",
+      presentationId: "presentation-c",
+      priceSinIva: new Prisma.Decimal(2350554),
+      priceConIva: new Prisma.Decimal(2468081.7),
+      taxPercent: new Prisma.Decimal(5),
+      priceList: { name: "CALASAN", currency: "COP" },
+      presentation: { empaque: "Saco x 25 Kg.", form: "Premix" },
+    },
+  ];
 
   beforeAll(async () => {
     moduleRef = await Test.createTestingModule({
@@ -60,10 +93,19 @@ describe("Products", () => {
         refreshToken: refreshTokenStub(),
         customer: {
           findUnique: async ({ where: { id }, include }: { where: { id: string }; include?: Record<string, boolean> }) => {
-            if (id !== customerId && id !== discountCustomerId && id !== goalMissCustomerId) {
+            const known = [
+              customerId,
+              discountCustomerId,
+              goalMissCustomerId,
+              listCustomerId,
+              ambiguousCustomerId,
+            ];
+            if (!known.includes(id)) {
               return null;
             }
-            const result: Record<string, unknown> = { id };
+            const result: Record<string, unknown> = { id, priceListId: null };
+            if (id === listCustomerId) result.priceListId = "list-1";
+            if (id === ambiguousCustomerId) result.priceListId = "list-2";
             if (include?.segment) {
               result.segment = {
                 discountPercent: id === customerId ? 0 : 5,
@@ -74,6 +116,19 @@ describe("Products", () => {
             }
             return result;
           },
+        },
+        priceListItem: {
+          findMany: async ({
+            where,
+          }: {
+            where: { priceListId: string; presentation: { id?: string } };
+          }) =>
+            listPriceItems.filter(
+              (item) =>
+                item.priceListId === where.priceListId &&
+                (where.presentation.id === undefined ||
+                  item.presentationId === where.presentation.id),
+            ),
         },
         order: {
           aggregate: async ({ where }: { where: { customerId: string } }) => ({
@@ -88,9 +143,20 @@ describe("Products", () => {
                 { code: "P2002", clientVersion: "test", meta: { target: ["sku"] } },
               );
             }
+            // `presentations` llega como nested create de Prisma; el stub lo
+            // aplana al array que devolvería el include.
+            const { presentations, ...scalars } = data as {
+              presentations?: { create: Record<string, unknown>[] };
+            } & Record<string, unknown>;
             const product = {
               id: `product-${products.length + 1}`,
-              ...data,
+              ...scalars,
+              presentations: (presentations?.create ?? []).map((p, index) => ({
+                id: `presentation-${products.length + 1}-${index + 1}`,
+                productId: `product-${products.length + 1}`,
+                ...p,
+                priceItems: [],
+              })),
               createdAt: new Date("2026-04-29T00:00:00.000Z"),
               updatedAt: new Date("2026-04-29T00:00:00.000Z"),
             };
@@ -101,13 +167,17 @@ describe("Products", () => {
           // real: the service passes `where: { active: true }` by default and
           // `where: undefined` when includeInactive is set.
           findMany: async ({ where }: { where?: { active?: boolean } } = {}) =>
-            products.filter(
-              (p) =>
-                where?.active === undefined ||
-                ((p as { active?: boolean }).active ?? true) === where.active,
-            ),
-          findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-            products.find((p) => (p as { id: string }).id === id) ?? null,
+            products
+              .filter(
+                (p) =>
+                  where?.active === undefined ||
+                  ((p as { active?: boolean }).active ?? true) === where.active,
+              )
+              .map((p) => ({ presentations: [], ...p })),
+          findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+            const product = products.find((p) => (p as { id: string }).id === id);
+            return product ? { presentations: [], ...product } : null;
+          },
         },
       })
       .compile();
@@ -246,6 +316,91 @@ describe("Products", () => {
     expect(response.body.meetsGoal).toBe(false);
     expect(Number(response.body.discountPercent)).toBe(0);
     expect(response.body.finalPrice).toBe("200000");
+  });
+
+  it("prefers the customer's price list over basePrice, with no segment discount on top", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ sku: "CAT-ACETECH", name: "ACE TECH", unit: "Polvo soluble", basePrice: 999999 })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get(`/products/${productResponse.body.id}/price-for-customer/${listCustomerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(response.body.source).toBe("price_list");
+    expect(response.body.priceListName).toBe("AVSA");
+    expect(response.body.currency).toBe("COP");
+    expect(response.body.empaque).toBe("Bolsa x 500 g");
+    // El precio negociado gana sobre basePrice…
+    expect(Number(response.body.finalPrice)).toBe(84238.1);
+    // …y el 5% del segmento NO se aplica encima: descontaría dos veces sobre
+    // un precio que el cliente ya acordó.
+    expect(Number(response.body.discountPercent)).toBe(0);
+    expect(Number(response.body.taxPercent)).toBe(5);
+  });
+
+  it("asks which presentation when the product has several priced in the list", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ sku: "CAT-DYSENTECH", name: "DYSENTECH", unit: "Polvo soluble", basePrice: 1 })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get(`/products/${productResponse.body.id}/price-for-customer/${ambiguousCustomerId}`)
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    // Elegir una al azar cotizaría un empaque distinto al que se despacha.
+    expect(response.body.source).toBe("ambiguous");
+    expect(response.body.options).toHaveLength(2);
+    expect(response.body.options.map((o: { empaque: string }) => o.empaque)).toEqual([
+      "Bolsa x 1 Kg",
+      "Saco x 25 Kg.",
+    ]);
+    expect(response.body.finalPrice).toBeUndefined();
+  });
+
+  it("prices the chosen presentation when the caller disambiguates", async () => {
+    const productResponse = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({ sku: "CAT-SILYTECH", name: "SILYTECH", unit: "Premix", basePrice: 1 })
+      .expect(201);
+
+    const response = await request(globalThis.__APP__)
+      .get(`/products/${productResponse.body.id}/price-for-customer/${ambiguousCustomerId}`)
+      .query({ presentationId: "presentation-c" })
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .expect(200);
+
+    expect(response.body.source).toBe("price_list");
+    expect(response.body.empaque).toBe("Saco x 25 Kg.");
+    expect(Number(response.body.finalPrice)).toBe(2350554);
+  });
+
+  it("creates a product with its presentations", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/products")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        sku: "CAT-HYDRATECH",
+        name: "HYDRATECH",
+        unit: "Polvo gelificante",
+        presentations: [
+          { empaque: "Saco x 20 Kg.", form: "Polvo gelificante", dosage: "6,66g/ 100 animales" },
+          { empaque: "Bolsa x 1 Kg" },
+        ],
+      })
+      .expect(201);
+
+    expect(response.body.presentations).toHaveLength(2);
+    expect(response.body.presentations[0].empaque).toBe("Saco x 20 Kg.");
+    // basePrice es vestigial: se puede crear un producto sin él.
+    expect(Number(response.body.basePrice)).toBe(0);
   });
 
   it("returns 404 for invalid product in price-for-customer", async () => {

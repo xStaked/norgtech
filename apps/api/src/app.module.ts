@@ -15,6 +15,7 @@ import { CustomerSegmentsModule } from "./modules/customer-segments/customer-seg
 import { DashboardModule } from "./modules/dashboard/dashboard.module";
 import { CustomersModule } from "./modules/customers/customers.module";
 import { OpportunitiesModule } from "./modules/opportunities/opportunities.module";
+import { PriceListsModule } from "./modules/price-lists/price-lists.module";
 import { ProductsModule } from "./modules/products/products.module";
 import { FollowUpTasksModule } from "./modules/follow-up-tasks/follow-up-tasks.module";
 import { OrdersModule } from "./modules/orders/orders.module";
@@ -49,6 +50,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     NotificationsModule,
     CustomersModule,
     OpportunitiesModule,
+    PriceListsModule,
     ProductsModule,
     PricingModule,
     QuotesModule,

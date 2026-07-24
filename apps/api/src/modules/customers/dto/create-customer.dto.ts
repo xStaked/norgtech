@@ -70,6 +70,16 @@ export class CreateCustomerDto {
 
   @IsOptional()
   @IsString()
+  country?: string;
+
+  /** Lista de precios negociada. Si la tiene, gana sobre el precio base. */
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  priceListId?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsString()

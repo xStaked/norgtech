@@ -7,6 +7,7 @@ import {
   PricingItemInput,
   PricingMode,
   PricingPreview,
+  PriceSource,
   SegmentDiscountResolution,
 } from "./pricing.types";
 
@@ -99,6 +100,119 @@ export class PricingService {
       salesYTD,
       goalThreshold,
     };
+  }
+
+  /**
+   * Precio efectivo de un producto para un cliente.
+   *
+   * El precio de lista es el precio ya negociado con ese cliente, así que gana
+   * sobre `basePrice` y NO lleva el descuento de segmento encima: aplicárselo
+   * sería descontar dos veces sobre un precio que el cliente ya acordó.
+   *
+   * Sin lista (o si el producto no está en ella) se cae al comportamiento
+   * histórico: basePrice × descuento de segmento condicionado a la meta.
+   */
+  async resolvePrice(
+    customer: PricingCustomer,
+    product: { id: string; basePrice: Prisma.Decimal },
+    presentationId?: string,
+  ) {
+    const matches = await this.findListPrices(customer.priceListId, product.id, presentationId);
+
+    if (matches.length > 1) {
+      return {
+        productId: product.id,
+        customerId: customer.id,
+        source: "ambiguous" as PriceSource,
+        priceListId: customer.priceListId ?? null,
+        priceListName: matches[0].priceList.name,
+        currency: matches[0].priceList.currency,
+        // El producto tiene varias presentaciones con precio en esta lista;
+        // quien cotiza elige. Devolver una al azar cotizaría un empaque
+        // distinto al que se va a despachar.
+        options: matches.map((item) => ({
+          presentationId: item.presentationId,
+          empaque: item.presentation.empaque,
+          form: item.presentation.form,
+          priceSinIva: item.priceSinIva,
+          priceConIva: item.priceConIva,
+          taxPercent: item.taxPercent,
+        })),
+      };
+    }
+
+    const match = matches[0];
+    if (match && match.priceSinIva !== null) {
+      return {
+        productId: product.id,
+        customerId: customer.id,
+        source: "price_list" as PriceSource,
+        priceListId: match.priceListId,
+        priceListName: match.priceList.name,
+        currency: match.priceList.currency,
+        presentationId: match.presentationId,
+        empaque: match.presentation.empaque,
+        basePrice: product.basePrice,
+        priceSinIva: match.priceSinIva,
+        priceConIva: match.priceConIva,
+        taxPercent: match.taxPercent,
+        discountPercent: new Prisma.Decimal(0),
+        finalPrice: match.priceSinIva,
+      };
+    }
+
+    const { discountPercent, meetsGoal, salesYTD, goalThreshold } =
+      await this.resolveSegmentDiscount(customer);
+
+    const discountMultiplier = new Prisma.Decimal(1).minus(
+      new Prisma.Decimal(discountPercent).dividedBy(100),
+    );
+
+    return {
+      productId: product.id,
+      customerId: customer.id,
+      source: "base_price" as PriceSource,
+      basePrice: product.basePrice,
+      discountPercent,
+      finalPrice: new Prisma.Decimal(product.basePrice)
+        .times(discountMultiplier)
+        .toDecimalPlaces(2),
+      meetsGoal,
+      salesYTD,
+      goalThreshold,
+    };
+  }
+
+  /**
+   * Ítems de la lista del cliente que corresponden a este producto. Con
+   * `presentationId` es a lo sumo uno; sin él pueden ser varios (el producto
+   * tiene varios empaques con precio en esa lista).
+   */
+  private async findListPrices(
+    priceListId: string | null | undefined,
+    productId: string,
+    presentationId?: string,
+  ) {
+    if (!priceListId) {
+      return [];
+    }
+
+    return this.prisma.priceListItem.findMany({
+      where: {
+        priceListId,
+        presentation: {
+          productId,
+          active: true,
+          ...(presentationId ? { id: presentationId } : {}),
+        },
+        priceList: { active: true },
+      },
+      include: {
+        priceList: { select: { name: true, currency: true } },
+        presentation: { select: { empaque: true, form: true } },
+      },
+      orderBy: { presentation: { empaque: "asc" } },
+    });
   }
 
   /**

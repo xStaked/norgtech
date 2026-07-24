@@ -39,6 +39,8 @@ export class CustomersService {
             address: dto.address,
             city: dto.city,
             department: dto.department,
+            country: dto.country,
+            priceListId: dto.priceListId,
             notes: dto.notes,
             segmentId: dto.segmentId,
             companyId: dto.companyId,
@@ -208,6 +210,8 @@ export class CustomersService {
           ...(dto.address !== undefined && { address: dto.address }),
           ...(dto.city !== undefined && { city: dto.city }),
           ...(dto.department !== undefined && { department: dto.department }),
+          ...(dto.country !== undefined && { country: dto.country }),
+          ...(dto.priceListId !== undefined && { priceListId: dto.priceListId }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
           ...(dto.segmentId !== undefined && { segmentId: dto.segmentId }),
           ...(dto.companyId !== undefined && { companyId: dto.companyId }),
@@ -318,6 +322,8 @@ export class CustomersService {
       include: {
         segment: true,
         company: true,
+        // La lista determina a qué precio se le cotiza; el detalle la muestra.
+        priceList: true,
         contacts: {
           orderBy: [{ isPrimary: "desc" }, { createdAt: "desc" }],
         },

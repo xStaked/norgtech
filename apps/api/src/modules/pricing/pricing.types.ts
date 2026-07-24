@@ -11,7 +11,19 @@ export interface PricingCustomerSegment {
 export interface PricingCustomer {
   id: string;
   segment: PricingCustomerSegment | null;
+  /** Lista de precios negociada. Si existe, gana sobre basePrice + descuento. */
+  priceListId?: string | null;
 }
+
+/**
+ * De dónde salió el precio:
+ * - `price_list`: precio negociado del cliente. Es final, no lleva descuento.
+ * - `base_price`: no hay lista (o el producto no está en ella) → basePrice
+ *   con el descuento de segmento condicionado a la meta, como siempre.
+ * - `ambiguous`: hay lista y el producto tiene varias presentaciones con
+ *   precio en ella. Quien cotiza debe elegir cuál; `options` las trae.
+ */
+export type PriceSource = "price_list" | "base_price" | "ambiguous";
 
 export interface PricingItemInput {
   productId?: string | null;

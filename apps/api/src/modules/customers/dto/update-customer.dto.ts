@@ -45,6 +45,15 @@ export class UpdateCustomerDto {
 
   @IsOptional()
   @IsString()
+  country?: string;
+
+  /** Lista de precios negociada. Si la tiene, gana sobre el precio base. */
+  @IsOptional()
+  @IsString()
+  priceListId?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 
   @IsOptional()
