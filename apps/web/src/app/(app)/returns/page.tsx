@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -94,7 +95,12 @@ const columns: readonly DataTableColumn<ReturnRow>[] = [
   },
 ] as const;
 
-export default async function ReturnsPage() {
+export default async function ReturnsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const [response, user] = await Promise.all([apiFetch("/returns"), getCurrentUser()]);
 
   const returns: ReturnItem[] = response.ok ? await response.json() : [];
@@ -111,9 +117,14 @@ export default async function ReturnsPage() {
     invoiceId: item.invoice?.id ?? null,
   }));
 
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.customerName, row.reason, row.invoiceNumber],
+    match: { creditNote: (row) => (row.invoiceId ? "si" : "no") },
+  });
+
   const totalAmount = rows.reduce((sum, row) => sum + row.amount, 0);
+  const filteredAmount = filtered.reduce((sum, row) => sum + row.amount, 0);
   const withCreditNote = rows.filter((row) => row.invoiceId).length;
-  const filterSummary = `${rows.length.toLocaleString("es-CO")} devoluciones - Total: ${formatCurrency(totalAmount)}`;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -144,7 +155,23 @@ export default async function ReturnsPage() {
         />
       </div>
 
-      <FilterBar summary={filterSummary} />
+      <ListFilters
+        searchPlaceholder="Buscar por cliente, motivo o factura"
+        selects={[
+          {
+            key: "creditNote",
+            allLabel: "Con y sin nota crédito",
+            options: [
+              { value: "si", label: "Con nota crédito" },
+              { value: "no", label: "Sin nota crédito" },
+            ],
+          },
+        ]}
+        shown={filtered.length}
+        total={rows.length}
+        noun="devoluciones"
+        summaryExtra={`Total: ${formatCurrency(filteredAmount)}`}
+      />
 
       <SectionCard
         title="Devoluciones"
@@ -152,7 +179,7 @@ export default async function ReturnsPage() {
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

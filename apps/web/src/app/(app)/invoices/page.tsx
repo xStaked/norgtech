@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, param, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -170,10 +171,20 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const queryString = buildQueryString(params);
+  // Solo lo que el DTO del API acepta: manda un parametro extra (p.ej. search) y
+  // la validacion responde 400 y la lista se vacia.
+  const queryString = buildQueryString({
+    status: param(params, "status"),
+    companyId: param(params, "companyId"),
+    customerId: param(params, "customerId"),
+    orderId: param(params, "orderId"),
+    from: param(params, "from"),
+    to: param(params, "to"),
+    overdue: param(params, "overdue"),
+  });
   const listPath = queryString ? `/invoices?${queryString}` : "/invoices";
 
   const [response, user] = await Promise.all([
@@ -199,8 +210,11 @@ export default async function InvoicesPage({
     companyPrefix: invoice.company?.prefix ?? null,
   }));
 
-  const totalBalance = rows.reduce((sum, row) => sum + row.balance, 0);
-  const filterSummary = `${rows.length.toLocaleString("es-CO")} facturas - Saldo pendiente: ${formatCurrency(totalBalance)}`;
+  // El estado ya viene filtrado del API; la busqueda recorta aqui.
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.invoiceNumber, row.customerName, row.companyName],
+  });
+  const totalBalance = filtered.reduce((sum, row) => sum + row.balance, 0);
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -251,7 +265,24 @@ export default async function InvoicesPage({
         />
       </div>
 
-      <FilterBar summary={filterSummary} />
+      <ListFilters
+        searchPlaceholder="Buscar por número, cliente o empresa"
+        selects={[
+          {
+            key: "status",
+            allLabel: "Todos los estados",
+            options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+          },
+          {
+            key: "overdue",
+            allLabel: "Vencidas y al día",
+            options: [{ value: "true", label: "Solo vencidas" }],
+          },
+        ]}
+        shown={filtered.length}
+        noun="facturas"
+        summaryExtra={`Saldo pendiente: ${formatCurrency(totalBalance)}`}
+      />
 
       <SectionCard
         title="Facturas"
@@ -259,7 +290,7 @@ export default async function InvoicesPage({
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

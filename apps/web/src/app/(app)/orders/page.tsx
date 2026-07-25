@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, optionsFrom, param, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -158,13 +159,15 @@ function countByStatus(rows: OrderRow[], status: string) {
 export default async function OrdersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; companyId?: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
-  const { status, companyId } = await searchParams;
-  const params = new URLSearchParams();
-  if (status) params.set("status", status as string);
-  if (companyId) params.set("companyId", companyId as string);
-  const apiPath = params.toString() ? `/orders?${params.toString()}` : "/orders";
+  const params = await searchParams;
+  const status = param(params, "status");
+  const companyId = param(params, "companyId");
+  const apiQuery = new URLSearchParams();
+  if (status) apiQuery.set("status", status);
+  if (companyId) apiQuery.set("companyId", companyId);
+  const apiPath = apiQuery.toString() ? `/orders?${apiQuery.toString()}` : "/orders";
   const response = await apiFetch(apiPath);
   const orders: Order[] = response.ok ? await response.json() : [];
 
@@ -184,9 +187,11 @@ export default async function OrdersPage({
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
-  const filterSummary = status
-    ? `${rows.length.toLocaleString("es-CO")} pedidos en estado "${statusLabels[status] ?? status}"`
-    : `${rows.length.toLocaleString("es-CO")} pedidos registrados`;
+  // El estado ya viene filtrado del API; la busqueda y la empresa recortan aqui.
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.customerName],
+    match: { companyName: (row) => row.companyName },
+  });
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -221,17 +226,23 @@ export default async function OrdersPage({
         <StatCard label="Entregados" value={countByStatus(rows, "entregado")} tone="success" />
       </div>
 
-      <FilterBar summary={filterSummary}>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <FilterLink label="Todos" active={!status} href="/orders" />
-          <FilterLink label="Recibido" active={status === "recibido"} href="/orders?status=recibido" />
-          <FilterLink label="Orden facturación" active={status === "orden_facturacion"} href="/orders?status=orden_facturacion" />
-          <FilterLink label="Facturado" active={status === "facturado"} href="/orders?status=facturado" />
-          <FilterLink label="Despachado" active={status === "despachado"} href="/orders?status=despachado" />
-          <FilterLink label="En tránsito" active={status === "en_transito"} href="/orders?status=en_transito" />
-          <FilterLink label="Entregado" active={status === "entregado"} href="/orders?status=entregado" />
-        </div>
-      </FilterBar>
+      <ListFilters
+        searchPlaceholder="Buscar por cliente"
+        selects={[
+          {
+            key: "status",
+            allLabel: "Todos los estados",
+            options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+          },
+          {
+            key: "companyName",
+            allLabel: "Todas las empresas",
+            options: optionsFrom(rows, (row) => row.companyName),
+          },
+        ]}
+        shown={filtered.length}
+        noun="pedidos"
+      />
 
       <SectionCard
         title="Cola de pedidos"
@@ -239,7 +250,7 @@ export default async function OrdersPage({
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState
@@ -251,25 +262,5 @@ export default async function OrdersPage({
         />
       </SectionCard>
     </div>
-  );
-}
-
-function FilterLink({ label, active, href }: { label: string; active: boolean; href: string }) {
-  return (
-    <Link
-      href={href}
-      style={{
-        padding: "6px 12px",
-        borderRadius: 8,
-        fontSize: 13,
-        fontWeight: 600,
-        textDecoration: "none",
-        backgroundColor: active ? "#0c2c44" : "#eef3f8",
-        color: active ? "#ffffff" : "#44556e",
-        border: `1px solid ${active ? "#0c2c44" : "#dbe4ef"}`,
-      }}
-    >
-      {label}
-    </Link>
   );
 }

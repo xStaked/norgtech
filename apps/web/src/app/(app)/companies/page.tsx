@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -64,11 +65,20 @@ const columns: readonly DataTableColumn<CompanyRow>[] = [
   },
 ] as const;
 
-export default async function CompaniesPage() {
+export default async function CompaniesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const response = await apiFetch("/companies?includeInactive=true");
   const companies: Company[] = response.ok ? await response.json() : [];
 
   const rows: CompanyRow[] = companies;
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.name, row.legalName, row.nit, row.prefix],
+    match: { active: (row) => String(row.isActive) },
+  });
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -79,12 +89,27 @@ export default async function CompaniesPage() {
         actions={<ButtonLink href="/companies/new">Nueva empresa</ButtonLink>}
       />
 
-      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} empresas registradas`} />
+      <ListFilters
+        searchPlaceholder="Buscar por nombre, NIT o prefijo"
+        selects={[
+          {
+            key: "active",
+            allLabel: "Todos los estados",
+            options: [
+              { value: "true", label: "Activas" },
+              { value: "false", label: "Inactivas" },
+            ],
+          },
+        ]}
+        shown={filtered.length}
+        total={rows.length}
+        noun="empresas"
+      />
 
       <SectionCard title="Catalogo de empresas" description="Gestiona las empresas facturadoras disponibles en pedidos y facturas.">
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

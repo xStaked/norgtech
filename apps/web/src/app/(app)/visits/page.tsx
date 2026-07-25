@@ -2,12 +2,13 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, param, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { crmTheme, type CrmStatusTone } from "@/components/ui/theme";
+import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 import { dateTimeFormatter } from "@/lib/datetime";
 import { getCurrentUser } from "@/lib/auth.server";
@@ -131,10 +132,10 @@ const filterConfig: { key: FilterKey; label: string; param?: string }[] = [
 export default async function VisitsPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const activeFilter = (typeof params.filter === "string" ? params.filter : "all") as FilterKey;
+  const activeFilter = (param(params, "filter") ?? "all") as FilterKey;
 
   const filterParam = filterConfig.find((f) => f.key === activeFilter)?.param;
   const apiPath = filterParam ? `/visits?${filterParam}` : "/visits";
@@ -168,6 +169,11 @@ export default async function VisitsPage({
     isOverdue: visit.isOverdue,
   }));
 
+  // El filtro rapido ya viene aplicado del API; la busqueda recorta aqui.
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.customerName, row.summary],
+  });
+
   return (
     <div style={{ display: "grid", gap: 24 }}>
       <PageHeader
@@ -197,33 +203,19 @@ export default async function VisitsPage({
         <StatCard label="No realizadas" value={countByStatus(allRows, "no_realizada")} tone="neutral" />
       </div>
 
-      <FilterBar
-        summary={`${rows.length.toLocaleString("es-CO")} visitas registradas`}
-        actions={
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {filterConfig.map((f) => {
-              const isActive = activeFilter === f.key;
-              return (
-                <Link
-                  key={f.key}
-                  href={f.key === "all" ? "/visits" : `/visits?filter=${f.key}`}
-                  style={{
-                    padding: "6px 12px",
-                    borderRadius: crmTheme.radius.md,
-                    background: isActive ? crmTheme.colors.primary : crmTheme.colors.surfaceMuted,
-                    color: isActive ? "#fff" : crmTheme.colors.textMuted,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    textDecoration: "none",
-                    transition: "background 160ms ease, color 160ms ease",
-                  }}
-                >
-                  {f.label}
-                </Link>
-              );
-            })}
-          </div>
-        }
+      <ListFilters
+        searchPlaceholder="Buscar por cliente o resumen"
+        selects={[
+          {
+            key: "filter",
+            allLabel: "Todas",
+            options: filterConfig
+              .filter((f) => f.key !== "all")
+              .map((f) => ({ value: f.key, label: f.label })),
+          },
+        ]}
+        shown={filtered.length}
+        noun="visitas"
       />
 
       <SectionCard
@@ -232,7 +224,7 @@ export default async function VisitsPage({
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

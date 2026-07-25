@@ -5,6 +5,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardDescription, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, type SearchParams } from "@/lib/list-filter";
 
 interface Segment {
   id: string;
@@ -25,9 +27,19 @@ function formatGoalRange(min: number, max: number | null): string {
   return `Meta: ${minFormatted} - ${maxFormatted}`;
 }
 
-export default async function SegmentsPage() {
+export default async function SegmentsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const response = await apiFetch("/customer-segments");
-  const segments: Segment[] = response.ok ? await response.json() : [];
+  const all: Segment[] = response.ok ? await response.json() : [];
+
+  const segments = applyFilters(all, params, {
+    search: (segment) => [segment.name, segment.description],
+    match: { active: (segment) => String(segment.active) },
+  });
 
   return (
     <div className="space-y-6">
@@ -43,8 +55,31 @@ export default async function SegmentsPage() {
         }
       />
 
+      <ListFilters
+        searchPlaceholder="Buscar por nombre o descripción"
+        selects={[
+          {
+            key: "active",
+            allLabel: "Todos los estados",
+            options: [
+              { value: "true", label: "Activos" },
+              { value: "false", label: "Inactivos" },
+            ],
+          },
+        ]}
+        shown={segments.length}
+        total={all.length}
+        noun="segmentos"
+      />
+
       {segments.length === 0 ? (
-        <EmptyState title="No hay segmentos registrados." />
+        <EmptyState
+          title={
+            all.length === 0
+              ? "No hay segmentos registrados."
+              : "Ningún segmento coincide con los filtros."
+          }
+        />
       ) : (
         <div className="grid gap-3">
           {segments.map((segment) => (

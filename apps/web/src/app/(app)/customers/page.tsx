@@ -8,9 +8,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
-import { CustomersFilters } from "@/components/customers/customers-filters";
+import { ListFilters } from "@/components/ui/list-filters";
 import { buildQueryString } from "@/lib/query-string";
-import { paymentLabel } from "@/lib/labels";
+import { PAYMENT_LABELS, paymentLabel } from "@/lib/labels";
 
 interface Contact {
   id: string;
@@ -236,11 +236,36 @@ export default async function CustomersPage({
         actions={canCreate(userRole, "customer") && <ButtonLink href="/customers/new">Nuevo cliente</ButtonLink>}
       />
 
-      <CustomersFilters
-        companies={companies}
-        segments={segments}
+      <ListFilters
+        searchPlaceholder="Buscar por nombre, razón social o NIT"
+        selects={[
+          {
+            key: "companyId",
+            allLabel: "Todas las empresas",
+            options: companies.map((company) => ({ value: company.id, label: company.name })),
+          },
+          {
+            key: "active",
+            allLabel: "Todos los estados",
+            options: [
+              { value: "true", label: "Activos" },
+              { value: "false", label: "Inactivos" },
+            ],
+          },
+          {
+            key: "segmentId",
+            allLabel: "Todos los segmentos",
+            options: segments.map((segment) => ({ value: segment.id, label: segment.name })),
+          },
+          {
+            key: "paymentCondition",
+            allLabel: "Todas las formas de pago",
+            options: Object.entries(PAYMENT_LABELS).map(([value, label]) => ({ value, label })),
+          },
+        ]}
         shown={rows.length}
         total={total}
+        noun="clientes"
       />
 
       <SectionCard

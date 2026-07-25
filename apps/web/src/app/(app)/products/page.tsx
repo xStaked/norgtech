@@ -3,8 +3,9 @@ import { apiFetch } from "@/lib/api.server";
 import { formatPrice } from "@/lib/catalog";
 import { PageHeader } from "@/components/ui/page-header";
 import { ButtonLink } from "@/components/ui/button-link";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { applyFilters, optionsFrom, type SearchParams } from "@/lib/list-filter";
 
 interface Product {
   id: string;
@@ -45,15 +46,29 @@ function initials(name: string): string {
   return (parts[0][0] + parts[1][0]).toUpperCase();
 }
 
-export default async function ProductsPage() {
+export default async function ProductsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const response = await apiFetch("/products?includeInactive=true");
-  const products: Product[] = response.ok ? await response.json() : [];
+  const all: Product[] = response.ok ? await response.json() : [];
+
+  const products = applyFilters(all, params, {
+    search: (product) => [product.name, product.sku, product.description],
+    match: {
+      unit: (product) => product.unit,
+      active: (product) => String(product.active),
+      priced: (product) => (Object.keys(product.priceRange).length > 0 ? "si" : "no"),
+    },
+  });
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="CATÁLOGO"
-        title={`Productos · ${products.length}`}
+        title={`Productos · ${all.length}`}
         actions={
           <>
             <ButtonLink href="/products" variant="secondary">
@@ -64,26 +79,36 @@ export default async function ProductsPage() {
         }
       />
 
-      <FilterBar>
-        <div className="flex h-[38px] min-w-[260px] items-center rounded-lg border border-input bg-card px-3 text-[13px] text-muted-foreground">
-          Buscar producto o SKU…
-        </div>
-        <button
-          type="button"
-          className="inline-flex h-[38px] items-center gap-2 rounded-lg border border-input bg-card px-3 text-[13px] font-semibold text-foreground hover:bg-muted"
-        >
-          Categoría
-        </button>
-        <button
-          type="button"
-          className="inline-flex h-[38px] items-center gap-2 rounded-lg border border-input bg-card px-3 text-[13px] font-semibold text-foreground hover:bg-muted"
-        >
-          Unidad
-        </button>
-      </FilterBar>
+      <ListFilters
+        searchPlaceholder="Buscar producto, SKU o descripción"
+        selects={[
+          { key: "unit", allLabel: "Todas las unidades", options: optionsFrom(all, (p) => p.unit) },
+          {
+            key: "active",
+            allLabel: "Todos los estados",
+            options: [
+              { value: "true", label: "Activos" },
+              { value: "false", label: "Inactivos" },
+            ],
+          },
+          {
+            key: "priced",
+            allLabel: "Con y sin precio",
+            options: [
+              { value: "si", label: "Con precio" },
+              { value: "no", label: "Sin precio" },
+            ],
+          },
+        ]}
+        shown={products.length}
+        total={all.length}
+        noun="productos"
+      />
 
       {products.length === 0 ? (
-        <p className="text-muted-foreground">No hay productos registrados.</p>
+        <p className="text-muted-foreground">
+          {all.length === 0 ? "No hay productos registrados." : "Ningún producto coincide con los filtros."}
+        </p>
       ) : (
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((product) => (

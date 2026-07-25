@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -134,7 +135,12 @@ function sumTotals(rows: QuoteRow[]) {
   return currencyFormatter.format(rows.reduce((sum, row) => sum + row.total, 0));
 }
 
-export default async function QuotesPage() {
+export default async function QuotesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
@@ -150,6 +156,12 @@ export default async function QuotesPage() {
     customerId: quote.customer?.id ?? null,
     createdAt: quote.createdAt,
   }));
+
+  // Los StatCard resumen todo el pipeline; los filtros solo recortan la tabla.
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.customerName],
+    match: { status: (row) => row.status },
+  });
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -180,7 +192,19 @@ export default async function QuotesPage() {
         <StatCard label="Valor total" value={sumTotals(rows)} tone="neutral" />
       </div>
 
-      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} cotizaciones registradas`} />
+      <ListFilters
+        searchPlaceholder="Buscar por cliente"
+        selects={[
+          {
+            key: "status",
+            allLabel: "Todos los estados",
+            options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+          },
+        ]}
+        shown={filtered.length}
+        total={rows.length}
+        noun="cotizaciones"
+      />
 
       <SectionCard
         title="Pipeline de cotizaciones"
@@ -188,7 +212,7 @@ export default async function QuotesPage() {
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

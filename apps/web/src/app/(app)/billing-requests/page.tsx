@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -84,7 +85,12 @@ const dateTimeFormatter = new Intl.DateTimeFormat("es-CO", {
   minute: "2-digit",
 });
 
-export default async function BillingRequestsPage() {
+export default async function BillingRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const [response, customersResponse, user] = await Promise.all([
     apiFetch("/billing-requests"),
     apiFetch("/customers"),
@@ -114,6 +120,14 @@ export default async function BillingRequestsPage() {
     companyName: billingRequest.company?.name ?? null,
     companyPrefix: billingRequest.company?.prefix ?? null,
   }));
+
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.customerName, row.opportunityTitle, row.notes, row.companyName],
+    match: {
+      status: (row) => row.status,
+      sourceType: (row) => row.sourceType,
+    },
+  });
 
   const columns: readonly DataTableColumn<BillingRequestRow>[] = [
     {
@@ -202,7 +216,24 @@ export default async function BillingRequestsPage() {
         actions={canAct ? <CreateBillingRequestModal customers={customers} /> : undefined}
       />
 
-      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} solicitudes registradas`} />
+      <ListFilters
+        searchPlaceholder="Buscar por cliente, oportunidad o nota"
+        selects={[
+          {
+            key: "status",
+            allLabel: "Todos los estados",
+            options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+          },
+          {
+            key: "sourceType",
+            allLabel: "Todos los orígenes",
+            options: Object.entries(sourceTypeLabels).map(([value, label]) => ({ value, label })),
+          },
+        ]}
+        shown={filtered.length}
+        total={rows.length}
+        noun="solicitudes"
+      />
 
       <SectionCard
         title="Cola de facturación"
@@ -210,7 +241,7 @@ export default async function BillingRequestsPage() {
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

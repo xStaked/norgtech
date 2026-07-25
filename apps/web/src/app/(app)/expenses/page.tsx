@@ -3,7 +3,8 @@ import { ExpenseExportButtons } from "@/components/expenses/expense-export-butto
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, param, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -181,10 +182,21 @@ const columns: readonly DataTableColumn<ExpenseRow>[] = [
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const queryString = buildQueryString(params);
+  // Solo lo que el DTO del API acepta: manda un parametro extra (p.ej. search) y
+  // la validacion responde 400 y la lista se vacia.
+  const apiParams = {
+    status: param(params, "status"),
+    category: param(params, "category"),
+    submittedByUserId: param(params, "submittedByUserId"),
+    customerId: param(params, "customerId"),
+    visitId: param(params, "visitId"),
+    from: param(params, "from"),
+    to: param(params, "to"),
+  };
+  const queryString = buildQueryString(apiParams);
   const listPath = queryString ? `/commercial-expenses?${queryString}` : "/commercial-expenses";
   const summaryPath = queryString ? `/commercial-expenses/summary?${queryString}` : "/commercial-expenses/summary";
 
@@ -211,8 +223,11 @@ export default async function ExpensesPage({
     visitId: expense.visit?.id ?? null,
   }));
 
+  // Estado y categoria ya vienen filtrados del API; la busqueda recorta aqui.
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.submittedByName, row.customerName],
+  });
   const totalAmount = Number(summary.totalAmount ?? rows.reduce((total, row) => total + row.amount, 0));
-  const filterSummary = `${rows.length.toLocaleString("es-CO")} gastos registrados - ${formatCurrency(totalAmount, "COP")} reportados`;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -223,7 +238,7 @@ export default async function ExpensesPage({
         actions={
           <>
             {canCreate(role, "expense") && <ButtonLink href="/expenses/new">Nuevo gasto</ButtonLink>}
-            {canExportExpenses(role) && <ExpenseExportButtons query={params} />}
+            {canExportExpenses(role) && <ExpenseExportButtons query={apiParams} />}
           </>
         }
       />
@@ -241,7 +256,24 @@ export default async function ExpensesPage({
         <StatCard label="Contabilizados" value={countByStatus(rows, "contabilizado")} tone="info" />
       </div>
 
-      <FilterBar summary={filterSummary} />
+      <ListFilters
+        searchPlaceholder="Buscar por vendedor o cliente"
+        selects={[
+          {
+            key: "status",
+            allLabel: "Todos los estados",
+            options: Object.entries(statusLabels).map(([value, label]) => ({ value, label })),
+          },
+          {
+            key: "category",
+            allLabel: "Todas las categorías",
+            options: Object.entries(categoryLabels).map(([value, label]) => ({ value, label })),
+          },
+        ]}
+        shown={filtered.length}
+        noun="gastos"
+        summaryExtra={`${formatCurrency(totalAmount, "COP")} reportados`}
+      />
 
       <SectionCard
         title="Cola de gastos"
@@ -249,7 +281,7 @@ export default async function ExpensesPage({
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState

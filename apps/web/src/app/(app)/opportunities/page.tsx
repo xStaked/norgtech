@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FilterBar } from "@/components/ui/filter-bar";
+import { ListFilters } from "@/components/ui/list-filters";
+import { applyFilters, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
@@ -134,7 +135,12 @@ function countByStage(rows: OpportunityRow[], stage: string) {
   return rows.filter((row) => row.stage === stage).length.toLocaleString("es-CO");
 }
 
-export default async function OpportunitiesPage() {
+export default async function OpportunitiesPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const params = await searchParams;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
@@ -150,6 +156,12 @@ export default async function OpportunitiesPage() {
     customerId: opportunity.customer?.id ?? null,
     createdAt: opportunity.createdAt,
   }));
+
+  // Los StatCard resumen todo el pipeline; los filtros solo recortan la tabla.
+  const filtered = applyFilters(rows, params, {
+    search: (row) => [row.title, row.customerName],
+    match: { stage: (row) => row.stage },
+  });
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -184,7 +196,19 @@ export default async function OpportunitiesPage() {
         <StatCard label="Ventas cerradas" value={countByStage(rows, "venta_cerrada")} tone="success" />
       </div>
 
-      <FilterBar summary={`${rows.length.toLocaleString("es-CO")} oportunidades en el pipeline`} />
+      <ListFilters
+        searchPlaceholder="Buscar por título o cliente"
+        selects={[
+          {
+            key: "stage",
+            allLabel: "Todas las etapas",
+            options: Object.entries(stageLabels).map(([value, label]) => ({ value, label })),
+          },
+        ]}
+        shown={filtered.length}
+        total={rows.length}
+        noun="oportunidades"
+      />
 
       <SectionCard
         title="Pipeline comercial"
@@ -192,7 +216,7 @@ export default async function OpportunitiesPage() {
       >
         <DataTable
           columns={columns}
-          rows={rows}
+          rows={filtered}
           getRowKey={(row) => row.id}
           emptyState={
             <EmptyState
