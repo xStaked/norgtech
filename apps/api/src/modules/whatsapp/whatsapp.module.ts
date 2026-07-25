@@ -5,6 +5,7 @@ import {
   OpenAIExpenseExtractionProvider,
 } from "../commercial-expenses/commercial-expense-extraction.provider";
 import { CommercialExpensesModule } from "../commercial-expenses/commercial-expenses.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { OrdersModule } from "../orders/orders.module";
 import { VisitsModule } from "../visits/visits.module";
 import { KapsoWebhookService } from "./kapso-webhook.service";
@@ -22,6 +23,7 @@ import { WhatsAppService } from "./whatsapp.service";
     AuthModule,
     forwardRef(() => CommercialExpensesModule),
     forwardRef(() => OrdersModule),
+    NotificationsModule,
     VisitsModule,
   ],
   controllers: [WhatsAppController, WhatsAppWebhookController, NoraAgentController],

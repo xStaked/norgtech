@@ -131,6 +131,7 @@ class NoraAgentAttachment(BaseModel):
 
 class NoraCustomerSnapshot(BaseModel):
     customerName: str | None = None
+    catalogo: list[dict] = Field(default_factory=list)
     zonas: list[dict] = Field(default_factory=list)
     recentOrders: list[dict] = Field(default_factory=list)
     cartera: dict = Field(default_factory=dict)

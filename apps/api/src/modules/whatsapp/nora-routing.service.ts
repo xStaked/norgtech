@@ -4,6 +4,7 @@ import {
   NoraConversationCase,
   NoraConversationCaseStatus,
   NoraConversationCaseType,
+  NotificationType,
   Prisma,
   UserRole,
   WhatsAppConversation,
@@ -15,6 +16,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuthService } from "../auth/auth.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { VisitsService } from "../visits/visits.service";
+import { NotificationsService } from "../notifications/notifications.service";
 import { NoraCaseAttachment } from "./dto/nora-case.dto";
 import { NoraCaseService } from "./nora-case.service";
 import { NoraExpenseExtractionService } from "./nora-expense-extraction.service";
@@ -71,6 +73,7 @@ export class NoraRoutingService {
     private readonly expenseExtraction: NoraExpenseExtractionService,
     private readonly authService: AuthService,
     private readonly visitsService: VisitsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async routeInboundMessage({ conversation, message }: RouteInboundMessageInput) {
@@ -350,6 +353,12 @@ export class NoraRoutingService {
                   .map((it) => ({
                     productRef: this.stringValue(it.productRef) ?? this.stringValue(it.product_ref),
                     quantity: Number(it.quantity),
+                    // El empaque que confirmo el cliente: sin esto el pedido sale
+                    // en la presentacion que adivine el CRM (10 bolsas de 500 g
+                    // cuando pidio 10 kilos).
+                    ...(this.stringValue(it.presentation) && {
+                      presentation: this.stringValue(it.presentation),
+                    }),
                   }))
                   .filter((it) => it.productRef && Number.isFinite(it.quantity) && it.quantity > 0);
 
@@ -376,7 +385,7 @@ export class NoraRoutingService {
 
             if (items.length > 0) {
               const chosenZoneId = this.zoneChosenByCustomer(customerSnapshot.zonas, draft.zona);
-              await this.noraCaseService.createCase({
+              const orderCase = await this.noraCaseService.createCase({
                 conversationId: conversation.id,
                 type: NoraConversationCaseType.order,
                 status: NoraConversationCaseStatus.ready_for_review,
@@ -408,8 +417,30 @@ export class NoraRoutingService {
                 },
               });
 
+              // Nora tiene prohibido inventar precios, asi que el valor lo
+              // calcula el backend con la lista del cliente y se pega a la
+              // confirmacion: despues del pedido la conversacion queda con un
+              // humano y Nora ya no puede responder "cuanto vale".
+              const estimate = await this.orderAutomation.estimateForCustomer(
+                sender.customerId,
+                items as Array<{ productRef: string; quantity: number }>,
+              );
+
+              await this.notifyWhatsAppOrder({
+                caseId: orderCase.id,
+                customerId: sender.customerId,
+                customerName: customerSnapshot.customerName,
+                items: items as Array<{ productRef: string; quantity: number }>,
+                total: estimate?.total ?? null,
+              });
+
               if (agentResponse.reply_text) {
-                await this.whatsAppService.sendAgentReply(conversation.id, agentResponse.reply_text);
+                await this.whatsAppService.sendAgentReply(
+                  conversation.id,
+                  estimate
+                    ? `${agentResponse.reply_text}\n\nValor estimado: ${this.formatCop(estimate.total)} con IVA. El asesor lo confirma al procesarlo.`
+                    : agentResponse.reply_text,
+                );
               }
               return;
             }
@@ -875,6 +906,66 @@ export class NoraRoutingService {
       .map((item) => item.customer);
   }
 
+  /**
+   * Un pedido que entra por WhatsApp no lo ve nadie hasta que alguien abre la
+   * bandeja. Avisamos al vendedor del cliente y a los administradores para que
+   * el caso no se quede esperando.
+   *
+   * ponytail: reusa el tipo `pedido_hito` en vez de agregar uno al enum (seria
+   * una migracion en prod y el enum esta espejado en Nora). La campana no
+   * discrimina por tipo, muestra titulo y cuerpo.
+   */
+  private async notifyWhatsAppOrder(input: {
+    caseId: string;
+    customerId: string;
+    customerName: string | null;
+    items: Array<{ productRef: string; quantity: number }>;
+    total: number | null;
+  }) {
+    try {
+      const [customer, supervisors] = await Promise.all([
+        this.prisma.customer.findUnique({
+          where: { id: input.customerId },
+          select: { assignedToUserId: true },
+        }),
+        this.prisma.user.findMany({
+          where: {
+            active: true,
+            role: { in: [UserRole.administrador, UserRole.director_comercial] },
+          },
+          select: { id: true },
+        }),
+      ]);
+
+      const detail = input.items
+        .map((item) => `${item.quantity} x ${item.productRef}`)
+        .join(", ");
+
+      await this.notifications.emit({
+        userIds: [
+          ...supervisors.map((user) => user.id),
+          ...(customer?.assignedToUserId ? [customer.assignedToUserId] : []),
+        ],
+        type: NotificationType.pedido_hito,
+        title: `Pedido nuevo por WhatsApp: ${input.customerName ?? "cliente"}`,
+        body: `${detail}${input.total !== null ? ` — ${this.formatCop(input.total)}` : ""}. Pendiente de revision en la bandeja.`,
+        entityType: "NoraConversationCase",
+        entityId: input.caseId,
+      });
+    } catch (error) {
+      // El pedido ya quedo armado: que falle el aviso no puede tumbar el flujo.
+      this.logger.error(`No se pudo notificar el pedido de WhatsApp: ${String(error)}`);
+    }
+  }
+
+  private formatCop(amount: number) {
+    return new Intl.NumberFormat("es-CO", {
+      style: "currency",
+      currency: "COP",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  }
+
   /** Zona que eligio el cliente, resuelta contra las suyas (nunca inventa una). */
   private zoneChosenByCustomer(
     zonas: Array<{ id: string; nombre: string }>,
@@ -1245,12 +1336,68 @@ export class NoraRoutingService {
     }>;
   }
 
+  /**
+   * Que le podemos vender a este cliente y en que empaque. Sin esto el agente no
+   * sabe que ASATECH viene en "Bolsa x 500 g" y toma "10 kilos" como 10 unidades.
+   * Con lista de precios se muestra solo lo que esta en su lista (es lo que tiene
+   * precio negociado); sin lista, el catalogo activo con el precio base.
+   */
+  private async catalogForCustomer(priceListId: string | null) {
+    try {
+      return await this.loadCatalogForCustomer(priceListId);
+    } catch (error) {
+      // Sin catalogo el agente sigue atendiendo (solo no sabe de empaques); que
+      // esta consulta falle no puede tumbarlo al planner.
+      this.logger.error(`No se pudo cargar el catalogo del cliente: ${String(error)}`);
+      return [];
+    }
+  }
+
+  private async loadCatalogForCustomer(priceListId: string | null) {
+    const presentations = await this.prisma.productPresentation.findMany({
+      where: {
+        active: true,
+        product: { active: true },
+        ...(priceListId && { priceItems: { some: { priceListId } } }),
+      },
+      select: {
+        empaque: true,
+        product: { select: { name: true, basePrice: true } },
+        ...(priceListId && {
+          priceItems: {
+            where: { priceListId },
+            select: { priceSinIva: true },
+          },
+        }),
+      },
+      orderBy: { product: { name: "asc" } },
+    });
+
+    const byProduct = new Map<string, Array<{ empaque: string; precioSinIva: number | null }>>();
+    for (const presentation of presentations) {
+      const listPrice = presentation.priceItems?.[0]?.priceSinIva;
+      const price = listPrice ?? presentation.product.basePrice;
+      const empaques = byProduct.get(presentation.product.name) ?? [];
+      empaques.push({
+        empaque: presentation.empaque,
+        precioSinIva: price === null || price === undefined ? null : Number(price),
+      });
+      byProduct.set(presentation.product.name, empaques);
+    }
+
+    return [...byProduct.entries()].map(([producto, presentaciones]) => ({
+      producto,
+      presentaciones,
+    }));
+  }
+
   private async buildCustomerSnapshot(customerId: string) {
     const [customer, orders, invoices] = await Promise.all([
       this.prisma.customer.findUnique({
         where: { id: customerId },
         select: {
           displayName: true,
+          priceListId: true,
           customerZones: {
             where: { isActive: true },
             select: { id: true, zone: { select: { name: true } } },
@@ -1299,6 +1446,7 @@ export class NoraRoutingService {
 
     return {
       customerName: customer?.displayName ?? null,
+      catalogo: await this.catalogForCustomer(customer?.priceListId ?? null),
       // Zonas de despacho del cliente: si tiene varias, Nora le pregunta a cual
       // despachar antes de armar el pedido (el asesor ya no tiene que adivinar).
       zonas: (customer?.customerZones ?? []).map((customerZone) => ({

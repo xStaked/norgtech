@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, forwardRef } from "@nestjs/common";
+import { Inject, Injectable, Logger, NotFoundException, forwardRef } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -36,6 +36,8 @@ type ActiveProduct = {
 
 @Injectable()
 export class WhatsAppOrderAutomationService {
+  private readonly logger = new Logger(WhatsAppOrderAutomationService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(forwardRef(() => OrdersService))
@@ -253,6 +255,45 @@ export class WhatsAppOrderAutomationService {
         (customerZone) => this.normalize(customerZone.zone?.name) === normalizedRef,
       ) ?? undefined
     );
+  }
+
+  /**
+   * Valor estimado del pedido que armo un cliente por WhatsApp, con su lista de
+   * precios y descuentos (la misma cuenta que hara la orden). Devuelve null si
+   * algun producto no se resuelve o el precio queda ambiguo: preferimos no
+   * decir un total a medias.
+   */
+  async estimateForCustomer(
+    customerId: string,
+    items: Array<{ productRef: string; quantity: number; presentation?: string }>,
+  ) {
+    try {
+      const products = (await this.prisma.product.findMany({
+        where: { active: true },
+      })) as ActiveProduct[];
+
+      const pricedItems = [];
+      for (const item of items) {
+        const resolved = this.resolveProduct(products, item.productRef);
+        if (resolved.decision !== "created" || !resolved.product) {
+          return null;
+        }
+        pricedItems.push({
+          productId: resolved.product.id,
+          quantity: item.quantity,
+          presentation: item.presentation,
+          // Con productId el precio sale de la lista del cliente; este valor se ignora.
+          unitPrice: 0,
+        });
+      }
+
+      return await this.ordersService.preview({ customerId, items: pricedItems });
+    } catch (error) {
+      // Presentacion ambigua, producto sin precio, cualquier cosa: el pedido ya
+      // esta armado y la confirmacion tiene que salir igual, solo sin el total.
+      this.logger.warn(`No se pudo estimar el valor del pedido: ${String(error)}`);
+      return null;
+    }
   }
 
   private resolveProduct(products: ActiveProduct[], productRef: string) {

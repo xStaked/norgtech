@@ -131,6 +131,11 @@ describe("WhatsApp inbox", () => {
       active: true,
     },
   ];
+  const notifications: Array<Record<string, unknown>> = [];
+  const presentations = [
+    { id: "pres-1", productId: "product-1", empaque: "Bulto x 50 kg", active: true },
+    { id: "pres-2", productId: "product-1", empaque: "Bolsa x 500 g", active: true },
+  ];
   const contacts = [
     {
       id: "contact-1",
@@ -613,6 +618,12 @@ describe("WhatsApp inbox", () => {
           }).map((user) => (select ? applySelect(user, select) : user)),
       },
       refreshToken: refreshTokenStub(),
+      notification: {
+        createMany: async ({ data }: { data: Array<Record<string, unknown>> }) => {
+          notifications.push(...data);
+          return { count: data.length };
+        },
+      },
       customer: {
         findUnique: async ({
           where: { id },
@@ -638,6 +649,16 @@ describe("WhatsApp inbox", () => {
         },
         findMany: async ({ select }: { select?: Record<string, unknown> } = {}) =>
           customers.map((customer) => applySelect(customer, select)),
+      },
+      productPresentation: {
+        findMany: async () =>
+          presentations
+            .filter((presentation) => presentation.active)
+            .map((presentation) => ({
+              empaque: presentation.empaque,
+              product: products.find((product) => product.id === presentation.productId),
+              priceItems: [],
+            })),
       },
       company: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -5003,6 +5024,15 @@ describe("WhatsApp inbox", () => {
         );
         expect(call).toBeDefined();
         const body = JSON.parse((call as any)[1].body);
+        // El catalogo con los empaques: sin el, el agente no puede preguntar en
+        // que presentacion quiere el producto.
+        const fertilizante = body.customer_snapshot.catalogo.find(
+          (item: { producto: string }) => item.producto === "Fertilizante",
+        );
+        expect(fertilizante.presentaciones.map((p: { empaque: string }) => p.empaque)).toEqual([
+          "Bulto x 50 kg",
+          "Bolsa x 500 g",
+        ]);
         const order = body.customer_snapshot.recentOrders[0];
         expect(order.trackingNumber).toBe("TRK-777");
         expect(order.companyRef).toBe("NT");
@@ -5092,6 +5122,20 @@ describe("WhatsApp inbox", () => {
         // La zona que eligio el cliente, resuelta contra las suyas.
         expect(data.customerZoneId).toBe("customer-zone-2");
         expect((data.items as Array<Record<string, unknown>>)[0].productRef).toBe("asatech");
+        // Al CRM le tiene que llegar el aviso: si no, el pedido se queda
+        // esperando a que alguien abra la bandeja por casualidad.
+        expect(notifications).toContainEqual(
+          expect.objectContaining({
+            entityType: "NoraConversationCase",
+            title: expect.stringContaining("Pedido nuevo por WhatsApp"),
+          }),
+        );
+        // La confirmacion sale si o si, aunque el valor no se pueda estimar.
+        expect(
+          messages.filter((message) => message.conversationId === "conversation-customer-agent"),
+        ).toContainEqual(
+          expect.objectContaining({ body: expect.stringContaining("un asesor confirma tu pedido") }),
+        );
       } finally {
         if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
         else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;

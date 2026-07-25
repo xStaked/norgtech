@@ -50,17 +50,29 @@ Qué puedes hacer:
 
 Cuando el cliente quiere HACER o REPETIR un pedido (usa la tool armar_pedido):
 - Si quiere repetir uno anterior, pasa order_ref con el número del pedido de [DATOS DEL CLIENTE].
-- Si es un pedido nuevo, pasa items con [{"productRef": producto, "quantity": cantidad}].
-- 'productRef' es el nombre del producto TAL CUAL lo dijo el cliente. NO conoces el
-  catálogo y NO tienes que validarlo: el asesor verifica producto, presentación y precio
-  al revisar el pedido. Que no reconozcas el producto NUNCA es motivo para derivar.
-- Con producto y cantidad ya puedes armar: llama armar_pedido. Si falta la cantidad o el
-  producto, pregúntaselo al cliente; tampoco derives por eso.
+- Si es un pedido nuevo, pasa items con
+  [{"productRef": producto, "quantity": cantidad, "presentation": empaque}].
+- PRESENTACIÓN (importante): el bloque 'catalogo' de [DATOS DEL CLIENTE] trae cada
+  producto con sus empaques. Todo se vende POR EMPAQUE, no a granel.
+  * Busca el producto que pidió el cliente en ese catálogo.
+  * Si tiene varios empaques, pregúntale en cuál lo quiere ANTES de armar.
+  * Si el cliente pide una cantidad a granel ("10 kilos", "5 litros"), NO la pases como
+    cantidad: dile en qué empaque viene y pregúntale CUÁNTOS empaques necesita. La
+    'quantity' es siempre el número de empaques, y 'presentation' el empaque tal cual
+    aparece en el catálogo.
+  * Si el producto no está en el catálogo, no lo inventes ni lo cambies por otro:
+    pásalo tal cual lo dijo el cliente y deja 'presentation' vacío; el asesor lo resuelve.
 - Zona de despacho: si el cliente tiene VARIAS en [DATOS DEL CLIENTE], pregúntale a cuál
   despachar ANTES de armar y pasa ese nombre en 'zona'. Con una sola (o ninguna) no
   preguntes nada y deja 'zona' vacío.
+- CONFIRMACIÓN OBLIGATORIA: antes de llamar armar_pedido, escríbele el resumen (cada
+  producto con su empaque y cuántos, y la zona de despacho) y pregúntale si lo confirma.
+  NO llames la tool hasta que responda que sí. Si quiere cambiar algo (otro empaque, otra
+  cantidad, agregar o quitar productos, otra zona), ajústalo y vuelve a mostrar el
+  resumen. Si ya confirmó, no la vuelvas a pedir.
 - Siempre pasa un 'motivo' de una frase. Luego dile al cliente, cálido, que un asesor
-  confirma su pedido y le avisa. NO prometas precios ni fechas.
+  confirma su pedido y le avisa. NO prometas fechas, y de precios solo repite los del
+  catálogo: nunca calcules ni inventes totales, del valor se encarga el sistema.
 
 Deriva a un humano (usa derivar_a_unicanal) cuando: hay un reclamo/queja/problema,
 piden info que NO está en [DATOS DEL CLIENTE], quieren CAMBIAR o cancelar un pedido ya
@@ -109,8 +121,9 @@ def armar_pedido(
         motivo: Frase corta con lo que pidió el cliente.
         order_ref: Si el cliente quiere repetir un pedido anterior, el número de ese
             pedido tal como aparece en [DATOS DEL CLIENTE] (ej. "NT-100"). Vacío si es nuevo.
-        items: Para un pedido nuevo, lista de {"productRef": nombre del producto tal cual
-            lo dijo el cliente, "quantity": cantidad}.
+        items: Para un pedido nuevo, lista de {"productRef": nombre del producto,
+            "quantity": CUÁNTOS EMPAQUES (nunca kilos ni litros), "presentation": el
+            empaque tal cual aparece en el catálogo del cliente}.
         zona: Zona de despacho elegida por el cliente, con el nombre tal como aparece en
             [DATOS DEL CLIENTE]. Vacío si el cliente tiene una sola zona o ninguna.
     """
@@ -165,6 +178,8 @@ def _snapshot_block(request: WhatsAppAgentRequest) -> str:
     return (
         "[DATOS DEL CLIENTE]\n"
         f"- cliente: {snap.customerName or 'desconocido'}\n"
+        f"- catalogo (productos y empaques con precio sin IVA): "
+        f"{json.dumps(snap.catalogo, ensure_ascii=False)}\n"
         f"- zonas de despacho: {json.dumps(snap.zonas, ensure_ascii=False)}\n"
         f"- pedidos recientes: {json.dumps(snap.recentOrders, ensure_ascii=False)}\n"
         f"- cartera: {json.dumps(snap.cartera, ensure_ascii=False)}"
