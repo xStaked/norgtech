@@ -40,6 +40,7 @@ interface Customer {
   contacts: Contact[];
   paymentCondition: string | null;
   company: { id: string; name: string } | null;
+  assignedToUser: { id: string; name: string } | null;
 }
 
 interface CustomerRow {
@@ -54,6 +55,7 @@ interface CustomerRow {
   active: boolean;
   paymentCondition: string | null;
   company: { id: string; name: string } | null;
+  seller: string | null;
 }
 
 function buildLocation(customer: Customer) {
@@ -98,6 +100,11 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     key: "segment",
     header: "Segmento",
     render: (row) => row.segment ?? <span style={{ color: "#6b7787" }}>Sin segmento</span>,
+  },
+  {
+    key: "seller",
+    header: "Vendedor",
+    render: (row) => row.seller ?? <span style={{ color: "#6b7787" }}>Sin asignar</span>,
   },
   {
     key: "location",
@@ -171,6 +178,7 @@ export default async function CustomersPage({
     search: single("search") || undefined,
     companyId: single("companyId") || undefined,
     segmentId: single("segmentId") || undefined,
+    assignedToUserId: single("assignedToUserId") || undefined,
     paymentCondition: single("paymentCondition") || undefined,
     active: single("active") || undefined,
   };
@@ -183,10 +191,11 @@ export default async function CustomersPage({
     ([key, value]) => key !== "includeInactive" && value !== undefined,
   );
 
-  const [response, companiesResponse, segmentsResponse, totalResponse] = await Promise.all([
+  const [response, companiesResponse, segmentsResponse, sellersResponse, totalResponse] = await Promise.all([
     apiFetch(`/customers?${queryString}`),
     apiFetch("/companies"),
     apiFetch("/customer-segments"),
+    apiFetch("/users/sellers"),
     // "N de M": el total sin filtrar solo se necesita (y se consulta) cuando hay
     // filtros activos, y va en paralelo con el listado filtrado. ponytail:
     // segunda consulta completa; endpoint de conteo cuando la tabla crezca.
@@ -199,6 +208,9 @@ export default async function CustomersPage({
     : [];
   const segments: { id: string; name: string }[] = segmentsResponse.ok
     ? await segmentsResponse.json()
+    : [];
+  const sellers: { id: string; name: string }[] = sellersResponse.ok
+    ? await sellersResponse.json()
     : [];
 
   let total = customers.length;
@@ -224,6 +236,7 @@ export default async function CustomersPage({
       active: customer.active,
       paymentCondition: customer.paymentCondition,
       company: customer.company,
+      seller: customer.assignedToUser?.name ?? null,
     };
   });
 
@@ -251,6 +264,11 @@ export default async function CustomersPage({
               { value: "true", label: "Activos" },
               { value: "false", label: "Inactivos" },
             ],
+          },
+          {
+            key: "assignedToUserId",
+            allLabel: "Todos los vendedores",
+            options: sellers.map((seller) => ({ value: seller.id, label: seller.name })),
           },
           {
             key: "segmentId",

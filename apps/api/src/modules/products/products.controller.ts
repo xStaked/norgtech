@@ -14,8 +14,8 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
-import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query";
 import { CreateProductDto } from "./dto/create-product.dto";
+import { ListProductsQueryDto } from "./dto/list-products.query.dto";
 import {
   CreateProductPresentationDto,
   UpdateProductPresentationDto,
@@ -49,8 +49,8 @@ export class ProductsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "comercial", "facturacion")
   @Get()
-  findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
-    return this.productsService.findAll(query.includeInactive);
+  findAll(@Query(listQueryPipe) query: ListProductsQueryDto) {
+    return this.productsService.findAll(query.includeInactive, query.customerId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -9,13 +9,20 @@ export type UserRole =
   | "facturacion"
   | "logistica";
 
+export interface NavSubItem {
+  href: string;
+  label: string;
+}
+
 export interface NavItem {
   href: string;
   label: string;
   shortLabel: string;
   description: string;
-  group: "Operacion" | "Comercial" | "Catalogo" | "Admin";
+  group: "Operacion" | "Comercial" | "Catalogo" | "Analisis" | "Admin";
   requiredRoles: readonly UserRole[];
+  /** Sub-pantallas: solo se despliegan cuando el item esta activo. */
+  children?: readonly NavSubItem[];
 }
 
 export interface NavGroup {
@@ -65,11 +72,26 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion"] as const,
   },
   {
+    href: "/analytics",
+    label: "Analítica",
+    shortLabel: "AN",
+    description: "Ventas, cartera, embudo y desempeño comercial",
+    group: "Analisis",
+    // Cifras consolidadas de toda la operacion: solo direccion.
+    requiredRoles: ["administrador", "director_comercial"] as const,
+    children: [
+      { href: "/analytics/ventas", label: "Ventas" },
+      { href: "/analytics/cartera", label: "Cartera" },
+      { href: "/analytics/embudo", label: "Embudo" },
+      { href: "/analytics/comercial", label: "Desempeño" },
+    ] as const,
+  },
+  {
     href: "/reports",
     label: "Reportes",
     shortLabel: "RP",
     description: "Reportes ejecutivos generados desde visitas",
-    group: "Operacion",
+    group: "Analisis",
     requiredRoles: ["administrador", "director_comercial", "tecnico"] as const,
   },
   {
@@ -198,6 +220,10 @@ export const navGroups: readonly NavGroup[] = [
   {
     label: "Catalogo",
     items: primaryNavItems.filter((item) => item.group === "Catalogo"),
+  },
+  {
+    label: "Analisis",
+    items: primaryNavItems.filter((item) => item.group === "Analisis"),
   },
   {
     label: "Admin",

@@ -11,14 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  ChevronDown,
-  LogOut,
-  MapPin,
-  Search,
-  Sparkles,
-  User,
-} from "lucide-react";
+import { LogOut, Search, Sparkles, User } from "lucide-react";
 
 export function Topbar() {
   const router = useRouter();
@@ -33,13 +26,6 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-20 flex h-[60px] items-center gap-3.5 border-b border-border bg-card px-4 md:px-6">
-      {/* Company switcher */}
-      <button className="flex h-9 items-center gap-2 rounded-lg border border-input bg-card px-2.5 text-[12.5px] font-semibold text-secondary-foreground">
-        <MapPin className="h-4 w-4 text-muted-foreground" />
-        <span>Norgtech (NT)</span>
-        <ChevronDown className="h-4 w-4 text-muted-foreground" />
-      </button>
-
       {/* Search */}
       <div className="hidden h-9 max-w-[340px] flex-1 items-center gap-2.5 rounded-lg border border-input bg-muted px-3 text-muted-foreground sm:flex">
         <Search className="h-4 w-4" />

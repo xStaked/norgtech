@@ -77,9 +77,29 @@ export class ProductsService {
    * ponytail: el rango se calcula en memoria sobre el include anidado. Son 53
    * productos y 772 ítems; si el catálogo crece a miles, pasarlo a SQL agregado.
    */
-  async findAll(includeInactive = false) {
+  async findAll(includeInactive = false, customerId?: string) {
+    // Un cliente compra por su lista de precios: filtrar "por cliente" es
+    // quedarse con los productos que tienen precio en esa lista.
+    let priceListId: string | undefined;
+    if (customerId) {
+      const customer = await this.prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { priceListId: true },
+      });
+      if (!customer) {
+        throw new NotFoundException("Customer not found");
+      }
+      if (!customer.priceListId) return [];
+      priceListId = customer.priceListId;
+    }
+
     const products = await this.prisma.product.findMany({
-      where: includeInactive ? undefined : { active: true },
+      where: {
+        ...(includeInactive ? undefined : { active: true }),
+        ...(priceListId && {
+          presentations: { some: { priceItems: { some: { priceListId } } } },
+        }),
+      },
       orderBy: { name: "asc" },
       include: {
         presentations: {
@@ -94,8 +114,12 @@ export class ProductsService {
     });
 
     return products.map(({ presentations, ...product }) => {
+      // Filtrando por cliente, el rango es el de SU lista: mezclarlo con el
+      // resto de listas mostraria un precio que ese cliente no paga.
       const items = presentations.flatMap((p) =>
-        p.priceItems.filter((i) => i.priceList.active),
+        p.priceItems.filter(
+          (i) => i.priceList.active && (!priceListId || i.priceListId === priceListId),
+        ),
       );
 
       return {

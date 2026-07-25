@@ -266,7 +266,15 @@ export class CustomersService {
   }
 
   findAll(query: ListCustomersQueryDto = {}) {
-    const { includeInactive, search, companyId, segmentId, paymentCondition, active } = query;
+    const {
+      includeInactive,
+      search,
+      companyId,
+      segmentId,
+      paymentCondition,
+      active,
+      assignedToUserId,
+    } = query;
 
     const where: Prisma.CustomerWhereInput = {};
     if (active !== undefined) {
@@ -276,6 +284,7 @@ export class CustomersService {
     }
     if (companyId) where.companyId = companyId;
     if (segmentId) where.segmentId = segmentId;
+    if (assignedToUserId) where.assignedToUserId = assignedToUserId;
     if (paymentCondition) where.paymentCondition = paymentCondition;
     if (search) {
       where.OR = [
@@ -300,8 +309,11 @@ export class CustomersService {
         paymentCondition: true,
         paymentDays: true,
         active: true,
+        // Lo usa el filtro por cliente del catalogo: sin lista no hay precios.
+        priceListId: true,
         segment: { select: { id: true, name: true } },
         company: { select: { id: true, name: true } },
+        assignedToUser: { select: { id: true, name: true } },
         contacts: {
           select: {
             id: true,

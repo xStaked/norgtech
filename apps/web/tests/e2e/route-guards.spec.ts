@@ -49,6 +49,33 @@ test.describe("resolveRoleRedirect (pure)", () => {
   test("comercial can still create an order via /orders/new", () => {
     expect(resolveRoleRedirect("/orders/new", "comercial" as UserRole)).toBeNull();
   });
+
+  // Analitica: cifras consolidadas de toda la operacion. Solo direccion, y
+  // tambien en las sub-pantallas (el guard casa por prefijo). Espeja el
+  // @Roles de AnalyticsController: si aqui se abriera y alla no, el usuario
+  // llegaria a una pantalla que solo sabe devolver 403.
+  for (const role of ["comercial", "tecnico", "facturacion", "logistica"] as const) {
+    test(`${role} no entra a analitica`, () => {
+      expect(resolveRoleRedirect("/analytics", role as UserRole)).toBe("/dashboard?forbidden=1");
+      expect(resolveRoleRedirect("/analytics/cartera", role as UserRole)).toBe(
+        "/dashboard?forbidden=1",
+      );
+    });
+  }
+
+  for (const role of ["administrador", "director_comercial"] as const) {
+    test(`${role} si entra a analitica y a sus 4 pantallas`, () => {
+      for (const path of [
+        "/analytics",
+        "/analytics/ventas",
+        "/analytics/cartera",
+        "/analytics/embudo",
+        "/analytics/comercial",
+      ]) {
+        expect(resolveRoleRedirect(path, role as UserRole)).toBeNull();
+      }
+    });
+  }
 });
 
 // End-to-end coverage through the real Next.js middleware, using a crafted fake JWT

@@ -84,6 +84,10 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/products": ["administrador", "director_comercial", "comercial"],
     "/segments": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
+    // Cifras consolidadas de toda la operacion: solo direccion. Espeja el
+    // @Roles de AnalyticsController — si aqui se abre y alla no, el usuario
+    // entra a una pantalla que solo sabe devolver 403.
+    "/analytics": ["administrador", "director_comercial"],
     "/users": ["administrador"],
     "/companies": ["administrador", "director_comercial"],
     "/zones": ["administrador", "director_comercial"],

@@ -25,6 +25,11 @@ export class ListCustomersQueryDto extends IncludeInactiveQueryDto {
   segmentId?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  assignedToUserId?: string;
+
+  @IsOptional()
   @IsEnum(PaymentCondition)
   paymentCondition?: PaymentCondition;
 

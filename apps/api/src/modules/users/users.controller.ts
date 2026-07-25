@@ -35,7 +35,16 @@ export class UsersController {
    *
    * Debe declararse antes de cualquier @Get(":id") o la ruta lo capturaria.
    */
-  @Roles("administrador", "comercial", "director_comercial", "logistica")
+  // tecnico y facturacion se suman por el filtro "Vendedor" del listado de
+  // clientes: ven GET /customers, asi que necesitan la lista para filtrarla.
+  @Roles(
+    "administrador",
+    "comercial",
+    "director_comercial",
+    "logistica",
+    "tecnico",
+    "facturacion",
+  )
   @Get("sellers")
   findSellers() {
     return this.usersService.findSellers();

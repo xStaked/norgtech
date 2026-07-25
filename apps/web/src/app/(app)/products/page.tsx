@@ -5,7 +5,8 @@ import { PageHeader } from "@/components/ui/page-header";
 import { ButtonLink } from "@/components/ui/button-link";
 import { ListFilters } from "@/components/ui/list-filters";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { applyFilters, optionsFrom, type SearchParams } from "@/lib/list-filter";
+import { applyFilters, optionsFrom, param, type SearchParams } from "@/lib/list-filter";
+import { buildQueryString } from "@/lib/query-string";
 
 interface Product {
   id: string;
@@ -18,6 +19,13 @@ interface Product {
   priceListCount: number;
   /** Mínimo y máximo por moneda. COP y USD nunca se mezclan. */
   priceRange: Record<string, { min: number; max: number }>;
+}
+
+interface Customer {
+  id: string;
+  displayName: string;
+  /** Sin lista de precios no hay catalogo que filtrar: no se ofrece. */
+  priceListId: string | null;
 }
 
 const AVATAR_COLORS = [
@@ -52,8 +60,15 @@ export default async function ProductsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const response = await apiFetch("/products?includeInactive=true");
+  // El filtro por cliente lo resuelve el API (necesita su lista de precios), no
+  // applyFilters: el catalogo que llega ya viene recortado a ese cliente.
+  const customerId = param(params, "customerId");
+  const [response, customersResponse] = await Promise.all([
+    apiFetch(`/products?${buildQueryString({ includeInactive: "true", customerId })}`),
+    apiFetch("/customers"),
+  ]);
   const all: Product[] = response.ok ? await response.json() : [];
+  const customers: Customer[] = customersResponse.ok ? await customersResponse.json() : [];
 
   const products = applyFilters(all, params, {
     search: (product) => [product.name, product.sku, product.description],
@@ -82,6 +97,13 @@ export default async function ProductsPage({
       <ListFilters
         searchPlaceholder="Buscar producto, SKU o descripción"
         selects={[
+          {
+            key: "customerId",
+            allLabel: "Todos los clientes",
+            options: customers
+              .filter((customer) => customer.priceListId)
+              .map((customer) => ({ value: customer.id, label: customer.displayName })),
+          },
           { key: "unit", allLabel: "Todas las unidades", options: optionsFrom(all, (p) => p.unit) },
           {
             key: "active",
@@ -107,7 +129,11 @@ export default async function ProductsPage({
 
       {products.length === 0 ? (
         <p className="text-muted-foreground">
-          {all.length === 0 ? "No hay productos registrados." : "Ningún producto coincide con los filtros."}
+          {all.length > 0
+            ? "Ningún producto coincide con los filtros."
+            : customerId
+              ? "Este cliente no tiene productos con precio en su lista."
+              : "No hay productos registrados."}
         </p>
       ) : (
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-3">

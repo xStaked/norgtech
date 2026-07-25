@@ -18,6 +18,7 @@ export const protectedPaths = [
   "/companies",
   "/zones",
   "/invoices",
+  "/analytics",
 ];
 
 interface RoleRestrictedRoute {
@@ -35,6 +36,7 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   { prefix: "/invoices/new", isAllowed: (role) => canCreate(role, "invoice") },
   { prefix: "/companies", isAllowed: (role) => canAccess(role, "/companies") },
   { prefix: "/zones", isAllowed: (role) => canAccess(role, "/zones") },
+  { prefix: "/analytics", isAllowed: (role) => canAccess(role, "/analytics") },
 ];
 
 export function matchesPrefix(pathname: string, prefix: string) {

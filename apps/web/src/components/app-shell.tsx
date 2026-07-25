@@ -13,7 +13,8 @@ export async function AppShell({ children }: AppShellProps) {
   return (
     <div className="relative flex min-h-screen bg-background">
       {/* Sidebar */}
-      <aside className="sticky top-0 z-30 hidden h-screen w-[252px] shrink-0 border-r border-sidebar-border bg-sidebar lg:block">
+      {/* El ancho lo pone SidebarNav (cliente): el collapse vive en su estado. */}
+      <aside className="sticky top-0 z-30 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar lg:block">
         <SidebarNav userRole={user?.role ?? null} userName={user?.name ?? null} />
       </aside>
 
