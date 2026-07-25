@@ -8,6 +8,7 @@ import {
   UserRole,
   WhatsAppConversation,
   WhatsAppMessage,
+  WhatsAppMessageRole,
   WhatsAppSenderType,
 } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
@@ -294,7 +295,11 @@ export class NoraRoutingService {
       // de primer contacto indefinidamente.
       if (
         sender.senderType === WhatsAppSenderType.desconocido &&
-        conversation.status !== "nuevo"
+        conversation.status !== "nuevo" &&
+        // Solo escalamos si de verdad intento identificarse con un NIT que no
+        // existe. Un "Hola" repetido no es un intento fallido: se le vuelve a
+        // pedir el NIT, y si insiste sin darlo lo pasamos igual a un humano.
+        (this.looksLikeNit(message.body) || this.senderTurns(context) >= 4)
       ) {
         if (!conversation.assignedToRole && !conversation.assignedToUserId) {
           await this.prisma.whatsAppConversation.update({
@@ -862,6 +867,17 @@ export class NoraRoutingService {
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map((item) => item.customer);
+  }
+
+  private looksLikeNit(messageBody: string) {
+    return /\d{5,}/.test(messageBody.replace(/[.\- ]/g, ""));
+  }
+
+  private senderTurns(context: { recent_messages: Array<{ role: string }> }) {
+    // recent_messages trae los ultimos 8 turnos, suficiente para el tope.
+    return context.recent_messages.filter(
+      (message) => message.role === WhatsAppMessageRole.user,
+    ).length;
   }
 
   private async identifyUnknownSender(

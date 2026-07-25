@@ -3154,9 +3154,20 @@ describe("WhatsApp inbox", () => {
     );
   });
 
+  it("keeps asking for the NIT instead of escalating a plain greeting", async () => {
+    await sendInbound("573008882223", "Hola", "wamid-greet-1");
+    const response = await sendInbound("573008882223", "Hola?", "wamid-greet-2");
+
+    const conversation = conversations.find(
+      (item) => item.id === response.body.conversationId,
+    );
+    expect(conversation).toMatchObject({ senderType: WhatsAppSenderType.desconocido });
+    expect(conversation).not.toHaveProperty("assignedToRole", UserRole.comercial);
+  });
+
   it("hands an unidentifiable sender to a human instead of repeating the greeting", async () => {
     await sendInbound("573008882222", "Hola", "wamid-no-id-1");
-    const response = await sendInbound("573008882222", "qwerty asdfgh", "wamid-no-id-2");
+    const response = await sendInbound("573008882222", "Mi NIT es 999999999-9", "wamid-no-id-2");
     const conversationId = response.body.conversationId;
 
     expect(conversations).toContainEqual(
