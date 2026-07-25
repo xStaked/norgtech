@@ -79,8 +79,11 @@ export class NoraRoutingService {
     // siempre: nada leia la respuesta del cliente, asi que Nora repetia el
     // saludo de primer contacto en cada mensaje. Nora le pide el NIT y aqui
     // lo usamos para dejar la conversacion enlazada al cliente.
+    let justIdentified = false;
     if (sender.senderType === WhatsAppSenderType.desconocido) {
       sender = (await this.identifyUnknownSender(conversation, message.body)) ?? sender;
+      justIdentified =
+        !conversation.customerId && sender.senderType === WhatsAppSenderType.cliente;
     }
 
     await this.updateConversationIdentity(conversation.id, sender);
@@ -117,6 +120,20 @@ export class NoraRoutingService {
       const context = await this.whatsAppService.getNoraConversationContext(conversation.id);
       const openCase = await this.noraCaseService.findOpenCase(conversation.id);
       const mediaPayload = this.mediaPayloadFromMessage(message);
+
+      // El mensaje que trae el NIT no dice que necesita el cliente, asi que en
+      // vez de mandarlo al agente le confirmamos quien es y le ofrecemos las
+      // opciones. Lo que responda ya entra como mensaje normal de cliente.
+      if (justIdentified) {
+        const customerName = context.customer?.displayName ?? context.customer?.legalName;
+        await this.whatsAppService.sendAgentReply(
+          conversation.id,
+          `${customerName ? `Listo, te identifique como ${customerName}. ` : "Listo, ya te identifique. "}` +
+            "Puedo ayudarte a hacer un pedido, consultar el estado de tus pedidos " +
+            "o comunicarte con un asesor. ¿Que necesitas?",
+        );
+        return;
+      }
 
       if (
         "userId" in sender &&

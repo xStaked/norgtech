@@ -3121,6 +3121,14 @@ describe("WhatsApp inbox", () => {
         customerId: "customer-1",
       }),
     );
+    // Identificado != atendido: hay que preguntarle que necesita.
+    expect(
+      messages.filter((message) => message.conversationId === response.body.conversationId),
+    ).toContainEqual(
+      expect.objectContaining({
+        body: expect.stringContaining("Agro Norte"),
+      }),
+    );
   });
 
   it("keeps one conversation per phone when two people send the same NIT", async () => {
