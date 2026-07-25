@@ -93,6 +93,14 @@ describe("WhatsApp inbox", () => {
       zoneId: "zone-2",
       isActive: true,
     },
+    // Segunda zona activa: con mas de una, la del pedido solo puede venir de lo
+    // que eligio el cliente, nunca de un default.
+    {
+      id: "customer-zone-2-costa",
+      customerId: "customer-2",
+      zoneId: "zone-1",
+      isActive: true,
+    },
   ];
   const products = [
     {
@@ -614,7 +622,19 @@ describe("WhatsApp inbox", () => {
           select?: Record<string, unknown>;
         }) => {
           const customer = customers.find((customer) => customer.id === id) ?? null;
-          return customer && select ? applySelect(customer, select) : customer;
+          if (!customer) {
+            return null;
+          }
+          const result = select ? applySelect(customer, select) : { ...customer };
+          if (select?.customerZones) {
+            result.customerZones = customerZones
+              .filter((customerZone) => customerZone.customerId === id && customerZone.isActive)
+              .map((customerZone) => ({
+                id: customerZone.id,
+                zone: zones.find((zone) => zone.id === customerZone.zoneId) ?? null,
+              }));
+          }
+          return result;
         },
         findMany: async ({ select }: { select?: Record<string, unknown> } = {}) =>
           customers.map((customer) => applySelect(customer, select)),
@@ -5053,6 +5073,7 @@ describe("WhatsApp inbox", () => {
             order_case: {
               orderRef: null,
               items: [{ productRef: "asatech", quantity: 10 }],
+              zona: "Interior",
               motivo: "10 kilos de asatech",
             },
           }),
@@ -5068,6 +5089,8 @@ describe("WhatsApp inbox", () => {
         const data = (created as Record<string, unknown>).extractedData as Record<string, unknown>;
         // Sin empresa el asesor no puede aceptar el caso: hay mas de una activa.
         expect(data.companyRef).toBe("company-1");
+        // La zona que eligio el cliente, resuelta contra las suyas.
+        expect(data.customerZoneId).toBe("customer-zone-2");
         expect((data.items as Array<Record<string, unknown>>)[0].productRef).toBe("asatech");
       } finally {
         if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;

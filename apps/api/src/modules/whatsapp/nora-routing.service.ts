@@ -375,6 +375,7 @@ export class NoraRoutingService {
             }
 
             if (items.length > 0) {
+              const chosenZoneId = this.zoneChosenByCustomer(customerSnapshot.zonas, draft.zona);
               await this.noraCaseService.createCase({
                 conversationId: conversation.id,
                 type: NoraConversationCaseType.order,
@@ -386,6 +387,7 @@ export class NoraRoutingService {
                   // las del propio cliente para que el asesor pueda aceptar el caso
                   // sin datos faltantes. Si repite un pedido, mandan los de ese.
                   ...(await this.orderDefaultsForCustomer(sender.customerId)),
+                  ...(chosenZoneId && { customerZoneId: chosenZoneId }),
                   ...(referenced?.companyRef && { companyRef: referenced.companyRef }),
                   ...(referenced?.customerZoneId && { customerZoneId: referenced.customerZoneId }),
                   items,
@@ -873,6 +875,18 @@ export class NoraRoutingService {
       .map((item) => item.customer);
   }
 
+  /** Zona que eligio el cliente, resuelta contra las suyas (nunca inventa una). */
+  private zoneChosenByCustomer(
+    zonas: Array<{ id: string; nombre: string }>,
+    zona?: string | null,
+  ) {
+    const normalized = this.normalizeText(zona);
+    if (!normalized) {
+      return undefined;
+    }
+    return zonas.find((item) => this.normalizeText(item.nombre) === normalized)?.id;
+  }
+
   /**
    * Empresa y zona con las que el asesor puede aceptar el pedido sin volver a
    * preguntar. La zona solo se asume cuando el cliente tiene una sola activa;
@@ -1235,7 +1249,13 @@ export class NoraRoutingService {
     const [customer, orders, invoices] = await Promise.all([
       this.prisma.customer.findUnique({
         where: { id: customerId },
-        select: { displayName: true },
+        select: {
+          displayName: true,
+          customerZones: {
+            where: { isActive: true },
+            select: { id: true, zone: { select: { name: true } } },
+          },
+        },
       }),
       this.prisma.order.findMany({
         where: { customerId },
@@ -1279,6 +1299,12 @@ export class NoraRoutingService {
 
     return {
       customerName: customer?.displayName ?? null,
+      // Zonas de despacho del cliente: si tiene varias, Nora le pregunta a cual
+      // despachar antes de armar el pedido (el asesor ya no tiene que adivinar).
+      zonas: (customer?.customerZones ?? []).map((customerZone) => ({
+        id: customerZone.id,
+        nombre: customerZone.zone?.name ?? "",
+      })),
       recentOrders: orders.map((o) => ({
         orderNumber: o.orderNumber,
         status: o.status,
@@ -1317,7 +1343,12 @@ export class NoraRoutingService {
       case_update: Record<string, unknown> | null;
       executed_entity: Record<string, unknown> | null;
       handoff: { needed: boolean; reason: string | null; rol: string | null } | null;
-      order_case: { orderRef: string | null; items: Array<Record<string, unknown>>; motivo: string } | null;
+      order_case: {
+        orderRef: string | null;
+        items: Array<Record<string, unknown>>;
+        zona?: string | null;
+        motivo: string;
+      } | null;
     }>;
   }
 

@@ -56,6 +56,9 @@ Cuando el cliente quiere HACER o REPETIR un pedido (usa la tool armar_pedido):
   al revisar el pedido. Que no reconozcas el producto NUNCA es motivo para derivar.
 - Con producto y cantidad ya puedes armar: llama armar_pedido. Si falta la cantidad o el
   producto, pregúntaselo al cliente; tampoco derives por eso.
+- Zona de despacho: si el cliente tiene VARIAS en [DATOS DEL CLIENTE], pregúntale a cuál
+  despachar ANTES de armar y pasa ese nombre en 'zona'. Con una sola (o ninguna) no
+  preguntes nada y deja 'zona' vacío.
 - Siempre pasa un 'motivo' de una frase. Luego dile al cliente, cálido, que un asesor
   confirma su pedido y le avisa. NO prometas precios ni fechas.
 
@@ -92,7 +95,12 @@ def derivar_a_unicanal(motivo: str, rol: str) -> str:
 
 
 @tool
-def armar_pedido(motivo: str, order_ref: str = "", items: list[dict] | None = None) -> str:
+def armar_pedido(
+    motivo: str,
+    order_ref: str = "",
+    items: list[dict] | None = None,
+    zona: str = "",
+) -> str:
     """Arma un pedido para que un asesor lo confirme. Úsala SIEMPRE que el cliente
     quiera HACER o REPETIR un pedido, aunque no reconozcas el producto: el asesor
     valida producto, presentación y precio antes de crearlo.
@@ -103,9 +111,16 @@ def armar_pedido(motivo: str, order_ref: str = "", items: list[dict] | None = No
             pedido tal como aparece en [DATOS DEL CLIENTE] (ej. "NT-100"). Vacío si es nuevo.
         items: Para un pedido nuevo, lista de {"productRef": nombre del producto tal cual
             lo dijo el cliente, "quantity": cantidad}.
+        zona: Zona de despacho elegida por el cliente, con el nombre tal como aparece en
+            [DATOS DEL CLIENTE]. Vacío si el cliente tiene una sola zona o ninguna.
     """
     payload = json.dumps(
-        {"orderRef": order_ref or None, "items": items or [], "motivo": motivo},
+        {
+            "orderRef": order_ref or None,
+            "items": items or [],
+            "zona": zona or None,
+            "motivo": motivo,
+        },
         ensure_ascii=False,
     )
     return f"PEDIDO|{payload}"
@@ -150,6 +165,7 @@ def _snapshot_block(request: WhatsAppAgentRequest) -> str:
     return (
         "[DATOS DEL CLIENTE]\n"
         f"- cliente: {snap.customerName or 'desconocido'}\n"
+        f"- zonas de despacho: {json.dumps(snap.zonas, ensure_ascii=False)}\n"
         f"- pedidos recientes: {json.dumps(snap.recentOrders, ensure_ascii=False)}\n"
         f"- cartera: {json.dumps(snap.cartera, ensure_ascii=False)}"
     )
@@ -194,6 +210,7 @@ def _extract_order(messages: list) -> NoraOrderDraft | None:
                 return NoraOrderDraft(
                     orderRef=data.get("orderRef"),
                     items=data.get("items") or [],
+                    zona=data.get("zona"),
                     motivo=data.get("motivo") or "pedido",
                 )
     return None
