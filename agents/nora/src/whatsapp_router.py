@@ -30,8 +30,8 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             intent="primer_contacto",
             summary=f"Numero no registrado inicia conversacion: {request.message.strip()}",
             suggested_reply=(
-                "Hola, recibimos tu mensaje. Para ayudarte, por favor comparte tu nombre "
-                "y la empresa o cliente que representas."
+                "Hola, recibimos tu mensaje. Para identificarte, por favor envianos "
+                "el NIT de tu empresa."
             ),
             requires_human_review=False,
             risk_level="medium",

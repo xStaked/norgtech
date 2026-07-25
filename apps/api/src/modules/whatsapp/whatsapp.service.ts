@@ -66,7 +66,9 @@ const sendMessageConversationInclude = {
 export type ResolvedWhatsAppSender =
   | {
       senderType: typeof WhatsAppSenderType.cliente;
-      contactId: string;
+      // null cuando el cliente se identifico por texto y aun no hay Contact
+      // con ese telefono en la agenda.
+      contactId: string | null;
       customerId: string;
     }
   | {

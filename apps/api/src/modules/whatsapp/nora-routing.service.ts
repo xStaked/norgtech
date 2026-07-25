@@ -73,7 +73,15 @@ export class NoraRoutingService {
   ) {}
 
   async routeInboundMessage({ conversation, message }: RouteInboundMessageInput) {
-    const sender = await this.whatsAppService.resolveSenderByPhone(conversation.phone);
+    let sender = await this.whatsAppService.resolveSenderByPhone(conversation.phone);
+
+    // Un numero que no esta en la agenda quedaba como "desconocido" para
+    // siempre: nada leia la respuesta del cliente, asi que Nora repetia el
+    // saludo de primer contacto en cada mensaje. Nora le pide el NIT y aqui
+    // lo usamos para dejar la conversacion enlazada al cliente.
+    if (sender.senderType === WhatsAppSenderType.desconocido) {
+      sender = (await this.identifyUnknownSender(conversation, message.body)) ?? sender;
+    }
 
     await this.updateConversationIdentity(conversation.id, sender);
 
@@ -261,6 +269,27 @@ export class NoraRoutingService {
         (conversation.assignedToRole || conversation.assignedToUserId) &&
         (conversation.status === "pendiente" || conversation.status === "en_gestion")
       ) {
+        return;
+      }
+
+      // Ya le pedimos el NIT (eso puso la conversacion en "pendiente") y
+      // seguimos sin reconocerlo: pasa a un humano en vez de repetir el saludo
+      // de primer contacto indefinidamente.
+      if (
+        sender.senderType === WhatsAppSenderType.desconocido &&
+        conversation.status !== "nuevo"
+      ) {
+        if (!conversation.assignedToRole && !conversation.assignedToUserId) {
+          await this.prisma.whatsAppConversation.update({
+            where: { id: conversation.id },
+            data: { assignedToRole: UserRole.comercial, status: "pendiente" },
+          });
+          await this.whatsAppService.sendAgentReply(
+            conversation.id,
+            "Gracias. No pude identificar tu empresa con ese NIT; " +
+              "un asesor te va a contactar en breve.",
+          );
+        }
         return;
       }
 
@@ -816,6 +845,64 @@ export class NoraRoutingService {
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map((item) => item.customer);
+  }
+
+  private async identifyUnknownSender(
+    conversation: WhatsAppConversation,
+    messageBody: string,
+  ): Promise<ResolvedWhatsAppSender | null> {
+    if (conversation.customerId) {
+      return {
+        senderType: WhatsAppSenderType.cliente,
+        customerId: conversation.customerId,
+        contactId: conversation.contactId,
+      };
+    }
+
+    const customer = await this.identifyCustomerFromMessage(messageBody);
+    if (!customer) {
+      return null;
+    }
+
+    this.logger.log(
+      `Conversacion ${conversation.id} identificada como cliente ${customer.id} por el texto del mensaje`,
+    );
+    return {
+      senderType: WhatsAppSenderType.cliente,
+      customerId: customer.id,
+      contactId: null,
+    };
+  }
+
+  /**
+   * Busca el NIT que escribe un numero desconocido ("890201881-4", "890201881").
+   * Compara solo digitos porque el taxId se guarda con puntos/guiones libres, y
+   * tolera que falte el digito de verificacion. Solo enlaza cuando hay UNA sola
+   * coincidencia: si no, la conversacion pasa a un humano.
+   */
+  private async identifyCustomerFromMessage(messageBody: string) {
+    const messageNits = (messageBody.match(/\d[\d.\- ]{4,}\d/g) ?? []).map((value) =>
+      value.replace(/\D/g, ""),
+    );
+    if (messageNits.length === 0) {
+      return null;
+    }
+
+    // ponytail: comparacion en memoria (~500 clientes). Si crece, guardar el
+    // taxId normalizado en una columna indexada y filtrar en SQL.
+    const candidates = await this.prisma.customer.findMany({
+      where: { active: true },
+      select: { id: true, taxId: true },
+    });
+
+    const matches = candidates.filter((customer) => {
+      const digits = (customer.taxId ?? "").replace(/\D/g, "");
+      return (
+        digits.length >= 6 &&
+        messageNits.some((nit) => nit.startsWith(digits) || digits.startsWith(nit))
+      );
+    });
+    return matches.length === 1 ? matches[0] : null;
   }
 
   private visitConfirmationQuestion(data: Record<string, unknown>) {

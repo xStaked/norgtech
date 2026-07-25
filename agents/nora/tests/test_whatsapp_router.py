@@ -633,7 +633,7 @@ def test_unknown_unregistered_sender_gets_first_contact_response_without_tools()
     assert result["intent"] == "primer_contacto"
     assert result["requires_human_review"] is False
     assert result["proposals"] == []
-    assert "nombre" in result["suggested_reply"].lower()
+    assert "nit" in result["suggested_reply"].lower()
 
 
 def test_payment_support_with_customer_context_returns_proposal():

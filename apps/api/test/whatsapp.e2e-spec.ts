@@ -62,7 +62,7 @@ describe("WhatsApp inbox", () => {
   ];
 
   const customers = [
-    { id: "customer-1", displayName: "Agro Norte", legalName: "Agro Norte SAS", companyId: "company-1" },
+    { id: "customer-1", displayName: "Agro Norte", legalName: "Agro Norte SAS", companyId: "company-1", taxId: "890201881-4" },
     { id: "customer-2", displayName: "Agro Sur", legalName: "Agro Sur SAS", companyId: "company-1" },
   ];
   const companies = [
@@ -616,6 +616,8 @@ describe("WhatsApp inbox", () => {
           const customer = customers.find((customer) => customer.id === id) ?? null;
           return customer && select ? applySelect(customer, select) : customer;
         },
+        findMany: async ({ select }: { select?: Record<string, unknown> } = {}) =>
+          customers.map((customer) => applySelect(customer, select)),
       },
       company: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
@@ -3091,6 +3093,52 @@ describe("WhatsApp inbox", () => {
       }),
     );
     expect(orders).toHaveLength(orderCountBefore);
+  });
+
+  const sendInbound = (from: string, body: string, id: string) =>
+    request(app.getHttpServer())
+      .post("/whatsapp/webhooks/kapso")
+      .send({
+        type: "whatsapp.message.received",
+        data: {
+          phone_number_id: "phone-number-1",
+          message: { id, from, text: { body } },
+        },
+      })
+      .expect(201);
+
+  it.each([
+    ["con guion", "890201881-4", "573008881111"],
+    ["sin digito de verificacion", "Mi NIT es 890201881", "573008881112"],
+  ])("identifies an unknown sender by its NIT (%s)", async (_label, reply, phone) => {
+    await sendInbound(phone, "Hola", `wamid-id-${phone}-1`);
+    const response = await sendInbound(phone, reply, `wamid-id-${phone}-2`);
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: response.body.conversationId,
+        senderType: WhatsAppSenderType.cliente,
+        customerId: "customer-1",
+      }),
+    );
+  });
+
+  it("hands an unidentifiable sender to a human instead of repeating the greeting", async () => {
+    await sendInbound("573008882222", "Hola", "wamid-no-id-1");
+    const response = await sendInbound("573008882222", "qwerty asdfgh", "wamid-no-id-2");
+    const conversationId = response.body.conversationId;
+
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: conversationId,
+        senderType: WhatsAppSenderType.desconocido,
+        assignedToRole: UserRole.comercial,
+        status: "pendiente",
+      }),
+    );
+    expect(
+      messages.filter((message) => message.conversationId === conversationId),
+    ).toContainEqual(expect.objectContaining({ body: expect.stringContaining("asesor") }));
   });
 
   it("never runs order automation for desconocido senders even when Nora returns intent=pedido with a valid order_candidate", async () => {
