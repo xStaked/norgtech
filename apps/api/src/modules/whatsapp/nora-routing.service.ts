@@ -404,9 +404,19 @@ export class NoraRoutingService {
                 },
               });
 
+              // El pedido salio bien: en la CONVERSACION no queda nada pendiente,
+              // lo pendiente es el caso (que tiene su notificacion y su boton en
+              // el panel). Con "pendiente" + asignada, la regla del unicanal calla
+              // a Nora y el cliente queda bloqueado hasta que un asesor abra la
+              // bandeja, sin que nadie se entere. Sigue asignada al rol para que
+              // el equipo la vea, pero resuelta para que Nora lo siga atendiendo.
               await this.prisma.whatsAppConversation.update({
                 where: { id: conversation.id },
-                data: { assignedToRole: UserRole.comercial, status: "pendiente", assignedToUserId: null },
+                data: {
+                  assignedToRole: UserRole.comercial,
+                  status: "resuelto",
+                  assignedToUserId: null,
+                },
               });
 
               await this.prisma.noraActionLog.update({

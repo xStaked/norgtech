@@ -5087,10 +5087,12 @@ describe("WhatsApp inbox", () => {
         // Al repetir un pedido manda la empresa de ese pedido, no la del cliente.
         expect(data.companyRef).toBe("NT");
 
-        // conversación asignada por rol (comercial) — ya no al buzón único / nota interna
+        // Asignada por rol (comercial) para que el equipo la vea, pero resuelta:
+        // el pedido salio bien, asi que Nora tiene que poder seguir atendiendo al
+        // cliente en vez de dejarlo mudo hasta que alguien abra la bandeja.
         expect(conversationUpdateMock).toHaveBeenCalledWith(
           expect.objectContaining({
-            data: expect.objectContaining({ assignedToRole: "comercial", status: "pendiente" }),
+            data: expect.objectContaining({ assignedToRole: "comercial", status: "resuelto" }),
           }),
         );
       } finally {
@@ -5146,6 +5148,50 @@ describe("WhatsApp inbox", () => {
         ).toContainEqual(
           expect.objectContaining({ body: expect.stringContaining("un asesor confirma tu pedido") }),
         );
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+        else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
+      }
+    });
+
+    it("keeps answering the customer after the order was armed", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      // Estado en el que queda la conversacion al armar un pedido: asignada al
+      // rol (para que el equipo la vea) pero resuelta. El caso contrario
+      // (asignada + pendiente = Nora callada) lo cubre el test de mas abajo.
+      const index = conversations.findIndex(
+        (item) => item.id === "conversation-customer-agent",
+      );
+      conversations[index] = {
+        ...conversations[index],
+        assignedToRole: UserRole.comercial,
+        status: WhatsAppConversationStatus.resuelto,
+      } as unknown as (typeof conversations)[number];
+      const agentCallsBefore = (globalThis.fetch as jest.Mock).mock.calls.filter(
+        ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+      ).length;
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "¡Hola de nuevo! ¿En qué te ayudo?",
+            case_update: null,
+            executed_entity: null,
+            handoff: { needed: false },
+            order_case: null,
+          }),
+        });
+
+        await postCustomerWebhookText("Hola");
+
+        // Si el pedido armado bloqueara la conversacion, este mensaje no llegaria
+        // al agente y el cliente quedaria hablando solo.
+        expect(
+          (globalThis.fetch as jest.Mock).mock.calls.filter(
+            ([url]) => typeof url === "string" && url.endsWith("/whatsapp/agent/customer"),
+          ).length,
+        ).toBe(agentCallsBefore + 1);
       } finally {
         if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
         else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
