@@ -4,6 +4,7 @@ import { ConfigModule } from "@nestjs/config";
 import { ScheduleModule } from "@nestjs/schedule";
 import { ThrottlerModule, ThrottlerGuard } from "@nestjs/throttler";
 import { HealthController } from "./health.controller";
+import { AnalyticsModule } from "./modules/analytics/analytics.module";
 import { AuditModule } from "./modules/audit/audit.module";
 import { AuthModule } from "./modules/auth/auth.module";
 import { CalculatorsModule } from "./modules/calculators/calculators.module";
@@ -46,6 +47,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     CompaniesModule,
     ContactsModule,
     DashboardModule,
+    AnalyticsModule,
     AuditModule,
     NotificationsModule,
     CustomersModule,

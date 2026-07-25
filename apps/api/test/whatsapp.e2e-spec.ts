@@ -1474,6 +1474,16 @@ describe("WhatsApp inbox", () => {
         deliveryStatus: "sent",
       }),
     );
+    // Con el pedido creado se suelta la conversacion: si sigue asignada, Nora
+    // no le vuelve a responder al cliente nunca mas.
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: "conversation-1",
+        assignedToRole: null,
+        assignedToUserId: null,
+        status: WhatsAppConversationStatus.resuelto,
+      }),
+    );
   });
 
   it("does not create a duplicate order from an already executed Nora order case", async () => {

@@ -574,6 +574,19 @@ export class WhatsAppService {
       });
     }
 
+    // El pedido ya esta creado: se acabo el motivo por el que la conversacion
+    // estaba con un humano. Si no la soltamos aca, queda asignada para siempre
+    // y Nora nunca vuelve a responderle al cliente (la regla del unicanal la
+    // calla mientras haya alguien a cargo).
+    await this.prisma.whatsAppConversation.update({
+      where: { id: conversationId },
+      data: {
+        assignedToRole: null,
+        assignedToUserId: null,
+        status: WhatsAppConversationStatus.resuelto,
+      },
+    });
+
     let replyDelivery:
       | { sent: true }
       | { sent: false; warning: string } = { sent: true };
