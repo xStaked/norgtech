@@ -92,6 +92,17 @@ export function CustomerInfoPanel({
         setError("No se pudo crear el pedido");
         return;
       }
+      // El endpoint responde 2xx aunque no cree nada (falta la empresa, la zona,
+      // el cliente...). Sin esto el boton no hacia nada y no se sabia por que.
+      const result = (await response.json().catch(() => null)) as {
+        decision?: string;
+        question?: string;
+        reason?: string;
+      } | null;
+      if (result && result.decision !== "created") {
+        setError(result.question ?? result.reason ?? "No se pudo crear el pedido");
+        return;
+      }
       onCreated();
     } finally {
       setCreating(false);

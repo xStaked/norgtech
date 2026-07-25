@@ -382,6 +382,10 @@ export class NoraRoutingService {
                 createdByUserId: null,
                 extractedData: {
                   customerId: sender.customerId,
+                  // El cliente no sabe de empresas internas ni elige zona: tomamos
+                  // las del propio cliente para que el asesor pueda aceptar el caso
+                  // sin datos faltantes. Si repite un pedido, mandan los de ese.
+                  ...(await this.orderDefaultsForCustomer(sender.customerId)),
                   ...(referenced?.companyRef && { companyRef: referenced.companyRef }),
                   ...(referenced?.customerZoneId && { customerZoneId: referenced.customerZoneId }),
                   items,
@@ -867,6 +871,28 @@ export class NoraRoutingService {
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
       .map((item) => item.customer);
+  }
+
+  /**
+   * Empresa y zona con las que el asesor puede aceptar el pedido sin volver a
+   * preguntar. La zona solo se asume cuando el cliente tiene una sola activa;
+   * con varias queda vacia a proposito para que la elija un humano.
+   */
+  private async orderDefaultsForCustomer(customerId: string) {
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: {
+        companyId: true,
+        customerZones: { where: { isActive: true }, select: { id: true } },
+      },
+    });
+
+    return {
+      ...(customer?.companyId && { companyRef: customer.companyId }),
+      ...(customer?.customerZones?.length === 1 && {
+        customerZoneId: customer.customerZones[0].id,
+      }),
+    };
   }
 
   private looksLikeNit(messageBody: string) {

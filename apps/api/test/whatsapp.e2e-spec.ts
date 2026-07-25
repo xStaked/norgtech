@@ -5024,6 +5024,8 @@ describe("WhatsApp inbox", () => {
         expect(data.customerId).toBe("customer-2");
         expect((data.items as unknown[]).length).toBeGreaterThan(0);
         expect((data.items as Array<Record<string, unknown>>)[0].productRef).toBe("FERT-001");
+        // Al repetir un pedido manda la empresa de ese pedido, no la del cliente.
+        expect(data.companyRef).toBe("NT");
 
         // conversación asignada por rol (comercial) — ya no al buzón único / nota interna
         expect(conversationUpdateMock).toHaveBeenCalledWith(
@@ -5034,6 +5036,42 @@ describe("WhatsApp inbox", () => {
       } finally {
         if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT; else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
         if (prevUnicanal === undefined) delete process.env.NORA_UNICANAL_USER_ID; else process.env.NORA_UNICANAL_USER_ID = prevUnicanal;
+      }
+    });
+
+    it("puts the customer's own company on a brand-new order case", async () => {
+      const prevFlag = process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+      process.env.NORA_WHATSAPP_CUSTOMER_AGENT = "true";
+      try {
+        (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({
+            reply_text: "Listo, un asesor confirma tu pedido.",
+            case_update: null,
+            executed_entity: null,
+            handoff: { needed: false },
+            order_case: {
+              orderRef: null,
+              items: [{ productRef: "asatech", quantity: 10 }],
+              motivo: "10 kilos de asatech",
+            },
+          }),
+        });
+
+        await postCustomerWebhookText("Necesito 10 kilos de asatech");
+
+        const created = [...noraCases]
+          .reverse()
+          .find(
+            (c) => c.conversationId === "conversation-customer-agent" && String(c.type) === "order",
+          );
+        const data = (created as Record<string, unknown>).extractedData as Record<string, unknown>;
+        // Sin empresa el asesor no puede aceptar el caso: hay mas de una activa.
+        expect(data.companyRef).toBe("company-1");
+        expect((data.items as Array<Record<string, unknown>>)[0].productRef).toBe("asatech");
+      } finally {
+        if (prevFlag === undefined) delete process.env.NORA_WHATSAPP_CUSTOMER_AGENT;
+        else process.env.NORA_WHATSAPP_CUSTOMER_AGENT = prevFlag;
       }
     });
 

@@ -51,15 +51,21 @@ Qué puedes hacer:
 Cuando el cliente quiere HACER o REPETIR un pedido (usa la tool armar_pedido):
 - Si quiere repetir uno anterior, pasa order_ref con el número del pedido de [DATOS DEL CLIENTE].
 - Si es un pedido nuevo, pasa items con [{"productRef": producto, "quantity": cantidad}].
+- 'productRef' es el nombre del producto TAL CUAL lo dijo el cliente. NO conoces el
+  catálogo y NO tienes que validarlo: el asesor verifica producto, presentación y precio
+  al revisar el pedido. Que no reconozcas el producto NUNCA es motivo para derivar.
+- Con producto y cantidad ya puedes armar: llama armar_pedido. Si falta la cantidad o el
+  producto, pregúntaselo al cliente; tampoco derives por eso.
 - Siempre pasa un 'motivo' de una frase. Luego dile al cliente, cálido, que un asesor
   confirma su pedido y le avisa. NO prometas precios ni fechas.
 
 Deriva a un humano (usa derivar_a_unicanal) cuando: hay un reclamo/queja/problema,
-piden info que NO está en [DATOS DEL CLIENTE], quieren hacer/cambiar un pedido que no
-puedes armar, o piden hablar con un área o persona. SIEMPRE pasa el 'rol' del área que
-corresponde (comercial, tecnico, facturacion, logistica) y un 'motivo' corto. Si NO
-tienes claro a qué área mandarlo, NO derives: pregúntale al cliente con cuál área quiere
-hablar (comercial, soporte técnico, facturación o entregas) y espera su respuesta.
+piden info que NO está en [DATOS DEL CLIENTE], quieren CAMBIAR o cancelar un pedido ya
+hecho, o piden hablar con un área o persona. Un pedido NUEVO nunca se deriva: se arma con
+armar_pedido. SIEMPRE pasa el 'rol' del área que corresponde (comercial, tecnico,
+facturacion, logistica) y un 'motivo' corto. Si NO tienes claro a qué área mandarlo, NO
+derives: pregúntale al cliente con cuál área quiere hablar (comercial, soporte técnico,
+facturación o entregas) y espera su respuesta.
 
 Si puedes resolver con los datos disponibles, responde directo y no derives.
 """
@@ -69,12 +75,15 @@ Si puedes resolver con los datos disponibles, responde directo y no derives.
 def derivar_a_unicanal(motivo: str, rol: str) -> str:
     """Deriva la conversación al área humana correcta cuando el cliente necesita
     algo que no puedes resolver con los datos disponibles (reclamo, info faltante,
-    hacer/cambiar un pedido, o hablar con un área/persona).
+    cambiar o cancelar un pedido ya hecho, o hablar con un área/persona).
+
+    NO la uses para un pedido nuevo: para eso está armar_pedido, aunque no conozcas
+    el producto que pide.
 
     Args:
         motivo: Frase corta con el motivo de la derivación.
         rol: El área que debe atender. EXACTAMENTE uno de:
-            "comercial"  -> ventas, cotizaciones, hablar con su asesor, hacer/cambiar pedidos.
+            "comercial"  -> ventas, cotizaciones, hablar con su asesor, cambios de pedidos.
             "tecnico"    -> soporte, instalación, fallas, asistencia técnica.
             "facturacion"-> facturas, pagos, cartera, comprobantes.
             "logistica"  -> entregas, envíos, transporte, dónde está el pedido.
@@ -84,14 +93,16 @@ def derivar_a_unicanal(motivo: str, rol: str) -> str:
 
 @tool
 def armar_pedido(motivo: str, order_ref: str = "", items: list[dict] | None = None) -> str:
-    """Arma un pedido para que un asesor lo confirme. Úsala cuando el cliente
-    quiere HACER o REPETIR un pedido.
+    """Arma un pedido para que un asesor lo confirme. Úsala SIEMPRE que el cliente
+    quiera HACER o REPETIR un pedido, aunque no reconozcas el producto: el asesor
+    valida producto, presentación y precio antes de crearlo.
 
     Args:
         motivo: Frase corta con lo que pidió el cliente.
         order_ref: Si el cliente quiere repetir un pedido anterior, el número de ese
             pedido tal como aparece en [DATOS DEL CLIENTE] (ej. "NT-100"). Vacío si es nuevo.
-        items: Para un pedido nuevo, lista de {"productRef": nombre del producto, "quantity": cantidad}.
+        items: Para un pedido nuevo, lista de {"productRef": nombre del producto tal cual
+            lo dijo el cliente, "quantity": cantidad}.
     """
     payload = json.dumps(
         {"orderRef": order_ref or None, "items": items or [], "motivo": motivo},
