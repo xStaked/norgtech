@@ -864,14 +864,84 @@ export class NoraRoutingService {
       return null;
     }
 
+    // Varias personas de la misma empresa escriben desde numeros distintos, asi
+    // que cada conversacion queda con el mismo cliente. Guardamos con quien
+    // hablamos para poder distinguirlas en la bandeja; el nombre del perfil de
+    // WhatsApp manda si ya lo tenemos.
+    if (!conversation.senderName) {
+      const senderName = this.senderNameFromMessage(messageBody);
+      if (senderName) {
+        await this.prisma.whatsAppConversation.update({
+          where: { id: conversation.id },
+          data: { senderName },
+        });
+      }
+    }
+
     this.logger.log(
-      `Conversacion ${conversation.id} identificada como cliente ${customer.id} por el texto del mensaje`,
+      `Conversacion ${conversation.id} identificada como cliente ${customer.id} por el NIT`,
     );
     return {
       senderType: WhatsAppSenderType.cliente,
       customerId: customer.id,
       contactId: null,
     };
+  }
+
+  private static readonly SENDER_NAME_FILLERS = new Set([
+    "hola",
+    "buenas",
+    "buenos",
+    "dias",
+    "tardes",
+    "noches",
+    "nit",
+    "mi",
+    "es",
+    "soy",
+    "gracias",
+    "empresa",
+    "de",
+    "la",
+    "el",
+    "con",
+    "que",
+  ]);
+
+  /**
+   * Saca el nombre de quien escribe del mismo mensaje del NIT ("Soy Omar, NIT
+   * 890201881-4"). Es solo la etiqueta de la bandeja, por eso ante la duda
+   * devuelve null y se conserva el nombre del perfil de WhatsApp.
+   */
+  private senderNameFromMessage(messageBody: string) {
+    const withoutNit = messageBody.replace(/\d[\d.\- ]{4,}\d/g, " ");
+    const explicit = withoutNit.match(
+      /\b(?:soy|me llamo|mi nombre es|nombre\s*:)\s+([\p{L}][\p{L}\s]{2,40})/iu,
+    );
+    const words = (explicit?.[1] ?? withoutNit)
+      .replace(/[^\p{L}\s]/gu, " ")
+      .split(/\s+/)
+      .filter((word) => word.length >= 2);
+
+    if (explicit) {
+      // "Soy Omar de AVSA" -> "Omar": el nombre termina donde empieza el relleno.
+      const nameWords: string[] = [];
+      for (const word of words.slice(0, 3)) {
+        if (NoraRoutingService.SENDER_NAME_FILLERS.has(this.normalizeText(word))) {
+          break;
+        }
+        nameWords.push(word);
+      }
+      return nameWords.join(" ") || null;
+    }
+
+    // Sin "soy"/"me llamo" solo aceptamos un texto corto que sea puro nombre.
+    const clean = words.filter(
+      (word) => !NoraRoutingService.SENDER_NAME_FILLERS.has(this.normalizeText(word)),
+    );
+    return clean.length > 0 && clean.length <= 3 && clean.length === words.length
+      ? clean.join(" ")
+      : null;
   }
 
   /**

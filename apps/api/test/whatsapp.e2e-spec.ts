@@ -3123,6 +3123,29 @@ describe("WhatsApp inbox", () => {
     );
   });
 
+  it("keeps one conversation per phone when two people send the same NIT", async () => {
+    await sendInbound("573008881113", "Hola", "wamid-same-nit-a1");
+    const omar = await sendInbound("573008881113", "Soy Omar, NIT 890201881-4", "wamid-same-nit-a2");
+    await sendInbound("573008881114", "Hola", "wamid-same-nit-b1");
+    const laura = await sendInbound("573008881114", "Me llamo Laura Gomez, 890201881", "wamid-same-nit-b2");
+
+    expect(omar.body.conversationId).not.toBe(laura.body.conversationId);
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: omar.body.conversationId,
+        customerId: "customer-1",
+        senderName: "Omar",
+      }),
+    );
+    expect(conversations).toContainEqual(
+      expect.objectContaining({
+        id: laura.body.conversationId,
+        customerId: "customer-1",
+        senderName: "Laura Gomez",
+      }),
+    );
+  });
+
   it("hands an unidentifiable sender to a human instead of repeating the greeting", async () => {
     await sendInbound("573008882222", "Hola", "wamid-no-id-1");
     const response = await sendInbound("573008882222", "qwerty asdfgh", "wamid-no-id-2");
