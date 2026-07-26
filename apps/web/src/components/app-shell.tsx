@@ -20,7 +20,7 @@ export async function AppShell({ children }: AppShellProps) {
 
       {/* Main content area */}
       <div className="relative z-10 flex min-w-0 flex-1 flex-col">
-        <Topbar />
+        <Topbar userRole={user?.role ?? null} />
         <main className="flex-1 px-4 py-6 md:px-6">{children}</main>
       </div>
     </div>

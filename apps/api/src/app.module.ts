@@ -33,6 +33,7 @@ import { ReturnsModule } from "./modules/returns/returns.module";
 import { UsersModule } from "./modules/users/users.module";
 import { ZonesModule } from "./modules/zones/zones.module";
 import { PricingModule } from "./modules/pricing/pricing.module";
+import { SearchModule } from "./modules/search/search.module";
 import { PrismaModule } from "./prisma/prisma.module";
 
 @Module({
@@ -70,6 +71,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     InvoicesModule,
     ReturnsModule,
     ZonesModule,
+    SearchModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],

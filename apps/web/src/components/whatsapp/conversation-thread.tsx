@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCheck, MoreVertical, Phone } from "lucide-react";
+import { CheckCheck } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { WhatsAppConversationDetail } from "./whatsapp-types";
@@ -58,20 +58,6 @@ export function ConversationThread({
               Ver cliente →
             </Link>
           ) : null}
-          <button
-            type="button"
-            className="flex size-8 items-center justify-center rounded-md text-[#6b7787] hover:bg-[#f7f9fb]"
-            title="Llamar"
-          >
-            <Phone className="size-4" />
-          </button>
-          <button
-            type="button"
-            className="flex size-8 items-center justify-center rounded-md text-[#6b7787] hover:bg-[#f7f9fb]"
-            title="Más opciones"
-          >
-            <MoreVertical className="size-4" />
-          </button>
         </div>
       </div>
 

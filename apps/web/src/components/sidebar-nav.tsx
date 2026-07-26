@@ -6,7 +6,8 @@ import { useState, type ReactNode } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { usePollCount } from "@/lib/use-poll-count";
 import {
-  navGroups,
+  filterNavGroups,
+  groupTitles,
   type NavItem,
   type NavGroup,
   type NavSubItem,
@@ -20,23 +21,6 @@ function getInitials(name: string) {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
-const noraNavItem: NavItem = {
-  href: "/nora",
-  label: "Nora",
-  shortLabel: "NA",
-  description: "Asistente conversacional para reportes y confirmaciones",
-  group: "Operacion",
-  requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"],
-};
-
-const groupTitles: Record<NavGroup["label"], string> = {
-  Operacion: "Operación",
-  Comercial: "Comercial",
-  Catalogo: "Catálogo",
-  Analisis: "Análisis",
-  Admin: "Administración",
-};
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -183,21 +167,6 @@ function SidebarSubItem({
       {child.label}
     </Link>
   );
-}
-
-function filterNavGroups(role: UserRole) {
-  const groupsWithNora = navGroups.map((group) =>
-    group.label === "Operacion"
-      ? { ...group, items: [...group.items, noraNavItem] }
-      : group,
-  );
-
-  return groupsWithNora
-    .map((group) => ({
-      ...group,
-      items: group.items.filter((item) => item.requiredRoles.includes(role)),
-    }))
-    .filter((group) => group.items.length > 0);
 }
 
 export function SidebarNav({
