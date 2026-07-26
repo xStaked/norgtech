@@ -46,6 +46,22 @@ def test_comercial_tiene_todo_menos_analitica_consolidada_y_reportes():
     assert "get_seller_goal_progress" in names
 
 
+def test_comercial_cotiza_factura_y_devuelve():
+    names = {t.name for t in tools_for_role("comercial", ALL_TOOLS)}
+    assert {"preview_quote", "create_quote", "request_billing_for_quote"} <= names
+    assert {"list_invoices", "list_overdue_invoices"} <= names
+    assert {"list_returns", "create_return"} <= names
+
+
+def test_tecnico_no_toca_plata_pero_si_busca():
+    names = {t.name for t in tools_for_role("tecnico", ALL_TOOLS)}
+    # SearchController deja entrar a los seis roles.
+    assert "global_search" in names
+    for forbidden in ("preview_quote", "create_quote", "list_invoices",
+                      "list_returns", "create_return"):
+        assert forbidden not in names
+
+
 def test_tecnico_si_genera_reportes_ejecutivos():
     names = {t.name for t in tools_for_role("tecnico", ALL_TOOLS)}
     assert {"list_reports", "generate_report_from_visit"} <= names

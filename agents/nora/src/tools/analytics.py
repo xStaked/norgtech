@@ -31,6 +31,14 @@ def _sections(data: dict) -> dict[str, int]:
     return found
 
 
+def _num(value) -> float:
+    """Monto del API a float. Prisma serializa los Decimal como string."""
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 def _pick(data: dict, path: str):
     node = data
     for part in path.split("."):
@@ -283,7 +291,15 @@ async def get_cartera(
                 {
                     "factura": i.get("invoiceNumber"),
                     "vence": i.get("dueDate"),
-                    "saldo": (i.get("totalAmount") or 0) - (i.get("totalPaid") or 0),
+                    # /invoices/overdue devuelve las filas crudas de Prisma: los
+                    # Decimal llegan como string ("1000.00"), no como numero.
+                    # Restarlos directo reventaba con TypeError y el usuario
+                    # solo veia "Error inesperado al obtener la cartera".
+                    # Se descuentan tambien las notas credito: ese es el saldo
+                    # real (invoiceBalance en el API).
+                    "saldo": _num(i.get("totalAmount"))
+                    - _num(i.get("totalPaid"))
+                    - _num(i.get("creditNoteTotal")),
                 }
                 for i in overdue_list
                 if (i.get("customer") or {}).get("id") == customer_id

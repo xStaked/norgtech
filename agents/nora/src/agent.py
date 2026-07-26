@@ -22,6 +22,17 @@ from .tools.reports import list_reports, generate_report_from_visit
 from .tools.tasks import list_follow_ups, complete_follow_up, list_visits, complete_visit
 from .tools.credit import get_customer_credit, get_credit_alerts, get_price_for_customer
 from .tools.goals import get_team_goals, get_seller_goal_progress
+from .tools.quotes import (
+    preview_quote,
+    create_quote,
+    list_quotes,
+    get_quote,
+    update_quote_status,
+    request_billing_for_quote,
+)
+from .tools.invoices import list_invoices, get_invoice, list_overdue_invoices, get_invoice_payments
+from .tools.returns import list_returns, get_return, create_return
+from .tools.search import global_search
 from .tools.nestjs_client import NestJSClient
 
 # ── Tools ──────────────────────────────────────────────
@@ -64,6 +75,20 @@ ALL_TOOLS = [
     get_price_for_customer,
     get_team_goals,
     get_seller_goal_progress,
+    preview_quote,
+    create_quote,
+    list_quotes,
+    get_quote,
+    update_quote_status,
+    request_billing_for_quote,
+    list_invoices,
+    get_invoice,
+    list_overdue_invoices,
+    get_invoice_payments,
+    list_returns,
+    get_return,
+    create_return,
+    global_search,
 ]
 
 # ── State ──────────────────────────────────────────────

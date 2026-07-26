@@ -210,3 +210,31 @@ def test_analytics_tools_registered_in_web_agent():
 
     names = {t.name for t in ALL_TOOLS}
     assert {"get_sales_summary", "get_cartera", "get_goal_progress"} <= names
+
+
+def test_get_cartera_por_cliente_no_revienta_con_decimales_string():
+    """El API manda los Decimal de /invoices/overdue como string; restarlos
+    directo tiraba TypeError y el usuario solo veia 'Error inesperado'."""
+    fake_client = AsyncMock()
+
+    async def _get(path, params=None):
+        if path == "/invoices/summary":
+            return {"totalBalance": 500, "aging": {}, "byCustomer": []}
+        return [
+            {
+                "invoiceNumber": "F-1",
+                "dueDate": "2026-05-01",
+                "totalAmount": "1000.00",
+                "totalPaid": "250.00",
+                "creditNoteTotal": "50.00",
+                "customer": {"id": "c-1"},
+            }
+        ]
+
+    fake_client.get = AsyncMock(side_effect=_get)
+    with patch("src.tools.analytics.NestJSClient", return_value=fake_client):
+        result = asyncio.run(get_cartera.ainvoke({"customer_id": "c-1", "auth_token": "Bearer x"}))
+
+    payload = json.loads(result[result.index("{"):])
+    # 1000 - 250 - 50: el saldo real descuenta pagos Y notas credito.
+    assert payload["facturas_vencidas"][0]["saldo"] == 700

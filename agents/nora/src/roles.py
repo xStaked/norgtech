@@ -39,6 +39,9 @@ _ROLE_ALLOWLIST: dict[str, set[str]] = {
         "complete_visit",
         "list_reports",
         "generate_report_from_visit",
+        # SearchController deja entrar a los seis roles; el service recorta por
+        # tipo, asi que un tecnico solo recibe clientes. No da 403.
+        "global_search",
     },
 }
 
