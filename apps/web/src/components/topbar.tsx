@@ -3,7 +3,7 @@
 import { startTransition, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { SESSION_COOKIE_NAME } from "@/lib/auth";
+import { canAccess, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   DropdownMenu,
@@ -188,15 +188,18 @@ export function Topbar({ userRole }: { userRole: UserRole | null }) {
 
       <div className="flex-1" />
 
-      {/* Nora */}
-      <Link
-        href="/nora"
-        className="flex h-9 items-center gap-2 rounded-lg px-3.5 text-[13px] font-bold text-white"
-        style={{ background: "var(--nora-accent)" }}
-      >
-        <Sparkles className="h-4 w-4" />
-        <span className="hidden sm:inline">Pregúntale a Nora</span>
-      </Link>
+      {/* Nora: solo para los roles que pueden entrar a /nora. Antes se mostraba
+          a todos y facturacion/logistica caian en /dashboard?forbidden=1. */}
+      {canAccess(userRole, "/nora") && (
+        <Link
+          href="/nora"
+          className="flex h-9 items-center gap-2 rounded-lg px-3.5 text-[13px] font-bold text-white"
+          style={{ background: "var(--nora-accent)" }}
+        >
+          <Sparkles className="h-4 w-4" />
+          <span className="hidden sm:inline">Pregúntale a Nora</span>
+        </Link>
+      )}
 
       {/* Bell */}
       <NotificationBell />

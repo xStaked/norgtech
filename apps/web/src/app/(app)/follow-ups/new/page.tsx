@@ -14,7 +14,12 @@ interface Opportunity {
   title: string;
 }
 
-export default async function NewFollowUpPage() {
+export default async function NewFollowUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ customerId?: string }>;
+}) {
+  const { customerId } = await searchParams;
   const [customersRes, opportunitiesRes] = await Promise.all([
     apiFetch("/customers"),
     apiFetch("/opportunities"),
@@ -40,7 +45,11 @@ export default async function NewFollowUpPage() {
         title="Tarea operativa"
         description="Define el compromiso, su vencimiento y el contexto comercial asociado."
       >
-        <FollowUpTaskForm customers={customers} opportunities={opportunities} />
+        <FollowUpTaskForm
+          customers={customers}
+          opportunities={opportunities}
+          defaultCustomerId={customerId}
+        />
       </SectionCard>
     </div>
   );

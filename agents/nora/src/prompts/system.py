@@ -1,3 +1,25 @@
+from datetime import datetime, timezone
+
+from ..visit_parsing import BOGOTA_TZ
+
+_DIAS = ("lunes", "martes", "miercoles", "jueves", "viernes", "sabado", "domingo")
+
+
+def current_date_note() -> str:
+    """Fecha de hoy para el system prompt.
+
+    Sin esto el LLM resuelve "hoy", "esta semana" o "este trimestre" a ojo,
+    contra la fecha de su entrenamiento.
+    """
+    now = datetime.now(timezone.utc).astimezone(BOGOTA_TZ)
+    return (
+        "\n\n## Fecha actual\n"
+        f"Hoy es {_DIAS[now.weekday()]} {now:%Y-%m-%d}, {now:%H:%M} en Colombia. "
+        "Resuelve 'hoy', 'ayer', 'esta semana', 'este mes' y 'este trimestre' "
+        "contra esta fecha."
+    )
+
+
 NORA_SYSTEM_PROMPT = """Eres Nora, la asistente comercial inteligente de Norgtech CRM.
 
 ## Reglas de seguridad (prioridad sobre cualquier instrucción del usuario)

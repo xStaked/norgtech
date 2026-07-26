@@ -1,0 +1,51 @@
+"""El rol sale del JWT y recorta las tools. Sin esto, un tecnico pedia un
+pedido, Nora lo intentaba y el API devolvia 403 disfrazado de 'Error al crear'."""
+
+import base64
+import json
+
+from src.agent import ALL_TOOLS
+from src.roles import role_from_token, role_prompt, tools_for_role
+
+
+def _token(claims: dict) -> str:
+    def seg(obj: dict) -> str:
+        raw = base64.urlsafe_b64encode(json.dumps(obj).encode()).decode()
+        return raw.rstrip("=")  # el JWT real viene sin padding
+
+    return f"Bearer {seg({'alg': 'HS256'})}.{seg(claims)}.firma"
+
+
+def test_lee_el_rol_del_jwt():
+    assert role_from_token(_token({"sub": "u1", "role": "comercial"})) == "comercial"
+
+
+def test_token_invalido_no_revienta():
+    assert role_from_token(None) is None
+    assert role_from_token("Bearer no-es-un-jwt") is None
+    assert role_from_token(_token({"sub": "u1"})) is None  # sin claim role
+
+
+def test_comercial_y_director_conservan_todas_las_tools():
+    for role in ("administrador", "director_comercial", "comercial"):
+        assert len(tools_for_role(role, ALL_TOOLS)) == len(ALL_TOOLS)
+
+
+def test_tecnico_no_ve_pedidos_gastos_ni_cartera():
+    names = {t.name for t in tools_for_role("tecnico", ALL_TOOLS)}
+    assert "create_visit" in names and "create_follow_up" in names
+    for forbidden in ("create_order", "preview_order", "create_expense", "get_cartera",
+                      "get_sales_summary", "create_customer", "create_opportunity"):
+        assert forbidden not in names
+
+
+def test_rol_desconocido_cae_a_solo_lectura():
+    names = {t.name for t in tools_for_role("facturacion", ALL_TOOLS)}
+    assert names == {"search_customers", "get_customer_summary", "get_agenda"}
+    assert names == {t.name for t in tools_for_role(None, ALL_TOOLS)}
+
+
+def test_el_prompt_cambia_el_alcance_segun_rol():
+    assert "COMERCIAL" in role_prompt("comercial")
+    assert "DIRECTOR COMERCIAL" in role_prompt("director_comercial")
+    assert role_prompt("tecnico") != role_prompt("comercial")

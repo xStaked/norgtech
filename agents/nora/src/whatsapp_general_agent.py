@@ -20,7 +20,8 @@ from langgraph.prebuilt import ToolNode
 
 from .agent import ALL_TOOLS, create_llm
 from .models.whatsapp_models import WhatsAppAgentRequest, WhatsAppAgentResponse
-from .prompts.system import NORA_SYSTEM_PROMPT
+from .prompts.system import NORA_SYSTEM_PROMPT, current_date_note
+from .roles import role_from_token, role_prompt, tools_for_role
 
 logger = logging.getLogger(__name__)
 
@@ -100,13 +101,17 @@ class _GeneralState(TypedDict):
 
 
 def _build_general_graph():
-    llm = create_llm().bind_tools(ALL_TOOLS)
+    llm = create_llm()
     tool_node = ToolNode(ALL_TOOLS)
 
     # ainvoke y no invoke: el sync bloquea el event loop de FastAPI y los
     # turnos concurrentes se serializan hasta reventar por timeout.
     async def call_model(state: _GeneralState) -> dict:
-        return {"messages": [await llm.ainvoke(state["messages"])]}
+        # Mismo criterio que el agente web: el token trae el rol y el rol
+        # decide que herramientas se le ofrecen al LLM.
+        role = role_from_token(state.get("auth_token"))
+        llm_with_tools = llm.bind_tools(tools_for_role(role, ALL_TOOLS))
+        return {"messages": [await llm_with_tools.ainvoke(state["messages"])]}
 
     def should_continue(state: _GeneralState):
         last = state["messages"][-1]
@@ -313,6 +318,7 @@ def _to_messages(request: WhatsAppAgentRequest) -> list:
     )
     if request.open_case and request.open_case.type == "new_customer":
         system_prompt += NEW_CUSTOMER_CASE_PROMPT
+    system_prompt += role_prompt(role_from_token(request.auth)) + current_date_note()
 
     messages: list = [SystemMessage(content=system_prompt)]
     case_context = _case_context_block(request)

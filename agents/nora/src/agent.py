@@ -7,7 +7,8 @@ from langgraph.prebuilt import ToolNode
 from langgraph.checkpoint.memory import MemorySaver
 
 from .config import settings
-from .prompts.system import NORA_SYSTEM_PROMPT
+from .prompts.system import NORA_SYSTEM_PROMPT, current_date_note
+from .roles import role_from_token, role_prompt, tools_for_role
 from .tools.customers import search_customers, create_customer, update_customer, get_customer_summary
 from .tools.segments import get_customer_segments
 from .tools.agenda import get_agenda
@@ -107,15 +108,19 @@ def create_llm() -> ChatOpenAI:
 def build_nora_graph():
     """Construye el state graph de Nora."""
     llm = create_llm()
-    llm_with_tools = llm.bind_tools(ALL_TOOLS)
-    
+
+    # ToolNode se queda con TODAS: solo ejecuta lo que el LLM llamo, y el LLM
+    # solo puede llamar lo que se le bindeo para su rol.
     tool_node = ToolNode(ALL_TOOLS)
-    
+
     def call_model(state: NoraState) -> dict:
-        """Nodo principal: llama al LLM con el historial."""
-        system_msg = SystemMessage(content=NORA_SYSTEM_PROMPT)
+        """Nodo principal: llama al LLM con el historial, acotado al rol."""
+        role = role_from_token(state.get("auth_token"))
+        system_msg = SystemMessage(
+            content=NORA_SYSTEM_PROMPT + role_prompt(role) + current_date_note()
+        )
         messages = [system_msg] + state["messages"]
-        response = llm_with_tools.invoke(messages)
+        response = llm.bind_tools(tools_for_role(role, ALL_TOOLS)).invoke(messages)
         return {"messages": [response]}
 
     def should_continue(state: NoraState) -> Literal["tools", "__end__"]:

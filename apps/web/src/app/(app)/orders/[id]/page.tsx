@@ -489,25 +489,31 @@ export default async function OrderDetailPage({
             </div>
           </Card>
 
-          {/* Nora */}
+          {/* Siguiente paso: regla estatica sobre `nextStatusMap`, NO sale de
+              Nora. Se llamaba "Nora sugiere" y prometia una sugerencia de IA
+              que nadie calculaba. */}
           <div className="rounded-[11px] border border-[#ddd6f7] bg-[linear-gradient(160deg,#f7f5ff,#fff)] p-4">
             <div className="flex items-center gap-2">
               <div className="flex h-7 w-7 items-center justify-center rounded-[8px] bg-[#6d4ff0] text-[13px] text-white">
                 ✦
               </div>
-              <span className="text-[13px] font-bold text-[#0c2c44]">Nora sugiere</span>
+              <span className="text-[13px] font-bold text-[#0c2c44]">Siguiente paso</span>
             </div>
             <p className="mt-2 text-[12.5px] leading-relaxed text-[#6b7787]">
               {nextStatusMap[order.status]
                 ? `Este pedido está en estado “${statusLabels[order.status]}”. Programa un seguimiento para avanzarlo a “${statusLabels[nextStatusMap[order.status]]}”.`
                 : "El pedido está completado. Verifica la confirmación de entrega con el cliente."}
             </p>
-            <button
-              type="button"
-              className="mt-3 h-[36px] w-full rounded-lg bg-[#6d4ff0] text-[13px] font-bold text-white transition-colors hover:bg-[#5d3fe0]"
+            <Link
+              href={
+                order.customer
+                  ? `/follow-ups/new?customerId=${order.customer.id}`
+                  : "/follow-ups/new"
+              }
+              className="mt-3 flex h-[36px] w-full items-center justify-center rounded-lg bg-[#6d4ff0] text-[13px] font-bold text-white transition-colors hover:bg-[#5d3fe0]"
             >
               Programar seguimiento
-            </button>
+            </Link>
           </div>
         </div>
       </div>

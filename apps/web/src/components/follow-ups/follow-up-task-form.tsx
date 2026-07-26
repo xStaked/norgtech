@@ -22,6 +22,8 @@ interface Opportunity {
 interface FollowUpTaskFormProps {
   customers: Customer[];
   opportunities: Opportunity[];
+  /** Preselecciona el cliente cuando se llega desde un pedido o cliente. */
+  defaultCustomerId?: string;
 }
 
 const types = [
@@ -33,7 +35,11 @@ const types = [
   { value: "otro", label: "Otro" },
 ];
 
-export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormProps) {
+export function FollowUpTaskForm({
+  customers,
+  opportunities,
+  defaultCustomerId,
+}: FollowUpTaskFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -89,6 +95,7 @@ export function FollowUpTaskForm({ customers, opportunities }: FollowUpTaskFormP
         <Select
           name="customerId"
           required
+          defaultValue={defaultCustomerId}
           searchPlaceholder="Buscar cliente…"
           options={[
             { value: "", label: "Seleccionar cliente" },
