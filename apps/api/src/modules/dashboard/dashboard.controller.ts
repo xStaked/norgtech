@@ -31,8 +31,11 @@ export class DashboardController {
     @CurrentUser() user: AuthUser,
     @Query("days") days?: string,
     @Query("companyId") companyId?: string,
+    // Rango explicito (YYYY-MM-DD). Si llega, manda sobre `days`.
+    @Query("from") from?: string,
+    @Query("to") to?: string,
   ) {
-    return this.dashboardService.getCommercialAdvancedSummary(user, days, companyId);
+    return this.dashboardService.getCommercialAdvancedSummary(user, days, companyId, from, to);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -25,7 +25,8 @@ from .models.whatsapp_models import (
     WhatsAppAgentResponse,
 )
 from .agent import nora_graph, NoraState
-from .sessions import session_store
+from .roles import user_id_from_token
+from .sessions import session_store, SessionOwnershipError
 from .whatsapp_router import route_whatsapp_message
 from .whatsapp_agent import run_whatsapp_agent
 from .whatsapp_general_agent import run_whatsapp_general_agent
@@ -195,6 +196,33 @@ def get_auth_header(authorization: str = Header(...)) -> str:
         raise HTTPException(status_code=401, detail="Invalid authorization header")
     return authorization
 
+def require_user_id(authorization: str) -> str:
+    """Id del usuario dueño del token. 403 si el token no identifica a nadie."""
+    user_id = user_id_from_token(authorization)
+    if not user_id:
+        raise HTTPException(status_code=403, detail="Token without user identity")
+    return user_id
+
+
+def session_for_user(
+    session_id: str,
+    authorization: str,
+    context_type: str = None,
+    context_entity_id: str = None,
+):
+    """Sesión atada al dueño del JWT. 403 si la sesión es de otro usuario."""
+    user_id = require_user_id(authorization)
+    try:
+        return session_store.get_or_create(
+            session_id=session_id,
+            owner_user_id=user_id,
+            context_type=context_type,
+            context_entity_id=context_entity_id,
+        )
+    except SessionOwnershipError:
+        raise HTTPException(status_code=403, detail="Session belongs to another user")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -232,9 +260,10 @@ async def send_message(
     """
     session_id = body.sessionId or str(uuid.uuid4())
     
-    # Obtener/crear metadata de sesión
-    ctx = session_store.get_or_create(
+    # Obtener/crear metadata de sesión (atada al dueño del JWT)
+    ctx = session_for_user(
         session_id=session_id,
+        authorization=authorization,
         context_type=body.contextType,
         context_entity_id=body.contextEntityId,
     )
@@ -299,10 +328,13 @@ async def get_session(
     """
     Obtiene la sesión con sus mensajes y propuestas.
     """
+    user_id = require_user_id(authorization)
     ctx = session_store.get(session_id)
     if not ctx:
         raise HTTPException(status_code=404, detail="Session not found")
-    
+    if ctx.owner_user_id != user_id:
+        raise HTTPException(status_code=403, detail="Session belongs to another user")
+
     # Obtener historial del checkpointer de LangGraph
     config = {"configurable": {"thread_id": session_id}}
     try:
@@ -325,7 +357,7 @@ async def get_session(
     
     return {
         "id": session_id,
-        "ownerUserId": "unknown",
+        "ownerUserId": ctx.owner_user_id or "unknown",
         "contextType": ctx.context_type,
         "contextEntityId": ctx.context_entity_id,
         "messages": messages,
@@ -347,8 +379,9 @@ async def stream_message(
     """
     session_id = sessionId or str(uuid.uuid4())
     
-    ctx = session_store.get_or_create(
+    ctx = session_for_user(
         session_id=session_id,
+        authorization=authorization,
         context_type=contextType,
         context_entity_id=contextEntityId,
     )

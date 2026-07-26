@@ -40,6 +40,10 @@ def test_comercial_tiene_todo_menos_analitica_consolidada_y_reportes():
     assert "get_analytics" not in names
     assert "list_reports" not in names
     assert "generate_report_from_visit" not in names
+    # Metas del equipo completo: DashboardController las da solo a direccion.
+    assert "get_team_goals" not in names
+    # La suya si, y el API le deja consultar solo la propia.
+    assert "get_seller_goal_progress" in names
 
 
 def test_tecnico_si_genera_reportes_ejecutivos():
@@ -51,8 +55,12 @@ def test_tecnico_si_genera_reportes_ejecutivos():
 def test_tecnico_no_ve_pedidos_gastos_ni_cartera():
     names = {t.name for t in tools_for_role("tecnico", ALL_TOOLS)}
     assert "create_visit" in names and "create_follow_up" in names
+    # Cierra su propia operacion del dia: los @Roles de visits y follow-up-tasks
+    # si lo incluyen.
+    assert {"list_visits", "complete_visit", "list_follow_ups", "complete_follow_up"} <= names
     for forbidden in ("create_order", "preview_order", "create_expense", "get_cartera",
-                      "get_sales_summary", "create_customer", "create_opportunity"):
+                      "get_sales_summary", "create_customer", "create_opportunity",
+                      "get_customer_credit", "get_price_for_customer", "get_team_goals"):
         assert forbidden not in names
 
 

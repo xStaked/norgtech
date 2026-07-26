@@ -33,6 +33,10 @@ _ROLE_ALLOWLIST: dict[str, set[str]] = {
         "update_visit",
         "delete_visit",
         "create_follow_up",
+        "list_follow_ups",
+        "complete_follow_up",
+        "list_visits",
+        "complete_visit",
         "list_reports",
         "generate_report_from_visit",
     },
@@ -47,6 +51,8 @@ _RESTRICTED: dict[str, set[str]] = {
     # ReportsController.
     "list_reports": {"administrador", "director_comercial", "tecnico"},
     "generate_report_from_visit": {"administrador", "director_comercial", "tecnico"},
+    # DashboardController.getSellerGoals: metas de TODO el equipo.
+    "get_team_goals": {"administrador", "director_comercial"},
 }
 
 # Roles sin acceso a /nora en el portal (facturacion, logistica) y token sin rol
@@ -63,8 +69,8 @@ _PROMPT_BY_ROLE: dict[str, str] = {
         "El usuario es DIRECTOR COMERCIAL. Ve las cifras consolidadas de toda la "
         "operacion y de todos los vendedores. No hables de 'tus ventas' ni 'tu "
         "cartera': son del equipo completo. Puedes usar todas tus herramientas. "
-        "Ojo: get_goal_progress devuelve SOLO la meta del propio usuario, no la "
-        "de otro vendedor; si te preguntan por la meta de alguien mas, dilo."
+        "Ojo: get_goal_progress es SOLO la meta propia. Para la meta de otro "
+        "vendedor o del equipo usa get_team_goals y get_seller_goal_progress."
     ),
     "comercial": (
         "El usuario es COMERCIAL. Todo lo que consultes viene filtrado a SUS "
@@ -88,23 +94,38 @@ _FALLBACK_PROMPT = (
 )
 
 
-def role_from_token(auth_token: Optional[str]) -> Optional[str]:
-    """Extrae el `role` del payload del JWT ('Bearer <jwt>'). None si no se puede."""
+def _claims_from_token(auth_token: Optional[str]) -> dict:
+    """Payload del JWT ('Bearer <jwt>') sin verificar firma. {} si no se puede."""
     if not auth_token:
-        return None
+        return {}
     token = auth_token.split(" ", 1)[-1]
     parts = token.split(".")
     if len(parts) != 3:
-        return None
+        return {}
     try:
         payload = parts[1]
         # base64url sin padding: el JWT lo omite, `b64decode` lo exige.
         payload += "=" * (-len(payload) % 4)
         claims = json.loads(base64.urlsafe_b64decode(payload))
     except Exception:
-        return None
-    role = claims.get("role")
+        return {}
+    return claims if isinstance(claims, dict) else {}
+
+
+def role_from_token(auth_token: Optional[str]) -> Optional[str]:
+    """Extrae el `role` del payload del JWT ('Bearer <jwt>'). None si no se puede."""
+    role = _claims_from_token(auth_token).get("role")
     return role if isinstance(role, str) else None
+
+
+def user_id_from_token(auth_token: Optional[str]) -> Optional[str]:
+    """Extrae el id del usuario (claim `sub`) del JWT. None si no se puede.
+
+    El API de NestJS firma `{ sub, role, email }` tanto en el login como en
+    `mintScopedToken` (apps/api/src/modules/auth/auth.service.ts).
+    """
+    sub = _claims_from_token(auth_token).get("sub")
+    return sub if isinstance(sub, str) and sub else None
 
 
 def _allows(role: Optional[str], tool_name: str) -> bool:

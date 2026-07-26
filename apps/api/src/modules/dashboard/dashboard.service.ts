@@ -1,6 +1,12 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { Prisma, UserRole, VisitStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import {
+  MAX_RANGE_DAYS,
+  bogotaDate,
+  dayBoundary,
+  shiftDays,
+} from "../analytics/analytics.shared";
 import {
   FOLLOW_UP_TASK_SETTLED_STATUSES,
   dayRangeInZone,
@@ -247,11 +253,14 @@ export class DashboardService {
     };
   }
 
-  async getCommercialAdvancedSummary(user: AuthUser, daysQuery?: string, companyId?: string) {
-    const days = this.normalizeDays(daysQuery);
-    const to = new Date();
-    const from = new Date(to);
-    from.setDate(to.getDate() - days);
+  async getCommercialAdvancedSummary(
+    user: AuthUser,
+    daysQuery?: string,
+    companyId?: string,
+    fromQuery?: string,
+    toQuery?: string,
+  ) {
+    const { from, to, days } = this.resolveWindow(daysQuery, fromQuery, toQuery);
     const isSellerScoped = user.role === UserRole.comercial;
     // La cartera (clientes dormidos) SI es un concepto de asignacion: son "mis
     // clientes", los tenga o no atendidos otro vendedor en un pedido suelto.
@@ -653,6 +662,44 @@ export class DashboardService {
         )
         .slice(0, 25),
     };
+  }
+
+  /**
+   * Ventana del panel comercial.
+   *
+   * `days` es la ventana movil de siempre (lo que usa el portal). Si llega
+   * `from` y/o `to` (YYYY-MM-DD), manda el rango explicito — asi un comercial
+   * puede preguntar por "junio" o "el trimestre pasado" sin necesitar
+   * /analytics/*, que le esta vedado por rol.
+   *
+   * Los limites de dia, el formato y el tope de rango salen de
+   * `analytics.shared`: el criterio de fechas (y la zona horaria de Bogota) es
+   * uno solo para toda la app, no una copia por modulo.
+   */
+  private resolveWindow(daysQuery?: string, fromQuery?: string, toQuery?: string) {
+    if (!fromQuery && !toQuery) {
+      const days = this.normalizeDays(daysQuery);
+      const to = new Date();
+      const from = new Date(to);
+      from.setDate(to.getDate() - days);
+      return { from, to, days };
+    }
+
+    // Rango parcial: `to` sin `from` cierra hacia atras con la ventana de `days`;
+    // `from` sin `to` llega hasta hoy.
+    const toDate = toQuery ?? bogotaDate(new Date());
+    const fromDate = fromQuery ?? shiftDays(toDate, -this.normalizeDays(daysQuery));
+
+    const from = dayBoundary(fromDate, "start");
+    const to = dayBoundary(toDate, "end");
+    if (from > to) {
+      throw new BadRequestException("El rango es invalido: `from` es posterior a `to`.");
+    }
+    const days = Math.round((to.getTime() - from.getTime()) / 86_400_000);
+    if (days > MAX_RANGE_DAYS) {
+      throw new BadRequestException(`El rango no puede superar ${MAX_RANGE_DAYS} dias.`);
+    }
+    return { from, to, days };
   }
 
   private normalizeDays(daysQuery?: string) {

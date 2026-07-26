@@ -36,7 +36,7 @@ export interface ResolvedFilters {
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 /** `2026-07-25` -> instante del primer/ultimo milisegundo de ese dia en Bogota. */
-function dayBoundary(date: string, edge: "start" | "end"): Date {
+export function dayBoundary(date: string, edge: "start" | "end"): Date {
   if (!DATE_ONLY.test(date)) {
     throw new BadRequestException(`Fecha invalida: "${date}". Formato esperado YYYY-MM-DD.`);
   }
@@ -53,7 +53,7 @@ export function bogotaDate(instant: Date): string {
   return new Date(instant.getTime() - 5 * 3_600_000).toISOString().slice(0, 10);
 }
 
-function shiftDays(date: string, days: number): string {
+export function shiftDays(date: string, days: number): string {
   const shifted = new Date(`${date}T12:00:00.000Z`);
   shifted.setUTCDate(shifted.getUTCDate() + days);
   return shifted.toISOString().slice(0, 10);

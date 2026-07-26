@@ -49,6 +49,31 @@ def test_get_sales_summary_compacts_and_limits_top5():
     assert len(payload["productos_baja_rotacion"]) == 5
 
 
+def test_get_sales_summary_forwards_explicit_date_range():
+    """`date_from`/`date_to` viajan como `from`/`to` (los nombres del API)."""
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=SALES_PAYLOAD)
+
+    with patch("src.tools.analytics.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            get_sales_summary.ainvoke(
+                {
+                    "date_from": "2026-06-01",
+                    "date_to": "2026-06-30",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+
+    assert fake_client.get.await_args.args[0] == "/dashboard/commercial-advanced"
+    params = fake_client.get.await_args.kwargs["params"]
+    assert params["from"] == "2026-06-01"
+    assert params["to"] == "2026-06-30"
+    # el rango se anuncia en el texto, no "últimos N días"
+    assert "2026-06-01" in result and "2026-06-30" in result
+    assert "últimos" not in result
+
+
 def test_get_sales_summary_surfaces_api_error_detail():
     fake_client = AsyncMock()
     fake_client.get = AsyncMock(side_effect=NestJSAPIError(403, "Insufficient permissions"))

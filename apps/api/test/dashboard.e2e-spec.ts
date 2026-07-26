@@ -598,6 +598,73 @@ describe("Dashboard advanced commercial summary", () => {
     });
   });
 
+  // Rango explicito: sin esto un comercial no puede preguntar por "junio" ni
+  // por "el trimestre pasado" — /analytics/* le esta vedado por rol, y `days`
+  // solo mira hacia atras desde hoy.
+  describe("explicit date range (from/to)", () => {
+    it("honours from/to over the rolling days window", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/dashboard/commercial-advanced?from=2026-05-01&to=2026-05-31")
+        .set("Authorization", "Bearer test-token")
+        .expect(200);
+
+      // Los 3 pedidos de mayo; el de 2025-12-15 queda fuera.
+      expect(response.body.totals).toMatchObject({ orders: 3, revenue: 3500 });
+      // Limites de dia en Bogota: 2026-05-01 00:00 -05 a 2026-05-31 23:59 -05.
+      expect(response.body.window.days).toBe(31);
+      expect(response.body.window.from).toBe("2026-05-01T05:00:00.000Z");
+      expect(response.body.window.to).toBe("2026-06-01T04:59:59.999Z");
+    });
+
+    it("reaches a period that the days window cannot see", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/dashboard/commercial-advanced?from=2025-12-01&to=2025-12-31&days=30")
+        .set("Authorization", "Bearer test-token")
+        .expect(200);
+
+      // Solo order-old-1. Con days=30 (que aqui se ignora) serian 0 pedidos.
+      expect(response.body.totals).toMatchObject({ orders: 1, revenue: 700 });
+    });
+
+    it("scopes the range to the comercial like the days window does", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/dashboard/commercial-advanced?from=2026-05-01&to=2026-05-31")
+        .set("Authorization", "Bearer test-token")
+        .set("x-test-role", UserRole.comercial)
+        .expect(200);
+
+      // order-current-1 (1000) + order-cross-1 (500). El de seller-2 no entra.
+      expect(response.body.totals).toMatchObject({ orders: 2, revenue: 1500 });
+    });
+
+    it("rejects a malformed date", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/dashboard/commercial-advanced?from=junio&to=2026-06-30")
+        .set("Authorization", "Bearer test-token")
+        .expect(400);
+
+      expect(response.body.message).toContain("YYYY-MM-DD");
+    });
+
+    it("rejects from after to", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/dashboard/commercial-advanced?from=2026-06-30&to=2026-06-01")
+        .set("Authorization", "Bearer test-token")
+        .expect(400);
+
+      expect(response.body.message).toContain("posterior");
+    });
+
+    it("rejects a range wider than the analytics cap", async () => {
+      const response = await request(app.getHttpServer())
+        .get("/dashboard/commercial-advanced?from=2019-01-01&to=2026-06-01")
+        .set("Authorization", "Bearer test-token")
+        .expect(400);
+
+      expect(response.body.message).toContain("1096");
+    });
+  });
+
   // DASH-05: solo Order tiene companyId; el resto de contadores no puede
   // acotarse sin inventar la relacion.
   it("scopes orders by the selected company (DASH-05)", async () => {

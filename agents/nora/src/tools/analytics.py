@@ -140,21 +140,34 @@ async def get_analytics(
 async def get_sales_summary(
     auth_token: Annotated[str, InjectedState("auth_token")],
     days: int = 90,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
 ) -> str:
     """
-    Resumen de ventas e indicadores del comercial en una ventana de días.
-    Úsala para: '¿cuánto llevo en ventas?', top clientes, top productos,
-    recompra, devoluciones, clientes dormidos / a quién no le he vendido,
-    productos de baja rotación. Los datos vienen filtrados al usuario actual.
+    Resumen de ventas e indicadores del comercial, en una ventana de días o en
+    un rango de fechas explícito. Úsala para: '¿cuánto llevo en ventas?',
+    '¿cuánto vendí en junio?', '¿cómo me fue el trimestre pasado?', top
+    clientes, top productos, recompra, devoluciones, clientes dormidos / a quién
+    no le he vendido, productos de baja rotación. Los datos vienen filtrados al
+    usuario actual.
+
+    Para un periodo concreto pasa `date_from` y `date_to` (p.ej. junio de 2026 =
+    2026-06-01 a 2026-06-30). Si no das rango, se usan los últimos `days` días.
 
     Args:
-        days: Tamaño de la ventana en días (por defecto 90).
+        days: Tamaño de la ventana en días (por defecto 90). Se ignora si das
+            `date_from` y `date_to`.
+        date_from: Inicio del rango (YYYY-MM-DD), inclusive.
+        date_to: Fin del rango (YYYY-MM-DD), inclusive.
     """
     try:
         client = NestJSClient(auth_token)
-        data = await client.get(
-            "/dashboard/commercial-advanced", params={"days": days}
-        )
+        params: dict = {"days": days}
+        if date_from:
+            params["from"] = date_from
+        if date_to:
+            params["to"] = date_to
+        data = await client.get("/dashboard/commercial-advanced", params=params)
         totals = data.get("totals", {}) or {}
         repurchase = data.get("repurchase", {}) or {}
         summary = {
@@ -202,8 +215,13 @@ async def get_sales_summary(
                 for p in (data.get("lowRotationProducts") or [])[:5]
             ],
         }
+        periodo = (
+            f"del {date_from or 'inicio'} al {date_to or 'hoy'}"
+            if (date_from or date_to)
+            else f"últimos {summary['ventana_dias']} días"
+        )
         return (
-            f"Resumen de ventas (últimos {summary['ventana_dias']} días): "
+            f"Resumen de ventas ({periodo}): "
             f"{json.dumps(summary, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:

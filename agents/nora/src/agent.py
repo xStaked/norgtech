@@ -19,6 +19,9 @@ from .tools.follow_ups import create_follow_up
 from .tools.orders import search_products, get_customer_quotes, preview_order, create_order, get_companies, get_customer_zones
 from .tools.analytics import get_sales_summary, get_cartera, get_goal_progress, get_analytics
 from .tools.reports import list_reports, generate_report_from_visit
+from .tools.tasks import list_follow_ups, complete_follow_up, list_visits, complete_visit
+from .tools.credit import get_customer_credit, get_credit_alerts, get_price_for_customer
+from .tools.goals import get_team_goals, get_seller_goal_progress
 from .tools.nestjs_client import NestJSClient
 
 # ── Tools ──────────────────────────────────────────────
@@ -52,6 +55,15 @@ ALL_TOOLS = [
     get_analytics,
     list_reports,
     generate_report_from_visit,
+    list_follow_ups,
+    complete_follow_up,
+    list_visits,
+    complete_visit,
+    get_customer_credit,
+    get_credit_alerts,
+    get_price_for_customer,
+    get_team_goals,
+    get_seller_goal_progress,
 ]
 
 # ── State ──────────────────────────────────────────────
@@ -149,6 +161,11 @@ def build_nora_graph():
     )
     workflow.add_edge("tools", "agent")
     
+    # ponytail: memoria en proceso. Aguanta porque el front no persiste el
+    # sessionId (se pierde con un F5 igual) y hoy corre una sola replica. Techo:
+    # con mas de una replica, el turno siguiente puede caer en otro proceso y
+    # perder el hilo. Upgrade: AsyncPostgresSaver construido en el lifespan de
+    # FastAPI (el grafo ya no podria ser un singleton de modulo).
     # Checkpointer para memoria entre turnos
     memory = MemorySaver()
     return workflow.compile(checkpointer=memory)
