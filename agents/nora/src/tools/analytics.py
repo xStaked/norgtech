@@ -7,6 +7,135 @@ from langgraph.prebuilt import InjectedState
 from .nestjs_client import NestJSClient, NestJSAPIError
 
 
+ANALYTICS_SCREENS = ("sales", "receivables", "funnel", "seller-performance")
+
+# Filas por seccion. El API ya manda top-N (20-30); esto acota lo que entra al
+# contexto del LLM sin perder el total, que va aparte en `filas_totales`.
+_MAX_SECTION_ROWS = 10
+
+
+def _sections(data: dict) -> dict[str, int]:
+    """Listas disponibles en la respuesta, con su numero de filas.
+
+    Generico a proposito: las 4 pantallas tienen formas distintas y el API las
+    cambia sin avisar. Si mañana aparece un breakdown nuevo, Nora lo ve solo.
+    """
+    found: dict[str, int] = {}
+    for key, value in data.items():
+        if isinstance(value, list):
+            found[key] = len(value)
+        elif isinstance(value, dict) and key not in ("totals", "range", "filters"):
+            for sub, sub_value in value.items():
+                if isinstance(sub_value, list):
+                    found[f"{key}.{sub}"] = len(sub_value)
+    return found
+
+
+def _pick(data: dict, path: str):
+    node = data
+    for part in path.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return None
+        node = node[part]
+    return node
+
+
+@tool
+async def get_analytics(
+    screen: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    section: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    as_of: Optional[str] = None,
+    seller_user_id: Optional[str] = None,
+    company_id: Optional[str] = None,
+    zone_id: Optional[str] = None,
+    segment_id: Optional[str] = None,
+    granularity: Optional[str] = None,
+) -> str:
+    """
+    Analítica consolidada de TODA la operación (todos los vendedores). Solo para
+    administrador y director_comercial. Úsala para preguntas de dirección:
+    ventas por vendedor/zona/segmento/ciudad, comparación contra el año pasado,
+    cartera y aging del total, embudo y tasa de cierre, desempeño por vendedor.
+
+    Llámala DOS veces cuando necesites detalle: la primera sin `section` te
+    devuelve totales + la lista de secciones disponibles; la segunda con la
+    sección que te sirva te devuelve sus filas.
+
+    Args:
+        screen: sales | receivables | funnel | seller-performance
+        section: Sección a detallar, p.ej. "breakdowns.bySeller", "aging",
+            "series", "stages". Omítela para ver totales y qué secciones hay.
+        date_from: Inicio del rango (YYYY-MM-DD). Por defecto, últimos 90 días.
+        date_to: Fin del rango (YYYY-MM-DD).
+        as_of: Solo receivables — foto de la cartera a esa fecha (YYYY-MM-DD).
+        seller_user_id: Acota a un vendedor (así respondes "¿cómo va Juan?").
+        company_id: Acota a una empresa que factura.
+        zone_id: Acota a una zona.
+        segment_id: Acota a un segmento de cliente.
+        granularity: Solo sales — day | week | month para la serie temporal.
+    """
+    if screen not in ANALYTICS_SCREENS:
+        return f"Pantalla inválida '{screen}'. Usa una de: {', '.join(ANALYTICS_SCREENS)}."
+    params = {
+        "from": date_from,
+        "to": date_to,
+        "asOf": as_of,
+        "sellerUserId": seller_user_id,
+        "companyId": company_id,
+        "zoneId": zone_id,
+        "segmentId": segment_id,
+        "granularity": granularity,
+    }
+    params = {k: v for k, v in params.items() if v}
+    try:
+        client = NestJSClient(auth_token)
+        data = await client.get(f"/analytics/{screen}", params=params or None)
+        head = {
+            "pantalla": screen,
+            "rango": data.get("range"),
+            "moneda": data.get("currency"),
+            "filtros": data.get("filters"),
+            "totales": data.get("totals"),
+        }
+        if data.get("previous"):
+            head["periodo_anterior"] = data["previous"]
+        if data.get("asOf"):
+            head["a_fecha"] = data["asOf"]
+
+        if section:
+            rows = _pick(data, section)
+            if rows is None:
+                disponibles = ", ".join(_sections(data)) or "ninguna"
+                return (
+                    f"La sección '{section}' no existe en {screen}. "
+                    f"Disponibles: {disponibles}."
+                )
+            payload = {**head, "seccion": section}
+            if isinstance(rows, list):
+                payload["filas"] = rows[:_MAX_SECTION_ROWS]
+                payload["filas_totales"] = len(rows)
+                payload["truncado"] = len(rows) > _MAX_SECTION_ROWS
+            else:
+                payload["contenido"] = rows
+            return json.dumps(payload, ensure_ascii=False)
+
+        return json.dumps(
+            {**head, "secciones_disponibles": _sections(data)}, ensure_ascii=False
+        )
+    except NestJSAPIError as e:
+        if e.status_code == 403:
+            return (
+                "Este usuario no puede ver la analítica consolidada: son cifras de "
+                "toda la operación, reservadas a dirección comercial."
+            )
+        return f"Error al consultar la analítica: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al consultar la analítica: {str(e)}"
+
+
 @tool
 async def get_sales_summary(
     auth_token: Annotated[str, InjectedState("auth_token")],

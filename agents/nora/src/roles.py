@@ -14,16 +14,15 @@ import base64
 import json
 from typing import Optional
 
-# Herramientas que ve cada rol. `None` = todas.
-# comercial y director/admin comparten toolset: la diferencia es el ALCANCE de
+# Roles que usan el toolset completo. Entre ellos la diferencia es el ALCANCE de
 # los datos, y eso ya lo aplica el API (dashboard.service isSellerScoped,
 # invoices where assignedToUserId, etc.), no la lista de tools.
-_TOOLS_BY_ROLE: dict[str, Optional[set[str]]] = {
-    "administrador": None,
-    "director_comercial": None,
-    "comercial": None,
-    # Tecnico: entra a /nora, pero no a pedidos, gastos, oportunidades ni
-    # productos. Solo clientes (lectura), visitas y seguimientos.
+_FULL_ROLES = {"administrador", "director_comercial", "comercial"}
+
+# Roles que solo ven un subconjunto. Tecnico entra a /nora, pero no a pedidos,
+# gastos, oportunidades ni productos: clientes (lectura), visitas, seguimientos
+# y reportes ejecutivos.
+_ROLE_ALLOWLIST: dict[str, set[str]] = {
     "tecnico": {
         "search_customers",
         "get_customer_summary",
@@ -34,7 +33,20 @@ _TOOLS_BY_ROLE: dict[str, Optional[set[str]]] = {
         "update_visit",
         "delete_visit",
         "create_follow_up",
+        "list_reports",
+        "generate_report_from_visit",
     },
+}
+
+# Tools que NO son para todos los roles del toolset completo. Espeja el @Roles
+# del controller correspondiente: si aqui se abre y alla no, Nora ofrece algo
+# que termina en 403.
+_RESTRICTED: dict[str, set[str]] = {
+    # AnalyticsController: cifras consolidadas de toda la operacion.
+    "get_analytics": {"administrador", "director_comercial"},
+    # ReportsController.
+    "list_reports": {"administrador", "director_comercial", "tecnico"},
+    "generate_report_from_visit": {"administrador", "director_comercial", "tecnico"},
 }
 
 # Roles sin acceso a /nora en el portal (facturacion, logistica) y token sin rol
@@ -95,12 +107,17 @@ def role_from_token(auth_token: Optional[str]) -> Optional[str]:
     return role if isinstance(role, str) else None
 
 
+def _allows(role: Optional[str], tool_name: str) -> bool:
+    if tool_name in _RESTRICTED and role not in _RESTRICTED[tool_name]:
+        return False
+    if role in _FULL_ROLES:
+        return True
+    return tool_name in _ROLE_ALLOWLIST.get(role or "", _FALLBACK_TOOLS)
+
+
 def tools_for_role(role: Optional[str], all_tools: list) -> list:
     """Subconjunto de `all_tools` que el rol puede usar."""
-    allowed = _TOOLS_BY_ROLE.get(role, _FALLBACK_TOOLS) if role else _FALLBACK_TOOLS
-    if allowed is None:
-        return all_tools
-    return [t for t in all_tools if t.name in allowed]
+    return [t for t in all_tools if _allows(role, t.name)]
 
 
 def role_prompt(role: Optional[str]) -> str:

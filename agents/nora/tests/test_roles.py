@@ -26,9 +26,26 @@ def test_token_invalido_no_revienta():
     assert role_from_token(_token({"sub": "u1"})) is None  # sin claim role
 
 
-def test_comercial_y_director_conservan_todas_las_tools():
-    for role in ("administrador", "director_comercial", "comercial"):
+def test_direccion_conserva_todas_las_tools():
+    for role in ("administrador", "director_comercial"):
         assert len(tools_for_role(role, ALL_TOOLS)) == len(ALL_TOOLS)
+
+
+def test_comercial_tiene_todo_menos_analitica_consolidada_y_reportes():
+    names = {t.name for t in tools_for_role("comercial", ALL_TOOLS)}
+    # Su propia operacion, si: pedidos, gastos, cartera y ventas (ya filtradas
+    # a el por el API).
+    assert {"create_order", "create_expense", "get_cartera", "get_sales_summary"} <= names
+    # Cifras de toda la empresa y reportes ejecutivos, no: el API responde 403.
+    assert "get_analytics" not in names
+    assert "list_reports" not in names
+    assert "generate_report_from_visit" not in names
+
+
+def test_tecnico_si_genera_reportes_ejecutivos():
+    names = {t.name for t in tools_for_role("tecnico", ALL_TOOLS)}
+    assert {"list_reports", "generate_report_from_visit"} <= names
+    assert "get_analytics" not in names
 
 
 def test_tecnico_no_ve_pedidos_gastos_ni_cartera():

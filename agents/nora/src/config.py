@@ -22,6 +22,9 @@ class Settings:
     # el 429 se resuelve esperando ~1s, no cayendo al fallback.
     llm_max_retries: int = int(os.getenv("NORA_LLM_MAX_RETRIES", "6"))
     nestjs_api_url: str = os.getenv("NESTJS_API_URL", "http://localhost:3001")
+    # Para armar enlaces al portal (reportes). Mismo nombre de variable que usa
+    # el API en auth.service: por WhatsApp un "/reports/x" relativo no sirve.
+    frontend_url: str = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
     port: int = int(os.getenv("PORT", "8000"))
 
 settings = Settings()
