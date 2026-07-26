@@ -108,6 +108,9 @@ describe("Orders", () => {
   let invoiceCreateFailure:
     | { target: "orderId" | "invoiceNumber"; triggered: boolean }
     | null = null;
+  // Simula la carrera real: otro pedido de la misma empresa se quedo con el
+  // consecutivo entre el findMany y el create.
+  let orderCreateFailure: { triggered: boolean } | null = null;
   const products: Array<Record<string, unknown>> = [
     {
       id: "product-1",
@@ -570,6 +573,14 @@ describe("Orders", () => {
                 matchesOrderWhere(o, where, [...invoices, ...pendingInvoices]),
               ),
             create: async ({ data, include }: { data: Record<string, unknown>; include?: Record<string, unknown> }) => {
+              if (orderCreateFailure && !orderCreateFailure.triggered) {
+                orderCreateFailure.triggered = true;
+                orders.push({ ...data, id: "order-race-winner", items: [] });
+                throw new Prisma.PrismaClientKnownRequestError(
+                  "Unique constraint failed on the fields: (`orderNumber`)",
+                  { code: "P2002", clientVersion: "test", meta: { target: ["orderNumber"] } },
+                );
+              }
               const order = {
                 id: `order-${orders.length + pendingOrders.length + 1}`,
                 status: "recibido",
@@ -2035,5 +2046,60 @@ describe("Orders", () => {
 
       expect(Number(response.body.totalAmount)).toBe(1000000);
     });
+  });
+
+  it("retries with a fresh consecutive when another order wins the race", async () => {
+    orderCreateFailure = { triggered: false };
+    let response: request.Response;
+    try {
+      response = await request(globalThis.__APP__)
+        .post("/orders")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          customerId: "customer-2",
+          companyId: "company-1",
+          items: [{ quantity: 1, unitPrice: 1000 }],
+        })
+        .expect(201);
+    } finally {
+      orderCreateFailure = null;
+    }
+
+    const seq = (orderNumber: unknown) => Number(String(orderNumber).split("-").pop());
+    const winner = orders.find((order) => order.id === "order-race-winner");
+    expect(seq(response.body.orderNumber)).toBe(seq(winner?.orderNumber) + 1);
+  });
+
+  // Va de ultimo a proposito: deja el consecutivo en 1000 y cualquier test
+  // posterior que cree pedidos veria numeros de 4 digitos.
+  it("continues the order consecutive past 999", async () => {
+    orders.push({
+      id: "order-consecutive-999",
+      companyId: "company-1",
+      customerId: "customer-1",
+      orderNumber: "NOR-999",
+      status: "recibido",
+      subtotal: new Prisma.Decimal(0),
+      total: new Prisma.Decimal(0),
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+      items: [],
+    });
+
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-2",
+        companyId: "company-1",
+        items: [{ quantity: 1, unitPrice: 1000 }],
+      })
+      .expect(201);
+
+    // Ordenando strings, "NOR-999" gana contra "NOR-1000" y esto devolvia
+    // "NOR-1000" una y otra vez hasta chocar contra el @unique.
+    expect(response.body.orderNumber).toBe("NOR-1000");
   });
 });

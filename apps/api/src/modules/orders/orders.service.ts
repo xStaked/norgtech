@@ -130,7 +130,7 @@ export class OrdersService {
     // subtotal dejaba pasar el IVA sin cupo.
     await this.credit.assertCreditLimit(dto.customerId, pricing.total);
 
-    const orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
+    let orderNumber = dto.orderNumber?.trim() || await this.nextOrderNumber(company.prefix);
     const orderDate = dto.orderDate ? new Date(dto.orderDate) : new Date();
     const customerNameSnapshot = customer.displayName;
     const customerNitSnapshot = customer.taxId ?? null;
@@ -190,7 +190,7 @@ export class OrdersService {
     const subtotal = pricing.subtotal;
     const total = pricing.total;
 
-    return this.prisma.$transaction(async (tx) => {
+    const runCreate = () => this.prisma.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
           customerId: dto.customerId,
@@ -268,6 +268,22 @@ export class OrdersService {
 
       return order;
     });
+
+    try {
+      return await runCreate();
+    } catch (error) {
+      // Dos pedidos simultaneos de la misma empresa leen el mismo consecutivo y
+      // el segundo revienta contra el @unique. Un reintento con el numero
+      // recalculado alcanza; si el numero lo mando el cliente el duplicado es
+      // real y tiene que fallar.
+      // ponytail: un reintento, no un loop. Si aparece contencion de verdad,
+      // el upgrade es una secuencia en Postgres por prefijo.
+      if (dto.orderNumber?.trim() || !this.isOrderNumberConstraintError(error)) {
+        throw error;
+      }
+      orderNumber = await this.nextOrderNumber(company.prefix);
+      return runCreate();
+    }
   }
 
   async createInvoiceFromOrder(user: AuthUser, orderId: string) {
@@ -1046,20 +1062,36 @@ export class OrdersService {
     return allowedTransitions[currentStatus].includes(nextStatus);
   }
 
+  // Mismo criterio que nextInvoiceNumber: el maximo se calcula parseando el
+  // consecutivo, no ordenando strings. Con `orderBy: desc` sobre texto,
+  // "NT-999" gana contra "NT-1000" y a partir del pedido mil se repetian los
+  // numeros hasta chocar contra el @unique.
   private async nextOrderNumber(companyPrefix: string) {
-    const last = await this.prisma.order.findFirst({
+    const orders = await this.prisma.order.findMany({
       where: { orderNumber: { startsWith: `${companyPrefix}-` } },
-      orderBy: { orderNumber: "desc" },
       select: { orderNumber: true },
     });
 
-    if (!last?.orderNumber) {
-      return `${companyPrefix}-001`;
-    }
+    const nextSequence = orders.reduce((max, order) => {
+      const match = order.orderNumber?.match(/-(\d+)$/);
+      const seq = match ? Number.parseInt(match[1], 10) : 0;
+      return Number.isFinite(seq) && seq > max ? seq : max;
+    }, 0);
 
-    const parts = last.orderNumber.split("-");
-    const seq = Number.parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
-    return `${companyPrefix}-${String(seq + 1).padStart(3, "0")}`;
+    return `${companyPrefix}-${String(nextSequence + 1).padStart(3, "0")}`;
+  }
+
+  private isOrderNumberConstraintError(error: unknown): boolean {
+    if (!this.isUniqueConstraintError(error)) {
+      return false;
+    }
+    // Prisma reporta el target como lista de campos (["orderNumber"]) o como
+    // nombre del indice ("Order_orderNumber_key") segun version y driver.
+    const target = error.meta?.target;
+    if (Array.isArray(target)) {
+      return target.includes("orderNumber");
+    }
+    return typeof target === "string" && target.includes("orderNumber");
   }
 
   private calculateInvoiceTotalsFromOrder(order: {

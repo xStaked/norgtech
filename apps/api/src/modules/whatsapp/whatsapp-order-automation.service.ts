@@ -173,7 +173,7 @@ export class WhatsAppOrderAutomationService {
         decision: "created" satisfies AutomationDecision,
         order,
         summary,
-        reply: this.createdReply(summary.items),
+        reply: this.createdReply(order.orderNumber, summary.items),
       };
     } catch (error) {
       return {
@@ -340,9 +340,13 @@ export class WhatsAppOrderAutomationService {
     };
   }
 
-  private createdReply(items: Array<{ name: string }>) {
+  // El numero va en la confirmacion porque es la unica referencia que el
+  // cliente puede citarle despues a Nora ("como va el NT-042"): sin el, el
+  // pedido existe con consecutivo y el cliente no lo conoce.
+  private createdReply(orderNumber: string | null, items: Array<{ name: string }>) {
     const productNames = items.map((item) => item.name).join(", ");
-    return `Recibimos tu pedido y queda en revision. Productos: ${productNames}.`;
+    const ref = orderNumber ? ` Tu numero de pedido es ${orderNumber}.` : "";
+    return `Recibimos tu pedido y queda en revision.${ref} Productos: ${productNames}.`;
   }
 
   private decimalToNumber(value: Prisma.Decimal | number | string) {

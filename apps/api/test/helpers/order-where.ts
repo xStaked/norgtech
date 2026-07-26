@@ -11,6 +11,7 @@ export type OrderWhereStub = {
   companyId?: string;
   id?: { not?: string };
   status?: { in?: string[] };
+  orderNumber?: { startsWith?: string };
   invoices?: { none?: { status?: { not?: string } } };
 };
 
@@ -36,6 +37,15 @@ export function matchesOrderWhere(
   if (where.companyId && order.companyId !== where.companyId) return false;
   if (where.id?.not && order.id === where.id.not) return false;
   if (where.status?.in && !where.status.in.includes(order.status)) return false;
+
+  // nextOrderNumber consulta por prefijo de empresa: sin esto el stub le
+  // devolveria tambien los consecutivos de las otras empresas.
+  if (
+    where.orderNumber?.startsWith &&
+    !String(order.orderNumber ?? "").startsWith(where.orderNumber.startsWith)
+  ) {
+    return false;
+  }
 
   if (where.invoices?.none) {
     const notStatus = where.invoices.none.status?.not;

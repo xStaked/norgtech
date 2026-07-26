@@ -122,6 +122,8 @@ describe("Pricing preview parity (ORD-04 / QUO-03)", () => {
         throw new Error("order.create must run inside a transaction");
       },
       findFirst: async () => null,
+      // nextOrderNumber lee los consecutivos ya usados por prefijo.
+      findMany: async () => [],
     };
 
     const prismaStub = {

@@ -1527,6 +1527,9 @@ describe("WhatsApp inbox", () => {
     ]);
     expect(response.body.reply).toContain("Recibimos tu pedido");
     expect(response.body.reply).toContain("Fertilizante");
+    // El numero va en la confirmacion: es la referencia con la que el cliente
+    // le pregunta despues a Nora como va el pedido.
+    expect(response.body.reply).toContain(response.body.order.orderNumber);
     // Un pedido que nace en revision tiene que sonar la campana de quien revisa:
     // si no, se queda esperando a que alguien abra la bandeja por casualidad.
     expect(notifications).toContainEqual(
