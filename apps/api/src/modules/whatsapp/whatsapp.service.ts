@@ -214,7 +214,7 @@ export class WhatsAppService {
 
     const shouldClearContact = dto.customerId === null && dto.contactId === undefined;
 
-    return this.prisma.whatsAppConversation.update({
+    const updated = await this.prisma.whatsAppConversation.update({
       where: { id },
       data: {
         // Reasignar area = handoff: vuelve a la bandeja compartida del area nueva,
@@ -239,6 +239,27 @@ export class WhatsAppService {
       },
       include: conversationDetailInclude,
     });
+
+    // Cerrar el caso desde la web dejaba al cliente en blanco: no se enteraba de
+    // nada. El aviso no puede tumbar el cambio de estado, por eso va aparte.
+    if (
+      dto.status === WhatsAppConversationStatus.resuelto &&
+      conversation.status !== WhatsAppConversationStatus.resuelto
+    ) {
+      try {
+        await this.sendAgentReply(
+          id,
+          "Damos por cerrada esta solicitud. Esperamos haberte ayudado. " +
+            "Si necesitas algo mas, escribenos y con gusto te atendemos.",
+        );
+      } catch (error) {
+        this.logger.warn(
+          `No se pudo avisar el cierre de la conversacion ${id}: ${this.getSafeErrorMessage(error)}`,
+        );
+      }
+    }
+
+    return updated;
   }
 
   async createNote(user: AuthUser, conversationId: string, body: string) {
@@ -323,6 +344,7 @@ export class WhatsAppService {
         phone,
         status: WhatsAppConversationStatus.pendiente,
         senderType: WhatsAppSenderType.comercial,
+        senderName: expense.submittedBy?.name ?? null,
       },
       include: { account: true },
     });

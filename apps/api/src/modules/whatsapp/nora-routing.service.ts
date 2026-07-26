@@ -1297,6 +1297,9 @@ export class NoraRoutingService {
         where: { id: conversationId },
         data: {
           senderType: sender.senderType,
+          // El numero es de un usuario de la plataforma: mostramos su nombre en
+          // vez del telefono pelado (el perfil de WhatsApp suele venir vacio).
+          senderName: sender.userName,
           customerId: null,
           contactId: null,
         },

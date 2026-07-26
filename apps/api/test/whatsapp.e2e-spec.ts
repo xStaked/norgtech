@@ -1345,6 +1345,23 @@ describe("WhatsApp inbox", () => {
       .expect(200);
 
     expect(resolved.body.status).toBe("resuelto");
+
+    // Cerrar desde la web avisa al cliente, y solo una vez.
+    const closings = () =>
+      messages.filter(
+        (message) =>
+          message.conversationId === "conversation-1" &&
+          message.body.startsWith("Damos por cerrada esta solicitud"),
+      );
+    expect(closings()).toHaveLength(1);
+
+    await request(app.getHttpServer())
+      .patch("/whatsapp/conversations/conversation-1")
+      .set("Authorization", `Bearer ${adminToken}`)
+      .send({ status: "resuelto" })
+      .expect(200);
+
+    expect(closings()).toHaveLength(1);
   });
 
   it("clears nullable relationship fields", async () => {
@@ -2435,7 +2452,6 @@ describe("WhatsApp inbox", () => {
             from: "573004445566",
             timestamp: "2026-05-22T20:02:00.000Z",
             text: { body: "Que tengo pendiente hoy?" },
-            profile: { name: "Sales" },
           },
         },
       })
@@ -2446,6 +2462,8 @@ describe("WhatsApp inbox", () => {
         id: response.body.conversationId,
         phone: "573004445566",
         senderType: WhatsAppSenderType.comercial,
+        // Sin perfil de WhatsApp, el nombre sale del usuario de la plataforma.
+        senderName: "Sales",
         customerId: null,
         contactId: null,
       }),
