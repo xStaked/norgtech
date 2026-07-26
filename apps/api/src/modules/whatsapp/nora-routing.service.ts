@@ -281,6 +281,13 @@ export class NoraRoutingService {
           this.logger.error(
             `Nora general agent failed, falling back to planner: ${String(error)}`,
           );
+          // El planner responde el saludo generico, que a mitad de un pedido se
+          // lee como si Nora se hubiera perdido: dejar el error en el log es lo
+          // unico que permite saber despues por que se cayo el turno.
+          await this.prisma.noraActionLog.update({
+            where: { id: actionLog.id },
+            data: { error: this.safeErrorMessage(error) },
+          });
           // fall through to the planner path below
         }
       }
@@ -1337,7 +1344,10 @@ export class NoraRoutingService {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error(`Nora general agent request failed with status ${response.status}`);
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `Nora general agent request failed with status ${response.status}${body ? `: ${body.slice(0, 300)}` : ""}`,
+      );
     }
     return response.json() as Promise<{
       reply_text: string;

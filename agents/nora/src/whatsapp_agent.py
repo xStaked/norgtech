@@ -30,8 +30,10 @@ def _build_expense_graph():
     llm = create_llm().bind_tools(EXPENSE_TOOLS)
     tool_node = ToolNode(EXPENSE_TOOLS)
 
-    def call_model(state: _AgentState) -> dict:
-        response = llm.invoke(state["messages"])
+    # ainvoke y no invoke: el sync bloquea el event loop de FastAPI y los
+    # turnos concurrentes se serializan hasta reventar por timeout.
+    async def call_model(state: _AgentState) -> dict:
+        response = await llm.ainvoke(state["messages"])
         return {"messages": [response]}
 
     def should_continue(state: _AgentState):

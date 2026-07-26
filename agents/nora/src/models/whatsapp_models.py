@@ -165,5 +165,8 @@ class WhatsAppAgentResponse(BaseModel):
     reply_text: str
     case_update: dict[str, Any] | None = None
     executed_entity: dict[str, Any] | None = None
+    # Si el turno reventó: el mensaje del error viaja al CRM para quedar en el
+    # NoraActionLog. Sin esto un 500 se veía como silencio total en WhatsApp.
+    error: str | None = None
     handoff: "NoraHandoff | None" = None
     order_case: "NoraOrderDraft | None" = None

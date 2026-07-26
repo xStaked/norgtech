@@ -10,6 +10,7 @@ from .visit_parsing import resolve_visit_datetime
 from typing import Annotated, TypedDict
 
 import json
+import logging
 import re
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -20,6 +21,8 @@ from langgraph.prebuilt import ToolNode
 from .agent import ALL_TOOLS, create_llm
 from .models.whatsapp_models import WhatsAppAgentRequest, WhatsAppAgentResponse
 from .prompts.system import NORA_SYSTEM_PROMPT
+
+logger = logging.getLogger(__name__)
 
 WHATSAPP_ADDENDUM = (
     "\n\n## Canal: WhatsApp\n"
@@ -100,8 +103,10 @@ def _build_general_graph():
     llm = create_llm().bind_tools(ALL_TOOLS)
     tool_node = ToolNode(ALL_TOOLS)
 
-    def call_model(state: _GeneralState) -> dict:
-        return {"messages": [llm.invoke(state["messages"])]}
+    # ainvoke y no invoke: el sync bloquea el event loop de FastAPI y los
+    # turnos concurrentes se serializan hasta reventar por timeout.
+    async def call_model(state: _GeneralState) -> dict:
+        return {"messages": [await llm.ainvoke(state["messages"])]}
 
     def should_continue(state: _GeneralState):
         last = state["messages"][-1]
@@ -361,7 +366,19 @@ async def run_whatsapp_general_agent(request: WhatsAppAgentRequest) -> WhatsAppA
         "auth_token": request.auth,
         "session_id": request.conversation_id,
     }
-    result = await _general_graph.ainvoke(state)
+    try:
+        result = await _general_graph.ainvoke(state)
+    except Exception as exc:
+        # Un 500 aquí dejaba al CRM cayendo al planner, que respondía el saludo
+        # genérico (o nada): el comercial veía silencio justo al confirmar.
+        logger.exception("El agente general falló procesando el turno")
+        return WhatsAppAgentResponse(
+            reply_text=(
+                "Se me cruzaron los cables procesando eso. ¿Me lo repites? "
+                "Si era un pedido, dime el cliente y los productos otra vez."
+            ),
+            error=f"{type(exc).__name__}: {exc}",
+        )
 
     reply_text = ""
     for msg in reversed(result["messages"]):

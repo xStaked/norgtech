@@ -150,8 +150,10 @@ def _build_customer_graph():
     llm = create_llm().bind_tools(CUSTOMER_TOOLS)
     tool_node = ToolNode(CUSTOMER_TOOLS)
 
-    def call_model(state: _CustomerState) -> dict:
-        return {"messages": [llm.invoke(state["messages"])]}
+    # ainvoke y no invoke: el sync bloquea el event loop de FastAPI y los
+    # turnos concurrentes se serializan hasta reventar por timeout.
+    async def call_model(state: _CustomerState) -> dict:
+        return {"messages": [await llm.ainvoke(state["messages"])]}
 
     def should_continue(state: _CustomerState):
         last = state["messages"][-1]
