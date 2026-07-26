@@ -29,7 +29,7 @@ export function WhatsAppInbox({
   initialConversationId?: string;
 }) {
   const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(
+  const [selectedId, setSelectedId] = useState<string | null>(
     initialConversationId ?? initialConversations[0]?.id ?? null,
   );
   const [selectedConversation, setSelectedConversation] =
