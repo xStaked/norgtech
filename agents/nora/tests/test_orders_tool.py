@@ -2,7 +2,7 @@ import asyncio
 import json
 from unittest.mock import AsyncMock, patch
 
-from src.tools.orders import get_companies, get_customer_zones, create_order
+from src.tools.orders import get_companies, get_customer_zones, preview_order, create_order
 from src.tools.nestjs_client import NestJSAPIError
 
 
@@ -114,30 +114,68 @@ def test_create_order_includes_zone_when_provided():
     assert payload["customerZoneId"] == "cz_1"
 
 
-def test_create_order_requires_company_id():
+def test_create_order_omits_company_so_crm_uses_customer_company():
     fake_client = AsyncMock()
-    fake_client.post = AsyncMock()
+    fake_client.post = AsyncMock(return_value={"id": "ord_3", "status": "recibido", "total": 2000})
 
     with patch("src.tools.orders.NestJSClient", return_value=fake_client):
         result = asyncio.run(
             create_order.ainvoke({
                 "customer_id": "cus_1",
                 "items": _order_items(),
-                "company_id": "",
                 "auth_token": "Bearer scoped",
             })
         )
 
-    assert result.startswith("Error")
-    assert "empresa" in result.lower()
-    fake_client.post.assert_not_awaited()
+    _, payload = fake_client.post.await_args.args
+    assert "companyId" not in payload
+    assert "ord_3" in result
+
+
+def test_create_order_asks_to_research_customer_when_id_is_stale():
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(side_effect=NestJSAPIError(404, "Customer not found"))
+
+    with patch("src.tools.orders.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            create_order.ainvoke({
+                "customer_id": "cus_inventado",
+                "items": _order_items(),
+                "auth_token": "Bearer scoped",
+            })
+        )
+
+    assert "search_customers" in result
+    assert "reintenta create_order" in result
+
+
+def test_preview_order_prices_without_creating():
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value={"subtotal": 100000, "total": 119000, "lines": []})
+
+    with patch("src.tools.orders.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            preview_order.ainvoke({
+                "customer_id": "cus_1",
+                "items": _order_items(),
+                "auth_token": "Bearer scoped",
+            })
+        )
+
+    path, payload = fake_client.post.await_args.args
+    assert path == "/orders/preview"
+    assert payload == {
+        "customerId": "cus_1",
+        "items": [{"productId": "p_1", "quantity": 2.0, "unitPrice": 1000.0}],
+    }
+    assert "confirmación" in result
 
 
 def test_order_tools_registered_in_web_agent():
     from src.agent import ALL_TOOLS
 
     names = {t.name for t in ALL_TOOLS}
-    assert {"get_companies", "get_customer_zones"} <= names
+    assert {"get_companies", "get_customer_zones", "preview_order"} <= names
 
 
 def test_create_order_accepts_zero_unit_price():

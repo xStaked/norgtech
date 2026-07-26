@@ -15,7 +15,7 @@ from .tools.visits import create_visit, delete_visit, get_customer_visits, updat
 from .tools.expenses import create_expense, get_expenses, update_expense
 from .tools.opportunities import get_customer_opportunities, create_opportunity, update_opportunity_stage
 from .tools.follow_ups import create_follow_up
-from .tools.orders import search_products, get_customer_quotes, create_order, get_companies, get_customer_zones
+from .tools.orders import search_products, get_customer_quotes, preview_order, create_order, get_companies, get_customer_zones
 from .tools.analytics import get_sales_summary, get_cartera, get_goal_progress
 from .tools.nestjs_client import NestJSClient
 
@@ -40,6 +40,7 @@ ALL_TOOLS = [
     create_follow_up,
     search_products,
     get_customer_quotes,
+    preview_order,
     create_order,
     get_companies,
     get_customer_zones,

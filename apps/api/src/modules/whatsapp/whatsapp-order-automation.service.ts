@@ -14,7 +14,6 @@ type AutomationDecision = "created" | "needs_clarification" | "human_review";
 type ActiveCompany = {
   id: string;
   name: string;
-  legalName?: string | null;
   prefix: string;
 };
 
@@ -77,11 +76,13 @@ export class WhatsAppOrderAutomationService {
       );
     }
 
-    const company = await this.resolveCompany(dto.companyRef);
+    // La empresa que factura la define el cliente, no el mensaje: preguntarla
+    // solo produce pedidos rechazados por "company does not match customer".
+    const company = await this.resolveCustomerCompany(customer.companyId);
     if (!company) {
       return this.needsClarification(
         "companyId",
-        "Para preparar el pedido, dime por cual empresa debe salir.",
+        "El cliente no tiene una empresa activa asignada para facturar. Avisale al equipo comercial.",
       );
     }
 
@@ -183,25 +184,9 @@ export class WhatsAppOrderAutomationService {
     }
   }
 
-  private async resolveCompany(companyRef?: string) {
-    const companies = await this.prisma.company.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, legalName: true, prefix: true },
-    });
-
-    if (!companyRef?.trim()) {
-      return companies.length === 1 ? (companies[0] as ActiveCompany) : null;
-    }
-
-    const normalizedRef = this.normalize(companyRef);
-    return (
-      (companies as ActiveCompany[]).find((company) =>
-        [company.id, company.name, company.legalName, company.prefix].some(
-          (candidate) => this.normalize(candidate) === normalizedRef,
-        ),
-      ) ?? null
-    );
+  private async resolveCustomerCompany(companyId: string): Promise<ActiveCompany | null> {
+    const company = await this.prisma.company.findUnique({ where: { id: companyId } });
+    return company?.isActive ? company : null;
   }
 
   private async resolveCustomer(customerRef?: string) {
@@ -210,7 +195,7 @@ export class WhatsAppOrderAutomationService {
     }
     const customers = await this.prisma.customer.findMany({
       where: { active: true },
-      select: { id: true, displayName: true, legalName: true, taxId: true },
+      select: { id: true, companyId: true, displayName: true, legalName: true, taxId: true },
     });
     const normalizedRef = this.normalize(customerRef);
     const matches = customers.filter((candidate) =>
@@ -219,7 +204,7 @@ export class WhatsAppOrderAutomationService {
       ),
     );
     if (matches.length === 1) {
-      return { id: matches[0].id };
+      return { id: matches[0].id, companyId: matches[0].companyId };
     }
     if (matches.length > 1) {
       return undefined; // ambiguous

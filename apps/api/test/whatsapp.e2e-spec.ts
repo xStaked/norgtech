@@ -1443,6 +1443,15 @@ describe("WhatsApp inbox", () => {
     ]);
     expect(response.body.reply).toContain("Recibimos tu pedido");
     expect(response.body.reply).toContain("Fertilizante");
+    // Un pedido que nace en revision tiene que sonar la campana de quien revisa:
+    // si no, se queda esperando a que alguien abra la bandeja por casualidad.
+    expect(notifications).toContainEqual(
+      expect.objectContaining({
+        entityType: "order",
+        entityId: response.body.order.id,
+        title: expect.stringContaining("pendiente de revision"),
+      }),
+    );
   });
 
   it("creates a review order from a ready Nora order case", async () => {

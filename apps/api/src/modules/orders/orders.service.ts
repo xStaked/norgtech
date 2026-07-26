@@ -1,5 +1,5 @@
 import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
-import { InvoiceStatus, NotificationType, OrderStatus, Prisma } from "@prisma/client";
+import { InvoiceStatus, NotificationType, OrderStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -13,9 +13,16 @@ import { ResolveOrderItemDto } from "./dto/resolve-order-item.dto";
 import { RejectOrderDto } from "./dto/reject-order.dto";
 import { OrderXlsxExportService } from "./order-xlsx-export.service";
 import { CreditService } from "../credit/credit.service";
+import { CreditSummaryDto } from "../credit/dto/credit-summary.dto";
 import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { allowedTransitions } from "./order-status-transition-map";
 import { isEligibleSeller } from "../seller-goals/seller-eligibility";
+
+const COP = new Intl.NumberFormat("es-CO", {
+  style: "currency",
+  currency: "COP",
+  maximumFractionDigits: 0,
+});
 
 const INVOICE_ALLOWED_ORDER_STATUSES: OrderStatus[] = [
   OrderStatus.orden_facturacion,
@@ -75,13 +82,16 @@ export class OrdersService {
 
   async create(user: AuthUser, dto: CreateOrderDto) {
     const customer = await this.loadCustomerOrThrow(dto.customerId);
+    // La empresa que factura la define el cliente. Quien no la manda (Nora por
+    // WhatsApp) la hereda; quien la manda sigue validandose contra el cliente.
+    const companyId = dto.companyId || customer.companyId;
     const company = await this.prisma.company.findUnique({
-      where: { id: dto.companyId },
+      where: { id: companyId },
     });
     if (!company || !company.isActive) {
       throw new NotFoundException("Company not found or inactive");
     }
-    if (customer.companyId !== dto.companyId) {
+    if (customer.companyId !== companyId) {
       throw new BadRequestException("Order company does not match customer company");
     }
     if (dto.customerZoneId) {
@@ -184,7 +194,7 @@ export class OrdersService {
       const order = await tx.order.create({
         data: {
           customerId: dto.customerId,
-          companyId: dto.companyId,
+          companyId,
           opportunityId: dto.opportunityId || null,
           sourceQuoteId: dto.sourceQuoteId || null,
           sourceConversationId: dto.sourceConversationId || null,
@@ -251,6 +261,10 @@ export class OrdersService {
         },
         tx,
       );
+
+      if (order.approvalStatus === "en_revision") {
+        await this.notifyOrderInReview(order, user.id, tx);
+      }
 
       return order;
     });
@@ -712,11 +726,41 @@ export class OrdersService {
     });
   }
 
-  findReviewQueue() {
-    return this.prisma.order.findMany({
+  async findReviewQueue() {
+    const orders = await this.prisma.order.findMany({
       where: { approvalStatus: "en_revision" },
-      include: { items: true, customer: true, company: true },
+      include: {
+        items: true,
+        customer: true,
+        company: true,
+        seller: { select: { id: true, name: true } },
+      },
       orderBy: { createdAt: "desc" },
+    });
+
+    // El cupo es lo unico que puede tumbar un "Aprobar" ya habilitado. Se
+    // calcula aqui para que el revisor lo vea ANTES de hacer clic, en vez de
+    // descubrirlo con el 400 de approveOrder. Un pedido en revision esta en
+    // `recibido`, que no cuenta como exposicion (ORDER_EXPOSURE_STATUSES), asi
+    // que availableCredit ya es directamente comparable contra su total.
+    const summaries = new Map<string, CreditSummaryDto>();
+    for (const customerId of new Set(orders.map((order) => order.customerId))) {
+      summaries.set(customerId, await this.credit.getCreditSummary(customerId));
+    }
+
+    return orders.map((order) => {
+      const summary = summaries.get(order.customerId);
+      const availableCredit = summary?.availableCredit ?? null;
+      return {
+        ...order,
+        credit: {
+          creditLimit: summary?.creditLimit ?? null,
+          availableCredit,
+          // Sin limite configurado no hay cupo que exceder: assertCreditLimit
+          // tampoco bloquea en ese caso.
+          exceedsCredit: availableCredit != null && Number(order.total) > availableCredit,
+        },
+      };
     });
   }
 
@@ -936,6 +980,55 @@ export class OrdersService {
 
     const creator = await this.prisma.user.findUnique({ where: { id: user.id } });
     return isEligibleSeller(creator) ? user.id : null;
+  }
+
+  /**
+   * Un pedido que nace en revision (Nora por WhatsApp, o el CRM) necesita que
+   * alguien lo revise: avisa a quienes ven la bandeja de revision (los mismos
+   * roles de GET /orders/review-queue) y al vendedor dueno del pedido. Al que
+   * lo acaba de crear no, que ya lo sabe.
+   */
+  private async notifyOrderInReview(
+    order: {
+      id: string;
+      orderNumber: string | null;
+      sellerUserId: string | null;
+      total: Prisma.Decimal | number | null;
+      customer?: { displayName: string; assignedToUserId?: string | null } | null;
+    },
+    actorUserId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const reviewers = await tx.user.findMany({
+      where: {
+        active: true,
+        role: { in: [UserRole.administrador, UserRole.facturacion] },
+      },
+      select: { id: true },
+    });
+
+    const userIds = [
+      ...reviewers.map((reviewer) => reviewer.id),
+      order.sellerUserId,
+      order.customer?.assignedToUserId,
+    ].filter((id): id is string => Boolean(id) && id !== actorUserId);
+
+    if (userIds.length === 0) {
+      return;
+    }
+
+    await this.notifications.emit(
+      {
+        userIds,
+        type: NotificationType.pedido_hito,
+        title: `Pedido ${order.orderNumber ?? order.id} pendiente de revision`,
+        body: `${order.customer?.displayName ?? "Cliente"}${order.total ? ` — ${COP.format(Number(order.total))}` : ""}`,
+        entityType: "order",
+        entityId: order.id,
+        discriminator: "en_revision",
+      },
+      tx,
+    );
   }
 
   private async loadCustomerOrThrow(customerId: string) {

@@ -946,6 +946,20 @@ describe("Orders", () => {
     expect(Number(response.body.total)).toBe(119000);
   });
 
+  it("hereda la empresa del cliente cuando no se envia companyId", async () => {
+    const response = await request(globalThis.__APP__)
+      .post("/orders")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        customerId: "customer-1",
+        items: [{ productId: "product-1", quantity: 1, unitPrice: 50000 }],
+      })
+      .expect(201);
+
+    expect(response.body.companyId).toBe("company-1");
+    expect(response.body.billingCompanyNameSnapshot).toBe("Nortech");
+  });
+
   it("rechaza una orden cuya empresa no es la del cliente", async () => {
     const response = await request(globalThis.__APP__)
       .post("/orders")

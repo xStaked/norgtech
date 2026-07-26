@@ -15,9 +15,11 @@ export class CreateOrderDto {
   @IsNotEmpty()
   customerId!: string;
 
+  // Opcional: si no viene, se hereda del cliente (un cliente pertenece a una empresa).
+  @IsOptional()
   @IsString()
   @IsNotEmpty()
-  companyId!: string;
+  companyId?: string;
 
   @IsOptional()
   @IsString()
