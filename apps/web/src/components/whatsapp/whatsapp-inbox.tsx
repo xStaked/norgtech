@@ -62,13 +62,21 @@ export function WhatsAppInbox({
   }
 
   useEffect(() => {
-    loadConversation(selectedId);
+    void loadConversation(selectedId);
+    if (!selectedId) return;
+    // ponytail: poll de 4s sobre la conversación abierta en vez de websocket.
+    // Es una sola query con includes y solo corre para la pestaña que la mira;
+    // si hace falta latencia sub-segundo o hay muchos agentes, pasar a SSE.
+    const id = setInterval(() => {
+      void loadConversation(selectedId);
+    }, 4000);
+    return () => clearInterval(id);
   }, [selectedId]);
 
   useEffect(() => {
     const id = setInterval(() => {
       void refreshList();
-    }, 15000);
+    }, 10000);
     return () => clearInterval(id);
   }, []);
 

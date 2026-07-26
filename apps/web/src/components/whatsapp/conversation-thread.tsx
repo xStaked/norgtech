@@ -2,6 +2,7 @@
 
 import { CheckCheck } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { cn } from "@/lib/utils";
 import type { WhatsAppConversationDetail } from "./whatsapp-types";
 import {
@@ -17,6 +18,17 @@ export function ConversationThread({
 }: {
   conversation: WhatsAppConversationDetail | null;
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const lastMessageId = conversation?.messages.at(-1)?.id;
+
+  // Baja al último mensaje al abrir la conversación y cada vez que entra uno
+  // nuevo. Si no cambió el último id (poll sin novedades) no toca el scroll,
+  // así se puede leer historial sin que te tire abajo.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [conversation?.id, lastMessageId]);
+
   if (!conversation) {
     return (
       <div className="flex min-h-0 flex-1 items-center justify-center bg-[#eef1f4] text-sm text-[#6b7787]">
@@ -61,7 +73,7 @@ export function ConversationThread({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-auto p-5">
+      <div ref={scrollerRef} className="flex min-h-0 flex-1 flex-col gap-2.5 overflow-auto p-5">
         {conversation.messages.length === 0 ? (
           <div className="m-auto text-sm text-[#6b7787]">Sin mensajes todavía</div>
         ) : (
