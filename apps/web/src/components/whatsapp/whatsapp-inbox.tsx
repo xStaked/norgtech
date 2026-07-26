@@ -3,7 +3,12 @@
 import { MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { apiFetchClient } from "@/lib/api.client";
-import { getSessionTokenClient, getUserRoleFromToken } from "@/lib/auth";
+import {
+  decodeJwtPayload,
+  getSessionTokenClient,
+  getUserRoleFromToken,
+  type UserRole,
+} from "@/lib/auth";
 import { ConversationComposer } from "./conversation-composer";
 import { ConversationList } from "./conversation-list";
 import { ConversationThread } from "./conversation-thread";
@@ -30,8 +35,13 @@ export function WhatsAppInbox({
   const [selectedConversation, setSelectedConversation] =
     useState<WhatsAppConversationDetail | null>(null);
 
-  const role = getUserRoleFromToken(getSessionTokenClient());
+  const token = getSessionTokenClient();
+  const role = getUserRoleFromToken(token);
   const isAgent = role != null && UNICANAL_AGENT_ROLE_SET.has(role);
+  // Los unicos roles que no atienden son los supervisores (administrador,
+  // director_comercial): no hay tercera categoria.
+  const isSupervisor = role != null && !isAgent;
+  const myUserId = token ? ((decodeJwtPayload(token)?.sub as string | undefined) ?? null) : null;
 
   async function refreshList() {
     const response = await apiFetchClient("/whatsapp/conversations");
@@ -94,6 +104,24 @@ export function WhatsAppInbox({
     if (response.ok) {
       await refreshSelected();
     }
+  }
+
+  async function reassignRole(assignedToRole: UserRole) {
+    if (!selectedId) return;
+    const response = await apiFetchClient(`/whatsapp/conversations/${selectedId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ assignedToRole }),
+    });
+    if (!response.ok) return;
+    // Un agente que la manda a otra area la pierde de vista (el API responde 403
+    // al volver a leerla): soltamos la seleccion en vez de pedirla de nuevo.
+    if (!isSupervisor && assignedToRole !== role) {
+      setSelectedId(null);
+      setSelectedConversation(null);
+      await refreshList();
+      return;
+    }
+    await refreshSelected();
   }
 
   async function claimConversation(id: string) {
@@ -159,6 +187,11 @@ export function WhatsAppInbox({
         <CustomerInfoPanel
           conversation={activeConversation}
           onStatusChange={updateConversationStatus}
+          onRoleChange={reassignRole}
+          canReassign={
+            isSupervisor ||
+            (myUserId != null && activeConversation?.assignedToUser?.id === myUserId)
+          }
           onCreated={refreshSelected}
         />
       </div>

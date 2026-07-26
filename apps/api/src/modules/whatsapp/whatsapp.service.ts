@@ -27,7 +27,7 @@ import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
 import { NoraCaseService } from "./nora-case.service";
-import { isSupervisor } from "./unicanal-roles";
+import { isAttendableRole, isSupervisor } from "./unicanal-roles";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 
 const conversationSummaryInclude = {
@@ -150,6 +150,17 @@ export class WhatsAppService {
     throw new ForbiddenException("No tenés acceso a esta conversación");
   }
 
+  /**
+   * Mover una conversación de área es más fuerte que responderla: la saca de la
+   * bandeja de quien la tenía. Solo un supervisor, o el agente que la tomó (que
+   * es quien descubre "esto no es lo mío"), puede hacerlo.
+   */
+  private assertCanReassign(user: AuthUser, conversation: { assignedToUserId: string | null }) {
+    if (isSupervisor(user.role)) return;
+    if (conversation.assignedToUserId === user.id) return;
+    throw new ForbiddenException("Solo un supervisor o quien la tomó puede reasignarla");
+  }
+
   async claimConversation(user: AuthUser, id: string) {
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id },
@@ -195,16 +206,31 @@ export class WhatsAppService {
 
     this.assertCanAccess(user, conversation);
 
-    await this.assertReferencesExist(conversation, dto);
+    if (dto.assignedToRole !== undefined || dto.assignedToUserId !== undefined) {
+      this.assertCanReassign(user, conversation);
+    }
+
+    const assignedUserRole = await this.assertReferencesExist(conversation, dto);
 
     const shouldClearContact = dto.customerId === null && dto.contactId === undefined;
 
     return this.prisma.whatsAppConversation.update({
       where: { id },
       data: {
+        // Reasignar area = handoff: vuelve a la bandeja compartida del area nueva,
+        // sin dueno y pendiente. Misma forma que escribe Nora al derivar
+        // (nora-routing.service.ts), para que badge y "Tomar" funcionen igual.
+        ...(dto.assignedToRole !== undefined && {
+          assignedToRole: dto.assignedToRole,
+          assignedToUserId: null,
+          status: WhatsAppConversationStatus.pendiente,
+        }),
         ...(dto.status !== undefined && { status: dto.status }),
         ...(dto.assignedToUserId !== undefined && {
           assignedToUserId: dto.assignedToUserId,
+          // El rol sigue al dueno: si no, la conversacion queda colgada en la
+          // bandeja compartida del area vieja.
+          ...(assignedUserRole && { assignedToRole: assignedUserRole }),
         }),
         ...(dto.customerId !== undefined && { customerId: dto.customerId }),
         ...((dto.contactId !== undefined || shouldClearContact) && {
@@ -907,10 +933,13 @@ export class WhatsAppService {
       : WhatsAppSenderType.admin;
   }
 
+  /** Devuelve el rol del nuevo dueño (si lo hay) para que `assignedToRole` lo siga. */
   private async assertReferencesExist(
     conversation: { customerId: string | null; contactId: string | null },
     dto: UpdateConversationDto,
-  ) {
+  ): Promise<UserRole | null> {
+    let assignedUserRole: UserRole | null = null;
+
     if (dto.assignedToUserId !== undefined && dto.assignedToUserId !== null) {
       const assignedUser = await this.prisma.user.findUnique({
         where: { id: dto.assignedToUserId },
@@ -919,6 +948,12 @@ export class WhatsAppService {
       if (!assignedUser) {
         throw new NotFoundException("Assigned user not found");
       }
+      if (!isAttendableRole(assignedUser.role)) {
+        throw new BadRequestException(
+          `${assignedUser.name} no atiende el unicanal (rol ${assignedUser.role})`,
+        );
+      }
+      assignedUserRole = assignedUser.role;
     }
 
     if (dto.customerId !== undefined && dto.customerId !== null) {
@@ -957,5 +992,7 @@ export class WhatsAppService {
         throw new BadRequestException("Contact does not belong to customer");
       }
     }
+
+    return assignedUserRole;
   }
 }
