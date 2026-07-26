@@ -1936,6 +1936,25 @@ describe("Orders", () => {
   describe("credit gating on approve / advance / invoice (ORD-01)", () => {
     const admin = () => `Bearer ${global.__ADMIN_TOKEN__}`;
 
+    it("marks in the review queue the orders that would not pass the credit check", async () => {
+      // Misma aritmetica que el bloqueo de abajo, pero ANTES del clic: cupo
+      // 1.000.000 - 500.000 comprometidos = 500.000 disponibles.
+      const response = await request(global.__APP__)
+        .get("/orders/review-queue")
+        .set("Authorization", admin())
+        .expect(200);
+
+      const exceeds = response.body.find((order: { id: string }) => order.id === "order-credit-exceed");
+      const fits = response.body.find((order: { id: string }) => order.id === "order-credit-ok");
+
+      expect(exceeds.credit).toEqual({
+        creditLimit: 1000000,
+        availableCredit: 500000,
+        exceedsCredit: true,
+      });
+      expect(fits.credit.exceedsCredit).toBe(false);
+    });
+
     it("blocks approving an order that exceeds available credit, and leaves it unapproved", async () => {
       // customer-credit-tight: cupo 1.000.000, 500.000 ya comprometidos.
       // order-credit-exceed vale 900.000 -> 1.400.000 > 1.000.000.

@@ -17,11 +17,16 @@ import { UNICANAL_AGENT_ROLE_SET } from "./whatsapp-ui";
 
 export function WhatsAppInbox({
   initialConversations,
+  initialConversationId,
 }: {
   initialConversations: WhatsAppConversation[];
+  /** Conversación a abrir de entrada, aunque no venga en la primera página. */
+  initialConversationId?: string;
 }) {
   const [conversations, setConversations] = useState(initialConversations);
-  const [selectedId, setSelectedId] = useState(initialConversations[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState(
+    initialConversationId ?? initialConversations[0]?.id ?? null,
+  );
   const [selectedConversation, setSelectedConversation] =
     useState<WhatsAppConversationDetail | null>(null);
 
