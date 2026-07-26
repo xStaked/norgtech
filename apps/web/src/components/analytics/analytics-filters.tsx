@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Calendar, Info } from "lucide-react";
 import type { AnalyticsFilterOptions, FilterOption } from "@/lib/analytics";
+import { Select } from "@/components/ui/select";
 
 /**
  * Barra de filtros COMPARTIDA por las 4 pantallas (docs/analytics-spec.md §2.1).
@@ -28,9 +29,6 @@ interface AnalyticsFiltersProps {
   asOf?: string;
   note: string;
 }
-
-const controlClasses =
-  "h-[34px] rounded-lg border border-input bg-card px-2.5 text-[12.5px] font-semibold text-secondary-foreground outline-none transition-colors focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/40";
 
 const GRANULARITIES = [
   { value: "day", label: "Día" },
@@ -67,22 +65,16 @@ export function AnalyticsFilters({
     items: FilterOption[],
     value: string | null,
   ) => (
-    <label key={key} className="contents">
-      <span className="sr-only">{allLabel}</span>
-      <select
-        className={controlClasses}
-        value={value ?? ""}
-        onChange={(event) => setParams({ [key]: event.target.value })}
-        disabled={items.length === 0}
-      >
-        <option value="">{allLabel}</option>
-        {items.map((item) => (
-          <option key={item.value} value={item.value}>
-            {item.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Select
+      key={key}
+      aria-label={allLabel}
+      className="w-auto min-w-40 max-w-64 bg-card font-semibold"
+      searchPlaceholder={allLabel}
+      value={value ?? ""}
+      onValueChange={(next) => setParams({ [key]: next })}
+      disabled={items.length === 0}
+      options={[{ value: "", label: allLabel }, ...items]}
+    />
   );
 
   return (

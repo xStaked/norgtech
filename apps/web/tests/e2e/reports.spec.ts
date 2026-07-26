@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { chooseOption, selectByName } from "./select";
 
 async function waitForBackend(request: ReturnType<typeof test.fixtures>["request"]) {
   let backendReady = false;
@@ -34,7 +35,7 @@ test("generate report from completed visit and view it", async ({ page, request 
 
   // Create a new visit first
   await page.getByRole("link", { name: "Nueva visita" }).click();
-  await page.locator('select[name="customerId"]').selectOption({ index: 1 });
+  await chooseOption(page, selectByName(page, "customerId"), { index: 1 });
   await page.locator('input[name="scheduledAt"]').fill("2026-05-15T10:00");
   await page.getByRole("button", { name: "Guardar visita" }).click();
 

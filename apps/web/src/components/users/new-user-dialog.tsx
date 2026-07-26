@@ -14,13 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { type ManagedUser } from "@/components/users/types";
 import {
   E164_PHONE_PATTERN,
@@ -146,18 +140,16 @@ export function NewUserDialog({ open, onOpenChange, onCreated }: NewUserDialogPr
               <Label htmlFor="new-user-role" className="text-xs font-semibold text-[#3a4658]">
                 Rol <span className="text-[#b42318]">*</span>
               </Label>
-              <Select value={role} onValueChange={(value) => setRole((value as UserRole) ?? "comercial")}>
-                <SelectTrigger id="new-user-role" className="h-10 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {USER_ROLES.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {ROLE_LABELS[option] ?? option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Select
+                id="new-user-role"
+                size="lg"
+                value={role}
+                onValueChange={(value) => setRole((value as UserRole) || "comercial")}
+                options={USER_ROLES.map((option) => ({
+                  value: option,
+                  label: ROLE_LABELS[option] ?? option,
+                }))}
+              />
             </div>
 
             <div className="grid gap-1.5">

@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { chooseOption, selectByName } from "./select";
 
 async function waitForBackend(request: ReturnType<typeof test.fixtures>["request"]) {
   let backendReady = false;
@@ -74,12 +75,12 @@ test("create order and view logistics section", async ({ page, request }) => {
   await loginAsAdmin(page);
 
   await page.goto("/orders/new");
-  await page.locator('select[name="customerId"]').selectOption(customer.id);
+  await chooseOption(page, selectByName(page, "customerId"), { label: customer.displayName });
   await page.getByLabel("Orden de compra").fill("OC-E2E-001");
   await page.getByLabel("Fecha del pedido").fill("2026-05-22");
   await page.getByLabel("Direccion para despacho").fill("Calle 123 #45-67");
   await page.getByLabel("Solicitante", { exact: true }).fill("Juan Perez");
-  await page.getByTestId("product-select").selectOption(product.id);
+  await chooseOption(page, page.getByTestId("product-select"), { label: product.name });
   await page.getByRole("button", { name: "Guardar pedido" }).click();
 
   await page.waitForURL(/\/orders\/(?!new$)[a-z0-9_-]+$/i, { timeout: 10000 });
@@ -139,10 +140,10 @@ test("advance order status and create billing request", async ({ page, request }
   await loginAsAdmin(page);
 
   await page.goto("/orders/new");
-  await page.locator('select[name="customerId"]').selectOption(customer.id);
+  await chooseOption(page, selectByName(page, "customerId"), { label: customer.displayName });
   await page.getByLabel("Fecha del pedido").fill("2026-05-22");
   await page.getByLabel("Solicitante", { exact: true }).fill("Ana Gomez");
-  await page.getByTestId("product-select").selectOption(product.id);
+  await chooseOption(page, page.getByTestId("product-select"), { label: product.name });
   await page.getByRole("button", { name: "Guardar pedido" }).click();
   await page.waitForURL(/\/orders\/(?!new$)[a-z0-9_-]+$/i, { timeout: 10000 });
 

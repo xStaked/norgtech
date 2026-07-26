@@ -7,6 +7,7 @@ import { toInstantString } from "@/lib/datetime";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 interface Customer {
@@ -23,9 +24,6 @@ interface VisitFormProps {
   customers: Customer[];
   opportunities: Opportunity[];
 }
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function VisitForm({ customers, opportunities }: VisitFormProps) {
   const router = useRouter();
@@ -82,26 +80,27 @@ export function VisitForm({ customers, opportunities }: VisitFormProps) {
 
       <div className="grid gap-1">
         <Label>Cliente *</Label>
-        <select name="customerId" required className={selectClasses}>
-          <option value="">Seleccionar cliente</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.displayName}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="customerId"
+          required
+          searchPlaceholder="Buscar cliente…"
+          options={[
+            { value: "", label: "Seleccionar cliente" },
+            ...customers.map((c) => ({ value: c.id, label: c.displayName })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">
         <Label>Oportunidad</Label>
-        <select name="opportunityId" className={selectClasses}>
-          <option value="">Seleccionar oportunidad</option>
-          {opportunities.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.title}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="opportunityId"
+          searchPlaceholder="Buscar oportunidad…"
+          options={[
+            { value: "", label: "Seleccionar oportunidad" },
+            ...opportunities.map((o) => ({ value: o.id, label: o.title })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">

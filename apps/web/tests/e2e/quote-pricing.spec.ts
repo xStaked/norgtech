@@ -1,4 +1,5 @@
 import { expect, test, type Page, type APIRequestContext } from "@playwright/test";
+import { chooseOption, selectByName } from "./select";
 
 /**
  * The quote form must show the price the backend will actually save: the
@@ -31,9 +32,8 @@ async function loginAsAdmin(page: Page) {
 
 async function startQuoteFor(page: Page, customerName: string) {
   await page.goto("/quotes/new");
-  await page.locator('select[name="customerId"]').selectOption({ label: customerName });
-  // The item's product select is the only one without a name attribute.
-  await page.locator("select:not([name])").first().selectOption({ index: 1 });
+  await chooseOption(page, selectByName(page, "customerId"), { label: customerName });
+  await chooseOption(page, page.getByTestId("product-select").first(), { index: 1 });
 }
 
 test("applies the segment discount when the customer meets the goal", async ({ page, request }) => {

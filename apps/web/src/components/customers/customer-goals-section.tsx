@@ -10,13 +10,7 @@ import { Label } from "@/components/ui/label";
 import { SectionCard } from "@/components/ui/section-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 
 interface Goal {
   id: string;
@@ -297,6 +291,7 @@ export function CustomerGoalsSection({
               <div className="grid gap-1.5">
                 <Label htmlFor="periodType">Tipo de período</Label>
                 <Select
+                  id="periodType"
                   value={periodType}
                   onValueChange={(value) => {
                     if (value) {
@@ -304,16 +299,13 @@ export function CustomerGoalsSection({
                       setPeriodValue("");
                     }
                   }}
-                >
-                  <SelectTrigger id="periodType">
-                    <SelectValue placeholder="Selecciona..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="anual">Anual</SelectItem>
-                    <SelectItem value="trimestral">Trimestral</SelectItem>
-                    <SelectItem value="mensual">Mensual</SelectItem>
-                  </SelectContent>
-                </Select>
+                  placeholder="Selecciona..."
+                  options={[
+                    { value: "anual", label: "Anual" },
+                    { value: "trimestral", label: "Trimestral" },
+                    { value: "mensual", label: "Mensual" },
+                  ]}
+                />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="periodValue">Período</Label>

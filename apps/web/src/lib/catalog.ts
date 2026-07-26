@@ -80,13 +80,19 @@ export interface ProductDetail {
  * COP y USD nunca se convierten ni se mezclan: no hay tasa de cambio en el
  * sistema. El símbolo tiene que dejar obvio cuál es cuál.
  */
-export function formatPrice(value: string | number | null, currency: string): string {
+export function formatPrice(
+  value: string | number | null,
+  currency: string,
+  /** En listados los centavos de COP solo alargan la cifra: se redondea al peso. */
+  round = false,
+): string {
   if (value === null || value === "") return "";
   const n = Number(value);
   if (!Number.isFinite(n)) return "";
+  const decimals = round && currency !== "USD" ? 0 : 2;
   const amount = n.toLocaleString("es-CO", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
   });
   return currency === "USD" ? `US$ ${amount}` : `$${amount}`;
 }

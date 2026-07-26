@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Sparkles } from "lucide-react";
 import { crmTheme } from "@/components/ui/theme";
+import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { NoraProposalBlock } from "./nora-proposal-block";
 import {
@@ -351,30 +352,24 @@ export function NoraProposalCard({
               <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.nora.textSubtle }}>
                 Etapa
               </span>
-              <select
+              <Select
                 aria-label="Etapa de la oportunidad"
+                size="lg"
                 value={proposal.blocks.opportunity.stage ?? ""}
-                onChange={(event) =>
+                onValueChange={(stage) =>
                   updateProposal((draft) => ({
                     ...draft,
                     blocks: {
                       ...draft.blocks,
                       opportunity: draft.blocks.opportunity
-                        ? { ...draft.blocks.opportunity, stage: event.target.value }
+                        ? { ...draft.blocks.opportunity, stage }
                         : draft.blocks.opportunity,
                     },
                   }))
                 }
                 disabled={confirming}
-                style={textInputStyle()}
-              >
-                <option value="">Selecciona una etapa</option>
-                {opportunityStages.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={[{ value: "", label: "Selecciona una etapa" }, ...opportunityStages]}
+              />
             </label>
           </NoraProposalBlock>
         )}
@@ -424,29 +419,24 @@ export function NoraProposalCard({
                 <span style={{ fontSize: 12, fontWeight: 600, color: crmTheme.nora.textSubtle }}>
                   Tipo
                 </span>
-                <select
+                <Select
                   aria-label="Tipo de seguimiento"
+                  size="lg"
                   value={proposal.blocks.followUp.type ?? ""}
-                  onChange={(event) =>
+                  onValueChange={(type) =>
                     updateProposal((draft) => ({
                       ...draft,
                       blocks: {
                         ...draft.blocks,
                         followUp: draft.blocks.followUp
-                          ? { ...draft.blocks.followUp, type: event.target.value }
+                          ? { ...draft.blocks.followUp, type }
                           : draft.blocks.followUp,
                       },
                     }))
                   }
                   disabled={confirming}
-                  style={textInputStyle()}
-                >
-                  {followUpTypes.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={followUpTypes}
+                />
               </label>
             </div>
             <label style={{ display: "grid", gap: 6 }}>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { crmTheme } from "@/components/ui/theme";
+import { Select } from "@/components/ui/select";
 import { apiFetchClient } from "@/lib/api.client";
 
 interface QuoteStatusControlProps {
@@ -57,28 +58,15 @@ export function QuoteStatusControl({ quoteId, currentStatus }: QuoteStatusContro
   return (
     <div style={{ display: "grid", gap: 10, justifyItems: "start" }}>
       <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-        <select
+        <Select
+          size="lg"
+          className="w-auto min-w-48"
+          aria-label="Nuevo estado de la cotizacion"
           value={target}
-          onChange={(event) => setTarget(event.target.value)}
+          onValueChange={setTarget}
           disabled={loading}
-          style={{
-            minHeight: 44,
-            padding: "0 12px",
-            borderRadius: crmTheme.radius.md,
-            border: `1px solid ${crmTheme.colors.border}`,
-            background: crmTheme.colors.surface,
-            color: crmTheme.colors.text,
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: loading ? "not-allowed" : "pointer",
-          }}
-        >
-          {statusOrder.map((status) => (
-            <option key={status} value={status}>
-              {statusLabels[status]}
-            </option>
-          ))}
-        </select>
+          options={statusOrder.map((status) => ({ value: status, label: statusLabels[status] }))}
+        />
 
         <button
           type="button"

@@ -7,13 +7,7 @@ import { ROLE_LABELS } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import {
   Sheet,
   SheetContent,
@@ -455,21 +449,9 @@ function GoalForm({ draft, setDraft, saving, submitLabel, onSubmit, onCancel }: 
           <Label className="text-xs font-semibold text-[#3a4658]">Periodo</Label>
           <Select
             value={draft.periodType}
-            onValueChange={(value) =>
-              patch({ periodType: (value as string) ?? "mensual", periodValue: "" })
-            }
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {periodTypeOptions.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            onValueChange={(value) => patch({ periodType: value || "mensual", periodValue: "" })}
+            options={periodTypeOptions}
+          />
         </div>
 
         <div className="grid gap-1.5">

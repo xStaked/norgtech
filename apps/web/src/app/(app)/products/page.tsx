@@ -47,6 +47,10 @@ function avatarColor(name: string): string {
   return AVATAR_COLORS[hash % AVATAR_COLORS.length];
 }
 
+function hasPrice(product: Product): boolean {
+  return Object.keys(product.priceRange).length > 0;
+}
+
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
@@ -75,7 +79,7 @@ export default async function ProductsPage({
     match: {
       unit: (product) => product.unit,
       active: (product) => String(product.active),
-      priced: (product) => (Object.keys(product.priceRange).length > 0 ? "si" : "no"),
+      priced: (product) => (hasPrice(product) ? "si" : "no"),
     },
   });
 
@@ -143,66 +147,85 @@ export default async function ProductsPage({
               href={`/products/${product.id}`}
               className="group block rounded-[11px] border border-border bg-card p-4 transition-all hover:border-[#c7d3df] hover:shadow-[0_6px_18px_rgba(12,44,68,.08)]"
             >
-              <div className="flex items-start gap-2.5">
+              {/* Nombre y precio ya no comparten fila: el nombre se truncaba y
+                  los 4 chips de metadatos desbordaban. Ahora van apilados. */}
+              <div className="mb-3 flex items-start gap-2.5">
                 <span
                   aria-hidden="true"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] text-[13px] font-bold text-white"
+                  className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[9px] text-[12.5px] font-extrabold text-white"
                   style={{ backgroundColor: avatarColor(product.name) }}
                 >
                   {initials(product.name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[14px] font-bold text-foreground">
+                  <div className="text-[14.5px] font-bold leading-[1.25] text-foreground">
                     {product.name}
                   </div>
-                  {!product.active ? (
-                    <div className="mt-1">
-                      <StatusBadge tone="neutral">Inactivo</StatusBadge>
-                    </div>
-                  ) : null}
+                  <div className="mt-0.5 truncate font-mono text-[10.5px] font-semibold text-[#7a8696]">
+                    {product.sku}
+                  </div>
                 </div>
-                <div className="shrink-0 text-right">
-                  {/* Rango, no un precio único: el mismo producto vale distinto
-                      en cada lista. Una moneda por línea, nunca convertidas. */}
-                  {Object.entries(product.priceRange).length === 0 ? (
-                    <div className="text-[12px] text-muted-foreground">Sin precio</div>
-                  ) : (
-                    Object.entries(product.priceRange).map(([currency, range]) => (
-                      <div key={currency}>
-                        <div className="font-mono text-[12.5px] font-bold tabular-nums text-[#167c4a]">
+                <span
+                  aria-hidden="true"
+                  title={hasPrice(product) ? "Con precio" : "Sin precio"}
+                  className="mt-1.5 h-[7px] w-[7px] shrink-0 rounded-full"
+                  style={{ backgroundColor: hasPrice(product) ? "#00a651" : "#f58221" }}
+                />
+              </div>
+
+              <div className="mb-[11px] border-t border-[#f0f2f6] pt-[11px]">
+                {/* Rango, no un precio único: el mismo producto vale distinto
+                    en cada lista. Una moneda por línea, nunca convertidas. */}
+                {!hasPrice(product) ? (
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-md bg-[#fdf0dc] px-2.5 py-0.5 text-[11.5px] font-bold text-[#9a6410]">
+                      Sin precio
+                    </span>
+                    <span className="text-[11px] text-[#b3bcc8]">no está en ninguna lista</span>
+                  </div>
+                ) : (
+                  <>
+                    {Object.entries(product.priceRange).map(([currency, range]) => (
+                      <div key={currency} className="mb-1 flex items-baseline gap-[9px]">
+                        <span
+                          className="w-[30px] shrink-0 rounded py-px text-center text-[9.5px] font-extrabold"
+                          style={
+                            currency === "USD"
+                              ? { color: "#3d6b2f", backgroundColor: "#e8f0e6" }
+                              : { color: "#0f5c8a", backgroundColor: "#e6f0f6" }
+                          }
+                        >
+                          {currency}
+                        </span>
+                        <span
+                          className="font-mono text-[12.5px] font-semibold tabular-nums"
+                          style={{ color: currency === "USD" ? "#3d6b2f" : "#0c2c44" }}
+                        >
                           {range.min === range.max
-                            ? formatPrice(range.min, currency)
-                            : `${formatPrice(range.min, currency)} – ${formatPrice(range.max, currency)}`}
-                        </div>
-                        <div className="text-[10.5px] text-muted-foreground">
-                          {currency} · sin IVA
-                        </div>
+                            ? formatPrice(range.min, currency, true)
+                            : `${formatPrice(range.min, currency, true)} – ${formatPrice(range.max, currency, true)}`}
+                        </span>
                       </div>
-                    ))
-                  )}
-                </div>
+                    ))}
+                    {/* Una sola nota de IVA para todas las monedas, no una por fila. */}
+                    <div className="pl-[39px] text-[10px] text-[#b3bcc8]">rango sin IVA</div>
+                  </>
+                )}
               </div>
 
-              <div className="my-[10px] mt-3 flex flex-wrap gap-1.5">
-                <span className="rounded-md bg-[#e6f0f6] px-2 py-0.5 text-[11px] font-semibold text-[#0f5c8a]">
-                  {product.sku}
-                </span>
-                <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
-                  {product.unit}
-                </span>
-                <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
-                  {product.presentationCount} presentaciones
-                </span>
-                <span className="rounded-md bg-[#eef1f6] px-2 py-0.5 text-[11px] font-semibold text-[#44556e]">
-                  {product.priceListCount} listas
-                </span>
+              <div className="flex flex-wrap items-center gap-2 text-[11.5px] text-[#6b7787]">
+                {!product.active ? (
+                  <>
+                    <StatusBadge tone="neutral">Inactivo</StatusBadge>
+                    <span className="text-[#d5dbe3]">·</span>
+                  </>
+                ) : null}
+                <span className="font-semibold text-[#44556e]">{product.unit}</span>
+                <span className="text-[#d5dbe3]">·</span>
+                <span>{product.presentationCount} present.</span>
+                <span className="text-[#d5dbe3]">·</span>
+                <span>{product.priceListCount} listas</span>
               </div>
-
-              {product.description ? (
-                <p className="text-[12px] leading-[1.5] text-[#6b7787]">
-                  {product.description}
-                </p>
-              ) : null}
             </Link>
           ))}
         </div>

@@ -7,6 +7,7 @@ import { getSessionTokenClient, getUserRoleFromToken } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 
 interface ReviewItem {
   id: string;
@@ -36,9 +37,6 @@ interface OrderReviewActionsProps {
 }
 
 const reviewRoles = ["administrador", "facturacion"] as const;
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function OrderReviewActions({ orderId, approvalStatus, items }: OrderReviewActionsProps) {
   const router = useRouter();
@@ -184,19 +182,20 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
                 <div className="grid gap-2 sm:grid-cols-[1fr_10rem_auto]">
                   <div className="grid gap-1">
                     <Label htmlFor={`product-${item.id}`}>Producto del catálogo</Label>
-                    <select
+                    <Select
                       id={`product-${item.id}`}
                       value={resolution.productId}
-                      onChange={(e) => updateResolution(item.id, "productId", e.target.value)}
-                      className={selectClasses}
-                    >
-                      <option value="">Seleccionar producto</option>
-                      {products.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.sku}) — ${Number(p.basePrice).toLocaleString("es-CO")}/{p.unit}
-                        </option>
-                      ))}
-                    </select>
+                      onValueChange={(value) => updateResolution(item.id, "productId", value)}
+                      searchPlaceholder="Buscar producto o SKU…"
+                      options={[
+                        { value: "", label: "Seleccionar producto" },
+                        ...products.map((p) => ({
+                          value: p.id,
+                          label: p.name,
+                          meta: `${p.sku} · $${Number(p.basePrice).toLocaleString("es-CO")}/${p.unit}`,
+                        })),
+                      ]}
+                    />
                   </div>
                   <div className="grid gap-1">
                     <Label htmlFor={`price-${item.id}`}>Precio unitario</Label>

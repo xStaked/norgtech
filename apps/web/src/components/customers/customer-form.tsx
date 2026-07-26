@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import type { PriceListRef } from "@/lib/catalog";
 import { UserSelect } from "@/components/users/user-select";
+import { Select } from "@/components/ui/select";
 
 interface Segment {
   id: string;
@@ -45,9 +46,6 @@ interface CustomerFormProps {
   priceLists?: PriceListRef[];
   customer?: Customer;
 }
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 function periodPlaceholder(periodType: string): string {
   switch (periodType.toLowerCase()) {
@@ -194,36 +192,30 @@ export function CustomerForm({
 
       <div className="grid gap-1">
         <Label>Segmento *</Label>
-        <select
+        <Select
           name="segmentId"
           required
-          className={selectClasses}
           defaultValue={customer?.segmentId ?? ""}
-        >
-          <option value="">Seleccionar segmento</option>
-          {segments.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
+          searchPlaceholder="Buscar segmento…"
+          options={[
+            { value: "", label: "Seleccionar segmento" },
+            ...segments.map((s) => ({ value: s.id, label: s.name })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">
         <Label>Empresa *</Label>
-        <select
+        <Select
           name="companyId"
           required
-          className={selectClasses}
           defaultValue={customer?.companyId ?? ""}
-        >
-          <option value="">Seleccionar empresa</option>
-          {companies.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+          searchPlaceholder="Buscar empresa…"
+          options={[
+            { value: "", label: "Seleccionar empresa" },
+            ...companies.map((c) => ({ value: c.id, label: c.name })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">
@@ -306,18 +298,19 @@ export function CustomerForm({
           </div>
           <div className="grid gap-1">
             <Label>Lista de precios</Label>
-            <select
-              className={selectClasses}
+            <Select
               value={priceListId}
-              onChange={(event) => setPriceListId(event.target.value)}
-            >
-              <option value="">Sin asignar — usa precio base</option>
-              {priceLists.map((list) => (
-                <option key={list.id} value={list.id}>
-                  {list.name} · {list.kind} · {list.currency}
-                </option>
-              ))}
-            </select>
+              onValueChange={setPriceListId}
+              searchPlaceholder="Buscar lista…"
+              options={[
+                { value: "", label: "Sin asignar — usa precio base" },
+                ...priceLists.map((list) => ({
+                  value: list.id,
+                  label: list.name,
+                  meta: `${list.kind} · ${list.currency}`,
+                })),
+              ]}
+            />
           </div>
         </div>
 
@@ -369,31 +362,31 @@ export function CustomerForm({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-1">
           <Label>Tipo de cliente</Label>
-          <select
+          <Select
             name="customerType"
-            className={selectClasses}
             defaultValue={customer?.customerType ?? "cliente_directo"}
-          >
-            <option value="distribuidor">Distribuidor</option>
-            <option value="cliente_directo">Cliente directo</option>
-            <option value="planta_balanceados">Planta de balanceados</option>
-            <option value="maquila">Maquila</option>
-            <option value="otro">Otro</option>
-          </select>
+            options={[
+              { value: "distribuidor", label: "Distribuidor" },
+              { value: "cliente_directo", label: "Cliente directo" },
+              { value: "planta_balanceados", label: "Planta de balanceados" },
+              { value: "maquila", label: "Maquila" },
+              { value: "otro", label: "Otro" },
+            ]}
+          />
         </div>
         <div className="grid gap-1">
           <Label>Condicion de pago</Label>
-          <select
+          <Select
             name="paymentCondition"
-            className={selectClasses}
             defaultValue={customer?.paymentCondition ?? "contado"}
-          >
-            <option value="contado">Contado</option>
-            <option value="credito_15">Credito 15 dias</option>
-            <option value="credito_30">Credito 30 dias</option>
-            <option value="credito_60">Credito 60 dias</option>
-            <option value="credito_90">Credito 90 dias</option>
-          </select>
+            options={[
+              { value: "contado", label: "Contado" },
+              { value: "credito_15", label: "Credito 15 dias" },
+              { value: "credito_30", label: "Credito 30 dias" },
+              { value: "credito_60", label: "Credito 60 dias" },
+              { value: "credito_90", label: "Credito 90 dias" },
+            ]}
+          />
         </div>
       </div>
 
@@ -482,18 +475,18 @@ export function CustomerForm({
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="grid gap-1">
                   <Label>Tipo de periodo</Label>
-                  <select
-                    className={selectClasses}
+                  <Select
                     value={initialGoalPeriodType}
-                    onChange={(e) => {
-                      setInitialGoalPeriodType(e.target.value);
+                    onValueChange={(value) => {
+                      setInitialGoalPeriodType(value);
                       setInitialGoalPeriodValue("");
                     }}
-                  >
-                    <option value="anual">Anual</option>
-                    <option value="trimestral">Trimestral</option>
-                    <option value="mensual">Mensual</option>
-                  </select>
+                    options={[
+                      { value: "anual", label: "Anual" },
+                      { value: "trimestral", label: "Trimestral" },
+                      { value: "mensual", label: "Mensual" },
+                    ]}
+                  />
                 </div>
                 <div className="grid gap-1">
                   <Label>Periodo</Label>

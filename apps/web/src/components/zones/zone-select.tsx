@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetchClient } from "@/lib/api.client";
+import { Select } from "@/components/ui/select";
 
 interface Zone {
   id: string;
@@ -24,7 +25,10 @@ export function ZoneSelect({
   name = "zoneId",
   required = false,
 }: ZoneSelectProps) {
-  const [zones, setZones] = useState<Zone[]>([]);
+  const [zones, setZones] = useState<Zone[] | null>(null);
+  // Siempre controlado: las opciones llegan despues del primer render, y un
+  // valor por defecto no encuentra su opcion si se fija al montar.
+  const [internal, setInternal] = useState(value ?? "");
 
   useEffect(() => {
     apiFetchClient("/zones")
@@ -33,41 +37,19 @@ export function ZoneSelect({
       .catch(() => setZones([]));
   }, []);
 
-  const className =
-    "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
-
-  if (onChange) {
-    return (
-      <select
-        name={name}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        className={className}
-      >
-        <option value="">Seleccionar zona</option>
-        {zones.map((z) => (
-          <option key={z.id} value={z.id}>
-            {z.name}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
   return (
-    <select
+    <Select
       name={name}
-      defaultValue={value ?? ""}
       required={required}
-      className={className}
-    >
-      <option value="">Seleccionar zona</option>
-      {zones.map((z) => (
-        <option key={z.id} value={z.id}>
-          {z.name}
-        </option>
-      ))}
-    </select>
+      loading={zones === null}
+      placeholder="Seleccionar zona"
+      searchPlaceholder="Buscar zona…"
+      value={onChange ? (value ?? "") : internal}
+      onValueChange={onChange ?? setInternal}
+      options={[
+        { value: "", label: "Seleccionar zona" },
+        ...(zones ?? []).map((zone) => ({ value: zone.id, label: zone.name })),
+      ]}
+    />
   );
 }

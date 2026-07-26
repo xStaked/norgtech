@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { FilterBar } from "@/components/ui/filter-bar";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 
 export interface FilterSelect {
   /** Parametro de URL que escribe este select. */
@@ -29,9 +30,6 @@ interface ListFiltersProps {
   summaryExtra?: ReactNode;
   actions?: ReactNode;
 }
-
-const selectClasses =
-  "h-8 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function ListFilters({
   searchPlaceholder,
@@ -173,20 +171,15 @@ export function ListFilters({
         />
       ) : null}
       {selects.map((select) => (
-        <select
+        <Select
           key={select.key}
           aria-label={select.allLabel}
-          className={selectClasses}
+          className="w-auto min-w-40 max-w-64"
+          searchPlaceholder={select.allLabel}
           value={searchParams.get(select.key) ?? ""}
-          onChange={(event) => setParam(select.key, event.target.value)}
-        >
-          <option value="">{select.allLabel}</option>
-          {select.options.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+          onValueChange={(value) => setParam(select.key, value)}
+          options={[{ value: "", label: select.allLabel }, ...select.options]}
+        />
       ))}
     </FilterBar>
   );

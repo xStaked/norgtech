@@ -29,13 +29,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/components/ui/page-header";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 import { NewUserDialog } from "@/components/users/new-user-dialog";
 import { SellerGoalsDrawer } from "@/components/users/seller-goals-drawer";
 import { type ManagedUser, type SellerGoalProgress } from "@/components/users/types";
@@ -379,7 +373,7 @@ export function UserManagementClient({
           <Select
             value={user.role}
             onValueChange={(value) => {
-              const nextRole = value as UserRole | null;
+              const nextRole = value as UserRole | "";
               if (!nextRole || nextRole === user.role) return;
               void patchUser(
                 user,
@@ -388,22 +382,14 @@ export function UserManagementClient({
               );
             }}
             disabled={isPending(user.id)}
-          >
-            <SelectTrigger
-              className="h-[30px] w-full text-xs font-semibold"
-              style={{ color: ROLE_COLORS[user.role] }}
-              aria-label={`Rol de ${user.email}`}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {USER_ROLES.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {ROLE_LABELS[option] ?? option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+            className="h-[30px] text-xs"
+            aria-label={`Rol de ${user.email}`}
+            options={USER_ROLES.map((option) => ({
+              value: option,
+              label: ROLE_LABELS[option] ?? option,
+              dot: ROLE_COLORS[option],
+            }))}
+          />
         );
       },
     },
@@ -653,20 +639,17 @@ export function UserManagementClient({
             </div>
             <Select
               value={roleFilter}
-              onValueChange={(value) => setRoleFilter((value as UserRole | "all") ?? "all")}
-            >
-              <SelectTrigger aria-label="Filtrar por rol">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos los roles</SelectItem>
-                {USER_ROLES.map((option) => (
-                  <SelectItem key={option} value={option}>
-                    {ROLE_LABELS[option] ?? option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              onValueChange={(value) => setRoleFilter((value as UserRole | "all") || "all")}
+              className="w-auto min-w-40"
+              aria-label="Filtrar por rol"
+              options={[
+                { value: "all", label: "Todos los roles" },
+                ...USER_ROLES.map((option) => ({
+                  value: option,
+                  label: ROLE_LABELS[option] ?? option,
+                })),
+              ]}
+            />
             <span className="ml-auto text-xs text-muted-foreground">Ordenado por nombre</span>
           </div>
 

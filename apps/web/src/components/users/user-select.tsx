@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetchClient } from "@/lib/api.client";
+import { Select } from "@/components/ui/select";
 
 interface Seller {
   id: string;
@@ -25,7 +26,9 @@ export function UserSelect({
   name = "assignedToUserId",
   required = false,
 }: UserSelectProps) {
-  const [sellers, setSellers] = useState<Seller[]>([]);
+  const [sellers, setSellers] = useState<Seller[] | null>(null);
+  // Siempre controlado: las opciones llegan despues del primer render.
+  const [internal, setInternal] = useState(value ?? "");
 
   useEffect(() => {
     apiFetchClient("/users/sellers")
@@ -34,41 +37,19 @@ export function UserSelect({
       .catch(() => setSellers([]));
   }, []);
 
-  const className =
-    "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
-
-  if (onChange) {
-    return (
-      <select
-        name={name}
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-        required={required}
-        className={className}
-      >
-        {!required && <option value="">Sin asignar</option>}
-        {sellers.map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.name}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
   return (
-    <select
+    <Select
       name={name}
-      defaultValue={value ?? ""}
       required={required}
-      className={className}
-    >
-      {!required && <option value="">Sin asignar</option>}
-      {sellers.map((u) => (
-        <option key={u.id} value={u.id}>
-          {u.name}
-        </option>
-      ))}
-    </select>
+      loading={sellers === null}
+      placeholder="Sin asignar"
+      searchPlaceholder="Buscar vendedor…"
+      value={onChange ? (value ?? "") : internal}
+      onValueChange={onChange ?? setInternal}
+      options={[
+        ...(required ? [] : [{ value: "", label: "Sin asignar" }]),
+        ...(sellers ?? []).map((seller) => ({ value: seller.id, label: seller.name })),
+      ]}
+    />
   );
 }

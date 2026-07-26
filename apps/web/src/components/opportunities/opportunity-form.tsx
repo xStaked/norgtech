@@ -6,6 +6,7 @@ import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 
 interface Customer {
   id: string;
@@ -26,9 +27,6 @@ const stages = [
   { value: "venta_cerrada", label: "Venta cerrada" },
   { value: "perdida", label: "Perdida" },
 ];
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 export function OpportunityForm({ customers }: OpportunityFormProps) {
   const router = useRouter();
@@ -88,14 +86,15 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
 
       <div className="grid gap-1">
         <Label>Cliente *</Label>
-        <select name="customerId" required className={selectClasses}>
-          <option value="">Seleccionar cliente</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.displayName}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="customerId"
+          required
+          searchPlaceholder="Buscar cliente…"
+          options={[
+            { value: "", label: "Seleccionar cliente" },
+            ...customers.map((c) => ({ value: c.id, label: c.displayName })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">
@@ -110,19 +109,7 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
 
       <div className="grid gap-1">
         <Label>Etapa *</Label>
-        <select
-          name="stage"
-          required
-          className={selectClasses}
-          value={stage}
-          onChange={(e) => setStage(e.target.value)}
-        >
-          {stages.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
+        <Select name="stage" required value={stage} onValueChange={setStage} options={stages} />
       </div>
 
       {stage === "perdida" && (

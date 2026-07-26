@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import {
   PRICE_LIST_KIND_LABEL,
@@ -423,37 +424,29 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
                       className="mb-2 grid grid-cols-1 items-center gap-2 sm:grid-cols-[1.3fr_110px_110px_76px_70px] sm:gap-x-2.5"
                     >
                       <div>
-                        <select
-                          className={inputClasses}
+                        <Select
+                          size="lg"
                           aria-label="Para quién es este precio"
+                          placeholder="¿Para quién?"
+                          searchPlaceholder="Buscar lista…"
                           value={row.priceListId}
-                          onChange={(event) =>
+                          onValueChange={(priceListId) =>
                             setPrices((all) =>
                               all.map((item) =>
-                                item.key === row.key
-                                  ? { ...item, priceListId: event.target.value }
-                                  : item,
+                                item.key === row.key ? { ...item, priceListId } : item,
                               ),
                             )
                           }
-                        >
-                          <option value="">¿Para quién?</option>
-                          {(
-                            ["cliente", "segmento", "export", "linea"] as const
-                          ).map((kind) => {
-                            const group = priceLists.filter((item) => item.kind === kind);
-                            if (group.length === 0) return null;
-                            return (
-                              <optgroup key={kind} label={PRICE_LIST_KIND_LABEL[kind]}>
-                                {group.map((item) => (
-                                  <option key={item.id} value={item.id}>
-                                    {priceListOwner(item)}
-                                  </option>
-                                ))}
-                              </optgroup>
-                            );
-                          })}
-                        </select>
+                          options={[
+                            { value: "", label: "¿Para quién?" },
+                            ...priceLists.map((item) => ({
+                              value: item.id,
+                              label: priceListOwner(item),
+                              meta: priceListContext(item),
+                              group: PRICE_LIST_KIND_LABEL[item.kind],
+                            })),
+                          ]}
+                        />
                         {/* Moneda y país no se digitan: salen de a quién le vendes. */}
                         {list ? (
                           <p className="mt-1 text-[10.5px] text-muted-foreground">

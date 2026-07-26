@@ -6,6 +6,7 @@ import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 
 interface InvoicePaymentFormProps {
   invoiceId: string;
@@ -106,17 +107,11 @@ export function InvoicePaymentForm({
         </div>
         <div className="grid gap-1">
           <Label>Metodo *</Label>
-          <select
+          <Select
             name="method"
             required
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-          >
-            {Object.entries(methodLabels).map(([value, label]) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
+            options={Object.entries(methodLabels).map(([value, label]) => ({ value, label }))}
+          />
         </div>
       </div>
 

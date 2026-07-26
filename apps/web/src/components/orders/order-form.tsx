@@ -9,6 +9,7 @@ import { usePricingPreview } from "@/lib/use-pricing-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { CompanySelect } from "@/components/companies/company-select";
@@ -53,9 +54,6 @@ interface OrderFormProps {
   products: Product[];
   quotes: Quote[];
 }
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-card px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 const emptyItem = (): OrderItem => ({
   productId: "",
@@ -344,25 +342,34 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
           </Field>
           {customerZones.length > 0 && (
             <Field label="Zona de despacho" htmlFor="customerZoneId">
-              <select id="customerZoneId" name="customerZoneId" className={selectClasses}>
-                <option value="">Sin zona especifica</option>
-                {customerZones.map((cz) => (
-                  <option key={cz.id} value={cz.id}>
-                    {cz.zone.name}{cz.assignedTo ? ` — ${cz.assignedTo.name}` : ""}
-                  </option>
-                ))}
-              </select>
+              <Select
+                id="customerZoneId"
+                name="customerZoneId"
+                searchPlaceholder="Buscar zona…"
+                options={[
+                  { value: "", label: "Sin zona especifica" },
+                  ...customerZones.map((cz) => ({
+                    value: cz.id,
+                    label: cz.zone.name,
+                    meta: cz.assignedTo?.name,
+                  })),
+                ]}
+              />
             </Field>
           )}
           <Field label="Cliente *" htmlFor="customerId">
-            <select id="customerId" name="customerId" required className={selectClasses} onChange={(e) => setSelectedCustomerId(e.target.value)}>
-              <option value="">Seleccionar cliente</option>
-              {customers.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.displayName}
-                </option>
-              ))}
-            </select>
+            <Select
+              id="customerId"
+              name="customerId"
+              required
+              value={selectedCustomerId}
+              onValueChange={setSelectedCustomerId}
+              searchPlaceholder="Buscar cliente…"
+              options={[
+                { value: "", label: "Seleccionar cliente" },
+                ...customers.map((c) => ({ value: c.id, label: c.displayName })),
+              ]}
+            />
             {creditSummary && creditSummary.availableCredit != null && (
               <div
                 style={{
@@ -387,14 +394,15 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
               vendedor -> ninguno). Adivinar aqui haria que el formulario mienta
               sobre lo que se guarda. */}
           <Field label="Vendedor" htmlFor="sellerUserId">
-            <select id="sellerUserId" name="sellerUserId" className={selectClasses}>
-              <option value="">Automatico (segun el cliente)</option>
-              {sellers.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            <Select
+              id="sellerUserId"
+              name="sellerUserId"
+              searchPlaceholder="Buscar vendedor…"
+              options={[
+                { value: "", label: "Automatico (segun el cliente)" },
+                ...sellers.map((s) => ({ value: s.id, label: s.name })),
+              ]}
+            />
           </Field>
           <Field label="Orden de compra" htmlFor="purchaseOrderNumber">
             <Input id="purchaseOrderNumber" name="purchaseOrderNumber" />
@@ -412,41 +420,38 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             <Input id="branchNameSnapshot" name="branchNameSnapshot" />
           </Field>
           <Field label="Oportunidad" htmlFor="opportunityId">
-            <select
+            <Select
               id="opportunityId"
               name="opportunityId"
-              className={selectClasses}
               value={opportunityId}
-              onChange={(e) => setOpportunityId(e.target.value)}
+              onValueChange={setOpportunityId}
               disabled={!selectedCustomerId}
-            >
-              <option value="">Ninguna</option>
-              {customerOpportunities.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.title}
-                </option>
-              ))}
-            </select>
+              searchPlaceholder="Buscar oportunidad…"
+              options={[
+                { value: "", label: "Ninguna" },
+                ...customerOpportunities.map((o) => ({ value: o.id, label: o.title })),
+              ]}
+            />
             {!selectedCustomerId && (
               <p className="text-xs text-muted-foreground">Seleccione un cliente primero</p>
             )}
           </Field>
           <Field label="Cotizacion origen" htmlFor="sourceQuoteId">
-            <select
+            <Select
               id="sourceQuoteId"
               name="sourceQuoteId"
-              className={selectClasses}
               value={sourceQuoteId}
-              onChange={(e) => setSourceQuoteId(e.target.value)}
+              onValueChange={setSourceQuoteId}
               disabled={!selectedCustomerId}
-            >
-              <option value="">Ninguna</option>
-              {customerQuotes.map((q) => (
-                <option key={q.id} value={q.id}>
-                  Cotizacion #{q.id.slice(-6)}
-                </option>
-              ))}
-            </select>
+              searchPlaceholder="Buscar cotizacion…"
+              options={[
+                { value: "", label: "Ninguna" },
+                ...customerQuotes.map((q) => ({
+                  value: q.id,
+                  label: `Cotizacion #${q.id.slice(-6)}`,
+                })),
+              ]}
+            />
             {!selectedCustomerId && (
               <p className="text-xs text-muted-foreground">Seleccione un cliente primero</p>
             )}
@@ -480,20 +485,21 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             <div key={index} className="grid gap-3 rounded-lg border border-border bg-muted p-4">
               <div className="grid gap-3 lg:grid-cols-[minmax(13rem,1fr)_minmax(12rem,1fr)_9rem]">
                 <Field label="Producto catalogo" htmlFor={`productId-${index}`}>
-                  <select
+                  <Select
                     id={`productId-${index}`}
                     data-testid="product-select"
                     value={item.productId}
-                    onChange={(e) => updateItem(index, "productId", e.target.value)}
-                    className={selectClasses}
-                  >
-                    <option value="">Producto personalizado</option>
-                    {products.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name} ({p.sku}) - {money(Number(p.basePrice))}/{p.unit}
-                      </option>
-                    ))}
-                  </select>
+                    onValueChange={(value) => updateItem(index, "productId", value)}
+                    searchPlaceholder="Buscar producto o SKU…"
+                    options={[
+                      { value: "", label: "Producto personalizado" },
+                      ...products.map((p) => ({
+                        value: p.id,
+                        label: p.name,
+                        meta: `${p.sku} · ${money(Number(p.basePrice))}/${p.unit}`,
+                      })),
+                    ]}
+                  />
                 </Field>
                 <Field label="Producto" htmlFor={`productName-${index}`}>
                   <Input

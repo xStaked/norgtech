@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetchClient } from "@/lib/api.client";
 
@@ -75,9 +76,6 @@ const categories = [
   { value: "atencion_comercial", label: "Cliente / atencion comercial" },
   { value: "otros", label: "Otros" },
 ] as const;
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 function dateInputValue(value?: string) {
   if (!value) return new Date().toISOString().slice(0, 10);
@@ -294,20 +292,14 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
 
       <div className="grid gap-1">
         <Label>Categoria *</Label>
-        <select
+        <Select
           name="category"
           required
-          className={selectClasses}
           value={category}
-          onChange={(event) => setCategory(event.target.value)}
-        >
-          <option value="">Seleccionar categoria</option>
-          {categories.map((category) => (
-            <option key={category.value} value={category.value}>
-              {category.label}
-            </option>
-          ))}
-        </select>
+          onValueChange={setCategory}
+          searchPlaceholder="Buscar categoria…"
+          options={[{ value: "", label: "Seleccionar categoria" }, ...categories]}
+        />
       </div>
 
       <div className="grid gap-1">
@@ -353,32 +345,35 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
 
       <div className="grid gap-1">
         <Label>Cliente</Label>
-        <select
+        <Select
           name="customerId"
-          className={selectClasses}
           value={customerId}
-          onChange={(event) => setCustomerId(event.target.value)}
-        >
-          <option value="">Sin cliente</option>
-          {customers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.displayName}
-            </option>
-          ))}
-        </select>
+          onValueChange={setCustomerId}
+          searchPlaceholder="Buscar cliente…"
+          options={[
+            { value: "", label: "Sin cliente" },
+            ...customers.map((customer) => ({ value: customer.id, label: customer.displayName })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">
         <Label>Visita</Label>
-        <select name="visitId" className={selectClasses} defaultValue={initialValues?.visitId ?? ""}>
-          <option value="">Sin visita</option>
-          {availableVisits.map((visit) => (
-            <option key={visit.id} value={visit.id}>
-              {visit.summary ?? `Visita #${visit.id.slice(-6)}`}
-              {visit.scheduledAt ? ` - ${new Date(visit.scheduledAt).toLocaleDateString("es-CO")}` : ""}
-            </option>
-          ))}
-        </select>
+        <Select
+          name="visitId"
+          defaultValue={initialValues?.visitId ?? ""}
+          searchPlaceholder="Buscar visita…"
+          options={[
+            { value: "", label: "Sin visita" },
+            ...availableVisits.map((visit) => ({
+              value: visit.id,
+              label: visit.summary ?? `Visita #${visit.id.slice(-6)}`,
+              meta: visit.scheduledAt
+                ? new Date(visit.scheduledAt).toLocaleDateString("es-CO")
+                : undefined,
+            })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">

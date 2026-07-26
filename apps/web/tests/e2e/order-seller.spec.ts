@@ -1,4 +1,5 @@
 import { expect, test, type Page, type APIRequestContext } from "@playwright/test";
+import { chooseOption, selectByName } from "./select";
 
 /**
  * El pedido se atribuye a un vendedor real (Order.sellerUserId), que es lo que
@@ -54,21 +55,16 @@ test("el detalle muestra el vendedor elegido en el formulario", async ({ page, r
   await loginAsAdmin(page);
   await page.goto("/orders/new");
 
-  // CompanySelect tambien se puebla por fetch y, al ser required, no tiene
-  // opcion placeholder: la primera opcion ya es una empresa real.
-  const companySelect = page.locator('select[name="companyId"]');
-  await expect(companySelect.locator("option").first()).toBeAttached();
-  await companySelect.selectOption({ index: 0 });
-  await page.locator('select[name="customerId"]').selectOption({ label: "La Economia" });
-
-  const sellerSelect = page.locator('select[name="sellerUserId"]');
-  await expect(sellerSelect.locator(`option:text-is("${SELLER}")`)).toHaveCount(1);
-  await sellerSelect.selectOption({ label: SELLER });
+  // CompanySelect se puebla por fetch: el trigger queda deshabilitado hasta que
+  // llegan las empresas, asi que el click de chooseOption ya espera por ellas.
+  await chooseOption(page, selectByName(page, "companyId"), { index: 0 });
+  await chooseOption(page, selectByName(page, "customerId"), { label: "La Economia" });
+  await chooseOption(page, selectByName(page, "sellerUserId"), { label: SELLER });
 
   // "Elaboro" es texto libre y NO debe ser lo que el detalle llame "Vendedor".
   await page.locator('input[name="preparedByName"]').fill("Documento redactado por otra persona");
 
-  await page.getByTestId("product-select").first().selectOption({ index: 1 });
+  await chooseOption(page, page.getByTestId("product-select").first(), { index: 1 });
 
   await page.getByRole("button", { name: "Guardar pedido" }).click();
   await expect(page).toHaveURL(/\/orders\/[a-z0-9-]+$/);

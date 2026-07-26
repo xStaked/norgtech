@@ -14,13 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CompanySelect } from "@/components/companies/company-select";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Select } from "@/components/ui/select";
 
 interface CreateBillingRequestModalProps {
   customers: Array<{ id: string; displayName: string }>;
@@ -104,18 +98,14 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
 
             <div className="grid gap-2">
               <Label htmlFor="customerId">Cliente *</Label>
-              <Select value={customerId} onValueChange={(v) => setCustomerId(v ?? "")}>
-                <SelectTrigger id="customerId">
-                  <SelectValue placeholder="Seleccionar cliente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {customers.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.displayName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Select
+                id="customerId"
+                value={customerId}
+                onValueChange={setCustomerId}
+                placeholder="Seleccionar cliente"
+                searchPlaceholder="Buscar cliente…"
+                options={customers.map((c) => ({ value: c.id, label: c.displayName }))}
+              />
             </div>
 
             <div className="grid gap-2">

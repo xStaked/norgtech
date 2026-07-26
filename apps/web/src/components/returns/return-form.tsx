@@ -7,6 +7,7 @@ import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 
 export interface ReturnFormCustomer {
@@ -20,9 +21,6 @@ export interface ReturnFormInvoice {
   customerId: string;
   outstanding: number;
 }
-
-const selectClasses =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -94,41 +92,40 @@ export function ReturnForm({
 
       <div className="grid gap-1">
         <Label>Cliente *</Label>
-        <select
+        <Select
           name="customerId"
           required
           value={customerId}
-          onChange={(e) => {
-            setCustomerId(e.target.value);
+          onValueChange={(value) => {
+            setCustomerId(value);
             setInvoiceId("");
           }}
-          className={selectClasses}
-        >
-          <option value="">Selecciona un cliente</option>
-          {customers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.displayName}
-            </option>
-          ))}
-        </select>
+          searchPlaceholder="Buscar cliente…"
+          options={[
+            { value: "", label: "Selecciona un cliente" },
+            ...customers.map((c) => ({ value: c.id, label: c.displayName })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-1">
         <Label>Factura (opcional)</Label>
-        <select
+        <Select
           name="invoiceId"
           value={invoiceId}
-          onChange={(e) => setInvoiceId(e.target.value)}
+          onValueChange={setInvoiceId}
           disabled={!customerId}
-          className={selectClasses}
-        >
-          <option value="">Sin factura (solo registro)</option>
-          {customerInvoices.map((i) => (
-            <option key={i.id} value={i.id}>
-              {i.invoiceNumber} — saldo {currencyFormatter.format(i.outstanding)}
-            </option>
-          ))}
-        </select>
+          hint={customerId ? undefined : "Elige primero un cliente."}
+          searchPlaceholder="Buscar factura…"
+          options={[
+            { value: "", label: "Sin factura (solo registro)" },
+            ...customerInvoices.map((i) => ({
+              value: i.id,
+              label: i.invoiceNumber,
+              meta: `saldo ${currencyFormatter.format(i.outstanding)}`,
+            })),
+          ]}
+        />
         {selectedInvoice && (
           <p className="text-xs text-muted-foreground">
             La nota credito no puede superar el saldo de{" "}
