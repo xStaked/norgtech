@@ -159,7 +159,8 @@ describe("WhatsApp inbox", () => {
       senderName: "Laura Cliente",
       senderType: WhatsAppSenderType.cliente,
       status: WhatsAppConversationStatus.nuevo,
-      assignedToUserId: "sales-user-id",
+      assignedToUserId: "sales-user-id" as string | null,
+      assignedToRole: UserRole.comercial as UserRole | null,
       customerId: "customer-1",
       contactId: "contact-1",
       lastMessageAt: new Date("2026-05-22T10:00:00.000Z"),
@@ -1357,6 +1358,72 @@ describe("WhatsApp inbox", () => {
     expect(response.body.contactId).toBeNull();
     expect(response.body.assignedToUser).toBeNull();
     expect(response.body.contact).toBeNull();
+  });
+
+  describe("reasignación de área del unicanal", () => {
+    const index = conversations.findIndex((item) => item.id === "conversation-1");
+    let original: (typeof conversations)[number];
+
+    beforeEach(() => {
+      original = conversations[index];
+    });
+
+    afterEach(() => {
+      conversations[index] = original;
+    });
+
+    it("un supervisor la manda a otra área y la libera para que la tomen", async () => {
+      const response = await request(app.getHttpServer())
+        .patch("/whatsapp/conversations/conversation-1")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ assignedToRole: "tecnico" })
+        .expect(200);
+
+      expect(response.body.assignedToRole).toBe("tecnico");
+      expect(response.body.assignedToUserId).toBeNull();
+      expect(response.body.status).toBe("pendiente");
+    });
+
+    it("rechaza un área que no atiende el unicanal", async () => {
+      await request(app.getHttpServer())
+        .patch("/whatsapp/conversations/conversation-1")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ assignedToRole: "administrador" })
+        .expect(400);
+    });
+
+    it("el área sigue al dueño cuando se asigna una persona", async () => {
+      // Sin esto la conversación queda colgada en la bandeja compartida del área
+      // vieja aunque su dueño sea de otra.
+      conversations[index] = { ...conversations[index], assignedToRole: UserRole.tecnico };
+
+      const response = await request(app.getHttpServer())
+        .patch("/whatsapp/conversations/conversation-1")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({ assignedToUserId: "sales-user-id" })
+        .expect(200);
+
+      expect(response.body.assignedToRole).toBe("comercial");
+    });
+
+    it("un agente del área que no la tomó no puede reasignarla", async () => {
+      const login = await request(app.getHttpServer())
+        .post("/auth/login")
+        .send({ email: "sales@norgtech.local", password: "Admin123*" })
+        .expect(200);
+
+      conversations[index] = {
+        ...conversations[index],
+        assignedToRole: UserRole.comercial,
+        assignedToUserId: "user-magali",
+      };
+
+      await request(app.getHttpServer())
+        .patch("/whatsapp/conversations/conversation-1")
+        .set("Authorization", `Bearer ${login.body.accessToken}`)
+        .send({ assignedToRole: "tecnico" })
+        .expect(403);
+    });
   });
 
   it("rejects a contact that does not belong to the effective customer", async () => {

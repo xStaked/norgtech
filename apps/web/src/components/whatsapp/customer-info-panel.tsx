@@ -4,9 +4,11 @@ import { Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { ROLE_LABELS, type UserRole } from "@/lib/auth";
 import { apiFetchClient } from "@/lib/api.client";
 import type { WhatsAppConversationDetail, WhatsAppConversationStatus } from "./whatsapp-types";
 import {
+  UNICANAL_AGENT_ROLES,
   avatarColor,
   conversationName,
   formatOrderTotal,
@@ -30,10 +32,15 @@ const selectableStatuses: WhatsAppConversationStatus[] = [
 export function CustomerInfoPanel({
   conversation,
   onStatusChange,
+  onRoleChange,
+  canReassign,
   onCreated,
 }: {
   conversation: WhatsAppConversationDetail | null;
   onStatusChange: (status: WhatsAppConversationStatus) => void;
+  onRoleChange: (role: UserRole) => void;
+  /** Solo supervisores y quien la tomó pueden mover el área (espejo del guard del API). */
+  canReassign: boolean;
   onCreated: () => void;
 }) {
   const [creating, setCreating] = useState(false);
@@ -157,6 +164,36 @@ export function CustomerInfoPanel({
           ))}
         </div>
       </div>
+
+      {canReassign ? (
+        <div className="mt-5">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9aa3b1]">
+            Área
+          </div>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {UNICANAL_AGENT_ROLES.map((role) => (
+              <button
+                key={role}
+                type="button"
+                onClick={() => onRoleChange(role)}
+                className={cn(
+                  "rounded-md border px-2.5 py-1 text-[11px] font-semibold transition-colors",
+                  conversation.assignedToRole === role
+                    ? "border-[#0f5c8a] bg-[#eef5fb] text-[#0f5c8a]"
+                    : "border-border text-[#6b7787] hover:bg-[#f7f9fb]",
+                )}
+              >
+                {ROLE_LABELS[role]}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[11px] text-[#9aa3b1]">
+            {conversation.assignedToUser
+              ? `Atiende ${conversation.assignedToUser.name}. Cambiar el área la libera para que otro la tome.`
+              : "Sin dueño: cualquiera del área la puede tomar."}
+          </p>
+        </div>
+      ) : null}
 
       <div className="mt-6">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9aa3b1]">

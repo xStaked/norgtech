@@ -1,3 +1,5 @@
+import type { UserRole } from "@/lib/auth";
+
 export type WhatsAppConversationStatus = "nuevo" | "pendiente" | "en_gestion" | "resuelto";
 
 export type WhatsAppSenderType = "cliente" | "comercial" | "admin" | "desconocido";
@@ -13,7 +15,7 @@ export type WhatsAppConversation = {
   customer?: { id: string; displayName: string } | null;
   contact?: { id: string; fullName: string } | null;
   assignedToUser?: { id: string; name: string } | null;
-  assignedToRole?: string | null;
+  assignedToRole?: UserRole | null;
   tags?: { id: string; label: string }[];
 };
 

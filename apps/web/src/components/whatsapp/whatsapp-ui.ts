@@ -55,9 +55,11 @@ export function formatOrderTotal(total: string | number | null | undefined) {
 }
 
 /** Roles que atienden el unicanal (espejo de UNICANAL_AGENT_ROLES del API). */
-export const UNICANAL_AGENT_ROLE_SET = new Set<UserRole>([
+export const UNICANAL_AGENT_ROLES: readonly UserRole[] = [
   "comercial",
   "tecnico",
   "facturacion",
   "logistica",
-]);
+];
+
+export const UNICANAL_AGENT_ROLE_SET = new Set<UserRole>(UNICANAL_AGENT_ROLES);
