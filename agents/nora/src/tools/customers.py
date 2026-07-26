@@ -40,7 +40,7 @@ async def search_customers(
             }
             for c in customers[:10]
         ]
-        return f"Clientes encontrados: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Clientes encontrados: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al buscar clientes: {e.detail}"
     except Exception as e:
@@ -266,7 +266,7 @@ async def create_customer(
             payload["notes"] = notes
 
         result = await nestjs_client.post("/customers", payload)
-        return f"Cliente creado exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Cliente creado exitosamente: {json.dumps(result, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al crear cliente: {e.detail}"
     except Exception as e:
@@ -351,7 +351,7 @@ async def update_customer(
             return "No se especificó ningún campo para actualizar."
 
         result = await nestjs_client.patch(f"/customers/{customer_id}", payload)
-        return f"Cliente actualizado exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Cliente actualizado exitosamente: {json.dumps(result, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al actualizar cliente: {e.detail}"
     except Exception as e:

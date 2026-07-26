@@ -52,6 +52,6 @@ async def create_follow_up(
         if notes: payload["notes"] = notes
         
         result = await nestjs_client.post("/follow-up-tasks", payload)
-        return f"Tarea de seguimiento creada: {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Tarea de seguimiento creada: {json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"Error al crear tarea: {str(e)}"

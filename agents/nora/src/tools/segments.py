@@ -25,7 +25,7 @@ async def get_customer_segments(
             {"id": s["id"], "nombre": s["name"]}
             for s in segments
         ]
-        return f"Segmentos disponibles: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Segmentos disponibles: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al obtener segmentos: {e.detail}"
     except Exception as e:

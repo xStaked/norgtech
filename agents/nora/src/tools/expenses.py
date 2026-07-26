@@ -148,7 +148,7 @@ async def get_expenses(
             }
             for e in expenses[:15]
         ]
-        return f"Gastos del usuario: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Gastos del usuario: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         msg = f"Error al obtener los gastos [HTTP {e.status_code}]: {e.detail}"
         logger.error("get_expenses API error: %s", msg)

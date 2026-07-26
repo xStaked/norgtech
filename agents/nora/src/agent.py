@@ -64,6 +64,9 @@ def create_llm() -> ChatOpenAI:
             api_key=settings.openai_api_key,
             temperature=settings.llm_temperature,
             streaming=True,
+            # Los 429 por TPM son transitorios ("try again in 558ms"): sin
+            # reintentos suficientes el turno se cae y el usuario ve el fallback.
+            max_retries=settings.llm_max_retries,
         )
     elif settings.llm_provider == "deepseek":
         return ChatOpenAI(
@@ -72,6 +75,9 @@ def create_llm() -> ChatOpenAI:
             base_url=settings.deepseek_base_url,
             temperature=settings.llm_temperature,
             streaming=True,
+            # Los 429 por TPM son transitorios ("try again in 558ms"): sin
+            # reintentos suficientes el turno se cae y el usuario ve el fallback.
+            max_retries=settings.llm_max_retries,
         )
     elif settings.llm_provider == "qwen":
         return ChatOpenAI(
@@ -80,6 +86,9 @@ def create_llm() -> ChatOpenAI:
             base_url=settings.qwen_base_url,
             temperature=settings.llm_temperature,
             streaming=True,
+            # Los 429 por TPM son transitorios ("try again in 558ms"): sin
+            # reintentos suficientes el turno se cae y el usuario ve el fallback.
+            max_retries=settings.llm_max_retries,
         )
     elif settings.llm_provider == "openai":
         return ChatOpenAI(
@@ -87,6 +96,9 @@ def create_llm() -> ChatOpenAI:
             api_key=settings.openai_api_key,
             temperature=settings.llm_temperature,
             streaming=True,
+            # Los 429 por TPM son transitorios ("try again in 558ms"): sin
+            # reintentos suficientes el turno se cae y el usuario ve el fallback.
+            max_retries=settings.llm_max_retries,
         )
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")

@@ -55,6 +55,6 @@ async def get_agenda(auth_token: Annotated[str, InjectedState("auth_token")]) ->
         if not agenda_items:
             return "No tienes visitas ni tareas pendientes para los próximos 7 días."
         
-        return json.dumps({"items": agenda_items}, ensure_ascii=False, indent=2)
+        return json.dumps({"items": agenda_items}, ensure_ascii=False)
     except Exception as e:
         return f"Error al obtener agenda: {str(e)}"

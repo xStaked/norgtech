@@ -48,7 +48,7 @@ async def get_customer_opportunities(
             }
             for o in opportunities[:10]
         ]
-        return json.dumps(simplified, ensure_ascii=False, indent=2)
+        return json.dumps(simplified, ensure_ascii=False)
     except Exception as e:
         return f"Error al obtener oportunidades: {str(e)}"
 
@@ -84,7 +84,7 @@ async def create_opportunity(
         if estimated_value: payload["estimatedValue"] = estimated_value
         
         result = await nestjs_client.post("/opportunities", payload)
-        return f"Oportunidad creada: {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Oportunidad creada: {json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"Error al crear oportunidad: {str(e)}"
 
@@ -108,6 +108,6 @@ async def update_opportunity_stage(
     try:
         nestjs_client = NestJSClient(auth_token)
         result = await nestjs_client.patch(f"/opportunities/{opportunity_id}/stage", {"stage": new_stage})
-        return f"Etapa actualizada a '{new_stage}': {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Etapa actualizada a '{new_stage}': {json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"Error al actualizar etapa: {str(e)}"

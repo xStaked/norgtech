@@ -29,7 +29,7 @@ async def get_companies(
         ]
         if not simplified:
             return "No hay empresas activas configuradas."
-        return f"Empresas disponibles: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Empresas disponibles: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al obtener empresas: {e.detail}"
     except Exception as e:
@@ -86,12 +86,12 @@ async def search_products(
         ]
 
         if matched:
-            return f"Productos encontrados: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+            return f"Productos encontrados: {json.dumps(simplified, ensure_ascii=False)}"
         else:
             return (
                 f"No encontré productos que coincidan exactamente con '{query}'. "
                 f"Estos son los productos disponibles en el catálogo: "
-                f"{json.dumps(simplified, ensure_ascii=False, indent=2)}"
+                f"{json.dumps(simplified, ensure_ascii=False)}"
             )
     except NestJSAPIError as e:
         return f"Error al buscar productos: {e.detail}"
@@ -145,7 +145,7 @@ async def get_customer_quotes(
                 ],
             })
 
-        return f"Cotizaciones del cliente: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Cotizaciones del cliente: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al obtener cotizaciones: {e.detail}"
     except Exception as e:
@@ -184,7 +184,7 @@ async def get_customer_zones(
             }
             for z in zones
         ]
-        return f"Zonas del cliente: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Zonas del cliente: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al obtener zonas del cliente: {e.detail}"
     except Exception as e:
@@ -257,7 +257,7 @@ async def preview_order(
         )
         return (
             "Resumen del pedido (aún NO creado, pide confirmación al usuario antes de "
-            f"crearlo): {json.dumps(result, ensure_ascii=False, indent=2)}"
+            f"crearlo): {json.dumps(result, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:
         return f"Error al calcular el pedido: {e.detail}"
@@ -337,7 +337,7 @@ async def create_order(
         return (
             f"Pedido creado exitosamente y enviado a revisión. "
             f"ID: {order_id}, Estado: {status}, Total: ${total}. "
-            f"Detalle completo: {json.dumps(result, ensure_ascii=False, indent=2)}"
+            f"Detalle completo: {json.dumps(result, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:
         # El historial de WhatsApp no conserva los resultados de las tools, así que

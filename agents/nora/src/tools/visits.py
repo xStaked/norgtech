@@ -39,7 +39,7 @@ async def create_visit(
         if next_step: payload["nextStep"] = next_step
         
         result = await nestjs_client.post("/visits", payload)
-        return f"Visita registrada exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Visita registrada exitosamente: {json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"Error al registrar visita: {str(e)}"
 
@@ -74,7 +74,7 @@ async def get_customer_visits(
             }
             for v in visits[:15]
         ]
-        return f"Visitas del cliente: {json.dumps(simplified, ensure_ascii=False, indent=2)}"
+        return f"Visitas del cliente: {json.dumps(simplified, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al obtener visitas: {e.detail}"
     except Exception as e:
@@ -119,7 +119,7 @@ async def update_visit(
         if customer_id: payload["customerId"] = customer_id
 
         result = await nestjs_client.patch(f"/visits/{visit_id}", payload)
-        return f"Visita actualizada exitosamente: {json.dumps(result, ensure_ascii=False, indent=2)}"
+        return f"Visita actualizada exitosamente: {json.dumps(result, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al actualizar visita: {e.detail}"
     except Exception as e:
