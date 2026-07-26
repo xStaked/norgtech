@@ -49,10 +49,6 @@ function CommandDialog({
 }) {
   return (
     <Dialog {...props}>
-      <DialogHeader className="sr-only">
-        <DialogTitle>{title}</DialogTitle>
-        <DialogDescription>{description}</DialogDescription>
-      </DialogHeader>
       <DialogContent
         className={cn(
           "top-1/3 translate-y-0 overflow-hidden rounded-xl! p-0",
@@ -60,7 +56,15 @@ function CommandDialog({
         )}
         showCloseButton={showCloseButton}
       >
-        {children}
+        {/* El header va DENTRO del content: Radix exige el DialogTitle ahi y
+            fuera del portal no se renderiza. */}
+        <DialogHeader className="sr-only">
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>{description}</DialogDescription>
+        </DialogHeader>
+        {/* Sin este <Command> los hijos (Input/List/Item) leen el contexto de
+            cmdk vacio y revientan al abrir el palette. */}
+        <Command>{children}</Command>
       </DialogContent>
     </Dialog>
   )
