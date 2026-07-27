@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { UserSelect } from "@/components/users/user-select";
 
 interface User {
   id: string;
@@ -90,9 +92,12 @@ export function OrderLogisticsSection({
   }
 
   return (
-    <div className="mt-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-base font-semibold text-foreground">Logística</h3>
+    // ponytail: mismas clases que el Card/CardHeader/Info del detalle de pedido,
+    // que es con quien tiene que verse igual. Si esos tres suben a un componente
+    // compartido, esta seccion se cuelga de el.
+    <section className="rounded-[11px] border border-[#e4e7ec] bg-white p-[18px]">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="m-0 text-[14.5px] font-extrabold text-[#0c2c44]">Logística</h2>
         {canEdit && !editing && (
           <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
             Editar
@@ -100,179 +105,161 @@ export function OrderLogisticsSection({
         )}
       </div>
 
-      {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
+      {error && <p className="mt-2 text-[13px] text-destructive">{error}</p>}
 
-      <div className="mt-3 grid gap-4 rounded-xl border border-border bg-muted p-4 [grid-template-columns:repeat(auto-fit,minmax(14rem,1fr))]">
-        {editing ? (
-          <>
-            <div className="grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Usuario asignado (ID)
-              </Label>
-              <Input
+      {editing ? (
+        <div className="mt-3 grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Usuario asignado" htmlFor="assignedLogisticsUserId">
+              <UserSelect
+                id="assignedLogisticsUserId"
+                name="assignedLogisticsUserId"
+                endpoint="/users/logistics"
+                searchPlaceholder="Buscar usuario…"
                 value={form.assignedLogisticsUserId}
-                onChange={(e) =>
-                  setForm({ ...form, assignedLogisticsUserId: e.target.value })
+                onChange={(assignedLogisticsUserId) =>
+                  setForm({ ...form, assignedLogisticsUserId })
                 }
-                placeholder="ID de usuario"
               />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Fecha comprometida
-              </Label>
+            </Field>
+            <Field label="Fecha comprometida" htmlFor="committedDeliveryDate">
               <Input
+                id="committedDeliveryDate"
                 type="date"
                 value={form.committedDeliveryDate}
                 onChange={(e) =>
                   setForm({ ...form, committedDeliveryDate: e.target.value })
                 }
               />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Transportadora
-              </Label>
+            </Field>
+            <Field label="Transportadora" htmlFor="carrierName">
               <Input
+                id="carrierName"
                 value={form.carrierName}
                 onChange={(e) => setForm({ ...form, carrierName: e.target.value })}
-                placeholder="Transportadora"
               />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Número de guía
-              </Label>
+            </Field>
+            <Field label="Número de guía" htmlFor="trackingNumber">
               <Input
+                id="trackingNumber"
                 value={form.trackingNumber}
                 onChange={(e) => setForm({ ...form, trackingNumber: e.target.value })}
-                placeholder="Guía"
               />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Link de tracking
-              </Label>
+            </Field>
+            <Field label="Link de tracking" htmlFor="trackingUrl">
               <Input
+                id="trackingUrl"
                 value={form.trackingUrl}
                 onChange={(e) => setForm({ ...form, trackingUrl: e.target.value })}
                 placeholder="https://..."
               />
-            </div>
-            <div className="grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Recibido por
-              </Label>
+            </Field>
+            <Field label="Recibido por" htmlFor="deliveredToName">
               <Input
+                id="deliveredToName"
                 value={form.deliveredToName}
                 onChange={(e) => setForm({ ...form, deliveredToName: e.target.value })}
                 placeholder="Nombre de quien recibe"
               />
-            </div>
-            <div className="col-span-full grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">
-                Confirmación de entrega
-              </Label>
-              <Textarea
-                value={form.deliveryConfirmationNotes}
-                onChange={(e) =>
-                  setForm({ ...form, deliveryConfirmationNotes: e.target.value })
-                }
-                rows={2}
-              />
-            </div>
-            <div className="col-span-full grid gap-1">
-              <Label className="text-sm font-semibold text-muted-foreground">Notas</Label>
-              <Textarea
-                value={form.logisticsNotes}
-                onChange={(e) =>
-                  setForm({ ...form, logisticsNotes: e.target.value })
-                }
-                rows={2}
-              />
-            </div>
-            <div className="col-span-full flex items-end gap-2">
-              <Button onClick={handleSave} disabled={loading}>
-                {loading ? "Guardando..." : "Guardar"}
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => setEditing(false)}
-                disabled={loading}
-              >
-                Cancelar
-              </Button>
-            </div>
-          </>
-        ) : (
-          <>
-            <Info label="Usuario asignado" value={assignedLogisticsUser?.name ?? "Sin asignar"} />
-            <Info
-              label="Fecha comprometida"
-              value={
-                committedDeliveryDate
-                  ? new Date(committedDeliveryDate).toLocaleDateString("es-CO")
-                  : null
+            </Field>
+          </div>
+          <Field label="Confirmación de entrega" htmlFor="deliveryConfirmationNotes">
+            <Textarea
+              id="deliveryConfirmationNotes"
+              value={form.deliveryConfirmationNotes}
+              onChange={(e) =>
+                setForm({ ...form, deliveryConfirmationNotes: e.target.value })
               }
+              rows={2}
             />
-            <Info
-              label="Fecha de despacho"
-              value={dispatchDate ? new Date(dispatchDate).toLocaleDateString("es-CO") : null}
+          </Field>
+          <Field label="Notas" htmlFor="logisticsNotes">
+            <Textarea
+              id="logisticsNotes"
+              value={form.logisticsNotes}
+              onChange={(e) => setForm({ ...form, logisticsNotes: e.target.value })}
+              rows={2}
             />
-            <Info label="Transportadora" value={carrierName} />
-            <Info label="Número de guía" value={trackingNumber} />
-            <TrackingInfo trackingUrl={trackingUrl} />
-            <Info
-              label="Fecha de entrega"
-              value={deliveryDate ? new Date(deliveryDate).toLocaleDateString("es-CO") : null}
-            />
-            <Info label="Recibido por" value={deliveredToName} />
-            {deliveryConfirmationNotes && (
-              <div className="col-span-full">
-                <div className="text-sm font-semibold text-muted-foreground">
-                  Confirmación de entrega
-                </div>
-                <div className="mt-1 text-foreground">{deliveryConfirmationNotes}</div>
-              </div>
-            )}
-            {logisticsNotes && (
-              <div className="col-span-full">
-                <div className="text-sm font-semibold text-muted-foreground">
-                  Notas de logística
-                </div>
-                <div className="mt-1 text-foreground">{logisticsNotes}</div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+          </Field>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleSave} disabled={loading}>
+              {loading ? "Guardando..." : "Guardar"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditing(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-3.5 sm:grid-cols-2">
+          <Info label="Usuario asignado" value={assignedLogisticsUser?.name ?? "Sin asignar"} />
+          <Info label="Fecha comprometida" value={formatDate(committedDeliveryDate)} />
+          <Info label="Fecha de despacho" value={formatDate(dispatchDate)} />
+          <Info label="Transportadora" value={carrierName} />
+          <Info label="Número de guía" value={trackingNumber} />
+          <Info
+            label="Tracking"
+            value={
+              trackingUrl ? (
+                <a
+                  href={trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block max-w-full truncate text-primary underline-offset-4 hover:underline"
+                >
+                  {trackingUrl}
+                </a>
+              ) : null
+            }
+          />
+          <Info label="Fecha de entrega" value={formatDate(deliveryDate)} />
+          <Info label="Recibido por" value={deliveredToName} />
+          <div className="sm:col-span-2">
+            <Info label="Confirmación de entrega" value={deliveryConfirmationNotes} />
+          </div>
+          <div className="sm:col-span-2">
+            <Info label="Notas de logística" value={logisticsNotes} />
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
-function TrackingInfo({ trackingUrl }: { trackingUrl: string | null | undefined }) {
-  if (!trackingUrl) return null;
+function formatDate(value: string | null) {
+  return value ? new Date(value).toLocaleDateString("es-CO") : null;
+}
+
+function Field({
+  label,
+  htmlFor,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  children: ReactNode;
+}) {
   return (
-    <div>
-      <div className="text-sm font-semibold text-muted-foreground">Tracking</div>
-      <a
-        href={trackingUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="mt-1 inline-block max-w-full truncate text-primary underline-offset-4 hover:underline"
-      >
-        {trackingUrl}
-      </a>
+    <div className="grid gap-1">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
     </div>
   );
 }
 
-function Info({ label, value }: { label: string; value: string | null | undefined }) {
+function Info({ label, value }: { label: string; value: ReactNode }) {
   if (!value) return null;
   return (
     <div>
-      <div className="text-sm font-semibold text-muted-foreground">{label}</div>
-      <div className="mt-1 text-foreground">{value}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.03em] text-[#9aa3b1]">
+        {label}
+      </div>
+      <div className="mt-0.5 text-[13px] text-[#3a4658]">{value}</div>
     </div>
   );
 }

@@ -50,6 +50,17 @@ export class UsersController {
     return this.usersService.findSellers();
   }
 
+  /**
+   * Selector "Usuario asignado" de la seccion Logistica del pedido: mismos
+   * roles que `PATCH /orders/:id/logistics`, quien edita elige a quien atiende.
+   * Tambien antes de cualquier @Get(":id").
+   */
+  @Roles("administrador", "logistica")
+  @Get("logistics")
+  findLogisticsUsers() {
+    return this.usersService.findLogisticsUsers();
+  }
+
   @Post()
   create(@Body(validationPipe) dto: CreateUserDto) {
     return this.usersService.create(dto);

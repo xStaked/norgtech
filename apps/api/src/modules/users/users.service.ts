@@ -53,6 +53,20 @@ export class UsersService {
     });
   }
 
+  /**
+   * Usuarios asignables en la seccion Logistica del pedido. Mismo motivo que
+   * `findSellers`: logistica no puede llamar `GET /users`. No se reusa el
+   * selector de vendedores porque ahi solo hay comercial/director_comercial,
+   * que no son quienes despachan.
+   */
+  async findLogisticsUsers(): Promise<Array<{ id: string; name: string }>> {
+    return this.prisma.user.findMany({
+      where: { active: true, role: { in: ["logistica", "administrador"] } },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    });
+  }
+
   async create(dto: CreateUserDto) {
     const email = this.normalizeEmail(dto.email);
     const temporaryPassword = this.generateTemporaryPassword();
