@@ -195,17 +195,24 @@ export function SidebarNav({
           a mitad de la animación del ancho. */}
       <div className="px-3 pt-4">
         <Collapsible open={!collapsed}>
-          {/* ponytail: logo con fondo blanco porque el webp no es transparente */}
-          <div className="w-[228px] rounded-[9px] bg-white px-3 py-2.5">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/norgtech-wordmark.webp"
-              alt="Norgtech — Tecnologías en nutrición orgánica"
-              className="h-auto w-full object-contain"
-            />
-          </div>
-          <div className="w-[228px] pb-3.5 pt-2 text-center text-[9.5px] font-semibold tracking-[0.04em] text-[#7fa9c4]">
-            ERP COMERCIAL
+          <div className="flex w-[228px] items-center gap-2.5 pb-3.5">
+            {/* ponytail: cuadro blanco porque el icono es a color sobre claro */}
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[9px] bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/norgtech-icon-logo.png"
+                alt="Norgtech"
+                className="h-[26px] w-[26px] object-contain"
+              />
+            </div>
+            <div className="leading-tight">
+              <div className="text-[15px] font-bold tracking-tight text-white">
+                norgtech
+              </div>
+              <div className="text-[9.5px] font-semibold tracking-[0.04em] text-[#7fa9c4]">
+                ERP COMERCIAL
+              </div>
+            </div>
           </div>
         </Collapsible>
         <div
