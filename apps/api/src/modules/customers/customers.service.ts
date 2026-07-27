@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -9,6 +10,7 @@ import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { NotificationsService } from "../notifications/notifications.service";
 import { PrismaService } from "../../prisma/prisma.service";
+import { taxIdSearchVariants } from "../../common/tax-id";
 import { AssignZoneDto } from "./dto/assign-zone.dto";
 import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { ListCustomersQueryDto } from "./dto/list-customers.query.dto";
@@ -110,7 +112,24 @@ export class CustomersService {
       });
     } catch (error) {
       if (this.isUniqueConstraintError(error)) {
-        throw new ConflictException("Ya existe un cliente con ese NIT (taxId)");
+        // El NIT es unico global e ignora `active`, mientras que el listado
+        // esconde los inactivos: sin decir QUE cliente choca, el que busco y no
+        // lo encontro recibe un "ya existe" que parece contradictorio.
+        const existing = dto.taxId
+          ? await this.prisma.customer.findUnique({
+              where: { taxId: dto.taxId },
+              select: { id: true, displayName: true, active: true },
+            })
+          : null;
+
+        throw new ConflictException(
+          existing
+            ? `Ya existe un cliente con el NIT ${dto.taxId}: "${existing.displayName}" (id ${existing.id})` +
+              (existing.active
+                ? ". Búscalo por NIT en vez de crearlo."
+                : ", pero está INACTIVO. Hay que reactivarlo en vez de crear uno nuevo.")
+            : "Ya existe un cliente con ese NIT (taxId)",
+        );
       }
 
       throw error;
@@ -174,6 +193,27 @@ export class CustomersService {
       }
     }
 
+    // Un comercial no mueve cartera: como mucho se queda un cliente que hoy no
+    // tiene vendedor. Sin esto, cualquier comercial (o Nora en su nombre) puede
+    // reasignarse el cliente de un companero con un PATCH.
+    if (
+      user.role === "comercial" &&
+      dto.assignedToUserId !== undefined &&
+      (customer.assignedToUserId !== null || dto.assignedToUserId !== user.id)
+    ) {
+      throw new ForbiddenException(
+        "Un comercial solo puede tomar clientes que no tienen vendedor asignado",
+      );
+    }
+
+    // Reactivar un cliente huerfano (los importados sin compras entraron
+    // inactivos y sin vendedor) lo deja a nombre de quien lo reactiva. Si ya
+    // tiene vendedor, se respeta.
+    const claimsOnReactivate =
+      user.role === "comercial" &&
+      dto.active === true &&
+      customer.assignedToUserId === null;
+
     if (dto.companyId && dto.companyId !== customer.companyId) {
       const company = await this.prisma.company.findUnique({
         where: { id: dto.companyId },
@@ -218,11 +258,13 @@ export class CustomersService {
           ...(dto.assignedToUserId !== undefined && {
             assignedToUserId: dto.assignedToUserId,
           }),
+          ...(claimsOnReactivate && { assignedToUserId: user.id }),
           ...(dto.customerType !== undefined && { customerType: dto.customerType }),
           ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
           ...(dto.paymentCondition !== undefined && { paymentCondition: dto.paymentCondition }),
           ...(dto.paymentDays !== undefined && { paymentDays: dto.paymentDays }),
           ...(dto.purchaseBudget !== undefined && { purchaseBudget: dto.purchaseBudget }),
+          ...(dto.active !== undefined && { active: dto.active }),
           updatedBy: user.id,
         },
         include: { contacts: true },
@@ -291,6 +333,9 @@ export class CustomersService {
         { displayName: { contains: search, mode: "insensitive" } },
         { legalName: { contains: search, mode: "insensitive" } },
         { taxId: { contains: search, mode: "insensitive" } },
+        ...taxIdSearchVariants(search).map((variant) => ({
+          taxId: { contains: variant, mode: "insensitive" as const },
+        })),
       ];
     }
 

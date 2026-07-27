@@ -1,5 +1,6 @@
 import { Type } from "class-transformer";
 import {
+  IsBoolean,
   IsEmail,
   IsEnum,
   IsNotEmpty,
@@ -100,4 +101,11 @@ export class UpdateCustomerDto {
   @IsNumber()
   @Min(0)
   purchaseBudget?: number;
+
+  // Los clientes importados sin compras entraron inactivos y el NIT es unico
+  // global: sin poder reactivarlos, el vendedor queda trabado (no lo encuentra
+  // en los listados y tampoco puede crearlo de nuevo).
+  @IsOptional()
+  @IsBoolean()
+  active?: boolean;
 }

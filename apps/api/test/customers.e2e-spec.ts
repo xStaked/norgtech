@@ -78,6 +78,17 @@ describe("Customers", () => {
           };
         }
 
+        if (where.email === "seller@norgtech.local") {
+          return {
+            id: assignedUserId,
+            name: "Seller",
+            email: "seller@norgtech.local",
+            passwordHash,
+            role: UserRole.comercial,
+            active: true,
+          };
+        }
+
         if (where.id === assignedUserId) {
           return {
             id: assignedUserId,
@@ -154,8 +165,16 @@ describe("Customers", () => {
         create: async () => {
           throw new Error("customer.create must run inside a transaction");
         },
-        findUnique: async ({ where, include }: { where: { id: string }; include?: Record<string, unknown> }) => {
-          const found = customers.find((c) => c.id === where.id);
+        findUnique: async ({
+          where,
+          include,
+        }: {
+          where: { id?: string; taxId?: string };
+          include?: Record<string, unknown>;
+        }) => {
+          const found = customers.find((c) =>
+            where.taxId !== undefined ? c.taxId === where.taxId : c.id === where.id,
+          );
           if (!found) return null;
           const result = { ...found };
           if (include?.contacts) {
@@ -299,6 +318,8 @@ describe("Customers", () => {
             "paymentCondition",
             "paymentDays",
             "active",
+            "priceListId",
+            "assignedToUser",
             "segment",
             "company",
             "contacts",
@@ -796,7 +817,11 @@ describe("Customers", () => {
       .send({ ...payload, displayName: "Otra razon social" })
       .expect(409);
 
-    expect(response.body.message).toBe("Ya existe un cliente con ese NIT (taxId)");
+    // El mensaje tiene que nombrar al cliente que choca: si no, quien busco y
+    // no lo encontro (porque estaba inactivo, o porque escribio el NIT con
+    // puntos) recibe un "ya existe" que le suena a contradiccion.
+    expect(response.body.message).toContain("Duplicada");
+    expect(response.body.message).toContain("901555444");
   });
 
   // ZON-01/COM-01 family: a deactivated customer must not silently disappear
@@ -839,6 +864,121 @@ describe("Customers", () => {
 
     const inclusiveIds = (inclusiveResponse.body as Array<{ id: string }>).map((c) => c.id);
     expect(inclusiveIds).toContain("inactive-customer-id");
+  });
+
+  // Reactivar desde Nora: el importado huerfano queda a nombre de quien lo
+  // reactiva, pero el de otro vendedor NO se puede tocar (CLI-reactivacion).
+  describe("reactivacion por un comercial", () => {
+    let sellerToken: string;
+
+    const pushInactive = (id: string, assignedToUserId: string | null) => {
+      customers.push({
+        id,
+        legalName: `${id} SAS`,
+        displayName: id,
+        taxId: null,
+        phone: null,
+        email: null,
+        city: null,
+        department: null,
+        notes: null,
+        segmentId,
+        companyId: "clx_default_norgtech",
+        company: { id: "clx_default_norgtech", name: "Norgtech" },
+        assignedToUserId,
+        creditLimit: null,
+        active: false,
+        contacts: [],
+        createdAt: new Date("2026-04-29T00:00:00.000Z"),
+        updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+      });
+    };
+
+    beforeAll(async () => {
+      const login = await request(globalThis.__APP__)
+        .post("/auth/login")
+        .send({ email: "seller@norgtech.local", password: "Admin123*" })
+        .expect(200);
+      sellerToken = login.body.accessToken;
+    });
+
+    it("reactiva un cliente sin vendedor y se lo asigna a quien lo reactiva", async () => {
+      pushInactive("huerfano", null);
+
+      await request(globalThis.__APP__)
+        .patch("/customers/huerfano")
+        .set("Authorization", `Bearer ${sellerToken}`)
+        .send({ active: true })
+        .expect(200);
+
+      const stored = customers.find((c) => c.id === "huerfano");
+      expect(stored?.active).toBe(true);
+      expect(stored?.assignedToUserId).toBe(assignedUserId);
+    });
+
+    it("reactiva el cliente de otro vendedor sin robarselo", async () => {
+      pushInactive("ajeno", "otro-vendedor-id");
+
+      await request(globalThis.__APP__)
+        .patch("/customers/ajeno")
+        .set("Authorization", `Bearer ${sellerToken}`)
+        .send({ active: true })
+        .expect(200);
+
+      const stored = customers.find((c) => c.id === "ajeno");
+      expect(stored?.active).toBe(true);
+      expect(stored?.assignedToUserId).toBe("otro-vendedor-id");
+    });
+
+    it("prohibe que un comercial se reasigne el cliente de otro", async () => {
+      pushInactive("cartera-ajena", "otro-vendedor-id");
+
+      await request(globalThis.__APP__)
+        .patch("/customers/cartera-ajena")
+        .set("Authorization", `Bearer ${sellerToken}`)
+        .send({ assignedToUserId: assignedUserId })
+        .expect(403);
+
+      expect(customers.find((c) => c.id === "cartera-ajena")?.assignedToUserId).toBe(
+        "otro-vendedor-id",
+      );
+    });
+  });
+
+  // El NIT se guarda como lo trajo el Excel ("900923429-1") pero el vendedor lo
+  // dicta con puntos. Sin normalizar la busqueda no lo encontraba y al crearlo
+  // el API respondia "ya existe con ese NIT": una contradiccion para el usuario.
+  it("finds a customer by NIT written with dots or without the check digit", async () => {
+    customers.push({
+      id: "superagro-id",
+      legalName: "SOCIEDAD AVICOLA SUPERAGRO SAS",
+      displayName: "SOCIEDAD AVICOLA SUPERAGRO SAS",
+      taxId: "900923429-1",
+      phone: null,
+      email: null,
+      city: null,
+      department: null,
+      notes: null,
+      segmentId,
+      companyId: "clx_default_norgtech",
+      company: { id: "clx_default_norgtech", name: "Norgtech" },
+      assignedToUserId: null,
+      creditLimit: null,
+      active: true,
+      contacts: [],
+      createdAt: new Date("2026-04-29T00:00:00.000Z"),
+      updatedAt: new Date("2026-04-29T00:00:00.000Z"),
+    });
+
+    for (const search of ["9.009.234.291", "9009234291", "900.923.429-1", "900923429"]) {
+      const response = await request(globalThis.__APP__)
+        .get(`/customers?search=${encodeURIComponent(search)}`)
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .expect(200);
+
+      const ids = (response.body as Array<{ id: string }>).map((c) => c.id);
+      expect(ids).toContain("superagro-id");
+    }
   });
 
   it("allows director_comercial to refresh segments", async () => {

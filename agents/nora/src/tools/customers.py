@@ -15,15 +15,24 @@ async def search_customers(
     Usa esta herramienta cuando necesites encontrar un cliente existente
     antes de crear uno nuevo. Siempre busca primero antes de crear.
 
+    Incluye clientes INACTIVOS (campo "activo": false). Si el cliente ya existe
+    aunque esté inactivo, NO lo crees de nuevo: dile al usuario que ya existe
+    pero está inactivo y ofrécele reactivarlo.
+
     Args:
         query: Texto de búsqueda (nombre, razón social, o NIT del cliente)
 
     Returns:
-        Lista de clientes encontrados en formato JSON con id, nombre, razonSocial, nit, ciudad, telefono
+        Lista de clientes encontrados en formato JSON con id, nombre, razonSocial, nit, ciudad, telefono, activo
     """
     try:
         nestjs_client = NestJSClient(auth_token)
-        result = await nestjs_client.get("/customers", params={"search": query})
+        # includeInactive: el NIT es único global e ignora `active`, así que si
+        # no vemos los inactivos decimos "no existe" y al crearlo el API responde
+        # "ya existe con ese NIT".
+        result = await nestjs_client.get(
+            "/customers", params={"search": query, "includeInactive": "true"}
+        )
         customers = result if isinstance(result, list) else result.get("data", [])
         if not customers:
             return "No se encontraron clientes con ese criterio de búsqueda."
@@ -37,6 +46,7 @@ async def search_customers(
                 "nit": c.get("taxId"),
                 "ciudad": c.get("city"),
                 "telefono": c.get("phone"),
+                "activo": c.get("active", True),
             }
             for c in customers[:10]
         ]
@@ -215,6 +225,21 @@ async def _resolve_company_id(nestjs_client: NestJSClient, company: Optional[str
     )
 
 
+def _normalize_tax_id(tax_id: Optional[str]) -> Optional[str]:
+    """NIT al formato con el que se importó la base: "900923429-1".
+
+    La gente lo dicta con puntos ("9.009.234.291") o pegado; guardarlo tal cual
+    crea duplicados con el mismo NIT escrito distinto, o choca contra el índice
+    único sin que la búsqueda por NIT lo encuentre.
+    """
+    if not tax_id:
+        return tax_id
+    compact = "".join(ch for ch in tax_id if ch.isalnum())
+    if compact.isdigit() and len(compact) >= 9:
+        return f"{compact[:-1]}-{compact[-1]}"
+    return tax_id
+
+
 @tool
 async def create_customer(
     legal_name: str,
@@ -235,6 +260,12 @@ async def create_customer(
 ) -> str:
     """
     Crea un nuevo cliente (empresa) en el CRM con su contacto primario.
+
+    ANTES de crear, busca con search_customers por NOMBRE y también por NIT.
+    Si aparece (aunque sea con "activo": false) NO lo crees: es el mismo cliente.
+    Si el API responde que ya existe un cliente con ese NIT, NO vuelvas a
+    ofrecer crearlo: el mensaje trae el nombre del cliente existente; dilo y
+    ofrece reactivarlo con update_customer(active=True) si está inactivo.
 
     IMPORTANTE: Un CLIENTE es una empresa/organización (razón social, NIT).
     Un CONTACTO es una persona que trabaja en ese cliente.
@@ -281,12 +312,7 @@ async def create_customer(
         if contact_email or email:
             contact_payload["email"] = contact_email or email
 
-        # Normalizar NIT: si es solo dígitos sin guión, agregar formato colombiano básico
-        normalized_tax_id = tax_id
-        if tax_id and tax_id.isdigit() and "-" not in tax_id:
-            # Si tiene 9+ dígitos, formato XXXXXXXX-X
-            if len(tax_id) >= 9:
-                normalized_tax_id = f"{tax_id[:-1]}-{tax_id[-1]}"
+        normalized_tax_id = _normalize_tax_id(tax_id)
 
         payload = {
             "legalName": legal_name,
@@ -332,6 +358,7 @@ async def update_customer(
     department: Optional[str] = None,
     notes: Optional[str] = None,
     segment_id: Optional[str] = None,
+    active: Optional[bool] = None,
 ) -> str:
     """
     Edita/actualiza un cliente (empresa) existente en el CRM.
@@ -357,6 +384,11 @@ async def update_customer(
         department: Nuevo departamento/estado (opcional)
         notes: Nuevas notas (opcional)
         segment_id: Nuevo ID de segmento (opcional)
+        active: True para reactivar un cliente inactivo, False para desactivarlo
+            (opcional). Úsalo cuando search_customers devuelva "activo": false
+            y el usuario quiera volver a trabajar con ese cliente. Al reactivar,
+            si el cliente no tiene vendedor queda a nombre de quien lo reactiva;
+            si ya es de otro vendedor sigue siendo de él (dilo, no lo reasignes).
 
     Returns:
         Datos del cliente actualizado en formato JSON
@@ -364,11 +396,7 @@ async def update_customer(
     try:
         nestjs_client = NestJSClient(auth_token)
 
-        # Normalizar NIT igual que en create_customer
-        normalized_tax_id = tax_id
-        if tax_id and tax_id.isdigit() and "-" not in tax_id:
-            if len(tax_id) >= 9:
-                normalized_tax_id = f"{tax_id[:-1]}-{tax_id[-1]}"
+        normalized_tax_id = _normalize_tax_id(tax_id)
 
         payload = {}
         if legal_name is not None:
@@ -391,6 +419,8 @@ async def update_customer(
             payload["notes"] = notes
         if segment_id is not None:
             payload["segmentId"] = segment_id
+        if active is not None:
+            payload["active"] = active
 
         if not payload:
             return "No se especificó ningún campo para actualizar."

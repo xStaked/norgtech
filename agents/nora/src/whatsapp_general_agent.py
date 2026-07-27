@@ -46,7 +46,12 @@ NEW_CUSTOMER_CASE_PROMPT = (
     "creación; crea el cliente igual con lo que tengas. Cuando ya tengas al menos "
     "nombre, NIT, ciudad y teléfono, llama create_customer directamente (el "
     "segmento se asigna solo, no pases segment_id; pasa email, address, department "
-    "y notes solo si los tienes) y confirma el resultado."
+    "y notes solo si los tienes) y confirma el resultado.\n"
+    "Antes de crear, busca con search_customers por el NIT y por el nombre: si "
+    "el cliente ya existe (aunque salga con \"activo\": false) NO lo crees de "
+    "nuevo; dilo y ofrece reactivarlo con update_customer(active=True). Si el "
+    "API responde que ya existe un cliente con ese NIT, tampoco vuelvas a "
+    "ofrecer crearlo: el error trae el nombre del cliente existente."
 )
 
 CUSTOMER_EDIT_PROMPT = (

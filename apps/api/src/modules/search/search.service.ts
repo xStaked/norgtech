@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { PrismaService } from "../../prisma/prisma.service";
+import { taxIdSearchVariants } from "../../common/tax-id";
 
 export interface SearchHit {
   type: "customer" | "order" | "product";
@@ -49,6 +50,9 @@ export class SearchService {
                 { displayName: { contains: q, mode: "insensitive" } },
                 { legalName: { contains: q, mode: "insensitive" } },
                 { taxId: { contains: q, mode: "insensitive" } },
+                ...taxIdSearchVariants(q).map((variant) => ({
+                  taxId: { contains: variant, mode: "insensitive" as const },
+                })),
               ],
             },
             select: { id: true, displayName: true, taxId: true, city: true },

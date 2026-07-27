@@ -1,7 +1,12 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from src.tools.customers import create_customer, update_customer
+from src.tools.customers import (
+    _normalize_tax_id,
+    create_customer,
+    search_customers,
+    update_customer,
+)
 from src.tools.nestjs_client import NestJSAPIError
 
 SEGMENTS = [
@@ -120,3 +125,40 @@ def test_update_customer_reports_api_error():
     client, result = _run_update({"display_name": "X"}, patch_side_effect=err)
     assert "error al actualizar cliente" in result.lower()
     assert "Customer not found" in result
+
+
+def _run_search(query, customers):
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=customers)
+
+    with patch("src.tools.customers.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            search_customers.ainvoke({"query": query, "auth_token": "Bearer scoped"})
+        )
+    return fake_client, result
+
+
+# El NIT es único global e ignora `active`: si la búsqueda no ve los inactivos,
+# Nora dice "no existe" y al crearlo el API responde "ya existe con ese NIT".
+def test_search_customers_includes_inactive_and_flags_them():
+    client, result = _run_search(
+        "Superagro",
+        [{"id": "c1", "displayName": "SUPERAGRO SAS", "taxId": "900923429-1", "active": False}],
+    )
+    _, kwargs = client.get.await_args
+    assert kwargs["params"]["includeInactive"] == "true"
+    assert '"activo": false' in result
+
+
+def test_normalize_tax_id_handles_dotted_input():
+    # El vendedor lo dicta "9.009.234.291"; en base está "900923429-1".
+    assert _normalize_tax_id("9.009.234.291") == "900923429-1"
+    assert _normalize_tax_id("900923429-1") == "900923429-1"
+    assert _normalize_tax_id("9009234291") == "900923429-1"
+    assert _normalize_tax_id(None) is None
+
+
+def test_update_customer_can_reactivate():
+    client, _ = _run_update({"active": True})
+    _, payload = client.patch.await_args.args
+    assert payload == {"active": True}
