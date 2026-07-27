@@ -9,10 +9,17 @@ SEGMENTS = [
     {"id": "seg-bronce", "name": "Bronce"},
 ]
 
+COMPANIES = [
+    {"id": "co-nano", "name": "Nanonutrición"},
+    {"id": "co-norg", "name": "Norgtech"},
+]
 
-def _run_create(segment_id=None, segments=SEGMENTS):
+
+def _run_create(segment_id=None, segments=SEGMENTS, company="Norgtech", companies=COMPANIES):
     fake_client = AsyncMock()
-    fake_client.get = AsyncMock(return_value=segments)
+    fake_client.get = AsyncMock(
+        side_effect=lambda path, **kw: companies if path == "/companies" else segments
+    )
     fake_client.post = AsyncMock(return_value={"id": "cust_1", "legalName": "ACME"})
 
     with patch("src.tools.customers.NestJSClient", return_value=fake_client):
@@ -23,6 +30,8 @@ def _run_create(segment_id=None, segments=SEGMENTS):
         }
         if segment_id is not None:
             args["segment_id"] = segment_id
+        if company is not None:
+            args["company"] = company
         result = asyncio.run(create_customer.ainvoke(args))
     return fake_client, result
 
@@ -51,6 +60,24 @@ def test_create_customer_errors_clearly_when_no_segments_exist():
     client, result = _run_create(segments=[])
     client.post.assert_not_awaited()
     assert "segmento" in result.lower()
+
+
+def test_create_customer_sends_company_id_resolved_from_name():
+    client, _ = _run_create(company="norgtech")
+    _, payload = client.post.await_args.args
+    assert payload["companyId"] == "co-norg"
+
+
+def test_create_customer_uses_the_only_company_when_none_given():
+    client, _ = _run_create(company=None, companies=[COMPANIES[0]])
+    _, payload = client.post.await_args.args
+    assert payload["companyId"] == "co-nano"
+
+
+def test_create_customer_asks_for_company_when_ambiguous():
+    client, result = _run_create(company=None)
+    client.post.assert_not_awaited()
+    assert "Norgtech" in result and "Nanonutrición" in result
 
 
 def _run_update(extra_args=None, patch_side_effect=None):

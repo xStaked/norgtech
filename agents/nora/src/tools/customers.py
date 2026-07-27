@@ -176,11 +176,51 @@ async def _resolve_segment_id(nestjs_client: NestJSClient, segment_id: Optional[
     return (bronce or segments[0])["id"]
 
 
+async def _resolve_company_id(nestjs_client: NestJSClient, company: Optional[str]) -> str:
+    """Resolve the invoicing company id from an id, a name, or nothing.
+
+    The API requires companyId to create a customer, but the LLM only ever has
+    the name the user said ("Norgtech"), so we resolve it here. With a single
+    company configured it's implicit; with several, we raise listing the names
+    so the LLM can ask instead of guessing an id that doesn't exist.
+    """
+    result = await nestjs_client.get("/companies")
+    companies = result if isinstance(result, list) else result.get("data", [])
+    if not companies:
+        raise NestJSAPIError(
+            status_code=404,
+            detail="No hay empresas configuradas en el CRM.",
+        )
+
+    if company:
+        needle = company.strip().lower()
+        match = next(
+            (
+                c
+                for c in companies
+                if c["id"] == company or needle in (c.get("name") or "").lower()
+            ),
+            None,
+        )
+        if match:
+            return match["id"]
+
+    if len(companies) == 1:
+        return companies[0]["id"]
+
+    names = ", ".join(c.get("name") or c["id"] for c in companies)
+    raise NestJSAPIError(
+        status_code=400,
+        detail=f"Falta indicar la empresa que factura al cliente. Opciones: {names}.",
+    )
+
+
 @tool
 async def create_customer(
     legal_name: str,
     display_name: str,
     auth_token: Annotated[str, InjectedState("auth_token")],
+    company: Optional[str] = None,
     segment_id: Optional[str] = None,
     tax_id: Optional[str] = None,
     phone: Optional[str] = None,
@@ -207,6 +247,9 @@ async def create_customer(
     Args:
         legal_name: Razón social o nombre legal de la empresa
         display_name: Nombre comercial o de display (cómo se conoce la empresa)
+        company: Nombre de la empresa del grupo que le factura a este cliente
+            (ej. "Norgtech"). Pasa el nombre tal cual lo dijo el usuario; si solo
+            hay una empresa configurada se toma esa automáticamente.
         segment_id: ID del segmento (opcional; si se omite se usa "Bronce")
         tax_id: NIT o identificador tributario (opcional)
         phone: Teléfono de la empresa (opcional)
@@ -225,6 +268,7 @@ async def create_customer(
     try:
         nestjs_client = NestJSClient(auth_token)
         resolved_segment_id = await _resolve_segment_id(nestjs_client, segment_id)
+        resolved_company_id = await _resolve_company_id(nestjs_client, company)
 
         # Auto-generar contacto primario
         primary_contact_name = contact_name or "Contacto Principal"
@@ -248,6 +292,7 @@ async def create_customer(
             "legalName": legal_name,
             "displayName": display_name,
             "segmentId": resolved_segment_id,
+            "companyId": resolved_company_id,
             "contacts": [contact_payload],
         }
         if normalized_tax_id:
