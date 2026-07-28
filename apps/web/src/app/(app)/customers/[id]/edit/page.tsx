@@ -2,6 +2,8 @@ import { notFound } from "next/navigation";
 import { CustomerForm } from "@/components/customers/customer-form";
 import { PageHeader } from "@/components/ui/page-header";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canAssignCustomers } from "@/lib/auth";
 import type { PriceListRef } from "@/lib/catalog";
 
 interface Customer {
@@ -33,7 +35,8 @@ export default async function CustomerEditPage({
 }) {
   const { id } = await params;
 
-  const [customerResponse, companiesResponse, priceListsResponse] = await Promise.all([
+  const [user, customerResponse, companiesResponse, priceListsResponse] = await Promise.all([
+    getCurrentUser(),
     apiFetch(`/customers/${id}`),
     apiFetch("/companies"),
     apiFetch("/price-lists"),
@@ -61,6 +64,7 @@ export default async function CustomerEditPage({
         companies={companies}
         priceLists={priceLists}
         customer={customer}
+        canAssign={canAssignCustomers(user?.role ?? null)}
       />
     </div>
   );

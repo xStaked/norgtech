@@ -45,7 +45,9 @@ NEW_CUSTOMER_CASE_PROMPT = (
     "Con eso llama create_customer directamente y confirma el resultado.\n"
     "Antes de crear, busca con search_customers por el NIT y por el nombre: si "
     "el cliente ya existe (aunque salga con \"activo\": false) NO lo crees de "
-    "nuevo; dilo y ofrece reactivarlo con update_customer(active=True). Si el "
+    "nuevo; dilo e intenta reactivarlo con update_customer(active=True). Si el "
+    "API responde que no tienes permiso, avisa que dirección tiene que "
+    "reactivarlo y asignarlo, y no lo intentes de otra forma. Si el "
     "API responde que ya existe un cliente con ese NIT, tampoco vuelvas a "
     "ofrecer crearlo: el error trae el nombre del cliente existente."
 )

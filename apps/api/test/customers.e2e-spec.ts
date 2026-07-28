@@ -882,9 +882,10 @@ describe("Customers", () => {
     expect(inclusiveIds).toContain("inactive-customer-id");
   });
 
-  // Reactivar desde Nora: el importado huerfano queda a nombre de quien lo
-  // reactiva, pero el de otro vendedor NO se puede tocar (CLI-reactivacion).
-  describe("reactivacion por un comercial", () => {
+  // Regla del cliente: las asignaciones las hace direccion. Un comercial tiene
+  // un cliente solo si lo creo el mismo o si un admin se lo asigno, asi que no
+  // puede reasignar ni reactivar (reactivar era la otra puerta para quedarselo).
+  describe("asignacion y reactivacion por un comercial", () => {
     let sellerToken: string;
 
     const pushInactive = (id: string, assignedToUserId: string | null) => {
@@ -918,32 +919,30 @@ describe("Customers", () => {
       sellerToken = login.body.accessToken;
     });
 
-    it("reactiva un cliente sin vendedor y se lo asigna a quien lo reactiva", async () => {
+    it("no puede reactivar un cliente inactivo, ni uno sin vendedor", async () => {
       pushInactive("huerfano", null);
 
       await request(globalThis.__APP__)
         .patch("/customers/huerfano")
         .set("Authorization", `Bearer ${sellerToken}`)
         .send({ active: true })
-        .expect(200);
+        .expect(403);
 
       const stored = customers.find((c) => c.id === "huerfano");
-      expect(stored?.active).toBe(true);
-      expect(stored?.assignedToUserId).toBe(assignedUserId);
+      expect(stored?.active).toBe(false);
+      expect(stored?.assignedToUserId).toBeNull();
     });
 
-    it("reactiva el cliente de otro vendedor sin robarselo", async () => {
-      pushInactive("ajeno", "otro-vendedor-id");
+    it("no puede quedarse un cliente huerfano", async () => {
+      pushInactive("sin-dueno", null);
 
       await request(globalThis.__APP__)
-        .patch("/customers/ajeno")
+        .patch("/customers/sin-dueno")
         .set("Authorization", `Bearer ${sellerToken}`)
-        .send({ active: true })
-        .expect(200);
+        .send({ assignedToUserId: assignedUserId })
+        .expect(403);
 
-      const stored = customers.find((c) => c.id === "ajeno");
-      expect(stored?.active).toBe(true);
-      expect(stored?.assignedToUserId).toBe("otro-vendedor-id");
+      expect(customers.find((c) => c.id === "sin-dueno")?.assignedToUserId).toBeNull();
     });
 
     it("prohibe que un comercial se reasigne el cliente de otro", async () => {
@@ -958,6 +957,24 @@ describe("Customers", () => {
       expect(customers.find((c) => c.id === "cartera-ajena")?.assignedToUserId).toBe(
         "otro-vendedor-id",
       );
+    });
+
+    // La otra mitad de la regla: el cliente que crea si es suyo, y el vendedor
+    // que mande el formulario (o Nora) se ignora.
+    it("el cliente que crea queda a su nombre aunque mande otro vendedor", async () => {
+      const response = await request(globalThis.__APP__)
+        .post("/customers")
+        .set("Authorization", `Bearer ${sellerToken}`)
+        .send({
+          legalName: "Alta Propia SAS",
+          displayName: "Alta Propia",
+          companyId: "clx_default_norgtech",
+          assignedToUserId: "otro-vendedor-id",
+          contacts: [{ fullName: "Carlos Perez", isPrimary: true }],
+        })
+        .expect(201);
+
+      expect(response.body.assignedToUserId).toBe(assignedUserId);
     });
   });
 

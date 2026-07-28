@@ -27,7 +27,14 @@ export class CustomersService {
 
   async create(user: AuthUser, dto: CreateCustomerDto) {
     this.assertExactlyOnePrimaryContact(dto);
-    await this.assertValidReferences(dto);
+    // Repartir cartera es de direccion. Un comercial se queda el cliente que
+    // crea el mismo y nada mas, mande lo que mande el formulario (o Nora en su
+    // nombre): sin esto podia dar de alta un cliente a nombre de un companero.
+    // Se resuelve ANTES de validar para no rechazar por un vendedor inexistente
+    // que de todas formas se iba a ignorar.
+    const assignedToUserId =
+      user.role === "comercial" ? user.id : dto.assignedToUserId;
+    await this.assertValidReferences(dto, assignedToUserId);
     const segmentId = await this.resolveSegmentId(dto.segmentId);
 
     try {
@@ -47,7 +54,7 @@ export class CustomersService {
             notes: dto.notes,
             segmentId,
             companyId: dto.companyId,
-            assignedToUserId: dto.assignedToUserId,
+            assignedToUserId,
             customerType: dto.customerType || undefined,
             creditLimit: dto.creditLimit !== undefined ? dto.creditLimit : undefined,
             paymentCondition: dto.paymentCondition || undefined,
@@ -96,10 +103,12 @@ export class CustomersService {
           tx,
         );
 
-        if (dto.assignedToUserId) {
+        // Avisarle a alguien que se asigno a si mismo el cliente que acaba de
+        // crear es ruido: la notificacion es para el que la recibe de direccion.
+        if (assignedToUserId && assignedToUserId !== user.id) {
           await this.notifications.emit(
             {
-              userIds: [dto.assignedToUserId],
+              userIds: [assignedToUserId],
               type: NotificationType.cliente_asignado,
               title: `Te asignaron el cliente ${customer.displayName}`,
               entityType: "customer",
@@ -165,7 +174,10 @@ export class CustomersService {
     return fallback.id;
   }
 
-  private async assertValidReferences(dto: CreateCustomerDto) {
+  private async assertValidReferences(
+    dto: CreateCustomerDto,
+    assignedToUserId?: string,
+  ) {
     const company = await this.prisma.company.findUnique({
       where: { id: dto.companyId },
     });
@@ -174,12 +186,12 @@ export class CustomersService {
       throw new NotFoundException("Company not found or inactive");
     }
 
-    if (!dto.assignedToUserId) {
+    if (!assignedToUserId) {
       return;
     }
 
     const assignedUser = await this.prisma.user.findUnique({
-      where: { id: dto.assignedToUserId },
+      where: { id: assignedToUserId },
     });
 
     if (!assignedUser) {
@@ -214,26 +226,23 @@ export class CustomersService {
       }
     }
 
-    // Un comercial no mueve cartera: como mucho se queda un cliente que hoy no
-    // tiene vendedor. Sin esto, cualquier comercial (o Nora en su nombre) puede
-    // reasignarse el cliente de un companero con un PATCH.
-    if (
-      user.role === "comercial" &&
-      dto.assignedToUserId !== undefined &&
-      (customer.assignedToUserId !== null || dto.assignedToUserId !== user.id)
-    ) {
+    // Un comercial no reparte cartera, ni siquiera hacia si mismo: se queda
+    // unicamente los clientes que crea el (ver `create`). Sin esto puede
+    // reasignarse por PATCH el cliente de un companero, o tomar uno huerfano.
+    if (user.role === "comercial" && dto.assignedToUserId !== undefined) {
       throw new ForbiddenException(
-        "Un comercial solo puede tomar clientes que no tienen vendedor asignado",
+        "Solo un administrador o el director comercial puede asignar el vendedor de un cliente",
       );
     }
 
-    // Reactivar un cliente huerfano (los importados sin compras entraron
-    // inactivos y sin vendedor) lo deja a nombre de quien lo reactiva. Si ya
-    // tiene vendedor, se respeta.
-    const claimsOnReactivate =
-      user.role === "comercial" &&
-      dto.active === true &&
-      customer.assignedToUserId === null;
+    // Activar o desactivar tampoco: reactivar era la otra puerta para quedarse
+    // un cliente (antes el que reactivaba uno sin vendedor se lo llevaba). Nora
+    // ahora reporta que el cliente existe inactivo y direccion decide.
+    if (user.role === "comercial" && dto.active !== undefined) {
+      throw new ForbiddenException(
+        "Solo un administrador o el director comercial puede activar o desactivar un cliente",
+      );
+    }
 
     if (dto.companyId && dto.companyId !== customer.companyId) {
       const company = await this.prisma.company.findUnique({
@@ -279,7 +288,6 @@ export class CustomersService {
           ...(dto.assignedToUserId !== undefined && {
             assignedToUserId: dto.assignedToUserId,
           }),
-          ...(claimsOnReactivate && { assignedToUserId: user.id }),
           ...(dto.customerType !== undefined && { customerType: dto.customerType }),
           ...(dto.creditLimit !== undefined && { creditLimit: dto.creditLimit }),
           ...(dto.paymentCondition !== undefined && { paymentCondition: dto.paymentCondition }),

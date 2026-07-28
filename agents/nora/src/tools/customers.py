@@ -255,8 +255,10 @@ async def create_customer(
     ANTES de crear, busca con search_customers por NOMBRE y también por NIT.
     Si aparece (aunque sea con "activo": false) NO lo crees: es el mismo cliente.
     Si el API responde que ya existe un cliente con ese NIT, NO vuelvas a
-    ofrecer crearlo: el mensaje trae el nombre del cliente existente; dilo y
-    ofrece reactivarlo con update_customer(active=True) si está inactivo.
+    ofrecer crearlo: el mensaje trae el nombre del cliente existente, dilo. Si
+    está inactivo, intenta reactivarlo con update_customer(active=True): si el
+    API responde que no tienes permiso, avisa que dirección tiene que
+    reactivarlo y asignarlo.
 
     IMPORTANTE: Un CLIENTE es una empresa/organización (razón social, NIT).
     Un CONTACTO es una persona que trabaja en ese cliente.
@@ -374,10 +376,10 @@ async def update_customer(
         notes: Nuevas notas (opcional)
         segment_id: Nuevo ID de segmento (opcional)
         active: True para reactivar un cliente inactivo, False para desactivarlo
-            (opcional). Úsalo cuando search_customers devuelva "activo": false
-            y el usuario quiera volver a trabajar con ese cliente. Al reactivar,
-            si el cliente no tiene vendedor queda a nombre de quien lo reactiva;
-            si ya es de otro vendedor sigue siendo de él (dilo, no lo reasignes).
+            (opcional). Solo un administrador o el director comercial puede
+            hacerlo: si el usuario es comercial el API responde que no tiene
+            permiso, y ahí le dices que dirección tiene que reactivar y asignar
+            el cliente. Reactivar NUNCA cambia a quién está asignado.
 
     Returns:
         Datos del cliente actualizado en formato JSON

@@ -38,6 +38,9 @@ interface CustomerFormProps {
   companies: { id: string; name: string }[];
   priceLists?: PriceListRef[];
   customer?: Customer;
+  // Sin default a proposito: que una pantalla nueva se olvide de pasarlo tiene
+  // que romper la compilacion, no mostrarle el selector a un comercial.
+  canAssign: boolean;
 }
 
 function periodPlaceholder(periodType: string): string {
@@ -55,6 +58,7 @@ export function CustomerForm({
   companies,
   priceLists = [],
   customer,
+  canAssign,
 }: CustomerFormProps) {
   const router = useRouter();
   const isEditing = Boolean(customer);
@@ -115,9 +119,15 @@ export function CustomerForm({
       // null, no undefined: "Sin asignar" tiene que poder quitarle el vendedor
       // a un cliente. Con undefined el backend no tocaba el campo y la opción
       // no hacía nada. Al crear no aplica, ahí sí es "no vino el dato".
-      assignedToUserId: isEditing
-        ? (optionalString("assignedToUserId") ?? null)
-        : optionalString("assignedToUserId") || undefined,
+      //
+      // Si no puede asignar, la clave no viaja: el backend rechaza cualquier
+      // `assignedToUserId` de un comercial, incluido el `null` que saldría de
+      // este campo al no estar renderizado, y toda edición daría 403.
+      ...(canAssign && {
+        assignedToUserId: isEditing
+          ? (optionalString("assignedToUserId") ?? null)
+          : optionalString("assignedToUserId") || undefined,
+      }),
       customerType: optionalString("customerType") || undefined,
       creditLimit: formData.get("creditLimit")
         ? Number(formData.get("creditLimit"))
@@ -330,13 +340,15 @@ export function CustomerForm({
         <Textarea name="notes" rows={3} defaultValue={customer?.notes ?? ""} />
       </div>
 
-      <div className="grid gap-1">
-        <Label>Asignado a</Label>
-        <UserSelect
-          name="assignedToUserId"
-          value={customer?.assignedToUserId ?? ""}
-        />
-      </div>
+      {canAssign && (
+        <div className="grid gap-1">
+          <Label>Asignado a</Label>
+          <UserSelect
+            name="assignedToUserId"
+            value={customer?.assignedToUserId ?? ""}
+          />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-1">
