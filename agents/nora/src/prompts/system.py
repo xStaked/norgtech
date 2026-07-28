@@ -12,9 +12,14 @@ def current_date_note() -> str:
     contra la fecha de su entrenamiento.
     """
     now = datetime.now(timezone.utc).astimezone(BOGOTA_TZ)
+    # Sin la hora a proposito: esto va en el PREFIJO del prompt, asi que un
+    # %H:%M cambiando cada minuto invalida el prompt caching de OpenAI para los
+    # ~20k tokens que siguen (system + schemas de las tools). Con marca de dia
+    # el prefijo es identico toda la jornada. La hora no hace falta: quien
+    # resuelve fechas y horas relativas es visit_parsing, en Python.
     return (
         "\n\n## Fecha actual\n"
-        f"Hoy es {_DIAS[now.weekday()]} {now:%Y-%m-%d}, {now:%H:%M} en Colombia. "
+        f"Hoy es {_DIAS[now.weekday()]} {now:%Y-%m-%d} en Colombia. "
         "Resuelve 'hoy', 'ayer', 'esta semana', 'este mes' y 'este trimestre' "
         "contra esta fecha."
     )

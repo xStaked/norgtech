@@ -21,6 +21,12 @@ class Settings:
     # Un turno de pedido encadena varias llamadas y satura el TPM de la cuenta:
     # el 429 se resuelve esperando ~1s, no cayendo al fallback.
     llm_max_retries: int = int(os.getenv("NORA_LLM_MAX_RETRIES", "6"))
+    # El SDK de OpenAI espera 600s por defecto: con los reintentos de arriba una
+    # llamada colgada bloquea el turno por horas. Una llamada sana tarda <15s.
+    llm_request_timeout: float = float(os.getenv("NORA_LLM_REQUEST_TIMEOUT", "60"))
+    # Tope de la respuesta: Nora contesta por chat/WhatsApp (parrafos cortos) o
+    # con un tool call; sin tope un loop de generacion puede correr minutos.
+    llm_max_tokens: int = int(os.getenv("NORA_LLM_MAX_TOKENS", "2000"))
     nestjs_api_url: str = os.getenv("NESTJS_API_URL", "http://localhost:3001")
     # Para armar enlaces al portal (reportes). Mismo nombre de variable que usa
     # el API en auth.service: por WhatsApp un "/reports/x" relativo no sirve.

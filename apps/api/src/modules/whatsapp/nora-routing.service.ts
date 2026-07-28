@@ -1345,6 +1345,11 @@ export class NoraRoutingService {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+      // Sin timeout un turno colgado deja al usuario sin respuesta por minutos.
+      // 90s es holgado frente a un turno lento real (~40s): corta solo lo que ya
+      // esta colgado, y el catch de arriba cae al planner como con cualquier
+      // otro error.
+      signal: AbortSignal.timeout(90_000),
     });
     if (!response.ok) {
       const body = await response.text().catch(() => "");

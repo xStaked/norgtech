@@ -1,6 +1,29 @@
+import asyncio
+import weakref
 import httpx
 from ..config import settings
 from typing import Optional
+
+# Un AsyncClient compartido para reusar el pool de conexiones: crear uno por
+# request costaba ~14ms de handshake TCP/TLS. Lo que se comparte es SOLO el
+# transporte; el Authorization del usuario nunca se guarda en el cliente, va
+# como header de cada request (ver NestJSClient._request), asi que el token de
+# un usuario no puede filtrarse al request de otro.
+# Se guarda uno por event loop porque el pool queda atado al loop que lo creo
+# (los tests corren cada caso con asyncio.run, o sea un loop nuevo); el
+# WeakKeyDictionary lo suelta cuando el loop se recolecta.
+_clients: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, httpx.AsyncClient]" = (
+    weakref.WeakKeyDictionary()
+)
+
+
+def _shared_client() -> httpx.AsyncClient:
+    loop = asyncio.get_running_loop()
+    client = _clients.get(loop)
+    if client is None or client.is_closed:
+        client = httpx.AsyncClient(timeout=30)
+        _clients[loop] = client
+    return client
 
 
 class NestJSAPIError(Exception):
@@ -24,34 +47,34 @@ class NestJSClient:
 
     async def _request(self, method: str, path: str, **kwargs) -> dict:
         """Realiza una petición HTTP con manejo de errores detallado."""
-        async with httpx.AsyncClient(timeout=30) as client:
-            r = await client.request(
-                method, f"{self.base_url}{path}", headers=self.headers, **kwargs
-            )
-            if r.is_error:
-                # Intentar extraer el mensaje de validación de NestJS
-                try:
-                    body = r.json()
-                except Exception:
-                    body = r.text
-                # NestJS validation pipe devuelve { message: [...], error: "Bad Request", statusCode: 400 }
-                if isinstance(body, dict):
-                    if "message" in body:
-                        if isinstance(body["message"], list):
-                            detail = "; ".join(str(m) for m in body["message"])
-                        else:
-                            detail = str(body["message"])
+        client = _shared_client()
+        r = await client.request(
+            method, f"{self.base_url}{path}", headers=self.headers, **kwargs
+        )
+        if r.is_error:
+            # Intentar extraer el mensaje de validación de NestJS
+            try:
+                body = r.json()
+            except Exception:
+                body = r.text
+            # NestJS validation pipe devuelve { message: [...], error: "Bad Request", statusCode: 400 }
+            if isinstance(body, dict):
+                if "message" in body:
+                    if isinstance(body["message"], list):
+                        detail = "; ".join(str(m) for m in body["message"])
                     else:
-                        detail = str(body)
+                        detail = str(body["message"])
                 else:
                     detail = str(body)
-                # ponytail: fallback so error is never blank — helps diagnose stale build 404s
-                if not detail or not detail.strip():
-                    detail = (r.text[:200] if r.text and r.text.strip() else "(empty body)")
-                target_url = f"{self.base_url}{path}"
-                detail = f"{detail} ({method} {target_url})"
-                raise NestJSAPIError(r.status_code, detail)
-            return r.json()
+            else:
+                detail = str(body)
+            # ponytail: fallback so error is never blank — helps diagnose stale build 404s
+            if not detail or not detail.strip():
+                detail = (r.text[:200] if r.text and r.text.strip() else "(empty body)")
+            target_url = f"{self.base_url}{path}"
+            detail = f"{detail} ({method} {target_url})"
+            raise NestJSAPIError(r.status_code, detail)
+        return r.json()
 
     async def get(self, path: str, params: Optional[dict] = None) -> dict:
         return await self._request("GET", path, params=params)
