@@ -6,7 +6,10 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
 // varias peticiones concurrentes reciban un 401 al mismo tiempo (single-flight).
 let refreshInFlight: Promise<string | null> | null = null;
 
-async function refreshAccessToken(): Promise<string | null> {
+// Exportada para /session/refresh: la pantalla puente que usa el render de
+// servidor renueva con este mismo mecanismo (mismo endpoint, mismo cookie, mismo
+// single-flight), no con una copia.
+export async function refreshAccessToken(): Promise<string | null> {
   if (!refreshInFlight) {
     refreshInFlight = fetch(new URL("/auth/refresh", API_URL).toString(), {
       method: "POST",

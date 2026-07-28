@@ -1,5 +1,9 @@
 export const SESSION_COOKIE_NAME = "session_token";
 
+// Pantalla puente que renueva la sesion desde el navegador. Vive fuera de
+// `(app)`, asi que no monta el AppShell y no vuelve a llamar a la API.
+export const SESSION_REFRESH_PATH = "/session/refresh";
+
 export type UserRole =
   | "administrador"
   | "director_comercial"
@@ -53,6 +57,36 @@ export function decodeJwtPayload(token: string): Record<string, unknown> | null 
   }
 }
 
+/**
+ * El access token dura 15m (`expiresIn` en apps/api auth.service.ts). Decodificar
+ * el rol no alcanza: un token vencido decodifica igual y la request sigue viva,
+ * pero la API responde 401 y la pantalla renderiza vacia. Todo lo que decida si
+ * la sesion sirve tiene que mirar `exp`.
+ *
+ * El margen evita el caso borde de un token que pasa el chequeo y vence entre
+ * el middleware y la llamada a la API.
+ */
+export function isTokenExpired(token: string | null, skewSeconds = 30): boolean {
+  if (!token) return true;
+  const exp = decodeJwtPayload(token)?.exp;
+  // Sin `exp` legible no hay forma de confiar en el token: se trata como vencido.
+  if (typeof exp !== "number") return true;
+  return exp * 1000 <= Date.now() + skewSeconds * 1000;
+}
+
+/**
+ * Solo rutas internas: `//evil.com` y `https://…` en `?next=` serian un
+ * redirect abierto desde una pantalla de sesion.
+ */
+export function sanitizeNextPath(next: string | null | undefined): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/dashboard";
+  return next;
+}
+
+export function buildSessionRefreshUrl(next: string): string {
+  return `${SESSION_REFRESH_PATH}?next=${encodeURIComponent(sanitizeNextPath(next))}`;
+}
+
 export function getUserRoleFromToken(token: string | null): UserRole | null {
   if (!token) return null;
   const payload = decodeJwtPayload(token);
@@ -84,10 +118,11 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/products": ["administrador", "director_comercial", "comercial"],
     "/segments": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
-    // Cifras consolidadas de toda la operacion: solo direccion. Espeja el
+    // Direccion ve la operacion completa; un comercial entra a las mismas
+    // pantallas pero el back le fuerza `sellerUserId` a su propio id. Espeja el
     // @Roles de AnalyticsController — si aqui se abre y alla no, el usuario
     // entra a una pantalla que solo sabe devolver 403.
-    "/analytics": ["administrador", "director_comercial"],
+    "/analytics": ["administrador", "director_comercial", "comercial"],
     "/users": ["administrador"],
     "/companies": ["administrador", "director_comercial"],
     "/zones": ["administrador", "director_comercial"],

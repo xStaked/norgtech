@@ -54,7 +54,15 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     }
 
     return null;
-  } catch {
+  } catch (error) {
+    // El `redirect()` de Next viaja como excepcion. Si se traga aca, la sesion
+    // vencida vuelve a terminar en la pantalla mocha en vez de ir a renovar.
+    if (isRedirectError(error)) throw error;
     return null;
   }
+}
+
+function isRedirectError(error: unknown): boolean {
+  const digest = (error as { digest?: unknown } | null)?.digest;
+  return typeof digest === "string" && digest.startsWith("NEXT_REDIRECT");
 }

@@ -19,6 +19,12 @@ export const protectedPaths = [
   "/zones",
   "/invoices",
   "/analytics",
+  "/reports",
+  // Tambien renderizan en servidor: sin sesion valida daban 200 con la pantalla
+  // vacia en vez de mandar al login.
+  "/users",
+  "/whatsapp",
+  "/returns",
 ];
 
 interface RoleRestrictedRoute {
@@ -37,6 +43,7 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   { prefix: "/companies", isAllowed: (role) => canAccess(role, "/companies") },
   { prefix: "/zones", isAllowed: (role) => canAccess(role, "/zones") },
   { prefix: "/analytics", isAllowed: (role) => canAccess(role, "/analytics") },
+  { prefix: "/reports", isAllowed: (role) => canAccess(role, "/reports") },
 ];
 
 export function matchesPrefix(pathname: string, prefix: string) {
