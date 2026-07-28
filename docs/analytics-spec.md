@@ -112,23 +112,31 @@ los números no van a cuadrar entre pantallas:
 
 ### 2.4 Permisos por rol
 
-**Solo `administrador` y `director_comercial` entran al módulo.** Ningún otro rol,
-en ninguna de las 4 pantallas: son cifras consolidadas de toda la operación.
+**`administrador` y `director_comercial` ven la operación completa. Un
+`comercial` entra a las mismas 4 pantallas, pero acotadas a su propia gestión**
+(pidió el cliente poder armar su informe semanal). Ningún otro rol entra.
 
 | Rol | Ventas | Cartera | Embudo | Desempeño |
 |---|---|---|---|---|
 | `administrador` | sí | sí | sí | sí |
 | `director_comercial` | sí | sí | sí | sí |
-| `comercial`, `facturacion`, `logistica`, `tecnico` | no | no | no | no |
+| `comercial` | solo lo suyo | solo lo suyo | solo lo suyo | solo su fila |
+| `facturacion`, `logistica`, `tecnico` | no | no | no | no |
 
 Se aplica en tres sitios y los tres tienen que coincidir: el `@Roles` de
 `AnalyticsController`, el `moduleAccess["/analytics"]` de `src/lib/auth.ts` y el
-guard de ruta (`roleRestrictedRoutes`). En el menú lateral, `/analytics` solo
-aparece para esos dos roles.
+guard de ruta (`roleRestrictedRoutes`). En el menú lateral, `/analytics` aparece
+para esos tres roles.
 
-El back conserva la regla de acotado "solo lo suyo" (`sellerUserId` forzado al
-usuario si el rol es `comercial`) por si algún día se abre el acceso, pero hoy
-ese camino no se alcanza.
+El acotado del comercial es **una sola regla**: `resolveFilters` le fuerza
+`sellerUserId` a su propio id, ignorando lo que mande el query. De ahí sale el
+`orderWhere` / `returnWhere` de ventas y desempeño, el `where` de facturas de
+cartera (`invoice.order.sellerUserId`, o `customer.assignedToUserId` si la
+factura no tiene pedido) y el `assignedToUserId` de oportunidades y
+cotizaciones del embudo. En Desempeño eso deja **una sola fila** — la suya —, no
+el ranking del equipo. En la barra de filtros el selector de "Vendedor" se
+muestra deshabilitado: el back lo ignora de todos modos y ofrecerlo editable
+sería engañoso.
 
 ### 2.5 Exportar a CSV
 

@@ -53,6 +53,6 @@ export class AnalyticsFiltersQueryDto {
   granularity?: "day" | "week" | "month";
 
   @IsOptional()
-  @IsEnum(["json", "csv"])
-  format?: "json" | "csv";
+  @IsEnum(["json", "csv", "pdf"])
+  format?: "json" | "csv" | "pdf";
 }

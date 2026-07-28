@@ -1,4 +1,12 @@
-import { Controller, Get, Query, Res, UseGuards, ValidationPipe } from "@nestjs/common";
+import {
+  Controller,
+  Get,
+  Query,
+  Res,
+  StreamableFile,
+  UseGuards,
+  ValidationPipe,
+} from "@nestjs/common";
 import type { Response } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -11,6 +19,7 @@ import { FunnelService } from "./funnel.service";
 import { ReceivablesService } from "./receivables.service";
 import { SalesService } from "./sales.service";
 import { SellerPerformanceService } from "./seller-performance.service";
+import { SellerReportService } from "./seller-report.service";
 
 type Row = Record<string, unknown>;
 
@@ -64,19 +73,21 @@ const CSV_COLUMNS: Record<string, CsvColumn<Row>[]> = {
 /**
  * Analitica: 4 pantallas, un solo juego de filtros (docs/analytics-spec.md).
  *
- * ACCESO: solo `administrador` y `director_comercial`. Ningun otro rol entra al
- * modulo, ni siquiera a su propia pantalla — decision de producto, no un
- * descuido: son cifras consolidadas de toda la operacion.
+ * ACCESO: `administrador` y `director_comercial` ven la operacion completa; un
+ * `comercial` entra a las mismas 4 pantallas pero solo con lo suyo, porque
+ * `resolveFilters` le fuerza `sellerUserId` a su propio id (§2.4). Los demas
+ * roles no entran.
  */
 @Controller("analytics")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles("administrador", "director_comercial")
+@Roles("administrador", "director_comercial", "comercial")
 export class AnalyticsController {
   constructor(
     private readonly salesService: SalesService,
     private readonly receivablesService: ReceivablesService,
     private readonly funnelService: FunnelService,
     private readonly sellerPerformanceService: SellerPerformanceService,
+    private readonly sellerReportService: SellerReportService,
   ) {}
 
   @Get("sales")
@@ -125,6 +136,16 @@ export class AnalyticsController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const filters = resolveFilters(query, user);
+
+    // `format=pdf` sale por los MISMOS filtros ya resueltos: un comercial baja
+    // su informe y nada mas, sin un camino paralelo que se saltee el forzado.
+    if (filters.pdf) {
+      return new StreamableFile(await this.sellerReportService.generate(user, filters), {
+        type: "application/pdf",
+        disposition: `attachment; filename="informe-desempeno-${filters.fromDate}-${filters.toDate}.pdf"`,
+      });
+    }
+
     return this.render(
       "seller-performance",
       await this.sellerPerformanceService.getSellerPerformance(filters),

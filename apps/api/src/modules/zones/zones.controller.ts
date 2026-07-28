@@ -22,7 +22,10 @@ export class ZonesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  // El comercial entra por la barra de filtros de analitica: sin esto el select
+  // de zona le llega vacio (403). Es solo el listado de nombres, no expone
+  // cifras de nadie; crear y editar zonas sigue siendo de direccion.
+  @Roles("administrador", "director_comercial", "comercial")
   @Get()
   findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
     return this.zonesService.findAll(query.includeInactive);

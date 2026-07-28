@@ -23,6 +23,7 @@ import {
   percent,
   toneDescending,
 } from "@/lib/analytics";
+import { getCurrentUser } from "@/lib/auth.server";
 
 interface ReceivablesResponse extends AnalyticsEnvelope {
   asOf: string;
@@ -106,10 +107,14 @@ export default async function AnalyticsReceivablesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [data, options] = await Promise.all([
+  const [data, options, user] = await Promise.all([
     fetchAnalytics<ReceivablesResponse>("receivables", params),
     fetchFilterOptions(),
+    getCurrentUser(),
   ]);
+  // Un comercial tiene el vendedor forzado por el back (§2.4): el selector
+  // se bloquea para que la barra no ofrezca un cambio que se ignora.
+  const lockedSeller = user?.role === "comercial";
 
   const description =
     "Cuánta plata está en la calle, hace cuánto, de quién es y quién paga tarde.";
@@ -145,6 +150,7 @@ export default async function AnalyticsReceivablesPage({
         options={options}
         currency={data.currency}
         applied={data.filters}
+        lockedSeller={lockedSeller}
         mode="asOf"
         range={data.range}
         asOf={data.asOf}

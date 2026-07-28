@@ -77,8 +77,9 @@ export const primaryNavItems = [
     shortLabel: "AN",
     description: "Ventas, cartera, embudo y desempeño comercial",
     group: "Analisis",
-    // Cifras consolidadas de toda la operacion: solo direccion.
-    requiredRoles: ["administrador", "director_comercial"] as const,
+    // Direccion ve la operacion completa; un comercial ve las mismas pantallas
+    // acotadas a su propia gestion (el back le fuerza el vendedor).
+    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
     children: [
       { href: "/analytics/ventas", label: "Ventas" },
       { href: "/analytics/cartera", label: "Cartera" },

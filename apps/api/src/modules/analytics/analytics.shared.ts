@@ -31,6 +31,7 @@ export interface ResolvedFilters {
   segmentId: string | null;
   granularity: Granularity;
   csv: boolean;
+  pdf: boolean;
 }
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
@@ -91,13 +92,14 @@ export function resolveFilters(
     toDate,
     currency: query.currency ?? "COP",
     companyId: query.companyId ?? null,
-    // Un comercial solo se ve a si mismo, mande lo que mande. Hoy el modulo no
-    // lo deja entrar (§2.4), pero la regla queda por si se abre el acceso.
+    // Un comercial solo se ve a si mismo, mande lo que mande: este forzado es
+    // lo UNICO que acota sus 4 pantallas (§2.4).
     sellerUserId: user.role === "comercial" ? user.id : query.sellerUserId ?? null,
     zoneId: query.zoneId ?? null,
     segmentId: query.segmentId ?? null,
     granularity: query.granularity ?? "month",
     csv: query.format === "csv",
+    pdf: query.format === "pdf",
   };
 }
 

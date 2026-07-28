@@ -25,6 +25,7 @@ import {
   signedPercent,
   toneDescending,
 } from "@/lib/analytics";
+import { getCurrentUser } from "@/lib/auth.server";
 
 interface SalesResponse extends AnalyticsEnvelope {
   totals: {
@@ -115,10 +116,14 @@ export default async function AnalyticsSalesPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [data, options] = await Promise.all([
+  const [data, options, user] = await Promise.all([
     fetchAnalytics<SalesResponse>("sales", params),
     fetchFilterOptions(),
+    getCurrentUser(),
   ]);
+  // Un comercial tiene el vendedor forzado por el back (§2.4): el selector
+  // se bloquea para que la barra no ofrezca un cambio que se ignora.
+  const lockedSeller = user?.role === "comercial";
 
   if (!data) {
     return (
@@ -160,6 +165,7 @@ export default async function AnalyticsSalesPage({
         options={options}
         currency={data.currency}
         applied={data.filters}
+        lockedSeller={lockedSeller}
         mode="range"
         range={data.range}
         note={`Cifras en ${data.currency} · nunca se suman monedas distintas`}

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { TriangleAlert } from "lucide-react";
+import { FileText, TriangleAlert } from "lucide-react";
 import { AnalyticsFilters } from "@/components/analytics/analytics-filters";
 import { AnalyticsHeader } from "@/components/analytics/analytics-header";
 import {
@@ -16,6 +16,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import {
   type AnalyticsEnvelope,
   type SearchParams,
+  analyticsQuery,
   count,
   fetchAnalytics,
   fetchFilterOptions,
@@ -25,6 +26,7 @@ import {
   toneAscending,
   toneDescending,
 } from "@/lib/analytics";
+import { getCurrentUser } from "@/lib/auth.server";
 
 interface SellerPerformanceResponse extends AnalyticsEnvelope {
   totals: {
@@ -85,10 +87,15 @@ export default async function AnalyticsSellerPerformancePage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [data, options] = await Promise.all([
+  const [data, options, user] = await Promise.all([
     fetchAnalytics<SellerPerformanceResponse>("seller-performance", params),
     fetchFilterOptions(),
+    getCurrentUser(),
   ]);
+  // Un comercial tiene el vendedor forzado por el back (§2.4): el selector
+  // se bloquea para que la barra no ofrezca un cambio que se ignora.
+  const lockedSeller = user?.role === "comercial";
+  const pdfQuery = analyticsQuery(params);
 
   const description =
     "Qué cuesta cada vendedor, qué trae, y si está haciendo el trabajo de campo.";
@@ -119,13 +126,23 @@ export default async function AnalyticsSellerPerformancePage({
         screen="comercial"
         params={params}
         extraActions={
-          // Las metas ya viven en el dashboard: se enlaza, no se duplica.
-          <Link
-            href="/dashboard"
-            className="flex h-9 items-center rounded-lg border border-input bg-card px-3.5 text-[13px] font-bold text-primary transition-colors hover:bg-muted"
-          >
-            Ver metas en Dashboard →
-          </Link>
+          <>
+            {/* El informe arrastra los mismos filtros de la pantalla. */}
+            <a
+              href={`/analytics/pdf${pdfQuery ? `?${pdfQuery}` : ""}`}
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-[13px] font-bold text-primary-foreground transition-opacity hover:opacity-90"
+            >
+              <FileText className="h-[15px] w-[15px]" aria-hidden="true" />
+              Informe PDF
+            </a>
+            {/* Las metas ya viven en el dashboard: se enlaza, no se duplica. */}
+            <Link
+              href="/dashboard"
+              className="flex h-9 items-center rounded-lg border border-input bg-card px-3.5 text-[13px] font-bold text-primary transition-colors hover:bg-muted"
+            >
+              Ver metas en Dashboard →
+            </Link>
+          </>
         }
       />
 
@@ -133,6 +150,7 @@ export default async function AnalyticsSellerPerformancePage({
         options={options}
         currency={data.currency}
         applied={data.filters}
+        lockedSeller={lockedSeller}
         mode="range"
         range={data.range}
         note={`Costo comercial en ${data.currency} · no incluye costo de producto`}

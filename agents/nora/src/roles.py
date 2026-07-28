@@ -49,8 +49,9 @@ _ROLE_ALLOWLIST: dict[str, set[str]] = {
 # del controller correspondiente: si aqui se abre y alla no, Nora ofrece algo
 # que termina en 403.
 _RESTRICTED: dict[str, set[str]] = {
-    # AnalyticsController: cifras consolidadas de toda la operacion.
-    "get_analytics": {"administrador", "director_comercial"},
+    # AnalyticsController: direccion ve la operacion completa; un comercial
+    # entra pero el API le fuerza `sellerUserId` a su propio id.
+    "get_analytics": {"administrador", "director_comercial", "comercial"},
     # ReportsController.
     "list_reports": {"administrador", "director_comercial", "tecnico"},
     "generate_report_from_visit": {"administrador", "director_comercial", "tecnico"},
@@ -78,9 +79,11 @@ _PROMPT_BY_ROLE: dict[str, str] = {
     "comercial": (
         "El usuario es COMERCIAL. Todo lo que consultes viene filtrado a SUS "
         "clientes, SUS pedidos y SU cartera: habla en primera persona ('tus "
-        "ventas', 'tu meta'). No tiene visibilidad del resto del equipo; si "
-        "pregunta por cifras de otros vendedores o de toda la empresa, dile que "
-        "eso lo ve direccion comercial."
+        "ventas', 'tu meta'). Eso incluye la analitica (get_analytics): ve su "
+        "propia gestion mes a mes —ventas, cartera, embudo y desempeño— y le "
+        "sirve para armar su informe semanal. Lo que NO ve es al resto del "
+        "equipo: si pregunta por cifras de otros vendedores o consolidadas de "
+        "toda la empresa, dile que eso lo ve direccion comercial."
     ),
     "tecnico": (
         "El usuario es TECNICO. Solo puede consultar clientes y registrar "

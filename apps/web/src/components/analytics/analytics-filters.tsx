@@ -28,6 +28,8 @@ interface AnalyticsFiltersProps {
   range: { from: string; to: string; granularity: string };
   asOf?: string;
   note: string;
+  /** Rol comercial: el back le fuerza el vendedor, el selector no puede mentir. */
+  lockedSeller?: boolean;
 }
 
 const GRANULARITIES = [
@@ -44,6 +46,7 @@ export function AnalyticsFilters({
   range,
   asOf,
   note,
+  lockedSeller = false,
 }: AnalyticsFiltersProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -64,6 +67,7 @@ export function AnalyticsFilters({
     allLabel: string,
     items: FilterOption[],
     value: string | null,
+    locked = false,
   ) => (
     <Select
       key={key}
@@ -72,7 +76,7 @@ export function AnalyticsFilters({
       searchPlaceholder={allLabel}
       value={value ?? ""}
       onValueChange={(next) => setParams({ [key]: next })}
-      disabled={items.length === 0}
+      disabled={locked || items.length === 0}
       options={[{ value: "", label: allLabel }, ...items]}
     />
   );
@@ -157,7 +161,7 @@ export function AnalyticsFilters({
       </div>
 
       {select("companyId", "Empresa: todas", options.companies, applied.companyId)}
-      {select("sellerUserId", "Vendedor: todos", options.sellers, applied.sellerUserId)}
+      {select("sellerUserId", "Vendedor: todos", options.sellers, applied.sellerUserId, lockedSeller)}
       {select("zoneId", "Zona: todas", options.zones, applied.zoneId)}
       {select("segmentId", "Segmento: todos", options.segments, applied.segmentId)}
 

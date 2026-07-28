@@ -21,6 +21,7 @@ import {
   percent,
   toneAscending,
 } from "@/lib/analytics";
+import { getCurrentUser } from "@/lib/auth.server";
 
 interface FunnelResponse extends AnalyticsEnvelope {
   totals: {
@@ -85,10 +86,14 @@ export default async function AnalyticsFunnelPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [data, options] = await Promise.all([
+  const [data, options, user] = await Promise.all([
     fetchAnalytics<FunnelResponse>("funnel", params),
     fetchFilterOptions(),
+    getCurrentUser(),
   ]);
+  // Un comercial tiene el vendedor forzado por el back (§2.4): el selector
+  // se bloquea para que la barra no ofrezca un cambio que se ignora.
+  const lockedSeller = user?.role === "comercial";
 
   const description = "Cuánto hay en juego, dónde se traba y por qué se pierde.";
 
@@ -118,6 +123,7 @@ export default async function AnalyticsFunnelPage({
         options={options}
         currency={data.currency}
         applied={data.filters}
+        lockedSeller={lockedSeller}
         mode="range"
         range={data.range}
         note={`Valores estimados en ${data.currency}`}

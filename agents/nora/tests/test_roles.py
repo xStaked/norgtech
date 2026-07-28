@@ -31,13 +31,15 @@ def test_direccion_conserva_todas_las_tools():
         assert len(tools_for_role(role, ALL_TOOLS)) == len(ALL_TOOLS)
 
 
-def test_comercial_tiene_todo_menos_analitica_consolidada_y_reportes():
+def test_comercial_tiene_todo_menos_metas_del_equipo_y_reportes():
     names = {t.name for t in tools_for_role("comercial", ALL_TOOLS)}
     # Su propia operacion, si: pedidos, gastos, cartera y ventas (ya filtradas
     # a el por el API).
     assert {"create_order", "create_expense", "get_cartera", "get_sales_summary"} <= names
-    # Cifras de toda la empresa y reportes ejecutivos, no: el API responde 403.
-    assert "get_analytics" not in names
+    # La analitica tambien: el API le fuerza `sellerUserId` a su propio id, asi
+    # que ve su gestion y no la del equipo (docs/analytics-spec.md §2.4).
+    assert "get_analytics" in names
+    # Reportes ejecutivos, no: el API responde 403.
     assert "list_reports" not in names
     assert "generate_report_from_visit" not in names
     # Metas del equipo completo: DashboardController las da solo a direccion.
