@@ -82,8 +82,13 @@ export class CreateCustomerDto {
   @IsString()
   notes?: string;
 
+  /**
+   * Opcional: el negocio no segmenta al dar de alta (solo maneja listas de
+   * precios). Si no viene, el backend resuelve el segmento por defecto.
+   */
+  @IsOptional()
   @IsString()
-  segmentId!: string;
+  segmentId?: string;
 
   @IsString()
   @IsNotEmpty()

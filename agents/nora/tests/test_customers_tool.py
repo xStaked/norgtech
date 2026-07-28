@@ -9,62 +9,42 @@ from src.tools.customers import (
 )
 from src.tools.nestjs_client import NestJSAPIError
 
-SEGMENTS = [
-    {"id": "seg-oro", "name": "Oro"},
-    {"id": "seg-bronce", "name": "Bronce"},
-]
-
 COMPANIES = [
     {"id": "co-nano", "name": "Nanonutrición"},
     {"id": "co-norg", "name": "Norgtech"},
 ]
 
 
-def _run_create(segment_id=None, segments=SEGMENTS, company="Norgtech", companies=COMPANIES):
+def _run_create(display_name="ACME", company="Norgtech", companies=COMPANIES):
     fake_client = AsyncMock()
-    fake_client.get = AsyncMock(
-        side_effect=lambda path, **kw: companies if path == "/companies" else segments
-    )
+    fake_client.get = AsyncMock(side_effect=lambda path, **kw: companies)
     fake_client.post = AsyncMock(return_value={"id": "cust_1", "legalName": "ACME"})
 
     with patch("src.tools.customers.NestJSClient", return_value=fake_client):
         args = {
             "legal_name": "ACME SAS",
-            "display_name": "ACME",
             "auth_token": "Bearer scoped",
         }
-        if segment_id is not None:
-            args["segment_id"] = segment_id
+        if display_name is not None:
+            args["display_name"] = display_name
         if company is not None:
             args["company"] = company
         result = asyncio.run(create_customer.ainvoke(args))
     return fake_client, result
 
 
-def test_create_customer_defaults_to_bronce_when_no_segment_given():
+# El negocio no segmenta al dar de alta: el segmento lo resuelve el backend.
+def test_create_customer_does_not_send_segment():
     client, result = _run_create()
     _, payload = client.post.await_args.args
-    assert payload["segmentId"] == "seg-bronce"
+    assert "segmentId" not in payload
     assert "cust_1" in result
 
 
-def test_create_customer_ignores_hallucinated_segment_id():
-    # The LLM passes an id that does not exist -> we must not forward it.
-    client, _ = _run_create(segment_id="made-up-id")
+def test_create_customer_falls_back_to_legal_name_as_display_name():
+    client, _ = _run_create(display_name=None)
     _, payload = client.post.await_args.args
-    assert payload["segmentId"] == "seg-bronce"
-
-
-def test_create_customer_keeps_valid_segment_id():
-    client, _ = _run_create(segment_id="seg-oro")
-    _, payload = client.post.await_args.args
-    assert payload["segmentId"] == "seg-oro"
-
-
-def test_create_customer_errors_clearly_when_no_segments_exist():
-    client, result = _run_create(segments=[])
-    client.post.assert_not_awaited()
-    assert "segmento" in result.lower()
+    assert payload["displayName"] == "ACME SAS"
 
 
 def test_create_customer_sends_company_id_resolved_from_name():

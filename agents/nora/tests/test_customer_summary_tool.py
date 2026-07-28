@@ -84,6 +84,26 @@ def test_summary_only_reads_never_writes():
     client.delete.assert_not_awaited()
 
 
+def test_summary_survives_one_failing_endpoint():
+    """Las 5 lecturas van en paralelo (asyncio.gather): que una falle no puede
+    cancelar las otras ni tumbar el resumen."""
+    client = _make_client()
+    ok_get = client.get.side_effect
+
+    async def _get(path, params=None):
+        if path == "/visits":
+            raise NestJSAPIError(500, "visits caida")
+        return await ok_get(path, params=params)
+
+    client.get = AsyncMock(side_effect=_get)
+    result = _run(client)
+    assert "No pude leer las visitas" in result
+    # El resto del resumen sigue completo.
+    assert "Ferretería El Martillo" in result
+    assert "1.500.000" in result
+    assert "Suministro anual" in result
+
+
 def test_summary_handles_customer_not_found():
     fake_client = AsyncMock()
     fake_client.get = AsyncMock(side_effect=NestJSAPIError(404, "Customer not found"))

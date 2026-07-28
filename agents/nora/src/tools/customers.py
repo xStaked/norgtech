@@ -1,3 +1,4 @@
+import asyncio
 import json
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
@@ -57,6 +58,14 @@ async def search_customers(
         return f"Error inesperado al buscar clientes: {str(e)}"
 
 
+def _unwrap(result):
+    """Devuelve el valor de un asyncio.gather(return_exceptions=True), o relanza
+    su excepción para que la maneje el try/except del bloque que la pidió."""
+    if isinstance(result, BaseException):
+        raise result
+    return result
+
+
 @tool
 async def get_customer_summary(
     customer_id: str,
@@ -80,8 +89,21 @@ async def get_customer_summary(
     try:
         nestjs_client = NestJSClient(auth_token)
 
-        # Datos básicos del cliente.
-        customer = await nestjs_client.get(f"/customers/{customer_id}")
+        # Las 5 lecturas son independientes: en serie el resumen tardaba la suma
+        # de las 5. return_exceptions=True para que el fallo de una NO cancele
+        # las otras; cada bloque de abajo sigue reportando su propio error.
+        customer, cartera_res, overdue_res, visits_res, opps_res = await asyncio.gather(
+            nestjs_client.get(f"/customers/{customer_id}"),
+            nestjs_client.get("/invoices/summary", params={"customerId": customer_id}),
+            nestjs_client.get("/invoices/overdue"),
+            nestjs_client.get("/visits", params={"customerId": customer_id}),
+            nestjs_client.get("/opportunities", params={"customerId": customer_id}),
+            return_exceptions=True,
+        )
+
+        # Datos básicos del cliente: si esto falla no hay resumen que armar y el
+        # error sale por el except de abajo, igual que cuando era secuencial.
+        customer = _unwrap(customer)
         nombre = customer.get("displayName") or customer.get("legalName") or "Cliente"
         partes: list[str] = [f"Resumen de {nombre}:"]
         basics: list[str] = []
@@ -101,15 +123,13 @@ async def get_customer_summary(
 
         # Cartera enfocada en el cliente (/invoices/summary + /invoices/overdue).
         try:
-            cartera = await nestjs_client.get(
-                "/invoices/summary", params={"customerId": customer_id}
-            )
+            cartera = _unwrap(cartera_res)
             saldo = cartera.get("totalBalance")
             if saldo is not None:
                 partes.append(f"Cartera: saldo pendiente ${saldo:,.0f}.".replace(",", "."))
             else:
                 partes.append("Cartera: sin saldo pendiente.")
-            overdue = await nestjs_client.get("/invoices/overdue")
+            overdue = _unwrap(overdue_res)
             overdue_list = overdue if isinstance(overdue, list) else overdue.get("data", [])
             vencidas = [
                 i for i in overdue_list
@@ -122,9 +142,7 @@ async def get_customer_summary(
 
         # Últimas visitas (/visits?customerId).
         try:
-            visits_res = await nestjs_client.get(
-                "/visits", params={"customerId": customer_id}
-            )
+            visits_res = _unwrap(visits_res)
             visits = visits_res if isinstance(visits_res, list) else visits_res.get("data", [])
             if visits:
                 ultima = visits[0]
@@ -140,9 +158,7 @@ async def get_customer_summary(
 
         # Oportunidades abiertas (/opportunities?customerId).
         try:
-            opps_res = await nestjs_client.get(
-                "/opportunities", params={"customerId": customer_id}
-            )
+            opps_res = _unwrap(opps_res)
             opps = opps_res if isinstance(opps_res, list) else opps_res.get("data", [])
             if opps:
                 detalle = "; ".join(
@@ -160,30 +176,6 @@ async def get_customer_summary(
         return f"Error al obtener el resumen del cliente: {e.detail}"
     except Exception as e:
         return f"Error inesperado al obtener el resumen del cliente: {str(e)}"
-
-
-async def _resolve_segment_id(nestjs_client: NestJSClient, segment_id: Optional[str]) -> str:
-    """Resolve a valid customer segment id.
-
-    The LLM is unreliable at fetching and passing a real segment_id (it tends to
-    hallucinate one, which the API rejects with "Customer segment not found"). So
-    we resolve it here: keep the LLM's id only if it actually exists, otherwise
-    default to "Bronce" (the segment for new customers) or the first available.
-    """
-    result = await nestjs_client.get("/customer-segments")
-    segments = result if isinstance(result, list) else result.get("data", [])
-    if not segments:
-        raise NestJSAPIError(
-            status_code=404,
-            detail="No hay segmentos de cliente configurados en el CRM.",
-        )
-
-    ids = {s["id"] for s in segments}
-    if segment_id and segment_id in ids:
-        return segment_id
-
-    bronce = next((s for s in segments if (s.get("name") or "").strip().lower() == "bronce"), None)
-    return (bronce or segments[0])["id"]
 
 
 async def _resolve_company_id(nestjs_client: NestJSClient, company: Optional[str]) -> str:
@@ -243,10 +235,9 @@ def _normalize_tax_id(tax_id: Optional[str]) -> Optional[str]:
 @tool
 async def create_customer(
     legal_name: str,
-    display_name: str,
     auth_token: Annotated[str, InjectedState("auth_token")],
+    display_name: Optional[str] = None,
     company: Optional[str] = None,
-    segment_id: Optional[str] = None,
     tax_id: Optional[str] = None,
     phone: Optional[str] = None,
     email: Optional[str] = None,
@@ -271,23 +262,23 @@ async def create_customer(
     Un CONTACTO es una persona que trabaja en ese cliente.
     NO crees un cliente para una persona individual a menos que sea un negocio unipersonal.
 
-    El segmento se resuelve automáticamente (por defecto "Bronce" para clientes
-    nuevos), así que NO necesitas llamar get_customer_segments antes: deja
-    segment_id vacío salvo que el usuario pida un segmento específico.
+    Para dar de alta un cliente SOLO necesitas: razón social o nombre, NIT,
+    la empresa que le factura y el teléfono. NO pidas correo, dirección,
+    ciudad, departamento ni notas: mándalos solo si el usuario ya los dijo.
+    El segmento lo asigna el CRM solo; no existe ni se pregunta.
 
     Args:
         legal_name: Razón social o nombre legal de la empresa
-        display_name: Nombre comercial o de display (cómo se conoce la empresa)
         company: Nombre de la empresa del grupo que le factura a este cliente
             (ej. "Norgtech"). Pasa el nombre tal cual lo dijo el usuario; si solo
             hay una empresa configurada se toma esa automáticamente.
-        segment_id: ID del segmento (opcional; si se omite se usa "Bronce")
-        tax_id: NIT o identificador tributario (opcional)
-        phone: Teléfono de la empresa (opcional)
-        email: Email corporativo (opcional)
-        address: Dirección física (opcional)
-        city: Ciudad (opcional)
-        department: Departamento/estado (opcional)
+        tax_id: NIT o identificador tributario
+        phone: Teléfono de la empresa
+        display_name: Nombre comercial (opcional; si falta se usa legal_name)
+        email: Email corporativo (opcional, no lo pidas)
+        address: Dirección física (opcional, no lo pidas)
+        city: Ciudad (opcional, no lo pidas)
+        department: Departamento/estado (opcional, no lo pidas)
         contact_name: Nombre completo del contacto principal (si no se provee, se usa "Contacto Principal")
         contact_phone: Teléfono del contacto principal (opcional)
         contact_email: Email del contacto principal (opcional)
@@ -298,7 +289,6 @@ async def create_customer(
     """
     try:
         nestjs_client = NestJSClient(auth_token)
-        resolved_segment_id = await _resolve_segment_id(nestjs_client, segment_id)
         resolved_company_id = await _resolve_company_id(nestjs_client, company)
 
         # Auto-generar contacto primario
@@ -316,8 +306,7 @@ async def create_customer(
 
         payload = {
             "legalName": legal_name,
-            "displayName": display_name,
-            "segmentId": resolved_segment_id,
+            "displayName": display_name or legal_name,
             "companyId": resolved_company_id,
             "contacts": [contact_payload],
         }

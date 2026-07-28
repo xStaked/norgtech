@@ -28,6 +28,7 @@ export class CustomersService {
   async create(user: AuthUser, dto: CreateCustomerDto) {
     this.assertExactlyOnePrimaryContact(dto);
     await this.assertValidReferences(dto);
+    const segmentId = await this.resolveSegmentId(dto.segmentId);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -44,7 +45,7 @@ export class CustomersService {
             country: dto.country,
             priceListId: dto.priceListId,
             notes: dto.notes,
-            segmentId: dto.segmentId,
+            segmentId,
             companyId: dto.companyId,
             assignedToUserId: dto.assignedToUserId,
             customerType: dto.customerType || undefined,
@@ -136,15 +137,35 @@ export class CustomersService {
     }
   }
 
-  private async assertValidReferences(dto: CreateCustomerDto) {
-    const segment = await this.prisma.customerSegment.findUnique({
-      where: { id: dto.segmentId },
-    });
-
-    if (!segment) {
-      throw new NotFoundException("Customer segment not found");
+  /**
+   * El segmento no se pide al dar de alta: el negocio solo maneja listas de
+   * precios. Si no viene uno, se cae al mismo por defecto que usa el importador
+   * de clientes (prisma/scripts/import-customers.ts): "Bronce".
+   */
+  private async resolveSegmentId(segmentId?: string) {
+    if (segmentId) {
+      const segment = await this.prisma.customerSegment.findUnique({
+        where: { id: segmentId },
+      });
+      if (!segment) {
+        throw new NotFoundException("Customer segment not found");
+      }
+      return segmentId;
     }
 
+    const segments = await this.prisma.customerSegment.findMany({
+      where: { active: true },
+    });
+    const fallback = segments.find((s) => s.name === "Bronce") ?? segments[0];
+
+    if (!fallback) {
+      throw new NotFoundException("No hay segmentos de cliente configurados");
+    }
+
+    return fallback.id;
+  }
+
+  private async assertValidReferences(dto: CreateCustomerDto) {
     const company = await this.prisma.company.findUnique({
       where: { id: dto.companyId },
     });

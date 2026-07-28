@@ -605,6 +605,22 @@ describe("Customers", () => {
     expect(auditResponse.body[0].action).toBe("customer.created");
   });
 
+  // El alta no pide segmento: el negocio solo maneja listas de precios.
+  it("creates a customer without segmentId falling back to Bronce", async () => {
+    const createResponse = await request(globalThis.__APP__)
+      .post("/customers")
+      .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+      .send({
+        legalName: "Sin Segmento SAS",
+        displayName: "Sin Segmento",
+        companyId: "clx_default_norgtech",
+        contacts: [{ fullName: "Carlos Perez", isPrimary: true }],
+      })
+      .expect(201);
+
+    expect(createResponse.body.segmentId).toBe("segment-bronze");
+  });
+
   it("rejects customer creation without exactly one primary contact", async () => {
     await request(globalThis.__APP__)
       .post("/customers")

@@ -1,5 +1,4 @@
 import { expect, test } from "@playwright/test";
-import { chooseOption, selectByName } from "./select";
 
 test("an authenticated user can create a customer", async ({ page, request }) => {
   // Wait for backend to be ready
@@ -27,7 +26,6 @@ test("an authenticated user can create a customer", async ({ page, request }) =>
 
   await page.goto("/customers/new");
 
-  await chooseOption(page, selectByName(page, "segmentId"), { index: 1 });
   await page.getByLabel("Razon social").fill("Agropecuaria Norte SAS");
   await page.getByLabel("Nombre comercial").fill("Agro Norte");
   await page.locator('input[name="contactFullName"]').fill("Carlos Perez");
@@ -64,7 +62,6 @@ test("customer detail shows 360 history sections", async ({ page, request }) => 
 
   // Create a new customer to view its detail
   await page.goto("/customers/new");
-  await chooseOption(page, selectByName(page, "segmentId"), { index: 1 });
   await page.getByLabel("Razon social").fill("Historial 360 SAS");
   await page.getByLabel("Nombre comercial").fill("Historial 360");
   await page.locator('input[name="contactFullName"]').fill("Luis Gomez");

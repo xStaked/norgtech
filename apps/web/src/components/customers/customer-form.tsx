@@ -12,11 +12,6 @@ import type { PriceListRef } from "@/lib/catalog";
 import { UserSelect } from "@/components/users/user-select";
 import { Select } from "@/components/ui/select";
 
-interface Segment {
-  id: string;
-  name: string;
-}
-
 interface Customer {
   id: string;
   legalName: string;
@@ -30,7 +25,6 @@ interface Customer {
   country: string | null;
   priceListId: string | null;
   notes: string | null;
-  segmentId: string | null;
   companyId: string | null;
   assignedToUserId: string | null;
   customerType: string | null;
@@ -41,7 +35,6 @@ interface Customer {
 }
 
 interface CustomerFormProps {
-  segments: Segment[];
   companies: { id: string; name: string }[];
   priceLists?: PriceListRef[];
   customer?: Customer;
@@ -59,7 +52,6 @@ function periodPlaceholder(periodType: string): string {
 }
 
 export function CustomerForm({
-  segments,
   companies,
   priceLists = [],
   customer,
@@ -117,7 +109,8 @@ export function CustomerForm({
       country: country.trim() || undefined,
       priceListId: priceListId || undefined,
       notes: optionalString("notes"),
-      segmentId: String(formData.get("segmentId")),
+      // El segmento no se pide: lo resuelve el backend al crear y al editar se
+      // deja como esta. El negocio solo maneja listas de precios.
       companyId: String(formData.get("companyId")),
       // null, no undefined: "Sin asignar" tiene que poder quitarle el vendedor
       // a un cliente. Con undefined el backend no tocaba el campo y la opción
@@ -189,20 +182,6 @@ export function CustomerForm({
   return (
     <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
-
-      <div className="grid gap-1">
-        <Label>Segmento *</Label>
-        <Select
-          name="segmentId"
-          required
-          defaultValue={customer?.segmentId ?? ""}
-          searchPlaceholder="Buscar segmento…"
-          options={[
-            { value: "", label: "Seleccionar segmento" },
-            ...segments.map((s) => ({ value: s.id, label: s.name })),
-          ]}
-        />
-      </div>
 
       <div className="grid gap-1">
         <Label>Empresa *</Label>

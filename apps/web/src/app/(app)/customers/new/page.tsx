@@ -5,15 +5,7 @@ import { apiFetch } from "@/lib/api.server";
 import { CustomerForm } from "@/components/customers/customer-form";
 import type { PriceListRef } from "@/lib/catalog";
 
-interface Segment {
-  id: string;
-  name: string;
-}
-
 export default async function NewCustomerPage() {
-  const response = await apiFetch("/customer-segments");
-  const segments: Segment[] = response.ok ? await response.json() : [];
-
   const companiesResponse = await apiFetch("/companies");
   const companies = companiesResponse.ok ? await companiesResponse.json() : [];
 
@@ -34,7 +26,7 @@ export default async function NewCustomerPage() {
         }
       />
       <SectionCard>
-        <CustomerForm segments={segments} companies={companies} priceLists={priceLists} />
+        <CustomerForm companies={companies} priceLists={priceLists} />
       </SectionCard>
     </div>
   );
