@@ -1,8 +1,53 @@
 import json
+from datetime import datetime, timedelta, timezone
+from urllib.parse import urlencode
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from .nestjs_client import NestJSClient, NestJSAPIError
+from ..visit_parsing import BOGOTA_TZ
 from typing import Annotated, Optional
+
+
+def google_calendar_link(
+    scheduled_at: str,
+    title: str,
+    details: str = "",
+    location: str = "",
+) -> Optional[str]:
+    """Link de plantilla de Google Calendar para una visita ya agendada.
+
+    Se acordo con el cliente NO integrar OAuth por cuenta: la agenda sigue
+    viviendo en la plataforma y al confirmar la visita se devuelve este link,
+    que la persona abre desde WhatsApp y le deja el evento en su calendario.
+
+    ZONA HORARIA: Google exige UTC compacto 'YYYYMMDDTHHMMSSZ'. Una fecha SIN
+    offset significa hora de pared de Colombia (mismo criterio que toInstantIso
+    en apps/api/src/shared/instant.ts, que es lo que Nora postea), asi que hay
+    que fijarle BOGOTA_TZ antes de pasar a UTC o el evento cae 5 horas corrido.
+    """
+    try:
+        start = datetime.fromisoformat(scheduled_at.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if start.tzinfo is None:
+        start = start.replace(tzinfo=BOGOTA_TZ)
+    start = start.astimezone(timezone.utc)
+    # El modelo de visita no tiene hora de fin: asumimos 1 hora de duracion.
+    end = start + timedelta(hours=1)
+    stamp = "%Y%m%dT%H%M%SZ"
+    params = {
+        "action": "TEMPLATE",
+        "text": title,
+        "dates": f"{start.strftime(stamp)}/{end.strftime(stamp)}",
+    }
+    if details:
+        params["details"] = details
+    if location:
+        params["location"] = location
+    # safe="/" deja crudo el separador inicio/fin de `dates`, que es la forma
+    # documentada por Google; el resto va URL-encoded.
+    return "https://calendar.google.com/calendar/render?" + urlencode(params, safe="/")
+
 
 @tool
 async def create_visit(
@@ -39,7 +84,14 @@ async def create_visit(
         if next_step: payload["nextStep"] = next_step
         
         result = await nestjs_client.post("/visits", payload)
-        return f"Visita registrada exitosamente: {json.dumps(result, ensure_ascii=False)}"
+        # El JSON va SIEMPRE al final: whatsapp_general_agent lo parsea desde la
+        # primera "{" hasta el final para sacar el executed_entity.
+        link = google_calendar_link(scheduled_at, f"Visita: {summary}", next_step or notes or "")
+        aviso = (
+            f"Pasale al usuario este link tal cual para que agregue la visita a su "
+            f"Google Calendar: {link}\n" if link else ""
+        )
+        return f"Visita registrada exitosamente. {aviso}{json.dumps(result, ensure_ascii=False)}"
     except Exception as e:
         return f"Error al registrar visita: {str(e)}"
 
@@ -119,7 +171,24 @@ async def update_visit(
         if customer_id: payload["customerId"] = customer_id
 
         result = await nestjs_client.patch(f"/visits/{visit_id}", payload)
-        return f"Visita actualizada exitosamente: {json.dumps(result, ensure_ascii=False)}"
+        # Solo al REAGENDAR: si no cambio la fecha, el link seria ruido. La
+        # fecha sale de la respuesta del API (ya normalizada) y no del texto
+        # que mando el usuario. El JSON va SIEMPRE al final, igual que en
+        # create_visit: whatsapp_general_agent lo parsea desde la primera "{".
+        link = (
+            google_calendar_link(
+                result.get("scheduledAt") or scheduled_at,
+                f"Visita: {result.get('summary') or summary or 'visita'}",
+                next_step or notes or "",
+            )
+            if scheduled_at
+            else None
+        )
+        aviso = (
+            f"Pasale al usuario este link tal cual para que actualice la visita en su "
+            f"Google Calendar: {link}\n" if link else ""
+        )
+        return f"Visita actualizada exitosamente. {aviso}{json.dumps(result, ensure_ascii=False)}"
     except NestJSAPIError as e:
         return f"Error al actualizar visita: {e.detail}"
     except Exception as e:

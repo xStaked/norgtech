@@ -1,8 +1,88 @@
 import asyncio
 from unittest.mock import AsyncMock, patch
 
-from src.tools.visits import delete_visit, get_customer_visits, update_visit
+import json
+from urllib.parse import parse_qs, urlparse
+
+from src.tools.visits import (
+    create_visit,
+    delete_visit,
+    get_customer_visits,
+    google_calendar_link,
+    update_visit,
+)
 from src.tools.nestjs_client import NestJSAPIError
+
+
+def test_google_calendar_link_convierte_hora_bogota_a_utc():
+    # "el 28 de julio a las 8" es hora de Bogota (UTC-5) -> 13:00 UTC.
+    link = google_calendar_link("2026-07-28T08:00:00", "Visita: Porcicultura Caribe")
+    params = parse_qs(urlparse(link).query)
+
+    assert params["dates"] == ["20260728T130000Z/20260728T140000Z"]  # +1h por defecto
+    assert params["action"] == ["TEMPLATE"]
+    assert params["text"] == ["Visita: Porcicultura Caribe"]
+    # Los espacios y los ":" viajan codificados; solo el "/" de dates queda crudo.
+    assert " " not in link and "%3A" in link
+    assert "dates=20260728T130000Z/20260728T140000Z" in link
+
+
+def test_google_calendar_link_respeta_offset_explicito_y_fecha_invalida():
+    assert "20260728T130000Z" in google_calendar_link("2026-07-28T13:00:00Z", "X")
+    assert "20260728T130000Z" in google_calendar_link("2026-07-28T08:00:00-05:00", "X")
+    assert google_calendar_link("manana a las 8", "X") is None
+
+
+def test_create_visit_devuelve_link_de_calendar_y_json_al_final():
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value={"id": "visit-1"})
+
+    with patch("src.tools.visits.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            create_visit.ainvoke(
+                {
+                    "customer_id": "cust-1",
+                    "scheduled_at": "2026-07-28T08:00:00",
+                    "summary": "Seguimiento",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+
+    assert "calendar.google.com" in result
+    assert "20260728T130000Z" in result
+    # El JSON queda al final y parseable (whatsapp_general_agent saca el id de ahi).
+    assert json.loads(result[result.index("{"):]) == {"id": "visit-1"}
+
+
+def test_update_visit_solo_manda_link_al_reagendar():
+    fake_client = AsyncMock()
+    fake_client.patch = AsyncMock(
+        return_value={"id": "visit-1", "scheduledAt": "2026-07-28T13:00:00.000Z", "summary": "Seguimiento"}
+    )
+
+    with patch("src.tools.visits.NestJSClient", return_value=fake_client):
+        reagenda = asyncio.run(
+            update_visit.ainvoke(
+                {
+                    "visit_id": "visit-1",
+                    "scheduled_at": "2026-07-28T08:00:00",
+                    "auth_token": "Bearer scoped",
+                }
+            )
+        )
+        # Cambiar solo las notas no es reagendar: ahi el link seria ruido.
+        solo_notas = asyncio.run(
+            update_visit.ainvoke(
+                {"visit_id": "visit-1", "notes": "llego tarde", "auth_token": "Bearer scoped"}
+            )
+        )
+
+    # La fecha sale de la respuesta del API (ya en UTC), no del texto del usuario.
+    assert "20260728T130000Z" in reagenda
+    assert "calendar.google.com" not in solo_notas
+    # El JSON queda al final en ambos casos.
+    assert json.loads(reagenda[reagenda.index("{"):])["id"] == "visit-1"
 
 
 def test_delete_visit_calls_delete_endpoint():
