@@ -8,7 +8,26 @@ la app sigue funcionando.
 Quien las empuja: `WhatsAppNotificationsCron` (`PUSH_TEMPLATES`), cada 5 minutos,
 leyendo `Notification.pushedAt IS NULL`.
 
+## Categoria: por que rechazan con `INCORRECT_CATEGORY`
+
+Meta no revisa solo el texto, tambien decide la categoria. UTILITY es "novedad
+de una cuenta que ya existe"; cualquier invitacion a entrar, ver, descubrir o
+aprovechar algo la reclasifica a MARKETING y rechaza el envio como UTILITY.
+
+Reglas para estas plantillas:
+
+- Nada de CTA ("Entra a Norgtech", "Míralo aquí", "No te lo pierdas").
+- Redactar como actualizacion de cuenta o recordatorio de algo ya agendado.
+- Cuanto mas corto, menos superficie para que el clasificador se confunda.
+
+Si aun asi rechazan, la salida es mandarla como MARKETING — pero cuesta mas por
+mensaje y el comercial puede tener el opt-out de marketing puesto y no recibir
+nada. Preferir siempre reescribir.
+
 ## `cliente_asignado`
+
+Primera version rechazada por `INCORRECT_CATEGORY`: el "Entra a Norgtech para
+ver su ficha" la volvia MARKETING. Esta es la que queda:
 
 ```json
 {
@@ -19,11 +38,11 @@ leyendo `Notification.pushedAt IS NULL`.
   "components": [
     {
       "type": "BODY",
-      "text": "Hola {{nombre}}, {{detalle}}. Entra a Norgtech para ver su ficha.",
+      "text": "Hola {{nombre}}, actualización de tu cuenta Norgtech: {{detalle}}.",
       "example": {
         "body_text_named_params": [
           { "param_name": "nombre", "example": "Carlos" },
-          { "param_name": "detalle", "example": "te asignaron el cliente Agro Norte" }
+          { "param_name": "detalle", "example": "Te asignaron el cliente Agro Norte" }
         ]
       }
     }
@@ -42,7 +61,7 @@ leyendo `Notification.pushedAt IS NULL`.
   "components": [
     {
       "type": "BODY",
-      "text": "Hola {{nombre}}, recordatorio: {{detalle}} No olvides registrarla en Norgtech al terminar.",
+      "text": "Hola {{nombre}}, recordatorio de tu agenda Norgtech: {{detalle}} Registra el resultado al terminar.",
       "example": {
         "body_text_named_params": [
           { "param_name": "nombre", "example": "Carlos" },
