@@ -4,6 +4,7 @@ import { NotificationType } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import {
   BOGOTA_TIME_ZONE,
+  VISIT_SETTLED_STATUSES,
   followUpTaskOverdueWhere,
   visitOverdueWhere,
 } from "../../shared/overdue";
@@ -20,6 +21,12 @@ const READ_RETENTION_DAYS = 60;
  * bandejas con backlog antiguo. Subir o quitar si se quiere avisar lo muy viejo.
  */
 const OVERDUE_NOTIFY_LOOKBACK_DAYS = 90;
+
+/**
+ * Anticipacion del recordatorio de visita. Debe ser mayor que el intervalo del
+ * cron (15 min) o una visita puede caer entre dos barridos y no avisarse.
+ */
+const UPCOMING_VISIT_LOOKAHEAD_MINUTES = 120;
 
 /**
  * Barrido diario de lo que el reloj vuelve notificable.
@@ -45,12 +52,63 @@ export class NotificationsCron {
     await this.sweep(new Date());
   }
 
+  /**
+   * Lo que vence espera al barrido de las 7am; lo que esta por pasar no puede.
+   * Un cuarto de hora es el grano mas grueso que sigue dando un aviso util con
+   * dos horas de anticipacion.
+   */
+  @Cron("*/15 * * * *", { timeZone: BOGOTA_TIME_ZONE })
+  async runUpcoming(): Promise<void> {
+    await this.sweepUpcomingVisits(new Date());
+  }
+
   /** `now` inyectado: los tests no dependen del reloj del proceso. */
   async sweep(now: Date): Promise<void> {
     await this.sweepOverdueVisits(now);
     await this.sweepOverdueFollowUps(now);
     await this.sweepAchievedGoals(now);
     await this.purgeRead(now);
+  }
+
+  /**
+   * Visitas que arrancan dentro de la ventana de anticipacion.
+   *
+   * El discriminante es la hora programada: reprogramar la visita cambia el
+   * `dedupeKey` y vuelve a avisar, que es justo lo que se quiere. Sin el, mover
+   * la visita de las 9am a las 4pm dejaria al comercial con el aviso viejo.
+   */
+  async sweepUpcomingVisits(now: Date): Promise<void> {
+    const horizon = new Date(
+      now.getTime() + UPCOMING_VISIT_LOOKAHEAD_MINUTES * 60 * 1000,
+    );
+
+    const visits = await this.prisma.visit.findMany({
+      where: {
+        status: { notIn: VISIT_SETTLED_STATUSES },
+        scheduledAt: { gte: now, lte: horizon },
+        assignedToUserId: { not: null },
+      },
+      select: {
+        id: true,
+        assignedToUserId: true,
+        scheduledAt: true,
+        customer: { select: { displayName: true } },
+      },
+    });
+
+    for (const visit of visits) {
+      if (!visit.assignedToUserId) continue;
+
+      await this.notifications.emit({
+        userIds: [visit.assignedToUserId],
+        type: NotificationType.visita_proxima,
+        title: `Visita pronto: ${visit.customer.displayName}`,
+        body: `Empieza a las ${this.formatTime(visit.scheduledAt)}.`,
+        entityType: "visit",
+        entityId: visit.id,
+        discriminator: visit.scheduledAt.toISOString(),
+      });
+    }
   }
 
   private async sweepOverdueVisits(now: Date): Promise<void> {
@@ -183,5 +241,13 @@ export class NotificationsCron {
 
   private formatDate(instant: Date): string {
     return instant.toLocaleDateString("es-CO", { timeZone: BOGOTA_TIME_ZONE });
+  }
+
+  private formatTime(instant: Date): string {
+    return instant.toLocaleTimeString("es-CO", {
+      timeZone: BOGOTA_TIME_ZONE,
+      hour: "numeric",
+      minute: "2-digit",
+    });
   }
 }

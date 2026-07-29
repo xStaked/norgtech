@@ -204,6 +204,7 @@ enum NotificationType {
   meta_cumplida
   pedido_hito
   cliente_asignado
+  visita_proxima
   visita_vencida
   seguimiento_vencido
   gasto_resuelto
@@ -1088,8 +1089,15 @@ model Notification {
   /// con varias replicas del API hace de lock sin lock distribuido.
   dedupeKey  String           @unique
   readAt     DateTime?
+  /// Outbox del empujon por WhatsApp: null = pendiente de enviar. La fila se
+  /// marca ANTES de llamar a Kapso, asi un fallo del proveedor no se reintenta
+  /// en bucle cada 5 minutos ni duplica el mensaje si el envio si salio.
+  /// Existe porque `emit` corre dentro de transacciones (crear/reasignar
+  /// cliente) y no se puede hacer HTTP ahi dentro.
+  pushedAt   DateTime?
   createdAt  DateTime         @default(now())
   user       User             @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, readAt, createdAt])
+  @@index([pushedAt, createdAt])
 }

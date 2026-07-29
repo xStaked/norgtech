@@ -14,6 +14,7 @@ import { NoraAgentController } from "./nora-agent.controller";
 import { NoraExpenseExtractionService } from "./nora-expense-extraction.service";
 import { NoraExpenseExecutionService } from "./nora-expense-execution.service";
 import { NoraRoutingService } from "./nora-routing.service";
+import { WhatsAppNotificationsCron } from "./whatsapp-notifications.cron";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
 import { WhatsAppController, WhatsAppWebhookController } from "./whatsapp.controller";
 import { WhatsAppService } from "./whatsapp.service";
@@ -29,6 +30,7 @@ import { WhatsAppService } from "./whatsapp.service";
   controllers: [WhatsAppController, WhatsAppWebhookController, NoraAgentController],
   providers: [
     WhatsAppService,
+    WhatsAppNotificationsCron,
     WhatsAppOrderAutomationService,
     KapsoWebhookService,
     NoraCaseService,

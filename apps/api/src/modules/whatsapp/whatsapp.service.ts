@@ -321,21 +321,30 @@ export class WhatsAppService {
     );
   }
 
-  async notifyExpenseCorrection(expense: ExpenseCorrectionInput): Promise<void> {
-    const phone = expense.submittedBy?.phone?.trim();
+  /**
+   * Conversacion por la que se le habla a un usuario interno, creandola si es
+   * la primera vez. Devuelve null (y lo registra) cuando falta el telefono o no
+   * hay cuenta de WhatsApp: no poder avisar nunca debe tumbar la operacion que
+   * origino el aviso.
+   */
+  private async conversationForUser(
+    user: { name: string | null; phone: string | null },
+    context: string,
+  ): Promise<{ id: string } | null> {
+    const phone = user.phone?.trim();
     if (!phone) {
-      this.logger.warn(`Expense ${expense.id} correction: submitter has no phone, skipping WhatsApp`);
-      return;
+      this.logger.warn(`${context}: user has no phone, skipping WhatsApp`);
+      return null;
     }
 
     const account = await this.prisma.whatsAppAccount.findFirst();
     if (!account) {
-      this.logger.warn(`Expense ${expense.id} correction: no WhatsAppAccount configured, skipping`);
-      return;
+      this.logger.warn(`${context}: no WhatsAppAccount configured, skipping`);
+      return null;
     }
 
     const waId = this.normalizePhone(phone);
-    const conversation = await this.prisma.whatsAppConversation.upsert({
+    return this.prisma.whatsAppConversation.upsert({
       where: { accountId_waId: { accountId: account.id, waId } },
       update: {},
       create: {
@@ -344,10 +353,38 @@ export class WhatsAppService {
         phone,
         status: WhatsAppConversationStatus.pendiente,
         senderType: WhatsAppSenderType.comercial,
-        senderName: expense.submittedBy?.name ?? null,
+        senderName: user.name,
       },
-      include: { account: true },
     });
+  }
+
+  /**
+   * Empujon proactivo a un usuario interno. Va por plantilla porque el aviso lo
+   * inicia el sistema: fuera de la ventana de 24h Meta descarta el texto libre.
+   */
+  async notifyUser(
+    user: { name: string | null; phone: string | null },
+    templateName: string,
+    params: Array<{ name: string; text: string }>,
+    previewBody: string,
+  ): Promise<boolean> {
+    const conversation = await this.conversationForUser(user, `Template ${templateName}`);
+    if (!conversation) {
+      return false;
+    }
+
+    await this.sendTemplateMessage(conversation.id, templateName, "es", params, previewBody);
+    return true;
+  }
+
+  async notifyExpenseCorrection(expense: ExpenseCorrectionInput): Promise<void> {
+    const conversation = await this.conversationForUser(
+      { name: expense.submittedBy?.name ?? null, phone: expense.submittedBy?.phone ?? null },
+      `Expense ${expense.id} correction`,
+    );
+    if (!conversation) {
+      return;
+    }
 
     await this.noraCaseService.createCase({
       conversationId: conversation.id,
