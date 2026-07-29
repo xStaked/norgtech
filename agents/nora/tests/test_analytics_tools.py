@@ -2,7 +2,12 @@ import asyncio
 from unittest.mock import AsyncMock, patch
 
 import json
-from src.tools.analytics import get_sales_summary, get_cartera, get_goal_progress
+from src.tools.analytics import (
+    get_sales_summary,
+    get_cartera,
+    get_goal_progress,
+    compare_analytics,
+)
 from src.tools.nestjs_client import NestJSAPIError
 
 
@@ -209,7 +214,12 @@ def test_analytics_tools_registered_in_web_agent():
     from src.agent import ALL_TOOLS
 
     names = {t.name for t in ALL_TOOLS}
-    assert {"get_sales_summary", "get_cartera", "get_goal_progress"} <= names
+    assert {
+        "get_sales_summary",
+        "get_cartera",
+        "get_goal_progress",
+        "compare_analytics",
+    } <= names
 
 
 def test_get_cartera_por_cliente_no_revienta_con_decimales_string():
@@ -238,3 +248,112 @@ def test_get_cartera_por_cliente_no_revienta_con_decimales_string():
     payload = json.loads(result[result.index("{"):])
     # 1000 - 250 - 50: el saldo real descuenta pagos Y notas credito.
     assert payload["facturas_vencidas"][0]["saldo"] == 700
+
+
+# ── compare_analytics ──────────────────────────────────────────────────
+# La resta se hace aqui en Python a proposito: cuando el LLM tenia que llamar
+# get_analytics dos veces y restar a mano, se inventaba las cifras.
+
+COMPARE_A = {
+    "range": {"from": "2026-05-01", "to": "2026-05-31"},
+    "totals": {"netRevenue": "1000.00", "orderCount": 10, "customerCount": 0},
+    "breakdowns": {
+        "bySeller": [
+            {"sellerName": "Ana", "revenue": 600},
+            {"sellerName": "Beto", "revenue": 400},
+        ]
+    },
+}
+
+COMPARE_B = {
+    "range": {"from": "2026-06-01", "to": "2026-06-30"},
+    "totals": {"netRevenue": "1500.00", "orderCount": 12, "customerCount": 5},
+    "breakdowns": {
+        "bySeller": [
+            {"sellerName": "Ana", "revenue": 500},
+            {"sellerName": "Carlos", "revenue": 1000},
+        ]
+    },
+}
+
+
+def _run_compare(args=None):
+    """Devuelve el payload y el cliente; cada rango recibe su propio payload."""
+    fake_client = AsyncMock()
+
+    async def _get(path, params=None):
+        return COMPARE_A if (params or {}).get("from") == "2026-05-01" else COMPARE_B
+
+    fake_client.get = AsyncMock(side_effect=_get)
+    with patch("src.tools.analytics.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            compare_analytics.ainvoke(
+                {
+                    "screen": "sales",
+                    "date_from_a": "2026-05-01",
+                    "date_to_a": "2026-05-31",
+                    "date_from_b": "2026-06-01",
+                    "date_to_b": "2026-06-30",
+                    "auth_token": "Bearer x",
+                    **(args or {}),
+                }
+            )
+        )
+    return json.loads(result), fake_client
+
+
+def test_compare_analytics_consulta_los_dos_rangos():
+    _, client = _run_compare()
+
+    assert client.get.await_count == 2
+    llamadas = {
+        (c.kwargs["params"]["from"], c.kwargs["params"]["to"])
+        for c in client.get.await_args_list
+    }
+    assert llamadas == {("2026-05-01", "2026-05-31"), ("2026-06-01", "2026-06-30")}
+    for c in client.get.await_args_list:
+        assert c.args[0] == "/analytics/sales"
+
+
+def test_compare_analytics_calcula_delta_y_porcentaje():
+    payload, _ = _run_compare()
+
+    # los Decimal llegan como string: hay que convertirlos antes de restar
+    neto = payload["variacion"]["netRevenue"]
+    assert neto == {"a": 1000.0, "b": 1500.0, "delta": 500.0, "delta_pct": 50.0}
+    assert payload["variacion"]["orderCount"]["delta"] == 2
+    assert payload["periodo_a"]["rango"]["from"] == "2026-05-01"
+    assert payload["periodo_b"]["rango"]["to"] == "2026-06-30"
+
+
+def test_compare_analytics_sin_base_no_emite_infinito():
+    payload, _ = _run_compare()
+
+    clientes = payload["variacion"]["customerCount"]
+    assert clientes["a"] == 0 and clientes["delta"] == 5
+    # dividir por 0 daria inf, que json.dumps escribe como `Infinity` (JSON
+    # invalido) y el LLM narra como si fuera una cifra.
+    assert clientes["delta_pct"] is None
+
+
+def test_compare_analytics_cruza_las_filas_de_la_seccion():
+    payload, _ = _run_compare({"section": "breakdowns.bySeller"})
+
+    assert payload["metrica"] == "revenue"
+    filas = {f["clave"]: f for f in payload["filas"]}
+    # Carlos solo existe en el periodo B: cuenta con 0 del lado A
+    assert filas["Carlos"]["a"] == 0
+    assert filas["Carlos"]["b"] == 1000
+    assert filas["Carlos"]["delta_pct"] is None
+    # Beto dejo de vender: aparece igual, con 0 del lado B
+    assert filas["Beto"] == {
+        "clave": "Beto",
+        "a": 400.0,
+        "b": 0.0,
+        "delta": -400.0,
+        "delta_pct": -100.0,
+    }
+    # ordenadas por |delta| desc
+    assert [f["clave"] for f in payload["filas"]] == ["Carlos", "Beto", "Ana"]
+    assert payload["filas_totales"] == 3
+    assert payload["truncado"] is False

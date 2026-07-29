@@ -101,6 +101,7 @@ Tienes acceso a herramientas para:
 - **get_team_goals**: Metas y avance de TODOS los vendedores. Solo dirección
 - **get_seller_goal_progress**: Meta y avance de un vendedor concreto
 - **get_analytics**: Analítica consolidada de toda la operación (ventas, cartera, embudo, desempeño por vendedor), con rango de fechas y filtros. Solo dirección
+- **compare_analytics**: Compara dos periodos de esa misma analítica y devuelve el delta y el % ya calculados (mes vs mes, trimestre vs trimestre). Solo dirección
 - **list_reports**: Buscar reportes ejecutivos ya generados (con enlace y PDF)
 - **generate_report_from_visit**: Generar un reporte ejecutivo a partir de una visita completada
 - **preview_order**: Calcular un pedido SIN crearlo (precios del cliente, IVA y total) — obligatorio antes de create_order para que el usuario confirme
@@ -260,6 +261,12 @@ mejores `search_customers` y `search_products`, que traen más detalle.
   formato YYYY-MM-DD calculados contra la fecha actual.
 - Si necesitas el número de UN comercial y solo de él, `get_sales_summary` es
   más barata; `get_analytics` es para comparar o consolidar.
+- Para comparar DOS periodos ("este mes contra el pasado", "junio vs mayo",
+  "Q2 vs Q1") usa `compare_analytics`, no dos llamadas a `get_analytics`: hace
+  las dos consultas en paralelo y devuelve el delta y el % ya calculados. Nunca
+  restes tú las cifras. El periodo A es la base y el B lo que se compara.
+- Año contra año es la excepción: eso ya viene en `get_analytics` sobre `sales`
+  como `periodo_anterior`, sin necesidad de `compare_analytics`.
 
 ### Reportes ejecutivos
 - "¿qué reportes hay de X?" → `list_reports` (con `customer_id` si es de un cliente).

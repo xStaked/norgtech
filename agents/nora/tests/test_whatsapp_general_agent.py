@@ -1,4 +1,5 @@
 """Deterministic tests for whatsapp_general_agent (no LLM, no network)."""
+import base64
 import json
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
@@ -11,6 +12,15 @@ def _req(**kwargs) -> WhatsAppAgentRequest:
     defaults = dict(current_message="¿qué tengo hoy?", history=[], auth="Bearer scoped", conversation_id="conv_1")
     defaults.update(kwargs)
     return WhatsAppAgentRequest(**defaults)
+
+
+def _token(role: str) -> str:
+    """JWT falso (sin firma valida), igual que en test_roles.py."""
+    def seg(obj: dict) -> str:
+        raw = base64.urlsafe_b64encode(json.dumps(obj).encode()).decode()
+        return raw.rstrip("=")  # el JWT real viene sin padding
+
+    return f"Bearer {seg({'alg': 'HS256'})}.{seg({'sub': 'u1', 'role': role})}.firma"
 
 
 def test_first_message_is_system_prompt_with_whatsapp_addendum():
@@ -150,6 +160,26 @@ def test_visit_pending_context_is_injected_for_short_confirmation_turn():
     assert "-06-29T12:00:00" in visit_blocks[0]
     assert "seguimiento con el producto no mas algo breve" in visit_blocks[0]
     assert '"currentMessageConfirms": true' in visit_blocks[0]
+
+
+def test_direccion_no_recibe_la_apertura_de_comercial_y_si_el_bloque_de_direccion():
+    system = _to_messages(_req(auth=_token("administrador")))[0].content
+
+    assert "un comercial del equipo" not in system
+    assert "alguien de dirección por WhatsApp" in system
+    assert "compare_analytics" in system
+    assert "Dirección por WhatsApp" in system
+
+
+def test_comercial_conserva_su_apertura_y_no_trae_el_bloque_de_direccion():
+    system = _to_messages(_req(auth=_token("comercial")))[0].content
+
+    assert "Estás hablando con un comercial del equipo por WhatsApp" in system
+    assert "Dirección por WhatsApp" not in system
+    # El catálogo de tools del prompt base sí nombra compare_analytics para
+    # todos (igual que get_analytics): lo que no debe llegarle al comercial es
+    # el bloque de dirección con las instrucciones de cómo responder cifras.
+    assert "NO hagas tú la resta" not in system
 
 
 def test_extract_executed_entity_from_create_visit_tool_message():

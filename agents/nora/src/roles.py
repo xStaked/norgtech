@@ -52,6 +52,8 @@ _RESTRICTED: dict[str, set[str]] = {
     # AnalyticsController: direccion ve la operacion completa; un comercial
     # entra pero el API le fuerza `sellerUserId` a su propio id.
     "get_analytics": {"administrador", "director_comercial", "comercial"},
+    # Pega al mismo endpoint que get_analytics, solo que dos veces.
+    "compare_analytics": {"administrador", "director_comercial", "comercial"},
     # ReportsController.
     "list_reports": {"administrador", "director_comercial", "tecnico"},
     "generate_report_from_visit": {"administrador", "director_comercial", "tecnico"},

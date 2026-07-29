@@ -1,3 +1,4 @@
+import asyncio
 import json
 from typing import Annotated, Optional
 
@@ -39,6 +40,39 @@ def _num(value) -> float:
         return 0.0
 
 
+# Claves con las que se identifica una fila para cruzarla entre los dos
+# periodos. Las 4 pantallas tienen formas distintas (sales manda sellerName,
+# receivables bucket, funnel stage...), asi que se toma la primera que exista.
+_ROW_KEYS = (
+    "sellerUserId",
+    "sellerName",
+    "zoneId",
+    "zoneName",
+    "segmentId",
+    "segmentName",
+    "customerId",
+    "customerName",
+    "name",
+    "bucket",
+    "stage",
+    "label",
+)
+
+# Metrica que se compara por fila, en orden de preferencia. Tambien varia por
+# pantalla: plata donde la hay, conteo cuando no.
+_ROW_METRICS = (
+    "netRevenue",
+    "revenue",
+    "total",
+    "amount",
+    "value",
+    "openValue",
+    "count",
+    "orderCount",
+    "invoiceCount",
+)
+
+
 def _pick(data: dict, path: str):
     node = data
     for part in path.split("."):
@@ -46,6 +80,97 @@ def _pick(data: dict, path: str):
             return None
         node = node[part]
     return node
+
+
+def _is_num(value) -> bool:
+    """True si el valor se puede comparar como numero (Decimal-string incluido)."""
+    if value is None or isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)):
+        return True
+    try:
+        float(value)
+        return True
+    except (TypeError, ValueError):
+        return False
+
+
+def _delta_pct(a: float, b: float) -> Optional[float]:
+    """Variacion porcentual de a -> b. None si la base es 0.
+
+    Nunca devuelve inf ni NaN: json.dumps los escribe como `Infinity`, que no es
+    JSON valido, y el LLM los narra como si fueran una cifra.
+    """
+    if not a:
+        return None
+    return round((b - a) / abs(a) * 100, 2)
+
+
+def _compare_totals(totals_a: dict, totals_b: dict) -> dict:
+    """{clave: {a, b, delta, delta_pct}} para cada clave numerica de `totals`."""
+    keys = list(totals_a) + [k for k in totals_b if k not in totals_a]
+    variacion: dict[str, dict] = {}
+    for key in keys:
+        raw_a, raw_b = totals_a.get(key), totals_b.get(key)
+        if not _is_num(raw_a) and not _is_num(raw_b):
+            continue
+        a, b = _num(raw_a), _num(raw_b)
+        variacion[key] = {
+            "a": a,
+            "b": b,
+            "delta": round(b - a, 2),
+            "delta_pct": _delta_pct(a, b),
+        }
+    return variacion
+
+
+def _row_key(row, index: int) -> str:
+    if isinstance(row, dict):
+        for key in _ROW_KEYS:
+            value = row.get(key)
+            if value not in (None, ""):
+                return str(value)
+    return f"#{index}"
+
+
+def _row_metric(rows_a: list, rows_b: list) -> Optional[str]:
+    for field in _ROW_METRICS:
+        for row in (*rows_a, *rows_b):
+            if isinstance(row, dict) and _is_num(row.get(field)):
+                return field
+    return None
+
+
+def _compare_rows(rows_a: list, rows_b: list, metric: Optional[str]) -> list[dict]:
+    """Cruza las filas de los dos periodos por su clave de identidad.
+
+    Una fila que solo esta en uno de los periodos cuenta con 0 del otro lado: el
+    cliente que dejo de comprar es justo lo que direccion quiere ver.
+    """
+    index: dict[str, dict] = {}
+    order: list[str] = []
+    for rows, side in ((rows_a, "a"), (rows_b, "b")):
+        for i, row in enumerate(rows):
+            key = _row_key(row, i)
+            entry = index.get(key)
+            if entry is None:
+                entry = {"clave": key, "a": 0.0, "b": 0.0}
+                index[key] = entry
+                order.append(key)
+            if metric and isinstance(row, dict):
+                entry[side] = _num(row.get(metric))
+    filas = []
+    for key in order:
+        entry = index[key]
+        filas.append(
+            {
+                **entry,
+                "delta": round(entry["b"] - entry["a"], 2),
+                "delta_pct": _delta_pct(entry["a"], entry["b"]),
+            }
+        )
+    filas.sort(key=lambda f: abs(f["delta"]), reverse=True)
+    return filas
 
 
 @tool
@@ -142,6 +267,115 @@ async def get_analytics(
         return f"Error al consultar la analítica: {e.detail}"
     except Exception as e:
         return f"Error inesperado al consultar la analítica: {str(e)}"
+
+
+@tool
+async def compare_analytics(
+    screen: str,
+    date_from_a: str,
+    date_to_a: str,
+    date_from_b: str,
+    date_to_b: str,
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    section: Optional[str] = None,
+    seller_user_id: Optional[str] = None,
+    company_id: Optional[str] = None,
+    zone_id: Optional[str] = None,
+    segment_id: Optional[str] = None,
+) -> str:
+    """
+    Compara DOS periodos arbitrarios de analítica: "este mes vs el pasado",
+    "Q2 vs Q1", "junio vs mayo". Consulta los dos rangos y calcula la diferencia
+    aquí, así que las cifras de variación salen ya hechas: no las restes tú.
+
+    El periodo A es la base (lo viejo) y el B es lo que se compara contra él, así
+    que `delta` = B - A y `delta_pct` es cuánto creció o cayó B frente a A.
+
+    Para año contra año NO uses esta tool: `get_analytics` sobre `sales` ya trae
+    `periodo_anterior` con el mismo periodo del año pasado.
+
+    Args:
+        screen: sales | receivables | funnel | seller-performance
+        date_from_a: Inicio del periodo A / base (YYYY-MM-DD).
+        date_to_a: Fin del periodo A (YYYY-MM-DD).
+        date_from_b: Inicio del periodo B (YYYY-MM-DD).
+        date_to_b: Fin del periodo B (YYYY-MM-DD).
+        section: Sección a cruzar fila por fila, p.ej. "breakdowns.bySeller",
+            "aging", "stages". Omítela para comparar solo los totales.
+        seller_user_id: Acota a un vendedor.
+        company_id: Acota a una empresa que factura.
+        zone_id: Acota a una zona.
+        segment_id: Acota a un segmento de cliente.
+    """
+    if screen not in ANALYTICS_SCREENS:
+        return f"Pantalla inválida '{screen}'. Usa una de: {', '.join(ANALYTICS_SCREENS)}."
+    filtros = {
+        "sellerUserId": seller_user_id,
+        "companyId": company_id,
+        "zoneId": zone_id,
+        "segmentId": segment_id,
+    }
+    filtros = {k: v for k, v in filtros.items() if v}
+    params_a = {**filtros, "from": date_from_a, "to": date_to_a}
+    params_b = {**filtros, "from": date_from_b, "to": date_to_b}
+    params_a = {k: v for k, v in params_a.items() if v}
+    params_b = {k: v for k, v in params_b.items() if v}
+    try:
+        client = NestJSClient(auth_token)
+        # En paralelo: son dos GET independientes y el cliente HTTP comparte el
+        # pool, asi que comparar dos periodos cuesta lo mismo que consultar uno.
+        data_a, data_b = await asyncio.gather(
+            client.get(f"/analytics/{screen}", params=params_a),
+            client.get(f"/analytics/{screen}", params=params_b),
+        )
+        payload = {
+            "pantalla": screen,
+            "periodo_a": {
+                "rango": data_a.get("range"),
+                "totales": data_a.get("totals"),
+            },
+            "periodo_b": {
+                "rango": data_b.get("range"),
+                "totales": data_b.get("totals"),
+            },
+            "variacion": _compare_totals(
+                data_a.get("totals") or {}, data_b.get("totals") or {}
+            ),
+        }
+
+        if section:
+            rows_a = _pick(data_a, section)
+            rows_b = _pick(data_b, section)
+            if rows_a is None and rows_b is None:
+                disponibles = ", ".join(_sections(data_a)) or "ninguna"
+                return (
+                    f"La sección '{section}' no existe en {screen}. "
+                    f"Disponibles: {disponibles}."
+                )
+            payload["seccion"] = section
+            if isinstance(rows_a, list) or isinstance(rows_b, list):
+                lista_a = rows_a if isinstance(rows_a, list) else []
+                lista_b = rows_b if isinstance(rows_b, list) else []
+                metrica = _row_metric(lista_a, lista_b)
+                filas = _compare_rows(lista_a, lista_b, metrica)
+                payload["metrica"] = metrica
+                payload["filas"] = filas[:_MAX_SECTION_ROWS]
+                payload["filas_totales"] = len(filas)
+                payload["truncado"] = len(filas) > _MAX_SECTION_ROWS
+            else:
+                payload["contenido_a"] = rows_a
+                payload["contenido_b"] = rows_b
+
+        return json.dumps(payload, ensure_ascii=False)
+    except NestJSAPIError as e:
+        if e.status_code == 403:
+            return (
+                "Este usuario no puede ver la analítica consolidada: son cifras de "
+                "toda la operación, reservadas a dirección comercial."
+            )
+        return f"Error al comparar la analítica: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al comparar la analítica: {str(e)}"
 
 
 @tool
