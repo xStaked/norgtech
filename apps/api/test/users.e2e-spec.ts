@@ -73,9 +73,11 @@ describe("Users", () => {
       }
     | undefined;
 
+  /** Id del usuario que, para el test en curso, sí tiene historial en el CRM. */
+  let historyFor: string | null = null;
+
   const prismaMock = {
     billingRequest: { findMany: async () => [] },
-    commercialExpense: { findMany: async () => [] },
     user: {
       findUnique: async ({
         where,
@@ -165,12 +167,45 @@ describe("Users", () => {
         users.set(where.id, updated);
         return applySelect(updated, select);
       },
+      delete: async ({ where }: { where: { id: string } }) => {
+        const existing = users.get(where.id);
+        if (!existing) throw new NotFoundException("User not found");
+        users.delete(where.id);
+        return existing;
+      },
     },
     refreshToken: refreshTokenStub(),
+    // Historial que bloquea el borrado. Cada test decide cuantas filas "tiene"
+    // el usuario poniendo su id en `historyFor`.
+    ...Object.fromEntries(
+      [
+        "customer",
+        "order",
+        "visit",
+        "quote",
+        "commercialExpenseSupport",
+        "paymentSupport",
+        "executiveReport",
+        "sellerGoal",
+        "whatsAppConversation",
+        "whatsAppMessage",
+        "whatsAppInternalNote",
+        "customerZone",
+      ].map((model) => [model, { count: async () => 0 }]),
+    ),
+    commercialExpense: {
+      findMany: async () => [],
+      count: async ({ where }: { where: { OR: Array<Record<string, string>> } }) => {
+        const target = historyFor;
+        if (!target) return 0;
+        return where.OR.some((clause) => Object.values(clause).includes(target)) ? 3 : 0;
+      },
+    },
   };
 
   beforeEach(() => {
     users.clear();
+    historyFor = null;
     lastFindUniqueArgs = undefined;
     lastFindManyArgs = undefined;
     lastCreateArgs = undefined;
@@ -475,5 +510,61 @@ describe("Users", () => {
       .expect(400);
 
     expect(users.get("admin-id")?.active).toBe(true);
+  });
+
+  it("deletes a user with no history in the CRM", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .delete("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(200);
+
+    expect(users.has("commercial-id")).toBe(false);
+  });
+
+  it("refuses to delete a user with history and says what it found", async () => {
+    const token = await login("admin@norgtech.com");
+    historyFor = "commercial-id";
+
+    const response = await request(app.getHttpServer())
+      .delete("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(409);
+
+    expect(response.body.message).toContain("3 gastos comerciales");
+    // El usuario sigue ahi: la salida es desactivarlo, no borrarlo.
+    expect(users.has("commercial-id")).toBe(true);
+  });
+
+  it("does not allow an admin to delete themself", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .delete("/users/admin-id")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(400);
+
+    expect(users.has("admin-id")).toBe(true);
+  });
+
+  it("returns 404 when deleting a nonexistent user", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .delete("/users/does-not-exist")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(404);
+  });
+
+  it("rejects delete for non-admin roles", async () => {
+    const token = await login("comercial@norgtech.com");
+
+    await request(app.getHttpServer())
+      .delete("/users/admin-id")
+      .set("Authorization", `Bearer ${token}`)
+      .expect(403);
+
+    expect(users.has("admin-id")).toBe(true);
   });
 });

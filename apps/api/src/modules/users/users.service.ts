@@ -133,6 +133,85 @@ export class UsersService {
     return user;
   }
 
+  /**
+   * Borra un usuario de verdad, pero solo si no dejo rastro en el CRM. Quien ya
+   * vendio, visito o cargo un soporte se desactiva: borrarlo dejaria pedidos sin
+   * vendedor y reportes sin autor.
+   */
+  async remove(currentUser: AuthUser, id: string): Promise<{ id: string; name: string }> {
+    const user = await this.prisma.user.findUnique({ where: { id }, select: { id: true, name: true } });
+
+    if (!user) {
+      throw new NotFoundException("User not found");
+    }
+
+    if (currentUser.id === id) {
+      throw new BadRequestException("You cannot delete your own user");
+    }
+
+    const history = await this.findHistory(id);
+    if (history.length > 0) {
+      throw new ConflictException(
+        `${user.name} tiene historial en el CRM (${history.join(", ")}). Desactivalo en vez de eliminarlo para no perder esos registros.`,
+      );
+    }
+
+    await this.prisma.user.delete({ where: { id } });
+
+    return { id: user.id, name: user.name };
+  }
+
+  /**
+   * Todo lo que se perderia al borrar al usuario, ya sea porque la llave foranea
+   * lo pone en NULL (pedidos sin vendedor) o porque arrastra el registro
+   * completo (metas). Visit y Quote se cuentan a mano: guardan el id del usuario
+   * como texto, sin llave foranea, asi que la base no avisaria nada y quedarian
+   * apuntando a un usuario que ya no existe.
+   */
+  private async findHistory(userId: string): Promise<string[]> {
+    const checks: Array<[string, Promise<number>]> = [
+      ["clientes asignados", this.prisma.customer.count({ where: { assignedToUserId: userId } })],
+      [
+        "pedidos",
+        this.prisma.order.count({
+          where: { OR: [{ sellerUserId: userId }, { assignedLogisticsUserId: userId }] },
+        }),
+      ],
+      ["visitas", this.prisma.visit.count({ where: { assignedToUserId: userId } })],
+      ["cotizaciones", this.prisma.quote.count({ where: { createdBy: userId } })],
+      [
+        "gastos comerciales",
+        this.prisma.commercialExpense.count({
+          where: { OR: [{ submittedByUserId: userId }, { reviewedByUserId: userId }] },
+        }),
+      ],
+      [
+        "soportes de gasto",
+        this.prisma.commercialExpenseSupport.count({ where: { uploadedByUserId: userId } }),
+      ],
+      ["soportes de pago", this.prisma.paymentSupport.count({ where: { uploadedByUserId: userId } })],
+      ["reportes ejecutivos", this.prisma.executiveReport.count({ where: { createdBy: userId } })],
+      ["metas de venta", this.prisma.sellerGoal.count({ where: { userId } })],
+      [
+        "conversaciones de WhatsApp",
+        this.prisma.whatsAppConversation.count({ where: { assignedToUserId: userId } }),
+      ],
+      [
+        "mensajes de WhatsApp",
+        this.prisma.whatsAppMessage.count({ where: { authorUserId: userId } }),
+      ],
+      ["notas internas", this.prisma.whatsAppInternalNote.count({ where: { authorUserId: userId } })],
+      ["zonas asignadas", this.prisma.customerZone.count({ where: { assignedToUserId: userId } })],
+    ];
+
+    const counts = await Promise.all(checks.map(([, count]) => count));
+
+    return checks
+      .map(([label], index) => ({ label, count: counts[index] }))
+      .filter(({ count }) => count > 0)
+      .map(({ label, count }) => `${count} ${label}`);
+  }
+
   private normalizeEmail(email: string) {
     return email.trim().toLowerCase();
   }

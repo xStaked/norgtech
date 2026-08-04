@@ -12,6 +12,7 @@ import {
   Plus,
   Search,
   Target,
+  Trash2,
   TriangleAlert,
   Users,
   X,
@@ -251,6 +252,34 @@ export function UserManagementClient({
       setDraftPhone(updated.phone ?? "");
     } else {
       setDraftPhone(user.phone ?? "");
+    }
+  }
+
+  async function deleteUser(user: ManagedUser) {
+    if (isPending(user.id)) return;
+    if (!window.confirm(`¿Eliminar a ${user.name}? Esta acción no se puede deshacer.`)) return;
+
+    markPending(user.id, true);
+
+    try {
+      const response = await apiFetchClient(`/users/${user.id}`, { method: "DELETE" });
+
+      if (!response.ok) {
+        // 409: el usuario tiene historial. El API explica cuál, y desactivarlo
+        // es la salida.
+        toast.error("No se pudo eliminar", {
+          description: await readErrorMessage(response, "Intenta de nuevo en unos segundos."),
+        });
+        return;
+      }
+
+      setUsers((current) => current.filter((item) => item.id !== user.id));
+      toast.success("Usuario eliminado", { description: `${user.name} ya no existe en el CRM.` });
+      router.refresh();
+    } catch {
+      toast.error("Error de conexión", { description: "No se pudo contactar al servidor." });
+    } finally {
+      markPending(user.id, false);
     }
   }
 
@@ -523,6 +552,14 @@ export function UserManagementClient({
             >
               {user.active ? "Desactivar acceso" : "Activar acceso"}
             </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              disabled={user.id === currentUserId || isPending(user.id)}
+              onClick={() => void deleteUser(user)}
+            >
+              <Trash2 />
+              Eliminar usuario
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       ),
@@ -691,8 +728,8 @@ export function UserManagementClient({
 
           <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
             <Info className="mt-px h-3.5 w-3.5 shrink-0" />
-            No puedes cambiar tu propio rol ni desactivar tu propia cuenta. Los usuarios nunca se
-            eliminan: se desactivan para conservar su historial.
+            No puedes cambiar tu propio rol, desactivar tu propia cuenta ni eliminarte. Solo se
+            elimina a quien no tiene historial en el CRM; el resto se desactiva para conservarlo.
           </p>
         </>
       )}

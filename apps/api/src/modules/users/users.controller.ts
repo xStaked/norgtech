@@ -1,4 +1,15 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards, ValidationPipe } from "@nestjs/common";
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+  ValidationPipe,
+} from "@nestjs/common";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
@@ -73,5 +84,11 @@ export class UsersController {
     @Body(validationPipe) dto: UpdateUserDto,
   ) {
     return this.usersService.update(user, id, dto);
+  }
+
+  /** Solo para usuarios sin historial: el resto se desactiva con PATCH. */
+  @Delete(":id")
+  remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.usersService.remove(user, id);
   }
 }
