@@ -56,8 +56,16 @@ assert.equal(isActive("DISTRIBUIDOR"), true);
 assert.deepEqual(parsePayment(30), { paymentCondition: "credito_30", paymentDays: 30 });
 assert.deepEqual(parsePayment("contado"), { paymentCondition: "contado", paymentDays: 0 });
 assert.deepEqual(parsePayment(""), { paymentCondition: "contado", paymentDays: 0 });
-// 45 no es un bucket valido del enum: cae a contado en vez de reventar.
-assert.deepEqual(parsePayment(45), { paymentCondition: "contado", paymentDays: 0 });
+assert.deepEqual(parsePayment(45), { paymentCondition: "credito_45", paymentDays: 45 });
+// La columna se escribe a mano: el plazo viene con la palabra "DIAS" y a veces
+// con la letra O en vez del cero.
+assert.deepEqual(parsePayment("45 DIAS"), { paymentCondition: "credito_45", paymentDays: 45 });
+assert.deepEqual(parsePayment("3O DIAS"), { paymentCondition: "credito_30", paymentDays: 30 });
+assert.deepEqual(parsePayment("CONTADOO"), { paymentCondition: "contado", paymentDays: 0 });
+// Texto que no es un plazo (la columna la usan para anotaciones) -> contado.
+assert.deepEqual(parsePayment("NO ES CLIENTE ACTIVO"), { paymentCondition: "contado", paymentDays: 0 });
+// 20 no esta en el enum: cae a contado en vez de reventar.
+assert.deepEqual(parsePayment("20 DIAS"), { paymentCondition: "contado", paymentDays: 0 });
 
 assert.equal(normalizeSeller("BREYNER"), "BREYNER VALLE");
 assert.equal(normalizeSeller("NATALIA "), "NATALIA");

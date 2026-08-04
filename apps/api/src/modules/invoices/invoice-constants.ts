@@ -73,6 +73,7 @@ export const paymentConditionLabels: Record<string, string> = {
   contado: "Contado",
   credito_15: "Credito 15 dias",
   credito_30: "Credito 30 dias",
+  credito_45: "Credito 45 dias",
   credito_60: "Credito 60 dias",
   credito_90: "Credito 90 dias",
 };

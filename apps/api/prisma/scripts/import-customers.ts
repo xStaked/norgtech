@@ -108,20 +108,21 @@ export function parseCustomerType(raw: unknown): CustomerType {
 }
 
 export function parsePayment(raw: unknown): { paymentCondition: PaymentCondition; paymentDays: number } {
-  const value = clean(raw).toLowerCase();
-  const days = Number(value);
-  if (Number.isFinite(days) && days > 0) {
-    const bucket = [15, 30, 60, 90].find((d) => d === days);
-    if (bucket) {
-      return {
+  // Vacio, "contado" o cualquier texto que no sea un plazo ("NO ES CLIENTE
+  // ACTIVO") -> contado. Es el default del schema y el supuesto conservador:
+  // sin cupo de credito hasta que alguien lo configure.
+  const contado = { paymentCondition: PaymentCondition.contado, paymentDays: 0 };
+  // La columna se llena a mano: "45 DIAS", "3O DIAS" con letra O, "CONTADOO".
+  const value = clean(raw).toUpperCase().replace(/(\d)O/g, (_, d: string) => `${d}0`);
+  if (!value || value.includes("CONTADO")) return contado;
+  const days = Number(value.match(/^(\d+)(?:\s*D[IÍ]AS?)?$/)?.[1]);
+  const bucket = [15, 30, 45, 60, 90].find((d) => d === days);
+  return bucket
+    ? {
         paymentCondition: PaymentCondition[`credito_${bucket}` as keyof typeof PaymentCondition],
         paymentDays: bucket,
-      };
-    }
-  }
-  // Vacio o "contado" -> contado. Es el default del schema y el supuesto
-  // conservador: sin cupo de credito hasta que alguien lo configure.
-  return { paymentCondition: PaymentCondition.contado, paymentDays: 0 };
+      }
+    : contado;
 }
 
 export function normalizeSeller(raw: unknown): string | null {

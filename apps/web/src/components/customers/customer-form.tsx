@@ -374,6 +374,7 @@ export function CustomerForm({
               { value: "contado", label: "Contado" },
               { value: "credito_15", label: "Credito 15 dias" },
               { value: "credito_30", label: "Credito 30 dias" },
+              { value: "credito_45", label: "Credito 45 dias" },
               { value: "credito_60", label: "Credito 60 dias" },
               { value: "credito_90", label: "Credito 90 dias" },
             ]}

@@ -139,6 +139,7 @@ export const PAYMENT_LABELS: Record<string, string> = {
   contado: "Contado",
   credito_15: "Crédito 15 días",
   credito_30: "Crédito 30 días",
+  credito_45: "Crédito 45 días",
   credito_60: "Crédito 60 días",
   credito_90: "Crédito 90 días",
 };

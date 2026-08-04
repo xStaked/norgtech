@@ -80,6 +80,7 @@ enum PaymentCondition {
   contado
   credito_15
   credito_30
+  credito_45
   credito_60
   credito_90
 }

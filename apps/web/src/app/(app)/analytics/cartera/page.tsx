@@ -95,6 +95,7 @@ const PAYMENT_CONDITION_LABELS: Record<string, string> = {
   contado: "Contado",
   credito_15: "Crédito 15",
   credito_30: "Crédito 30",
+  credito_45: "Crédito 45",
   credito_60: "Crédito 60",
   credito_90: "Crédito 90",
 };
