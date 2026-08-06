@@ -9,7 +9,6 @@ export const protectedPaths = [
   "/orders",
   "/billing-requests",
   "/products",
-  "/segments",
   "/visits",
   "/expenses",
   "/follow-ups",

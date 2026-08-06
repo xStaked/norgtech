@@ -249,6 +249,7 @@ describe("Customers", () => {
             "companyId",
             "segmentId",
             "paymentCondition",
+            "customerType",
             "OR",
           ];
           for (const key of Object.keys(where ?? {})) {
@@ -264,6 +265,7 @@ describe("Customers", () => {
             companyId?: string;
             segmentId?: string;
             paymentCondition?: string;
+            customerType?: string;
             OR?: Array<Record<string, { contains: string; mode?: string }>>;
           };
 
@@ -280,6 +282,7 @@ describe("Customers", () => {
             if (w.paymentCondition && c.paymentCondition !== w.paymentCondition) {
               return false;
             }
+            if (w.customerType && c.customerType !== w.customerType) return false;
             if (w.OR) {
               const hit = w.OR.some((clause) =>
                 Object.entries(clause).some(([field, cond]) => {
@@ -317,6 +320,7 @@ describe("Customers", () => {
             "creditLimit",
             "paymentCondition",
             "paymentDays",
+            "customerType",
             "active",
             "priceListId",
             "assignedToUser",
@@ -1012,24 +1016,6 @@ describe("Customers", () => {
       const ids = (response.body as Array<{ id: string }>).map((c) => c.id);
       expect(ids).toContain("superagro-id");
     }
-  });
-
-  it("allows director_comercial to refresh segments", async () => {
-    const directorLogin = await request(globalThis.__APP__)
-      .post("/auth/login")
-      .send({ email: "director@norgtech.local", password: "Admin123*" })
-      .expect(200);
-
-    const directorToken = directorLogin.body.accessToken;
-
-    const response = await request(globalThis.__APP__)
-      .post("/customers/refresh-segments")
-      .set("Authorization", `Bearer ${directorToken}`)
-      .expect(201);
-
-    expect(response.body.totalCustomers).toBeDefined();
-    expect(response.body.updated).toBeDefined();
-    expect(Array.isArray(response.body.details)).toBe(true);
   });
 
   it("rechaza crear un cliente sin empresa", async () => {

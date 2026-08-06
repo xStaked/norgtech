@@ -16,12 +16,9 @@ const user_tecnico = "760c715a-d52c-4450-a068-ca84decc58ec";
 const user_facturacion = "a5ee2979-5a55-45a5-be7b-10deefefcb6a";
 const user_logistica = "e405b989-5227-4da7-9bba-639225125d0d";
 
-const segment_oro = "754a9936-081f-42a6-9ebb-7a5e7a1a8ea4";
-const segment_plata = "f6c48d99-916a-4c25-aaea-b7c0d55afd03";
-const segment_bronce = "f003a568-d395-434d-9e74-6de3f2f0e618";
-const segment_platino = "c9e1a2b3-4d5e-6f7a-8b9c-0d1e2f3a4b5c";
-const segment_retail = "ed8440f7-2768-4ac3-8986-b362917f194e";
-const segment_industria = "26c81d48-808d-4793-9d34-6df05e57bb4f";
+// El segmento es solo una etiqueta, espejo de Customer.customerType.
+const segment_distribuidor = "ed8440f7-2768-4ac3-8986-b362917f194e";
+const segment_directo = "f003a568-d395-434d-9e74-6de3f2f0e618";
 
 const cust_1 = "cfba5b04-6e92-4b95-bece-f35cf5ec03f1";
 const cust_2 = "ecc72705-68e3-4254-bcdf-5666128a9531";
@@ -131,39 +128,28 @@ async function main() {
 
   // ── Customer Segments ────────────────────────────────
   const segments = [
-    { id: segment_bronce, name: "Bronce", description: "Clientes nuevos o de bajo volumen", discountPercent: 3, minGoalAmount: 0, maxGoalAmount: 50000000 },
-    { id: segment_plata, name: "Plata", description: "Clientes con buen potencial de crecimiento", discountPercent: 5, minGoalAmount: 50000000, maxGoalAmount: 150000000 },
-    { id: segment_oro, name: "Oro", description: "Clientes estrategicos con alto volumen de compra", discountPercent: 8, minGoalAmount: 150000000, maxGoalAmount: 300000000 },
-    { id: segment_platino, name: "Platino", description: "Clientes VIP con volumen excepcional", discountPercent: 12, minGoalAmount: 300000000, maxGoalAmount: null },
-    { id: segment_retail, name: "Retail", description: "Cadenas de tiendas y distribuidores", discountPercent: 4, minGoalAmount: 0, maxGoalAmount: 100000000 },
-    { id: segment_industria, name: "Industria", description: "Manufactura y sector industrial", discountPercent: 6, minGoalAmount: 100000000, maxGoalAmount: null },
+    { id: segment_distribuidor, name: "Distribuidor", description: "Etiqueta comercial. Sin descuento ni meta." },
+    { id: segment_directo, name: "Directo", description: "Etiqueta comercial. Sin descuento ni meta." },
   ];
 
   for (const seg of segments) {
     await prisma.customerSegment.upsert({
       where: { name: seg.name },
-      update: {
-        description: seg.description,
-        discountPercent: seg.discountPercent,
-        minGoalAmount: seg.minGoalAmount,
-        maxGoalAmount: seg.maxGoalAmount,
-        active: true,
-        updatedBy: user_director,
-      },
-      create: { id: seg.id, name: seg.name, description: seg.description, discountPercent: seg.discountPercent, minGoalAmount: seg.minGoalAmount, maxGoalAmount: seg.maxGoalAmount, active: true, createdBy: user_director, updatedBy: user_director },
+      update: { description: seg.description, active: true, updatedBy: user_director },
+      create: { id: seg.id, name: seg.name, description: seg.description, minGoalAmount: 0, active: true, createdBy: user_director, updatedBy: user_director },
     });
   }
 
   // ── Customers ────────────────────────────────────────
   const customers = [
-    { id: cust_1, legalName: "Industrias del Norte S.A.S.", displayName: "Indunorte", taxId: "900123456-1", phone: "+57 601 2345678", email: "compras@indunorte.com", address: "Calle 100 # 15-30", city: "Bogota", department: "Cundinamarca", notes: "Cliente estrategico desde 2019. Principal comprador de equipos industriales.", segmentId: segment_oro, assignedToUserId: user_comercial },
-    { id: cust_2, legalName: "Supermercados La Economia S.A.", displayName: "La Economia", taxId: "800234567-2", phone: "+57 604 3456789", email: "abastecimiento@laeconomia.com", address: "Carrera 43 # 1-50", city: "Medellin", department: "Antioquia", notes: "Cadena de 45 tiendas. Requiere entregas just-in-time.", segmentId: segment_retail, assignedToUserId: user_comercial },
-    { id: cust_3, legalName: "Constructora El Progreso Ltda.", displayName: "El Progreso", taxId: "830345678-3", phone: "+57 601 4567890", email: "logistica@elprogreso.com.co", address: "Avenida El Dorado # 68-20", city: "Bogota", department: "Cundinamarca", notes: "Proyectos de infraestructura publica. Pagos a 60 dias.", segmentId: segment_plata, assignedToUserId: user_comercial },
-    { id: cust_4, legalName: "Farmaceutica Andina S.A.", displayName: "FarAndina", taxId: "860456789-4", phone: "+57 602 5678901", email: "proveedores@farandina.com", address: "Calle 5 # 28-45", city: "Cali", department: "Valle del Cauca", notes: "Sector salud. Requiere certificaciones ISO y trazabilidad.", segmentId: segment_industria, assignedToUserId: user_director },
-    { id: cust_5, legalName: "TecnoSoluciones Colombia S.A.S.", displayName: "TecnoSol", taxId: "900567890-5", phone: "+57 605 6789012", email: "gerencia@tecnosol.co", address: "Carrera 7 # 72-35", city: "Bogota", department: "Cundinamarca", notes: "Startup en crecimiento. Interesada en soluciones IoT.", segmentId: segment_bronce, assignedToUserId: user_comercial },
-    { id: cust_6, legalName: "Alimentos del Valle S.A.", displayName: "Alivalle", taxId: "805678901-6", phone: "+57 602 7890123", email: "compras@alivalle.com", address: "Zona Industrial Mamonal", city: "Cartagena", department: "Bolivar", notes: "Procesadora de alimentos. Requiere equipos de refrigeracion industrial.", segmentId: segment_plata, assignedToUserId: user_comercial },
-    { id: cust_7, legalName: "Minerales Andinos S.A.", displayName: "MinAndes", taxId: "860789012-7", phone: "+57 607 8901234", email: "abastecimiento@minandes.com", address: "Carrera 15 # 88-10", city: "Bucaramanga", department: "Santander", notes: "Sector minero. Equipos de alta resistencia.", segmentId: segment_oro, assignedToUserId: user_director },
-    { id: cust_8, legalName: "Textiles del Caribe Ltda.", displayName: "TexCaribe", taxId: "830890123-8", phone: "+57 605 9012345", email: "compras@texcaribe.com", address: "Via 40 # 72-150", city: "Barranquilla", department: "Atlantico", notes: "Maquila textil. Renovacion de maquinaria planificada para Q4.", segmentId: segment_bronce, assignedToUserId: user_comercial },
+    { id: cust_1, legalName: "Industrias del Norte S.A.S.", displayName: "Indunorte", taxId: "900123456-1", phone: "+57 601 2345678", email: "compras@indunorte.com", address: "Calle 100 # 15-30", city: "Bogota", department: "Cundinamarca", notes: "Cliente estrategico desde 2019. Principal comprador de equipos industriales.", segmentId: segment_distribuidor, assignedToUserId: user_comercial },
+    { id: cust_2, legalName: "Supermercados La Economia S.A.", displayName: "La Economia", taxId: "800234567-2", phone: "+57 604 3456789", email: "abastecimiento@laeconomia.com", address: "Carrera 43 # 1-50", city: "Medellin", department: "Antioquia", notes: "Cadena de 45 tiendas. Requiere entregas just-in-time.", segmentId: segment_distribuidor, assignedToUserId: user_comercial },
+    { id: cust_3, legalName: "Constructora El Progreso Ltda.", displayName: "El Progreso", taxId: "830345678-3", phone: "+57 601 4567890", email: "logistica@elprogreso.com.co", address: "Avenida El Dorado # 68-20", city: "Bogota", department: "Cundinamarca", notes: "Proyectos de infraestructura publica. Pagos a 60 dias.", segmentId: segment_directo, assignedToUserId: user_comercial },
+    { id: cust_4, legalName: "Farmaceutica Andina S.A.", displayName: "FarAndina", taxId: "860456789-4", phone: "+57 602 5678901", email: "proveedores@farandina.com", address: "Calle 5 # 28-45", city: "Cali", department: "Valle del Cauca", notes: "Sector salud. Requiere certificaciones ISO y trazabilidad.", segmentId: segment_distribuidor, assignedToUserId: user_director },
+    { id: cust_5, legalName: "TecnoSoluciones Colombia S.A.S.", displayName: "TecnoSol", taxId: "900567890-5", phone: "+57 605 6789012", email: "gerencia@tecnosol.co", address: "Carrera 7 # 72-35", city: "Bogota", department: "Cundinamarca", notes: "Startup en crecimiento. Interesada en soluciones IoT.", segmentId: segment_directo, assignedToUserId: user_comercial },
+    { id: cust_6, legalName: "Alimentos del Valle S.A.", displayName: "Alivalle", taxId: "805678901-6", phone: "+57 602 7890123", email: "compras@alivalle.com", address: "Zona Industrial Mamonal", city: "Cartagena", department: "Bolivar", notes: "Procesadora de alimentos. Requiere equipos de refrigeracion industrial.", segmentId: segment_directo, assignedToUserId: user_comercial },
+    { id: cust_7, legalName: "Minerales Andinos S.A.", displayName: "MinAndes", taxId: "860789012-7", phone: "+57 607 8901234", email: "abastecimiento@minandes.com", address: "Carrera 15 # 88-10", city: "Bucaramanga", department: "Santander", notes: "Sector minero. Equipos de alta resistencia.", segmentId: segment_distribuidor, assignedToUserId: user_director },
+    { id: cust_8, legalName: "Textiles del Caribe Ltda.", displayName: "TexCaribe", taxId: "830890123-8", phone: "+57 605 9012345", email: "compras@texcaribe.com", address: "Via 40 # 72-150", city: "Barranquilla", department: "Atlantico", notes: "Maquila textil. Renovacion de maquinaria planificada para Q4.", segmentId: segment_directo, assignedToUserId: user_comercial },
   ];
 
   for (const c of customers) {
@@ -416,7 +402,7 @@ async function main() {
   console.log("   - 6 usuarios");
   console.log("   - 2 empresas");
   console.log("   - 6 zonas");
-  console.log("   - 6 segmentos");
+  console.log("   - 2 segmentos");
   console.log("   - 8 clientes");
   console.log("   - 9 contactos");
   console.log("   - 8 productos");

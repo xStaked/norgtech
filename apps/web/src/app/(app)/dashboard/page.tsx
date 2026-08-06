@@ -295,7 +295,7 @@ export default async function DashboardPage({
             <CardContent className="p-5">
               <div className="flex items-start justify-between">
                 <div>
-                  <h3 className="text-sm font-bold text-[#4f46e5]">Nora</h3>
+                  <h3 className="text-sm font-bold text-[#4f46e5]">Magali</h3>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Tu asistente comercial inteligente.
                   </p>

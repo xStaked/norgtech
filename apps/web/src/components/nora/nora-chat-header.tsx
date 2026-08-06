@@ -13,7 +13,7 @@ export function NoraChatHeader({ hasActiveSession }: NoraChatHeaderProps) {
         <MessageSquare className="h-4 w-4 text-white" strokeWidth={2.5} />
       </div>
       <div className="min-w-0">
-        <div className="text-[15px] font-bold text-foreground">Nora</div>
+        <div className="text-[15px] font-bold text-foreground">Magali</div>
         <div className="text-xs text-muted-foreground">Asistente comercial</div>
       </div>
       <div className="ml-auto">

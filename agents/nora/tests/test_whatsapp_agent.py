@@ -125,7 +125,7 @@ class TestToMessages:
         msgs = _to_messages(req)
         assert isinstance(msgs[0], SystemMessage)
         # EXPENSE_AGENT_PROMPT has distinctive content
-        assert "Nora" in msgs[0].content
+        assert "Magali" in msgs[0].content
 
     def test_second_message_is_case_context_block(self):
         req = _base_request()

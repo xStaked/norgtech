@@ -66,11 +66,11 @@ export default function LoginPage() {
           en un solo lugar.
         </>
       }
-      blurb="Pedidos, cartera, visitas y metas — con Nora, tu asistente de IA, integrada a WhatsApp."
+      blurb="Pedidos, cartera, visitas y metas — con Magali, tu asistente de IA, integrada a WhatsApp."
       stats={[
         { value: "2.4k", label: "pedidos / mes" },
         { value: "98%", label: "entregas a tiempo" },
-        { value: "24/7", label: "asistente Nora" },
+        { value: "24/7", label: "asistente Magali" },
       ]}
     >
       <h1 className="text-[25px] font-extrabold tracking-[-0.02em] text-[#0c2c44]">

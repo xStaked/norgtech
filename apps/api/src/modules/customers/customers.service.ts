@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { NotificationType, Prisma } from "@prisma/client";
+import { CustomerType, NotificationType, Prisma } from "@prisma/client";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { NotificationsService } from "../notifications/notifications.service";
@@ -35,7 +35,7 @@ export class CustomersService {
     const assignedToUserId =
       user.role === "comercial" ? user.id : dto.assignedToUserId;
     await this.assertValidReferences(dto, assignedToUserId);
-    const segmentId = await this.resolveSegmentId(dto.segmentId);
+    const segmentId = await this.resolveSegmentId(dto.segmentId, dto.customerType);
 
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -147,11 +147,11 @@ export class CustomersService {
   }
 
   /**
-   * El segmento no se pide al dar de alta: el negocio solo maneja listas de
-   * precios. Si no viene uno, se cae al mismo por defecto que usa el importador
-   * de clientes (prisma/scripts/import-customers.ts): "Bronce".
+   * El segmento ya no se pide ni se muestra: es una etiqueta, Distribuidor o
+   * Directo, y sale de `customerType`, que es lo que el usuario si edita. El
+   * modelo sigue en pie por si algun dia vuelven los niveles.
    */
-  private async resolveSegmentId(segmentId?: string) {
+  private async resolveSegmentId(segmentId?: string, customerType?: CustomerType | null) {
     if (segmentId) {
       const segment = await this.prisma.customerSegment.findUnique({
         where: { id: segmentId },
@@ -162,10 +162,11 @@ export class CustomersService {
       return segmentId;
     }
 
+    const name = customerType === "distribuidor" ? "Distribuidor" : "Directo";
     const segments = await this.prisma.customerSegment.findMany({
       where: { active: true },
     });
-    const fallback = segments.find((s) => s.name === "Bronce") ?? segments[0];
+    const fallback = segments.find((s) => s.name === name) ?? segments[0];
 
     if (!fallback) {
       throw new NotFoundException("No hay segmentos de cliente configurados");
@@ -268,6 +269,15 @@ export class CustomersService {
       }
     }
 
+    // El segmento es el espejo de customerType (la etiqueta Distribuidor /
+    // Directo): si cambia el tipo y nadie mando un segmento explicito, se mueve
+    // con el en vez de quedarse en el que tenia.
+    const segmentId =
+      dto.segmentId ??
+      (dto.customerType !== undefined && dto.customerType !== customer.customerType
+        ? await this.resolveSegmentId(undefined, dto.customerType)
+        : undefined);
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const result = await tx.customer.update({
         where: { id },
@@ -283,7 +293,7 @@ export class CustomersService {
           ...(dto.country !== undefined && { country: dto.country }),
           ...(dto.priceListId !== undefined && { priceListId: dto.priceListId }),
           ...(dto.notes !== undefined && { notes: dto.notes }),
-          ...(dto.segmentId !== undefined && { segmentId: dto.segmentId }),
+          ...(segmentId !== undefined && { segmentId }),
           ...(dto.companyId !== undefined && { companyId: dto.companyId }),
           ...(dto.assignedToUserId !== undefined && {
             assignedToUserId: dto.assignedToUserId,
@@ -343,6 +353,7 @@ export class CustomersService {
       companyId,
       segmentId,
       paymentCondition,
+      customerType,
       active,
       assignedToUserId,
     } = query;
@@ -357,6 +368,7 @@ export class CustomersService {
     if (segmentId) where.segmentId = segmentId;
     if (assignedToUserId) where.assignedToUserId = assignedToUserId;
     if (paymentCondition) where.paymentCondition = paymentCondition;
+    if (customerType) where.customerType = customerType;
     if (search) {
       where.OR = [
         { displayName: { contains: search, mode: "insensitive" } },
@@ -382,6 +394,7 @@ export class CustomersService {
         creditLimit: true,
         paymentCondition: true,
         paymentDays: true,
+        customerType: true,
         active: true,
         // Lo usa el filtro por cliente del catalogo: sin lista no hay precios.
         priceListId: true,
@@ -435,98 +448,6 @@ export class CustomersService {
         },
       },
     });
-  }
-
-  async refreshSegments(user: AuthUser) {
-    const segments = await this.prisma.customerSegment.findMany({
-      where: { active: true },
-      orderBy: { minGoalAmount: "asc" },
-    });
-
-    const customers = await this.prisma.customer.findMany({
-      where: { active: true },
-      include: { segment: true },
-    });
-
-    const oneYearAgo = new Date();
-    oneYearAgo.setDate(oneYearAgo.getDate() - 365);
-
-    const details: Array<{
-      customerId: string;
-      customerName: string;
-      previousSegment: string;
-      newSegment: string;
-      annualSpend: number;
-    }> = [];
-
-    let updatedCount = 0;
-
-    for (const customer of customers) {
-      const aggregate = await this.prisma.order.aggregate({
-        where: {
-          customerId: customer.id,
-          status: { in: ["facturado", "entregado"] },
-          createdAt: { gte: oneYearAgo },
-        },
-        _sum: { total: true },
-      });
-
-      const totalCompras = aggregate._sum.total ?? new Prisma.Decimal(0);
-
-      const newSegment = segments.find((segment) => {
-        const min = new Prisma.Decimal(segment.minGoalAmount);
-        const max = segment.maxGoalAmount ? new Prisma.Decimal(segment.maxGoalAmount) : null;
-        const total = new Prisma.Decimal(totalCompras);
-        return total.gte(min) && (max === null || total.lt(max));
-      });
-
-      const newSegmentId = newSegment?.id ?? segments[0]?.id;
-
-      if (newSegmentId && newSegmentId !== customer.segmentId) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.customer.update({
-            where: { id: customer.id },
-            data: { segmentId: newSegmentId, updatedBy: user.id },
-          });
-
-          await this.auditService.record(
-            {
-              entityType: "Customer",
-              entityId: customer.id,
-              action: "customer.segment_changed",
-              actorUserId: user.id,
-              previousState: {
-                segmentId: customer.segmentId,
-                segmentName: customer.segment?.name,
-              },
-              nextState: {
-                segmentId: newSegmentId,
-                segmentName: newSegment?.name,
-              },
-            },
-            tx,
-          );
-        });
-
-        updatedCount++;
-
-        if (details.length < 50) {
-          details.push({
-            customerId: customer.id,
-            customerName: customer.displayName,
-            previousSegment: customer.segment?.name ?? "",
-            newSegment: newSegment?.name ?? "",
-            annualSpend: new Prisma.Decimal(totalCompras).toNumber(),
-          });
-        }
-      }
-    }
-
-    return {
-      totalCustomers: customers.length,
-      updated: updatedCount,
-      details,
-    };
   }
 
   async getCustomerZones(customerId: string) {

@@ -21,7 +21,7 @@ def validate_plan(request: WhatsAppRouteRequest, plan: NoraPlan) -> ValidationRe
         if capability is None:
             return ValidationResult(
                 ok=False,
-                blocked_reason=f"Nora no soporta la accion {action.domain}.{action.action}.",
+                blocked_reason=f"Magali no soporta la accion {action.domain}.{action.action}.",
             )
 
         mode = mode_for_sender(request.sender_type)

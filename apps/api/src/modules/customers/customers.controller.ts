@@ -43,13 +43,6 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
-  @Post("refresh-segments")
-  refreshSegments(@CurrentUser() user: AuthUser) {
-    return this.customersService.refreshSegments(user);
-  }
-
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get()
   findAll(

@@ -26,7 +26,7 @@ def _token(role: str) -> str:
 def test_first_message_is_system_prompt_with_whatsapp_addendum():
     msgs = _to_messages(_req())
     assert isinstance(msgs[0], SystemMessage)
-    assert "Nora" in msgs[0].content          # NORA_SYSTEM_PROMPT marker
+    assert "Magali" in msgs[0].content        # NORA_SYSTEM_PROMPT marker
     assert "WhatsApp" in msgs[0].content       # addendum marker
     assert "Una solicitud de visita no es un gasto" in msgs[0].content
 

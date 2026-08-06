@@ -197,7 +197,7 @@ export function Topbar({ userRole }: { userRole: UserRole | null }) {
           style={{ background: "var(--nora-accent)" }}
         >
           <Sparkles className="h-4 w-4" />
-          <span className="hidden sm:inline">Pregúntale a Nora</span>
+          <span className="hidden sm:inline">Pregúntale a Magali</span>
         </Link>
       )}
 

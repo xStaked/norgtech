@@ -155,7 +155,7 @@ export function WhatsAppInbox({
           </div>
           <div>
             <div className="text-base font-bold leading-tight text-[#0c2c44]">WhatsApp</div>
-            <div className="text-xs text-[#6b7787]">Inbox operativo asistido por Nora</div>
+            <div className="text-xs text-[#6b7787]">Inbox operativo asistido por Magali</div>
           </div>
         </div>
         <span className="flex items-center gap-1.5 rounded-md bg-[#e6f4ec] px-2.5 py-1 text-xs font-semibold text-[#167c4a]">

@@ -163,7 +163,7 @@ export function AnalyticsFilters({
       {select("companyId", "Empresa: todas", options.companies, applied.companyId)}
       {select("sellerUserId", "Vendedor: todos", options.sellers, applied.sellerUserId, lockedSeller)}
       {select("zoneId", "Zona: todas", options.zones, applied.zoneId)}
-      {select("segmentId", "Segmento: todos", options.segments, applied.segmentId)}
+      {select("segmentId", "Tipo de cliente: todos", options.segments, applied.segmentId)}
 
       <span className="ml-auto flex items-center gap-1.5 text-[11.5px] text-muted-foreground">
         <Info className="h-3.5 w-3.5" aria-hidden="true" />

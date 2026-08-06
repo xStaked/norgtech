@@ -41,7 +41,7 @@ export function ConversationComposer({
             <Sparkles className="size-4" />
           </div>
           <p className="min-w-0 flex-1 truncate text-xs text-[#0c2c44]">
-            <span className="font-semibold text-[#6d4ff0]">Nora sugiere:</span> {suggestedReply}
+            <span className="font-semibold text-[#6d4ff0]">Magali sugiere:</span> {suggestedReply}
           </p>
           <button
             type="button"

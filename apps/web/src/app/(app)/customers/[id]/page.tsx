@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button-link";
-import { formatPercent } from "@/lib/labels";
+import { customerTypeLabel, formatPercent } from "@/lib/labels";
 import { DetailSection } from "@/components/ui/detail-section";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -24,11 +24,6 @@ interface Contact {
   phone: string | null;
   isPrimary: boolean;
   notes: string | null;
-}
-
-interface Segment {
-  id: string;
-  name: string;
 }
 
 interface Opportunity {
@@ -107,7 +102,7 @@ interface Customer {
   country: string | null;
   notes: string | null;
   company: { id: string; name: string } | null;
-  segment: Segment | null;
+  customerType: string | null;
   priceList: { id: string; name: string; currency: string } | null;
   contacts: Contact[];
   opportunities: Opportunity[];
@@ -191,7 +186,7 @@ export default async function CustomerDetailPage({
       </Link>
 
       <PageHeader
-        eyebrow={customer.segment?.name ?? "Sin segmento"}
+        eyebrow={customerTypeLabel(customer.customerType)}
         title={customer.displayName}
         description={customer.legalName}
         actions={
@@ -322,9 +317,9 @@ export default async function CustomerDetailPage({
           { label: "Ciudad", value: customer.city ?? "—" },
           { label: "Departamento", value: customer.department ?? "—" },
           { label: "Pais", value: customer.country ?? "—" },
-          { label: "Segmento", value: customer.segment?.name ?? "—" },
+          { label: "Tipo de cliente", value: customerTypeLabel(customer.customerType) },
           {
-            // Sin lista, se cotiza con precio base + descuento de segmento.
+            // Sin lista, se cotiza con el precio base del producto.
             label: "Lista de precios",
             value: customer.priceList
               ? `${customer.priceList.name} · ${customer.priceList.currency}`

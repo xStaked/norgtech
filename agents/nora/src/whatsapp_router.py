@@ -64,7 +64,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
             mode=mode,
             intent="unsupported",
             summary=plan.summary,
-            suggested_reply=validation.blocked_reason or "No puedo hacer esa accion desde Nora.",
+            suggested_reply=validation.blocked_reason or "No puedo hacer esa accion desde Magali.",
             requires_human_review=True,
             risk_level="medium",
             missing_fields=[],

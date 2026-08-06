@@ -141,14 +141,6 @@ export default async function QuoteDetailPage({
 
   const quote: Quote = await response.json();
 
-  // Derived from the saved lines, so it always reconciles with the stored
-  // subtotal — no recomputing of prices on the client (QUO-03).
-  const discountAmount = quote.items.reduce((sum, item) => {
-    if (!item.originalUnitPrice) return sum;
-    const perUnit = Number(item.originalUnitPrice) - Number(item.unitPrice);
-    return sum + perUnit * Number(item.quantity);
-  }, 0);
-
   return (
     <div
       style={{
@@ -195,20 +187,6 @@ export default async function QuoteDetailPage({
               gap: 12,
             }}
           >
-            {discountAmount > 0 && (
-              <>
-                <InlineMetric
-                  label="Subtotal sin descuento"
-                  value={formatCurrency(String(Number(quote.subtotal) + discountAmount))}
-                  tone="info"
-                />
-                <InlineMetric
-                  label="Descuento por segmento"
-                  value={`-${formatCurrency(String(discountAmount))}`}
-                  tone="success"
-                />
-              </>
-            )}
             <InlineMetric label="Subtotal" value={formatCurrency(quote.subtotal)} tone="info" />
             <InlineMetric label="Total" value={formatCurrency(quote.total)} tone="success" />
             <InlineMetric

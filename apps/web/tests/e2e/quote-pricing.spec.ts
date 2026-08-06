@@ -2,12 +2,9 @@ import { expect, test, type Page, type APIRequestContext } from "@playwright/tes
 import { chooseOption, selectByName } from "./select";
 
 /**
- * The quote form must show the price the backend will actually save: the
- * segment discount is conditional on the customer meeting their goal.
- *
- * Seeded fixtures this relies on:
- *  - "La Economia" — segment Retail, 4%, minGoalAmount 0  -> always meets goal
- *  - "Indunorte"   — segment Oro,    8%, minGoalAmount 150M, 0 YTD -> never meets
+ * El segmento ya no descuenta nada (es solo una etiqueta), asi que lo unico
+ * que queda por defender aqui es que el total del formulario sea el que se
+ * guarda: la vista previa y el backend corren el mismo PricingService.
  */
 
 async function waitForBackend(request: APIRequestContext) {
@@ -36,39 +33,6 @@ async function startQuoteFor(page: Page, customerName: string) {
   await chooseOption(page, page.getByTestId("product-select").first(), { index: 1 });
 }
 
-test("applies the segment discount when the customer meets the goal", async ({ page, request }) => {
-  await waitForBackend(request);
-  await loginAsAdmin(page);
-  await startQuoteFor(page, "La Economia");
-
-  // Retail = 4%, goal 0 -> met, so the discount is real and must be shown.
-  await expect(page.getByText(/Descuento:\s*4\.00%/)).toBeVisible();
-  await expect(page.getByText(/Descuento por segmento \(4\.00%\)/)).toBeVisible();
-});
-
-test("withholds the discount and explains why when the goal is not met", async ({
-  page,
-  request,
-}) => {
-  await waitForBackend(request);
-  await loginAsAdmin(page);
-  await startQuoteFor(page, "Indunorte");
-
-  // Oro = 8%, but 0 YTD against a 150M goal. The form must not promise 8%.
-  await expect(page.getByText(/Descuento:\s*0\.00%/)).toBeVisible();
-  await expect(page.getByText(/faltan .* para cumplir la meta/i)).toBeVisible();
-  await expect(page.getByText(/Descuento:\s*8\.00%/)).toHaveCount(0);
-});
-
-test("never renders NaN as a percentage (QUO-02)", async ({ page, request }) => {
-  await waitForBackend(request);
-  await loginAsAdmin(page);
-  await startQuoteFor(page, "Indunorte");
-
-  await expect(page.getByText(/Descuento:/)).toBeVisible();
-  await expect(page.getByText(/NaN/)).toHaveCount(0);
-});
-
 test("form total matches the saved quote detail (QUO-03)", async ({ page, request }) => {
   await waitForBackend(request);
   await loginAsAdmin(page);
@@ -78,6 +42,7 @@ test("form total matches the saved quote detail (QUO-03)", async ({ page, reques
   await expect(formTotal).not.toHaveText("—");
   await expect(formTotal).not.toHaveText("Calculando...");
   const shownTotal = (await formTotal.textContent())?.trim();
+  expect(shownTotal).not.toMatch(/NaN/);
 
   await page.getByRole("button", { name: "Guardar cotización" }).click();
   await expect(page).toHaveURL(/\/quotes\/[a-z0-9-]+$/);

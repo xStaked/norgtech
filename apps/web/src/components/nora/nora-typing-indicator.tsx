@@ -8,7 +8,7 @@ export function NoraTypingIndicator() {
     <div
       role="status"
       aria-live="polite"
-      aria-label="Nora está procesando tu mensaje"
+      aria-label="Magali está procesando tu mensaje"
       className="flex max-w-[88%] items-center gap-3"
     >
       <div
@@ -36,7 +36,7 @@ export function NoraTypingIndicator() {
             />
           ))}
         </div>
-        <span className="text-xs">Nora está pensando...</span>
+        <span className="text-xs">Magali está pensando...</span>
       </div>
     </div>
   );

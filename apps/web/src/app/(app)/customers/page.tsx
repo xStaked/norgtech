@@ -10,7 +10,7 @@ import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
 import { ListFilters } from "@/components/ui/list-filters";
 import { buildQueryString } from "@/lib/query-string";
-import { PAYMENT_LABELS, paymentLabel } from "@/lib/labels";
+import { CUSTOMER_TYPE_LABELS, PAYMENT_LABELS, customerTypeLabel, paymentLabel } from "@/lib/labels";
 
 interface Contact {
   id: string;
@@ -18,11 +18,6 @@ interface Contact {
   email: string | null;
   phone: string | null;
   isPrimary: boolean;
-}
-
-interface Segment {
-  id: string;
-  name: string;
 }
 
 interface Customer {
@@ -36,7 +31,7 @@ interface Customer {
   department: string | null;
   creditLimit: string | number | null;
   active: boolean;
-  segment: Segment | null;
+  customerType: string | null;
   contacts: Contact[];
   paymentCondition: string | null;
   company: { id: string; name: string } | null;
@@ -47,7 +42,7 @@ interface CustomerRow {
   id: string;
   displayName: string;
   legalName: string;
-  segment: string | null;
+  customerType: string | null;
   location: string;
   primaryContact: string | null;
   primaryContactMeta: string | null;
@@ -97,9 +92,9 @@ const columns: readonly DataTableColumn<CustomerRow>[] = [
     ),
   },
   {
-    key: "segment",
-    header: "Segmento",
-    render: (row) => row.segment ?? <span style={{ color: "#6b7787" }}>Sin segmento</span>,
+    key: "customerType",
+    header: "Tipo",
+    render: (row) => customerTypeLabel(row.customerType),
   },
   {
     key: "seller",
@@ -177,7 +172,7 @@ export default async function CustomersPage({
   const apiParams: Record<string, string | undefined> = {
     search: single("search") || undefined,
     companyId: single("companyId") || undefined,
-    segmentId: single("segmentId") || undefined,
+    customerType: single("customerType") || undefined,
     assignedToUserId: single("assignedToUserId") || undefined,
     paymentCondition: single("paymentCondition") || undefined,
     active: single("active") || undefined,
@@ -191,10 +186,9 @@ export default async function CustomersPage({
     ([key, value]) => key !== "includeInactive" && value !== undefined,
   );
 
-  const [response, companiesResponse, segmentsResponse, sellersResponse, totalResponse] = await Promise.all([
+  const [response, companiesResponse, sellersResponse, totalResponse] = await Promise.all([
     apiFetch(`/customers?${queryString}`),
     apiFetch("/companies"),
-    apiFetch("/customer-segments"),
     apiFetch("/users/sellers"),
     // "N de M": el total sin filtrar solo se necesita (y se consulta) cuando hay
     // filtros activos, y va en paralelo con el listado filtrado. ponytail:
@@ -205,9 +199,6 @@ export default async function CustomersPage({
   const customers: Customer[] = response.ok ? await response.json() : [];
   const companies: { id: string; name: string }[] = companiesResponse.ok
     ? await companiesResponse.json()
-    : [];
-  const segments: { id: string; name: string }[] = segmentsResponse.ok
-    ? await segmentsResponse.json()
     : [];
   const sellers: { id: string; name: string }[] = sellersResponse.ok
     ? await sellersResponse.json()
@@ -226,7 +217,7 @@ export default async function CustomersPage({
       id: customer.id,
       displayName: customer.displayName,
       legalName: customer.legalName,
-      segment: customer.segment?.name ?? null,
+      customerType: customer.customerType,
       location: buildLocation(customer),
       primaryContact: primary.name,
       primaryContactMeta: primary.meta,
@@ -271,9 +262,9 @@ export default async function CustomersPage({
             options: sellers.map((seller) => ({ value: seller.id, label: seller.name })),
           },
           {
-            key: "segmentId",
-            allLabel: "Todos los segmentos",
-            options: segments.map((segment) => ({ value: segment.id, label: segment.name })),
+            key: "customerType",
+            allLabel: "Todos los tipos",
+            options: Object.entries(CUSTOMER_TYPE_LABELS).map(([value, label]) => ({ value, label })),
           },
           {
             key: "paymentCondition",

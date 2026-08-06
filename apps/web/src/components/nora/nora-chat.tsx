@@ -294,7 +294,7 @@ export function NoraChat({
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Nora no pudo procesar el mensaje.",
+          : "Magali no pudo procesar el mensaje.",
       );
     } finally {
       setBusy(false);
@@ -336,13 +336,13 @@ export function NoraChat({
       }
 
       setNotice(
-        `Nora guardó ${body.saved.length} bloques y descartó ${body.discarded.length}.`,
+        `Magali guardó ${body.saved.length} bloques y descartó ${body.discarded.length}.`,
       );
     } catch (caughtError) {
       setError(
         caughtError instanceof Error
           ? caughtError.message
-          : "Nora no pudo confirmar la propuesta.",
+          : "Magali no pudo confirmar la propuesta.",
       );
     } finally {
       setConfirming(false);
@@ -367,7 +367,7 @@ export function NoraChat({
   }
 
   const firstUserMessage = messages.find((message) => message.role === "user");
-  const conversationTitle = firstUserMessage?.content ?? "Conversación con Nora";
+  const conversationTitle = firstUserMessage?.content ?? "Conversación con Magali";
   const conversationTime = firstUserMessage
     ? formatRelativeTime(firstUserMessage.createdAt)
     : "";
@@ -388,7 +388,7 @@ export function NoraChat({
           </div>
           <div className="min-w-0">
             <p className="text-[16px] font-extrabold leading-tight text-[#2a1f6e]">
-              Nora
+              Magali
             </p>
             <p className="truncate text-[11px] text-[#9a8fd0]">
               Asistente comercial IA

@@ -1,4 +1,4 @@
-import { PaymentCondition } from "@prisma/client";
+import { CustomerType, PaymentCondition } from "@prisma/client";
 import { Transform } from "class-transformer";
 import { IsBoolean, IsEnum, IsOptional, IsString, MaxLength } from "class-validator";
 import { IncludeInactiveQueryDto } from "../../../common/dto/include-inactive.query";
@@ -32,6 +32,10 @@ export class ListCustomersQueryDto extends IncludeInactiveQueryDto {
   @IsOptional()
   @IsEnum(PaymentCondition)
   paymentCondition?: PaymentCondition;
+
+  @IsOptional()
+  @IsEnum(CustomerType)
+  customerType?: CustomerType;
 
   // El ternario preserva undefined de forma explicita, sin depender de que
   // class-transformer no invoque @Transform con la clave ausente. Si llegara a
