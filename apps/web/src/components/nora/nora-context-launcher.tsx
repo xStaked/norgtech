@@ -39,13 +39,13 @@ export function NoraContextLauncher({
           >
             <MessageSquare size={14} color="#ffffff" strokeWidth={2.5} />
           </div>
-          Nora
+          Magali
         </span>
       }
       description={`Reportá una visita o seguimiento con contexto de ${contextLabel} usando lenguaje natural.`}
       actions={
         <ButtonLink href={`/nora?${searchParams.toString()}`} variant="ghost" size="sm">
-          Hablar con Nora
+          Hablar con Magali
         </ButtonLink>
       }
       padding="18px"
@@ -58,7 +58,7 @@ export function NoraContextLauncher({
           color: crmTheme.nora.textMuted,
         }}
       >
-        Nora interpreta tu mensaje y genera bloques editables para confirmar directamente en el CRM.
+        Magali interpreta tu mensaje y genera bloques editables para confirmar directamente en el CRM.
       </p>
     </SectionCard>
   );

@@ -100,7 +100,7 @@ const TABS = [
   { key: "vendedor", label: "Vendedor" },
   { key: "producto", label: "Producto" },
   { key: "zona", label: "Zona" },
-  { key: "segmento", label: "Segmento" },
+  { key: "segmento", label: "Tipo de cliente" },
   { key: "empresa", label: "Empresa" },
   { key: "ciudad", label: "Ciudad" },
 ];

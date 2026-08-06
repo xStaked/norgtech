@@ -70,7 +70,6 @@ export const config = {
     "/orders/:path*",
     "/billing-requests/:path*",
     "/products/:path*",
-    "/segments/:path*",
     "/visits/:path*",
     "/expenses/:path*",
     "/follow-ups/:path*",

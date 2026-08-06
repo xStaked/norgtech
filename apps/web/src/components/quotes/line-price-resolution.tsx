@@ -150,7 +150,7 @@ export function LinePriceResolution({
         </span>
         <span className="font-semibold">{resolution.empaque}</span>
         <span className="text-muted-foreground">
-          precio negociado — sin descuento de segmento encima
+          precio negociado con el cliente
         </span>
       </div>
     );
@@ -161,7 +161,7 @@ export function LinePriceResolution({
       <span className="rounded bg-[#fdf0dc] px-1.5 py-px text-[10.5px] font-bold text-[#9a6410]">
         Sin lista asignada
       </span>
-      <span>precio base − descuento de segmento</span>
+      <span>precio base del producto</span>
     </div>
   );
 }

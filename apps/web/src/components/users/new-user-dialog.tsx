@@ -184,7 +184,7 @@ export function NewUserDialog({ open, onOpenChange, onCreated }: NewUserDialogPr
                 required
               />
               <p className="text-[10.5px] text-muted-foreground">
-                Formato internacional. Se usa para WhatsApp y Nora.
+                Formato internacional. Se usa para WhatsApp y Magali.
               </p>
             </div>
           </div>

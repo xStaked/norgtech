@@ -240,7 +240,7 @@ export function CustomerInfoPanel({
           title={
             canCreate
               ? "Crear pedido"
-              : "Nora necesita una propuesta o caso listo para crear el pedido"
+              : "Magali necesita una propuesta o caso listo para crear el pedido"
           }
           className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#0f5c8a] px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#0d4d75] disabled:cursor-not-allowed disabled:opacity-50"
         >

@@ -13,12 +13,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { LinePriceResolution } from "./line-price-resolution";
 
-interface Segment {
-  id: string;
-  name: string;
-  discountPercent: string | number;
-}
-
 interface Product {
   id: string;
   name: string;
@@ -30,7 +24,6 @@ interface Product {
 interface Customer {
   id: string;
   displayName: string;
-  segment: Segment | null;
 }
 
 interface Opportunity {
@@ -130,8 +123,8 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         productId: items[i].productId,
         quantity: items[i].quantity,
         presentationId: items[i].presentationId || undefined,
-        // The backend re-derives this from the catalog + segment discount; it
-        // is sent only because the DTO requires the field.
+        // The backend re-derives this from the catalog; it is sent only
+        // because the DTO requires the field.
         unitPrice: 0,
         notes: items[i].notes,
       })),
@@ -181,23 +174,6 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
             ...customers.map((c) => ({ value: c.id, label: c.displayName })),
           ]}
         />
-        {selectedCustomerId && preview?.segmentName && (
-          <div className="text-sm text-muted-foreground">
-            Segmento:{" "}
-            <span className="font-medium text-foreground">{preview.segmentName}</span>
-            {" "}• Descuento:{" "}
-            <span className="font-medium text-foreground">
-              {formatPercent(preview.discountPercent)}
-            </span>
-            {!preview.meetsGoal && preview.goalThreshold > 0 && (
-              <span className="text-amber-700 dark:text-amber-500">
-                {" "}• No aplica: faltan{" "}
-                {formatMoney(Math.max(preview.goalThreshold - preview.salesYTD, 0))} para cumplir la
-                meta del segmento
-              </span>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="grid gap-1">
@@ -291,8 +267,8 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
               </div>
               <div className="grid gap-1">
                 <Label>Precio unitario</Label>
-                {/* Read-only: the price comes from the catalog and the segment
-                    discount, both resolved by the backend. */}
+                {/* Read-only: the price comes from the catalog, resolved by
+                    the backend. */}
                 <div className="flex h-8 items-center rounded-lg border border-border bg-card px-2.5 text-sm text-card-foreground">
                   {lineFor(index) ? formatMoney(lineFor(index)!.unitPrice) : "—"}
                 </div>
@@ -349,12 +325,6 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
             {preview ? formatMoney(preview.subtotal + preview.discountAmount) : "—"}
           </span>
         </div>
-        {preview && preview.discountAmount > 0 && (
-          <div className="flex justify-between text-sm text-emerald-600">
-            <span>Descuento por segmento ({formatPercent(preview.discountPercent)})</span>
-            <span>-{formatMoney(preview.discountAmount)}</span>
-          </div>
-        )}
         <div className="flex justify-between border-t border-border pt-2 text-lg font-semibold">
           <span>Total</span>
           <span data-testid="quote-total">

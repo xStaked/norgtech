@@ -13,7 +13,7 @@ import * as ExcelJS from "exceljs";
  *   pnpm --filter @norgtech/api exec ts-node prisma/scripts/import-customers.ts <ruta.xlsx>
  */
 
-const DEFAULT_SEGMENT = "Bronce";
+const DEFAULT_SEGMENT = "Directo";
 const TEST_CUSTOMERS = ["Cliente Prueba SAS", "Cliente Billing SAS"];
 
 // Los vendedores vienen escritos a mano, con espacios y dos formas para la

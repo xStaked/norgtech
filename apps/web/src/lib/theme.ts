@@ -176,14 +176,6 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
   },
   {
-    href: "/segments",
-    label: "Segmentos",
-    shortLabel: "SE",
-    description: "Clasificacion comercial y foco",
-    group: "Catalogo",
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
-  },
-  {
     href: "/zones",
     label: "Zonas",
     shortLabel: "ZN",
@@ -242,7 +234,7 @@ export const groupTitles: Record<NavGroup["label"], string> = {
 
 const noraNavItem: NavItem = {
   href: "/nora",
-  label: "Nora",
+  label: "Magali",
   shortLabel: "NA",
   description: "Asistente conversacional para reportes y confirmaciones",
   group: "Operacion",
@@ -270,7 +262,6 @@ const singularLabels: Record<string, string> = {
   Cotizaciones: "Cotizacion",
   Pedidos: "Pedido",
   Productos: "Producto",
-  Segmentos: "Segmento",
   Visitas: "Visita",
   Gastos: "Gasto",
   Reportes: "Reporte",

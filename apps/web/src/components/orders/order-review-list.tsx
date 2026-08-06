@@ -233,7 +233,7 @@ export function OrderReviewList() {
           </h1>
           <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[#6b7787]">
             <MessageCircle className="size-3.5 text-[#25d366]" aria-hidden="true" />
-            Pedidos creados por Nora desde WhatsApp. No existen comercialmente hasta que los apruebes.
+            Pedidos creados por Magali desde WhatsApp. No existen comercialmente hasta que los apruebes.
           </p>
         </div>
         <Button variant="outline" size="lg" onClick={() => void load()} disabled={refreshing}>
@@ -535,7 +535,7 @@ function OrderRow({
             {order.sourceConversationId && (
               <span className="inline-flex items-center gap-1 rounded bg-[#e6f4ec] px-1.5 text-[9.5px] font-extrabold text-[#167c4a]">
                 <MessageCircle className="size-2.5" aria-hidden="true" />
-                Nora
+                Magali
               </span>
             )}
           </div>
@@ -578,7 +578,7 @@ function OrderRow({
             <div className="mt-2.5 rounded-lg border border-[#f5dfb8] bg-[#fdf0dc] px-3 py-2.5">
               <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold text-[#9a6410]">
                 <TriangleAlert className="size-3" aria-hidden="true" />
-                NORA NO RECONOCIÓ {unresolved.length}{" "}
+                MAGALI NO RECONOCIÓ {unresolved.length}{" "}
                 {unresolved.length === 1 ? "PRODUCTO" : "PRODUCTOS"}
               </div>
               {unresolved.map((item) => (
@@ -690,7 +690,7 @@ function EmptyQueue({ filtered }: { filtered: boolean }) {
       <p className="mx-auto mt-1.5 max-w-[340px] text-[13px] leading-relaxed text-[#6b7787]">
         {filtered
           ? "Cambia la pestaña o limpia la búsqueda para ver el resto de la cola."
-          : "No hay pedidos esperando revisión. Cuando Nora cree uno desde WhatsApp, aparecerá aquí."}
+          : "No hay pedidos esperando revisión. Cuando Magali cree uno desde WhatsApp, aparecerá aquí."}
       </p>
     </div>
   );

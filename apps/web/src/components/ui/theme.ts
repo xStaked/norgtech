@@ -179,14 +179,6 @@ export const primaryNavItems = [
     group: "Catalogo",
     requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
   },
-  {
-    href: "/segments",
-    label: "Segmentos",
-    shortLabel: "SE",
-    description: "Clasificacion comercial y foco",
-    group: "Catalogo",
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
-  },
 ] as const satisfies readonly NavItem[];
 
 export const navGroups: readonly NavGroup[] = [
@@ -210,7 +202,6 @@ const singularLabels: Record<string, string> = {
   Cotizaciones: "Cotizacion",
   Pedidos: "Pedido",
   Productos: "Producto",
-  Segmentos: "Segmento",
   Visitas: "Visita",
   Reportes: "Reporte",
   Seguimientos: "Seguimiento",

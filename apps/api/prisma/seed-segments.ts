@@ -13,13 +13,11 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// El segmento es solo una etiqueta: espejo de Customer.customerType. Sin
+// descuento ni meta — el negocio no los usa.
 const SEGMENTS = [
-  { name: "Bronce", description: "Clientes nuevos o de bajo volumen", discountPercent: 3, minGoalAmount: 0, maxGoalAmount: 50000000 },
-  { name: "Plata", description: "Clientes con buen potencial de crecimiento", discountPercent: 5, minGoalAmount: 50000000, maxGoalAmount: 150000000 },
-  { name: "Oro", description: "Clientes estrategicos con alto volumen de compra", discountPercent: 8, minGoalAmount: 150000000, maxGoalAmount: 300000000 },
-  { name: "Platino", description: "Clientes VIP con volumen excepcional", discountPercent: 12, minGoalAmount: 300000000, maxGoalAmount: null },
-  { name: "Retail", description: "Cadenas de tiendas y distribuidores", discountPercent: 4, minGoalAmount: 0, maxGoalAmount: 100000000 },
-  { name: "Industria", description: "Manufactura y sector industrial", discountPercent: 6, minGoalAmount: 100000000, maxGoalAmount: null },
+  { name: "Distribuidor", description: "Etiqueta comercial. Sin descuento ni meta.", discountPercent: 0, minGoalAmount: 0, maxGoalAmount: null },
+  { name: "Directo", description: "Etiqueta comercial. Sin descuento ni meta.", discountPercent: 0, minGoalAmount: 0, maxGoalAmount: null },
 ];
 
 async function main() {

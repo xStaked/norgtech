@@ -23,7 +23,7 @@ export function NoraEmptyState({ onSend }: NoraEmptyStateProps) {
       </div>
 
       <div className="text-center">
-        <h3 className="text-xl font-extrabold text-[#2a1f6e]">Hola, soy Nora</h3>
+        <h3 className="text-xl font-extrabold text-[#2a1f6e]">Hola, soy Magali</h3>
         <p className="mt-1.5 max-w-[280px] text-sm leading-relaxed text-[#9a8fd0]">
           Tu asistente comercial. Contame qué pasó con un cliente y yo armo el registro por vos.
         </p>

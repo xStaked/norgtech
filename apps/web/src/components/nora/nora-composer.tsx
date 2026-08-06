@@ -95,7 +95,7 @@ export function NoraComposer({
             value={value}
             onChange={(e) => setValue(e.target.value)}
             rows={1}
-            placeholder={disabled ? "Nora está pensando…" : "Escríbele a Nora…"}
+            placeholder={disabled ? "Magali está pensando…" : "Escríbele a Magali…"}
             disabled={disabled}
             className="flex-1 resize-none bg-transparent py-3 text-[13.5px] leading-relaxed text-[#2a2540] outline-none placeholder:text-[#9a8fd0]"
             style={{ minHeight: 48, maxHeight: 200 }}

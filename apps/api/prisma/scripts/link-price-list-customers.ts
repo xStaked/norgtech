@@ -40,17 +40,17 @@ async function run(dry: boolean) {
   });
   if (!admin) throw new Error("No hay usuario administrador para atribuir createdBy.");
 
-  // Todos los clientes reales usan Bronce y facturan por Norgtech; sin más
-  // información, es el default menos sorprendente.
+  // El segmento es solo una etiqueta y estos facturan por Norgtech; sin más
+  // información, Directo es el default menos sorprendente.
   const segment = await prisma.customerSegment.findFirst({
-    where: { name: "Bronce" },
+    where: { name: "Directo" },
     select: { id: true },
   });
   const company = await prisma.company.findFirst({
     where: { prefix: "NT" },
     select: { id: true },
   });
-  if (!segment || !company) throw new Error("Falta el segmento Bronce o la empresa Norgtech.");
+  if (!segment || !company) throw new Error("Falta el segmento Directo o la empresa Norgtech.");
 
   let created = 0;
   let linked = 0;

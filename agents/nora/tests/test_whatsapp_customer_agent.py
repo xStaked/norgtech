@@ -40,7 +40,7 @@ def test_snapshot_block_handles_no_snapshot():
 
 def test_first_two_messages_are_prompt_and_snapshot():
     msgs = _to_messages(_req())
-    assert isinstance(msgs[0], SystemMessage) and "Nora" in msgs[0].content
+    assert isinstance(msgs[0], SystemMessage) and "Magali" in msgs[0].content
     assert isinstance(msgs[1], SystemMessage) and "DATOS DEL CLIENTE" in msgs[1].content
 
 

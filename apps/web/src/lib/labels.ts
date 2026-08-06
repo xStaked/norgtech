@@ -148,3 +148,16 @@ export function paymentLabel(condition: string | null): string {
   if (!condition) return "Contado";
   return PAYMENT_LABELS[condition] ?? condition;
 }
+
+export const CUSTOMER_TYPE_LABELS: Record<string, string> = {
+  distribuidor: "Distribuidor",
+  cliente_directo: "Cliente directo",
+  planta_balanceados: "Planta de balanceados",
+  maquila: "Maquila",
+  otro: "Otro",
+};
+
+export function customerTypeLabel(type: string | null): string {
+  if (!type) return "Cliente directo";
+  return CUSTOMER_TYPE_LABELS[type] ?? type;
+}

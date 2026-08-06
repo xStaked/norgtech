@@ -113,8 +113,8 @@ export function CustomerForm({
       country: country.trim() || undefined,
       priceListId: priceListId || undefined,
       notes: optionalString("notes"),
-      // El segmento no se pide: lo resuelve el backend al crear y al editar se
-      // deja como esta. El negocio solo maneja listas de precios.
+      // El segmento no se pide: es una etiqueta que el backend deriva de
+      // customerType. El negocio solo maneja listas de precios.
       companyId: String(formData.get("companyId")),
       // null, no undefined: "Sin asignar" tiene que poder quitarle el vendedor
       // a un cliente. Con undefined el backend no tocaba el campo y la opción
@@ -331,7 +331,7 @@ export function CustomerForm({
         ) : null}
 
         <p className="mt-3 text-[11.5px] text-muted-foreground">
-          Sin lista asignada, las cotizaciones usan precio base + descuento de segmento.
+          Sin lista asignada, las cotizaciones usan el precio base del producto.
         </p>
       </div>
 
