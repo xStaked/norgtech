@@ -4,6 +4,20 @@ from langgraph.prebuilt import InjectedState
 from .nestjs_client import NestJSClient, NestJSAPIError
 from typing import Annotated, Optional
 
+# Por WhatsApp el agente es stateless y NestJS solo le reenvia role+body de los
+# ultimos mensajes: las tool calls del turno anterior se pierden. Al responder
+# "si, crealo" el modelo tiene que rehacer el preview, y si el preview solo sabe
+# ordenar "pide confirmacion", vuelve a preguntar y el turno nunca crea nada
+# (el bucle que reporto el QA). La regla tiene que contemplar la confirmacion
+# que YA llego en el mensaje actual.
+CONFIRMATION_RULE = (
+    "Si el usuario TODAVIA no ha confirmado, muéstrale este resumen (cliente, "
+    "productos, cantidades, precio unitario y total) y espera su confirmación. "
+    "Si el usuario YA confirmó —su último mensaje pide crearlo ('sí', 'créala', "
+    "'dale', 'confirmo')— NO se lo vuelvas a preguntar: llama {create_tool} "
+    "ahora mismo, en este turno, con estos mismos datos."
+)
+
 
 @tool
 async def get_companies(
@@ -256,8 +270,9 @@ async def preview_order(
             "/orders/preview", {"customerId": customer_id, "items": normalized_items}
         )
         return (
-            "Resumen del pedido (aún NO creado, pide confirmación al usuario antes de "
-            f"crearlo): {json.dumps(result, ensure_ascii=False)}"
+            "Resumen del pedido, aún NO creado. "
+            + CONFIRMATION_RULE.format(create_tool="create_order")
+            + f" Datos: {json.dumps(result, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:
         return f"Error al calcular el pedido: {e.detail}"
@@ -288,6 +303,11 @@ async def create_order(
     3. Determinar la zona de despacho con get_customer_zones (si el cliente tiene zonas)
     4. Mostrar el resumen con preview_order y esperar que el usuario CONFIRME.
        Nunca crees el pedido en el mismo mensaje en que recibiste los datos.
+
+    Esa confirmación vale aunque el usuario la haya dado respondiendo al resumen
+    del turno ANTERIOR: por WhatsApp no ves tus llamadas previas, así que rehaces
+    el preview y creas de una vez. Lo que no puedes hacer es volver a pedir la
+    misma confirmación: eso deja al usuario en un bucle sin pedido.
 
     NO preguntes por la empresa que factura: la define el cliente y el CRM la asigna sola.
 

@@ -9,7 +9,13 @@ from langgraph.checkpoint.memory import MemorySaver
 from .config import settings
 from .prompts.system import NORA_SYSTEM_PROMPT, current_date_note
 from .roles import role_from_token, role_prompt, tools_for_role
-from .tools.customers import search_customers, create_customer, update_customer, get_customer_summary
+from .tools.customers import (
+    search_customers,
+    list_my_customers,
+    create_customer,
+    update_customer,
+    get_customer_summary,
+)
 from .tools.segments import get_customer_segments
 from .tools.agenda import get_agenda
 from .tools.visits import create_visit, delete_visit, get_customer_visits, update_visit
@@ -44,6 +50,7 @@ from .tools.nestjs_client import NestJSClient
 # ── Tools ──────────────────────────────────────────────
 ALL_TOOLS = [
     search_customers,
+    list_my_customers,
     create_customer,
     update_customer,
     get_customer_summary,
@@ -103,6 +110,11 @@ class NoraState(TypedDict):
     messages: Annotated[list, add_messages]
     auth_token: str
     session_id: str | None
+    # Mismo motivo que en _GeneralState: create_expense/update_expense la piden
+    # por InjectedState y sin la clave el turno muere con KeyError. En el chat
+    # web no hay conversacion de WhatsApp, asi que va en None y la tool lo
+    # traduce a "el gasto se registra con la foto del soporte".
+    conversation_id: str | None
 
 # ── LLM ────────────────────────────────────────────────
 def create_llm() -> ChatOpenAI:

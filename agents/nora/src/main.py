@@ -283,6 +283,9 @@ async def send_message(
         "messages": [human_msg],
         "auth_token": authorization,
         "session_id": session_id,
+        # El chat web no tiene conversacion de WhatsApp; la clave tiene que
+        # existir igual o las tools de gasto revientan al inyectarla.
+        "conversation_id": None,
     }
     
     result = await nora_graph.ainvoke(initial_state, config=config)
@@ -398,6 +401,9 @@ async def stream_message(
         "messages": [human_msg],
         "auth_token": authorization,
         "session_id": session_id,
+        # El chat web no tiene conversacion de WhatsApp; la clave tiene que
+        # existir igual o las tools de gasto revientan al inyectarla.
+        "conversation_id": None,
     }
     
     async def event_stream():

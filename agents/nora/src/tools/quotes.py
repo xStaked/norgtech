@@ -20,6 +20,7 @@ from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 
 from .nestjs_client import NestJSClient, NestJSAPIError
+from .orders import CONFIRMATION_RULE as _CONFIRMATION_RULE
 
 MAX_ROWS = 10
 MAX_ITEMS = 15
@@ -169,9 +170,9 @@ async def preview_quote(
             "total": data.get("total"),
         }
         return (
-            "Cotización calculada, aún NO existe en el CRM. Muéstrale este resumen al "
-            "usuario y pídele que confirme antes de llamar create_quote: "
-            f"{json.dumps(resumen, ensure_ascii=False)}"
+            "Cotización calculada, aún NO existe en el CRM. "
+            + _CONFIRMATION_RULE.format(create_tool="create_quote")
+            + f" Datos: {json.dumps(resumen, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:
         if e.status_code == 403:
@@ -206,6 +207,11 @@ async def create_quote(
     3. Una confirmación EXPLÍCITA del usuario ("sí", "créala", "dale").
     Si no hubo preview mostrado y confirmado, haz el preview primero — crear una
     cotización compromete precios frente al cliente.
+
+    Esa confirmación vale aunque el usuario la haya dado respondiendo al resumen
+    del turno ANTERIOR: por WhatsApp no ves tus llamadas previas, así que rehaces
+    el preview y creas de una vez. Lo que no puedes hacer es volver a pedir la
+    misma confirmación: eso deja al usuario en un bucle sin cotización.
 
     El total lo calcula el servidor con la lista de precios del cliente; tú solo
     mandas cantidades y precios unitarios acordados.

@@ -13,6 +13,29 @@ logger = logging.getLogger("nora.expenses")
 # Reuse the existing customer search as the association lookup tool.
 lookup_customer = search_customers
 
+# El CRM exige la foto del soporte para TODO gasto (assertSupportFile en
+# commercial-expenses.service.ts): un gasto dictado por texto no existe. El
+# endpoint del agente responde 404 (no hay caso abierto para la conversacion) o
+# 400 (el caso no tiene adjunto). Volcarle esos codigos al modelo hacia que
+# Nora improvisara; lo unico accionable es pedir la foto.
+_NEEDS_SUPPORT_REPLY = (
+    "No puedo registrar el gasto sin la foto del soporte: el CRM la exige "
+    "siempre. Pidele al usuario que mande la foto del recibo por WhatsApp y "
+    "con eso queda registrado. NO reintentes esta herramienta hasta que la "
+    "haya enviado."
+)
+# Un 400 de validacion ("amount must not be less than 1") si tiene que llegar
+# con su detalle: el modelo puede corregirlo. Solo los que hablan del soporte
+# se traducen a "manda la foto".
+_MISSING_SUPPORT_MARKERS = ("support", "attachment", "soporte", "adjunto")
+
+
+def _is_missing_support(status_code: int, detail: str) -> bool:
+    if status_code == 404:
+        return True
+    lowered = (detail or "").lower()
+    return status_code == 400 and any(m in lowered for m in _MISSING_SUPPORT_MARKERS)
+
 
 @tool
 async def create_expense(
@@ -20,7 +43,7 @@ async def create_expense(
     category: str,
     amount: float,
     description: str,
-    conversation_id: Annotated[str, InjectedState("conversation_id")],
+    conversation_id: Annotated[Optional[str], InjectedState("conversation_id")],
     auth_token: Annotated[str, InjectedState("auth_token")],
     supplier_name: Optional[str] = None,
     supplier_nit: Optional[str] = None,
@@ -35,6 +58,11 @@ async def create_expense(
     Registra el gasto comercial en el CRM usando el soporte (imagen) que ya
     fue recibido por WhatsApp. Llama esta herramienta SOLO cuando el usuario
     haya confirmado los datos del gasto.
+
+    REQUISITO: el CRM no acepta un gasto sin la foto del soporte. Si el usuario
+    te dicta un gasto por texto y NO ha mandado la foto del recibo en esta
+    conversacion, no le ofrezcas registrarlo ni llames esta herramienta:
+    pidele la foto primero.
 
     Args:
         expense_date: Fecha del gasto en formato YYYY-MM-DD.
@@ -51,6 +79,12 @@ async def create_expense(
     Returns:
         Confirmacion con el ID del gasto creado y su estado.
     """
+    # El chat web no tiene conversacion de WhatsApp y este endpoint la exige:
+    # sin ella el API responde un 400 de validacion que al modelo no le dice
+    # nada. El gasto se registra con su foto (por WhatsApp o desde el portal).
+    if not conversation_id:
+        return _NEEDS_SUPPORT_REPLY
+
     payload: dict = {
         "conversationId": conversation_id,
         "expenseDate": expense_date,
@@ -84,6 +118,9 @@ async def create_expense(
             f"Queda en revision. Detalle: {json.dumps(result, ensure_ascii=False)}"
         )
     except NestJSAPIError as e:
+        if _is_missing_support(e.status_code, e.detail):
+            logger.info("create_expense sin soporte [HTTP %s]: %s", e.status_code, e.detail)
+            return _NEEDS_SUPPORT_REPLY
         # The API responded with an error (4xx/5xx) — surface status + detail.
         msg = f"Error al registrar el gasto [HTTP {e.status_code}]: {e.detail}"
         logger.error("create_expense API error: %s", msg)
@@ -165,7 +202,7 @@ async def get_expenses(
 @tool
 async def update_expense(
     expense_id: str,
-    conversation_id: Annotated[str, InjectedState("conversation_id")],
+    conversation_id: Annotated[Optional[str], InjectedState("conversation_id")],
     auth_token: Annotated[str, InjectedState("auth_token")],
     expense_date: Optional[str] = None,
     category: Optional[str] = None,

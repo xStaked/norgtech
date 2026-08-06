@@ -133,6 +133,10 @@ class _GeneralState(TypedDict):
     messages: Annotated[list, add_messages]
     auth_token: str
     session_id: str | None
+    # create_expense/update_expense lo piden por InjectedState. Sin la clave,
+    # LangGraph levanta KeyError al inyectar y el turno entero se cae al
+    # except de abajo ("se me cruzaron los cables"), sin registrar nada.
+    conversation_id: str | None
 
 
 def _build_general_graph():
@@ -411,6 +415,7 @@ async def run_whatsapp_general_agent(request: WhatsAppAgentRequest) -> WhatsAppA
         "messages": _to_messages(request),
         "auth_token": request.auth,
         "session_id": request.conversation_id,
+        "conversation_id": request.conversation_id,
     }
     try:
         result = await _general_graph.ainvoke(state)
