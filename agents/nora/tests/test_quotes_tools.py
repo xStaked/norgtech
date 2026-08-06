@@ -111,9 +111,10 @@ def test_preview_manda_el_body_del_dto_y_no_crea_nada():
             }
         ],
     }
-    # El preview no crea: la respuesta lo dice y pide confirmacion.
+    # El preview no crea: la respuesta lo dice y pide confirmacion (o crea de
+    # una si el usuario ya confirmo — ver test_qa_whatsapp_regressions).
     assert "NO existe" in result
-    assert "confirme" in result
+    assert "no ha confirmado" in result
     assert "113050" in result
 
 

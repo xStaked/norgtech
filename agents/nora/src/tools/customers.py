@@ -58,6 +58,72 @@ async def search_customers(
         return f"Error inesperado al buscar clientes: {str(e)}"
 
 
+@tool
+async def list_my_customers(
+    auth_token: Annotated[str, InjectedState("auth_token")],
+    limit: int = 20,
+) -> str:
+    """
+    Lista la cartera de clientes del usuario: los que tiene asignados. Úsala
+    cuando pregunte por SUS clientes sin nombrar a ninguno — "mis clientes",
+    "¿a quién tengo asignado?", "dame dos clientes al azar", "cuántos clientes
+    manejo", "listame mi cartera de clientes".
+
+    NO uses search_customers para esto: esa busca por nombre o NIT y necesita un
+    término. Nunca digas que no tienes acceso a la lista de clientes.
+
+    A dirección (administrador, director comercial) le devuelve todos los
+    clientes activos, porque no tiene cartera propia.
+
+    Args:
+        limit: Cuántos devolver como máximo (por defecto 20).
+
+    Returns:
+        JSON con id, nombre, nit, ciudad, telefono y vendedor de cada cliente,
+        más el total de la cartera.
+    """
+    # El API no acota /customers al vendedor que pregunta (findAll solo filtra
+    # si le mandan assignedToUserId), asi que el alcance lo pone Nora: el id
+    # sale del JWT, no de lo que diga el modelo.
+    from ..roles import role_from_token, user_id_from_token
+
+    params: dict = {}
+    if role_from_token(auth_token) not in ("administrador", "director_comercial"):
+        user_id = user_id_from_token(auth_token)
+        if not user_id:
+            return (
+                "No pude identificar al usuario para listar su cartera. "
+                "Pídele que busque el cliente por nombre o NIT."
+            )
+        params["assignedToUserId"] = user_id
+
+    try:
+        nestjs_client = NestJSClient(auth_token)
+        result = await nestjs_client.get("/customers", params=params)
+        customers = result if isinstance(result, list) else result.get("data", [])
+        if not customers:
+            return "No tienes clientes asignados en el CRM."
+
+        simplified = [
+            {
+                "id": c["id"],
+                "nombre": c.get("displayName") or c.get("legalName"),
+                "nit": c.get("taxId"),
+                "ciudad": c.get("city"),
+                "telefono": c.get("phone"),
+                "vendedor": (c.get("assignedToUser") or {}).get("name"),
+            }
+            for c in customers[: max(1, limit)]
+        ]
+        return json.dumps(
+            {"clientes": simplified, "total": len(customers)}, ensure_ascii=False
+        )
+    except NestJSAPIError as e:
+        return f"Error al listar tus clientes: {e.detail}"
+    except Exception as e:
+        return f"Error inesperado al listar tus clientes: {str(e)}"
+
+
 def _unwrap(result):
     """Devuelve el valor de un asyncio.gather(return_exceptions=True), o relanza
     su excepción para que la maneje el try/except del bloque que la pidió."""
@@ -125,10 +191,19 @@ async def get_customer_summary(
         try:
             cartera = _unwrap(cartera_res)
             saldo = cartera.get("totalBalance")
-            if saldo is not None:
-                partes.append(f"Cartera: saldo pendiente ${saldo:,.0f}.".replace(",", "."))
+            # "Saldo" aqui son FACTURAS; la ficha del cliente en el portal suma
+            # PEDIDOS. Sin decir de donde sale el numero, Nora reportaba $0
+            # mientras la ficha mostraba $62M y parecia que una de las dos
+            # mentia. Se nombra la fuente en vez de cambiar la definicion.
+            if saldo:
+                partes.append(
+                    f"Cartera: saldo pendiente por facturas ${saldo:,.0f}.".replace(",", ".")
+                )
             else:
-                partes.append("Cartera: sin saldo pendiente.")
+                partes.append(
+                    "Cartera: sin facturas pendientes (este saldo es solo de "
+                    "facturas; los pedidos sin facturar no cuentan aquí)."
+                )
             overdue = _unwrap(overdue_res)
             overdue_list = overdue if isinstance(overdue, list) else overdue.get("data", [])
             vencidas = [
@@ -265,9 +340,10 @@ async def create_customer(
     NO crees un cliente para una persona individual a menos que sea un negocio unipersonal.
 
     Para dar de alta un cliente SOLO necesitas: razón social o nombre, NIT,
-    la empresa que le factura y el teléfono. NO pidas correo, dirección,
-    ciudad, departamento ni notas: mándalos solo si el usuario ya los dijo.
-    El segmento lo asigna el CRM solo; no existe ni se pregunta.
+    la empresa que le factura y el teléfono. No PIDAS correo, dirección,
+    ciudad, departamento ni notas — pero si el usuario ya los escribió (así sea
+    de corrido en un solo mensaje), MÁNDALOS todos: no los descartes ni crees el
+    cliente a medias. El segmento lo asigna el CRM solo; no se pregunta.
 
     Args:
         legal_name: Razón social o nombre legal de la empresa
@@ -277,10 +353,10 @@ async def create_customer(
         tax_id: NIT o identificador tributario
         phone: Teléfono de la empresa
         display_name: Nombre comercial (opcional; si falta se usa legal_name)
-        email: Email corporativo (opcional, no lo pidas)
-        address: Dirección física (opcional, no lo pidas)
-        city: Ciudad (opcional, no lo pidas)
-        department: Departamento/estado (opcional, no lo pidas)
+        email: Email corporativo (opcional: no lo pidas, pero mándalo si ya lo dijo)
+        address: Dirección física (opcional: no lo pidas, pero mándalo si ya lo dijo)
+        city: Ciudad (opcional: no lo pidas, pero mándalo si ya lo dijo)
+        department: Departamento/estado (opcional: no lo pidas, pero mándalo si ya lo dijo)
         contact_name: Nombre completo del contacto principal (si no se provee, se usa "Contacto Principal")
         contact_phone: Teléfono del contacto principal (opcional)
         contact_email: Email del contacto principal (opcional)
