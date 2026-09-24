@@ -24,26 +24,40 @@ El repo no tiene ningún linter, formatter ni CI. `pnpm lint` en la raíz ejecut
 Un único `eslint.config.mjs` en la raíz del monorepo. Flat config busca hacia arriba desde el cwd, así que ambos packages lo heredan.
 
 - **Base:** `@eslint/js` recommended + `typescript-eslint` `recommendedTypeChecked` con `projectService: true` (lee los `tsconfig` reales de cada app).
-- **Override `apps/web/**`:** `@next/eslint-plugin-next` + `eslint-plugin-react-hooks` (React 19).
+- **Override `apps/web/**`:** `@next/eslint-plugin-next` (`core-web-vitals`, normalizado a `error`) + `eslint-plugin-react-hooks` (`flat/recommended-latest`, React 19).
 - **Override `apps/api/**`:** solo las reglas TS base. Sin plugin NestJS por ahora.
-- **Override specs de Playwright** (`apps/web/tests/e2e/**`): los specs ya tienen 5 errores de `tsc` por el tipado de `test.fixtures`; se les da un override para que el lint type-aware no los rete. Si arreglar esos 5 errores resulta trivial, se corrigen y el override se elimina.
-- **`ignores` globales:** `dist/`, `.next/`, `node_modules/`, `coverage/`, `playwright-report/`, `prisma/generated/`, `.pnpm-store/`, `docs/`.
+- **Tests** (`apps/api/test/**`, `apps/web/tests/**`, `**/*.test.ts`): quedan solo en la base `recommended` (sin type-aware) — ver sección 2.
+- **`ignores` globales:** `dist/`, `.next/`, `node_modules/`, `coverage/`, `playwright-report/`, `.pnpm-store/`, `.worktrees/`, `.pytest_cache/`, `docs/`, `agents/`, `packages/shared/`, y `*.js`/`*.mjs`/`*.cjs`/`*.sql` (los únicos `.mjs` trackeados son `postcss.config.mjs` y este config).
 
-### 2. Política de reglas
+### 2. Política de reglas (dos niveles)
 
-- Todo en nivel `error`; los scripts usan `--max-warnings=0`. Cero warnings = el hook y Dokploy bloquean cualquier cosa.
-- Excepción única de estilo: `@typescript-eslint/no-unused-vars` con `argsIgnorePattern: "^_"` (el código existente ya usa `_*` para args ignorados).
+- **Código fuente** (`apps/api/src`, `apps/api/prisma`, `apps/web/src`, configs de app): `recommendedTypeChecked` completo — type-aware. Aquí están las reglas de valor real (`no-misused-promises`, `no-floating-promises`, `no-base-to-string`, `no-unsafe-*`).
+- **Tests** (`apps/api/test`, `apps/web/tests`, `*.test.ts`): `recommended` **sin** type-aware. El type-aware en e2e se ahoga en `res.json()` → `any` (2.200 falsos positivos de estilo, 0 bugs reales). Además `@typescript-eslint/no-explicit-any: off` para tests (decisión del dueño: los `any` de e2e son aceptables; se justifica en un comentario en la config).
+- Todo en nivel `error` (los `warn` de los plugins se normalizan a `error`); los scripts usan `--max-warnings=0`. Cero warnings = el hook y Dokploy bloquean cualquier cosa.
+- Excepciones documentadas en la config: `@typescript-eslint/no-unused-vars` acepta args `^_`; `@next/next/no-html-link-for-pages: off` (no aplica en App Router y solo imprime ruido en stderr).
 - Sin reglas de estilo subjetivas (naming, orden de imports, formatting).
 
 ### 3. Arreglo del código existente
 
-1. Correr `eslint . --fix` (solo fixes automáticos seguros).
-2. Correr sin `--fix` y arreglar manualmente lo restante, sin cambiar comportamiento.
-3. **Verificación antes del commit baseline:**
-   - `tsc --noEmit` en `apps/api` y `apps/web` → verde.
+Sondeo con la config final sobre el repo: **610 problemas (572 errores + 38 avisos)** — no los "pocos" estimados inicialmente; el desglose real es:
+
+| Zona | Problemas | Reglas dominantes |
+|---|---|---|
+| `apps/web/src` | 400 | `no-unsafe-assignment` 145 (`res.json()` sin tipar), `no-misused-promises` 64 (`onSubmit` async), `no-base-to-string` 61 (`String(formData.get())`), `set-state-in-effect` 14 |
+| `apps/api` src+prisma | 161 | `no-unsafe-assignment` 76 (scripts de import Excel), `no-unused-vars` 12, `no-require-imports` 6 |
+| `apps/api/test` | 49 | 38 comentarios `eslint-disable` obsoletos (`no-var`/`no-var-requires` de un setup legado) + 9 vars sin uso + 2 `require` |
+| `apps/web/tests` + `*.test.ts` | 0 | limpio con la config por niveles |
+
+Procedimiento:
+
+1. Correr `eslint . --fix` (elimina los 38 `eslint-disable` obsoletos y los fixes seguros).
+2. Arreglar el resto por categoría con recipes deterministas (tipar `res.json()`, `void` en promesas flotantes, convertir `require()` a `import`, quitar imports sin uso) sin cambiar comportamiento.
+3. Casos legítimos que la regla no puede resolver (p. ej. `set-state-in-effect` en `theme-provider` para sincronizar el tema) llevan `eslint-disable-next-line` **con razón escrita** — excepción quirúrgica, no regla apagada.
+4. **Verificación antes del commit baseline:**
+   - `tsc --noEmit` en `apps/api` y `apps/web` → verde (incluye corregir los 5 errores `test.fixtures` de Playwright en `orders.spec.ts`/`reports.spec.ts`).
    - `pnpm build` (Next + Nest) → verde.
    - `pnpm lint` → 0 errores, 0 warnings.
-4. Un solo commit: `chore(lint): baseline de ESLint 9 con type-aware rules`.
+5. Un solo commit: `chore(lint): baseline de ESLint 9 con type-aware rules`.
 
 ### 4. Enforcement
 
@@ -55,7 +69,7 @@ Un único `eslint.config.mjs` en la raíz del monorepo. Flat config busca hacia 
 
 ### 5. Dependencias nuevas (devDependencies raíz)
 
-`eslint`, `@eslint/js`, `typescript-eslint`, `@next/eslint-plugin-next`, `eslint-plugin-react-hooks`, `simple-git-hooks`, `globals`.
+`eslint`, `@eslint/js`, `typescript-eslint`, `@next/eslint-plugin-next` (fijado a `16.2.4`, igual que el `next` instalado), `eslint-plugin-react-hooks`, `simple-git-hooks`, `globals`, y `@types/jsonwebtoken` en `apps/api` (jsonwebtoken 9 no trae tipos; necesario para poder convertir los `require()` legados a `import`).
 
 ## Fuera de alcance
 
