@@ -317,7 +317,7 @@ export function NoraProposalCard({
         {expandedKey === "opportunity" && proposal.blocks.opportunity && (
           <NoraProposalBlock
             title="Oportunidad"
-            description="Define si Laura actualiza una oportunidad existente o crea una nueva."
+            description="Define si Magali actualiza una oportunidad existente o crea una nueva."
             enabled={proposal.blocks.opportunity.enabled}
             onToggle={(enabled) =>
               updateProposal((draft) => ({

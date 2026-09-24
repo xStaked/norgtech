@@ -48,7 +48,7 @@ export class NoraExpenseExtractionService {
   extractForCaseInBackground(input: ExtractForCaseInput): void {
     void this.extractForCase(input).catch((error) => {
       this.logger.error(
-        `Nora expense extraction crashed for case ${input.caseId}: ${this.safeError(error)}`,
+        `Magali expense extraction crashed for case ${input.caseId}: ${this.safeError(error)}`,
       );
     });
   }

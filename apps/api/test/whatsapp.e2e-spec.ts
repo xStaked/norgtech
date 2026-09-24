@@ -3116,7 +3116,7 @@ describe("WhatsApp inbox", () => {
     ).toBe(false);
   });
 
-  it("marks Nora route failures on the action log without rejecting the webhook", async () => {
+  it("marks Magali route failures on the action log without rejecting the webhook", async () => {
     (globalThis.fetch as jest.Mock).mockResolvedValueOnce({
       ok: false,
       status: 503,
@@ -3146,7 +3146,7 @@ describe("WhatsApp inbox", () => {
         mode: "cliente",
         action: "classify_inbound_message",
         status: NoraActionStatus.failed,
-        error: "Nora route request failed with status 503",
+        error: "Magali route request failed with status 503",
       }),
     );
   });

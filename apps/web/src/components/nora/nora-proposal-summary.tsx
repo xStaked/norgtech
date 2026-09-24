@@ -308,7 +308,7 @@ export function NoraProposalSummary({
             Impacto relacionado
           </p>
           <p style={{ margin: 0, fontSize: 12, color: crmTheme.nora.textMuted, lineHeight: 1.45 }}>
-            Laura detectó cambios asociados que conviene revisar junto con la acción principal.
+            Magali detectó cambios asociados que conviene revisar junto con la acción principal.
           </p>
         </div>
       )}

@@ -203,7 +203,7 @@ export class NoraRoutingService {
           return;
         } catch (error) {
           this.logger.error(
-            `Nora agent expense flow failed, falling back to planner: ${String(error)}`,
+            `Magali agent expense flow failed, falling back to planner: ${String(error)}`,
           );
           // fall through to the planner path below
         }
@@ -279,7 +279,7 @@ export class NoraRoutingService {
           return;
         } catch (error) {
           this.logger.error(
-            `Nora general agent failed, falling back to planner: ${String(error)}`,
+            `Magali general agent failed, falling back to planner: ${String(error)}`,
           );
           // El planner responde el saludo generico, que a mitad de un pedido se
           // lee como si Nora se hubiera perdido: dejar el error en el log es lo
@@ -472,7 +472,7 @@ export class NoraRoutingService {
               });
             } else {
               this.logger.warn(
-                `Customer handoff sin rol válido (${rol ?? "n/d"}) — no se asigna, Nora re-pregunta`,
+                `Customer handoff sin rol válido (${rol ?? "n/d"}) — no se asigna, Magali re-pregunta`,
               );
               if (!agentResponse.reply_text) {
                 await this.whatsAppService.sendAgentReply(
@@ -499,7 +499,7 @@ export class NoraRoutingService {
           return;
         } catch (error) {
           this.logger.error(
-            `Nora customer agent failed, falling back to planner: ${String(error)}`,
+            `Magali customer agent failed, falling back to planner: ${String(error)}`,
           );
           // fall through to the planner path below
         }
@@ -583,9 +583,9 @@ export class NoraRoutingService {
       if (suggestedReply && this.shouldAutoReply(noraResponse, automationResult)) {
         try {
           await this.whatsAppService.sendAgentReply(conversation.id, suggestedReply);
-          this.logger.log(`Nora auto-replied to conversation ${conversation.id}: "${suggestedReply.substring(0, 60)}..."`);
+          this.logger.log(`Magali auto-replied to conversation ${conversation.id}: "${suggestedReply.substring(0, 60)}..."`);
         } catch (sendError) {
-          this.logger.error(`Failed to send Nora reply to conversation ${conversation.id}: ${this.safeErrorMessage(sendError)}`);
+          this.logger.error(`Failed to send Magali reply to conversation ${conversation.id}: ${this.safeErrorMessage(sendError)}`);
           await this.prisma.noraActionLog.update({
             where: { id: actionLog.id },
             data: {
@@ -1330,7 +1330,7 @@ export class NoraRoutingService {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error(`Nora agent request failed with status ${response.status}`);
+      throw new Error(`Magali agent request failed with status ${response.status}`);
     }
     return response.json() as Promise<{
       reply_text: string;
@@ -1354,7 +1354,7 @@ export class NoraRoutingService {
     if (!response.ok) {
       const body = await response.text().catch(() => "");
       throw new Error(
-        `Nora general agent request failed with status ${response.status}${body ? `: ${body.slice(0, 300)}` : ""}`,
+        `Magali general agent request failed with status ${response.status}${body ? `: ${body.slice(0, 300)}` : ""}`,
       );
     }
     return response.json() as Promise<{
@@ -1512,7 +1512,7 @@ export class NoraRoutingService {
       body: JSON.stringify(payload),
     });
     if (!response.ok) {
-      throw new Error(`Nora customer agent request failed with status ${response.status}`);
+      throw new Error(`Magali customer agent request failed with status ${response.status}`);
     }
     return response.json() as Promise<{
       reply_text: string;
@@ -1537,7 +1537,7 @@ export class NoraRoutingService {
     });
 
     if (!response.ok) {
-      throw new Error(`Nora route request failed with status ${response.status}`);
+      throw new Error(`Magali route request failed with status ${response.status}`);
     }
 
     return response.json() as Promise<Record<string, unknown>>;
@@ -1561,7 +1561,7 @@ export class NoraRoutingService {
       });
     } catch (error) {
       this.logger.warn(
-        `Failed to persist Nora intent tag for conversation ${conversationId}: ${this.safeErrorMessage(error)}`,
+        `Failed to persist Magali intent tag for conversation ${conversationId}: ${this.safeErrorMessage(error)}`,
       );
     }
   }
@@ -1755,7 +1755,7 @@ export class NoraRoutingService {
     if (existingAutomatedOrder) {
       return {
         decision: "human_review",
-        reason: "La conversacion ya tiene un pedido creado por automatizacion de Nora.",
+        reason: "La conversacion ya tiene un pedido creado por automatizacion de Magali.",
         existingOrder: existingAutomatedOrder,
       };
     }
@@ -2182,6 +2182,6 @@ export class NoraRoutingService {
   private safeErrorMessage(error: unknown) {
     return error instanceof Error && error.message
       ? error.message
-      : "Nora route request failed";
+      : "Magali route request failed";
   }
 }

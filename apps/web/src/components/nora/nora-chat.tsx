@@ -155,7 +155,7 @@ async function fetchLauraStream(
   }
 
   if (result) return result;
-  throw new Error("Laura stream finished without result");
+  throw new Error("Magali stream finished without result");
 }
 
 export function NoraChat({
@@ -231,7 +231,7 @@ export function NoraChat({
         });
 
         if (!response.ok) {
-          throw new Error("Laura no pudo procesar el mensaje.");
+          throw new Error("Magali no pudo procesar el mensaje.");
         }
 
         body = (await response.json()) as NoraAssistantResponse;
@@ -320,7 +320,7 @@ export function NoraChat({
       );
 
       if (!response.ok) {
-        throw new Error("Laura no pudo confirmar la propuesta.");
+        throw new Error("Magali no pudo confirmar la propuesta.");
       }
 
       const body = (await response.json()) as NoraProposalConfirmationResponse;

@@ -41,7 +41,7 @@ export class NoraCaseService {
         where: { id: caseId },
       });
       if (!existing) {
-        throw new NotFoundException("Nora case not found");
+        throw new NotFoundException("Magali case not found");
       }
 
       return tx.noraConversationCase.update({
@@ -192,7 +192,7 @@ export class NoraCaseService {
       SELECT id FROM "NoraConversationCase" WHERE id = ${caseId} FOR UPDATE
     `;
     if (rows.length === 0) {
-      throw new NotFoundException("Nora case not found");
+      throw new NotFoundException("Magali case not found");
     }
   }
 

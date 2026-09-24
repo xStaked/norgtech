@@ -23,7 +23,7 @@ export function streamNoraMessage(
   })
     .then(async (response) => {
       if (!response.ok) {
-        throw new Error(`Laura streaming failed: ${response.statusText}`);
+        throw new Error(`Magali streaming failed: ${response.statusText}`);
       }
 
       const reader = response.body?.getReader();

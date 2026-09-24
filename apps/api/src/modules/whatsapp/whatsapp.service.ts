@@ -569,13 +569,13 @@ export class WhatsAppService {
     });
 
     if (!noraCase) {
-      throw new NotFoundException("Nora case not found");
+      throw new NotFoundException("Magali case not found");
     }
 
     if (noraCase.executedEntityType || noraCase.executedEntityId) {
       return {
         decision: "human_review",
-        reason: "Nora case already executed",
+        reason: "Magali case already executed",
         existing: {
           entityType: noraCase.executedEntityType,
           entityId: noraCase.executedEntityId,
@@ -588,7 +588,7 @@ export class WhatsAppService {
       noraCase.type !== NoraConversationCaseType.order ||
       noraCase.status !== NoraConversationCaseStatus.ready_for_review
     ) {
-      throw new BadRequestException("Nora case is not ready for order creation");
+      throw new BadRequestException("Magali case is not ready for order creation");
     }
 
     const extractedData = this.jsonObjectValue(noraCase.extractedData);
@@ -619,7 +619,7 @@ export class WhatsAppService {
 
       return {
         decision: "human_review",
-        reason: "Nora case already executed or execution is in progress",
+        reason: "Magali case already executed or execution is in progress",
         existing: existingCase
           ? {
               entityType: existingCase.executedEntityType,
@@ -879,7 +879,7 @@ export class WhatsAppService {
 
   private validateOrderItemsFromCaseData(value: unknown): ProcessOrderAutomationDto["items"] {
     if (!Array.isArray(value) || value.length === 0) {
-      throw new BadRequestException("Nora order case requires at least one valid item");
+      throw new BadRequestException("Magali order case requires at least one valid item");
     }
 
     const items: ProcessOrderAutomationDto["items"] = [];
@@ -887,7 +887,7 @@ export class WhatsAppService {
     for (const item of value) {
       if (!item || typeof item !== "object" || Array.isArray(item)) {
         throw new BadRequestException(
-          "Nora order case items require productRef and quantity greater than 0",
+          "Magali order case items require productRef and quantity greater than 0",
         );
       }
 
@@ -901,7 +901,7 @@ export class WhatsAppService {
 
       if (!productRef || !Number.isFinite(quantity) || quantity <= 0) {
         throw new BadRequestException(
-          "Nora order case items require productRef and quantity greater than 0",
+          "Magali order case items require productRef and quantity greater than 0",
         );
       }
 
@@ -918,7 +918,7 @@ export class WhatsAppService {
     }
 
     if (items.length === 0) {
-      throw new BadRequestException("Nora order case requires at least one valid item");
+      throw new BadRequestException("Magali order case requires at least one valid item");
     }
 
     return items;
