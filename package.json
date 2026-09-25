@@ -7,11 +7,22 @@
     "dev:api": "pnpm --filter @norgtech/api dev",
     "dev:web": "pnpm --filter @norgtech/web dev",
     "build": "pnpm -r build",
-    "lint": "pnpm -r lint",
-    "test": "pnpm -r test"
+    "lint": "eslint . --max-warnings=0",
+    "test": "pnpm -r test",
+    "prepare": "simple-git-hooks || true"
+  },
+  "simple-git-hooks": {
+    "pre-push": "pnpm lint"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@next/eslint-plugin-next": "16.2.4",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "simple-git-hooks": "^2.14.0",
     "typescript": "^5.8.3",
+    "typescript-eslint": "^8.70.1",
     "vitest": "^3.1.4"
   }
 }
