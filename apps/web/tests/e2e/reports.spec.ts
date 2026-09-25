@@ -1,7 +1,7 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 import { chooseOption, selectByName } from "./select";
 
-async function waitForBackend(request: ReturnType<typeof test.fixtures>["request"]) {
+async function waitForBackend(request: APIRequestContext) {
   let backendReady = false;
   for (let i = 0; i < 20; i++) {
     try {
@@ -18,7 +18,7 @@ async function waitForBackend(request: ReturnType<typeof test.fixtures>["request
   expect(backendReady, "Backend health check failed").toBe(true);
 }
 
-async function loginAsAdmin(page: ReturnType<typeof test.fixtures>["page"]) {
+async function loginAsAdmin(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Correo").fill("admin@norgtech.local");
   await page.getByLabel("Contraseña").fill("Admin123*");
