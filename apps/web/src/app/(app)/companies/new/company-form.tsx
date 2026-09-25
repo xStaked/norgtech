@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -20,10 +21,10 @@ export function CompanyForm() {
     const formData = new FormData(event.currentTarget);
 
     const body = {
-      name: String(formData.get("name") ?? "").trim(),
-      legalName: String(formData.get("legalName") ?? "").trim(),
-      nit: String(formData.get("nit") ?? "").trim(),
-      prefix: String(formData.get("prefix") ?? "").trim().toUpperCase(),
+      name: formValue(formData, "name").trim(),
+      legalName: formValue(formData, "legalName").trim(),
+      nit: formValue(formData, "nit").trim(),
+      prefix: formValue(formData, "prefix").trim().toUpperCase(),
     };
 
     if (!body.name || !body.legalName || !body.nit || !body.prefix) {
@@ -39,13 +40,13 @@ export function CompanyForm() {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear la empresa");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
+      const created = (await response.json()) as { id: string };
       router.push(`/companies/${created.id}`);
     } catch {
       setError("Error de conexion");
@@ -54,7 +55,7 @@ export function CompanyForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 max-w-lg">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-6 max-w-lg">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -21,8 +22,8 @@ export default function NewZonePage() {
     setLoading(true);
     const formData = new FormData(event.currentTarget);
     const body = {
-      name: String(formData.get("name") ?? "").trim(),
-      department: String(formData.get("department") ?? "").trim() || undefined,
+      name: formValue(formData, "name").trim(),
+      department: formValue(formData, "department").trim() || undefined,
     };
     if (!body.name) {
       setError("El nombre es obligatorio");
@@ -32,12 +33,12 @@ export default function NewZonePage() {
     try {
       const res = await apiFetchClient("/zones", { method: "POST", body: JSON.stringify(body) });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
+        const d = (await res.json().catch(() => ({}))) as { message?: string };
         setError(d.message || "Error");
         setLoading(false);
         return;
       }
-      const created = await res.json();
+      const created = (await res.json()) as { id: string };
       router.push(`/zones/${created.id}`);
     } catch {
       setError("Error de conexion");
@@ -53,7 +54,7 @@ export default function NewZonePage() {
         actions={<ButtonLink href="/zones" variant="secondary">Volver</ButtonLink>}
       />
       <SectionCard>
-        <form onSubmit={handleSubmit} className="grid gap-6 max-w-lg">
+        <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-6 max-w-lg">
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="grid gap-1">
             <Label htmlFor="name">Nombre *</Label>

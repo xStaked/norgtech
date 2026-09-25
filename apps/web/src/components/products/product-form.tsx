@@ -176,7 +176,7 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
               body: JSON.stringify(body),
             });
             if (!created.ok) throw new Error(await messageOf(created, `crear ${row.empaque}`));
-            presentationIdByKey.set(row.key, (await created.json()).id);
+            presentationIdByKey.set(row.key, ((await created.json()) as { id: string }).id);
           }
         }
       } else {
@@ -197,7 +197,10 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
         });
         if (!response.ok) throw new Error(await messageOf(response, "crear el producto"));
 
-        const created = await response.json();
+        const created = (await response.json()) as {
+          id: string;
+          presentations?: Array<{ id: string; empaque: string }>;
+        };
         productId = created.id;
         for (const row of withEmpaque) {
           const match = created.presentations?.find(
@@ -231,7 +234,7 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[1.7fr_1fr] lg:items-start">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4 lg:grid-cols-[1.7fr_1fr] lg:items-start">
       <div className="flex flex-col gap-4">
         {error ? (
           <p className="rounded-lg bg-[#fcebe9] px-4 py-2.5 text-sm text-destructive">{error}</p>
@@ -568,6 +571,6 @@ export function ProductForm({ priceLists, product }: ProductFormProps) {
 }
 
 async function messageOf(response: Response, action: string): Promise<string> {
-  const data = await response.json().catch(() => ({}));
+  const data = (await response.json().catch(() => ({}))) as { message?: string };
   return data?.message ?? `No se pudo ${action}.`;
 }

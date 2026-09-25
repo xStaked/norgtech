@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { AgendaFilters } from "@/components/agenda/agenda-filters";
 import { AgendaQueue } from "@/components/agenda/agenda-queue";
 import type { AgendaView } from "@/components/agenda/agenda-filters";
@@ -97,9 +96,9 @@ export default async function AgendaPage({
       apiFetch("/follow-up-tasks?dueToday=true"),
       apiFetch("/follow-up-tasks?overdue=true"),
     ]);
-    visits = visitsRes.ok ? await visitsRes.json() : [];
-    const dueToday = tasksDueTodayRes.ok ? await tasksDueTodayRes.json() : [];
-    const overdue = tasksOverdueRes.ok ? await tasksOverdueRes.json() : [];
+    visits = (visitsRes.ok ? await visitsRes.json() : []) as Visit[];
+    const dueToday = (tasksDueTodayRes.ok ? await tasksDueTodayRes.json() : []) as FollowUpTask[];
+    const overdue = (tasksOverdueRes.ok ? await tasksOverdueRes.json() : []) as FollowUpTask[];
     const taskIds = new Set(dueToday.map((t: FollowUpTask) => t.id));
     tasks = [...dueToday, ...overdue.filter((t: FollowUpTask) => !taskIds.has(t.id))];
   } else if (view === "semana") {
@@ -107,23 +106,23 @@ export default async function AgendaPage({
       apiFetch("/visits?thisWeek=true"),
       apiFetch("/follow-up-tasks?thisWeek=true"),
     ]);
-    visits = visitsRes.ok ? await visitsRes.json() : [];
-    tasks = tasksRes.ok ? await tasksRes.json() : [];
+    visits = (visitsRes.ok ? await visitsRes.json() : []) as Visit[];
+    tasks = (tasksRes.ok ? await tasksRes.json() : []) as FollowUpTask[];
   } else if (view === "vencidos") {
     const [visitsRes, tasksRes] = await Promise.all([
       apiFetch("/visits?overdue=true"),
       apiFetch("/follow-up-tasks?overdue=true"),
     ]);
-    visits = visitsRes.ok ? await visitsRes.json() : [];
-    tasks = tasksRes.ok ? await tasksRes.json() : [];
+    visits = (visitsRes.ok ? await visitsRes.json() : []) as Visit[];
+    tasks = (tasksRes.ok ? await tasksRes.json() : []) as FollowUpTask[];
   }
 
   const items = toAgendaItems(visits, tasks);
 
   const allVisitsRes = await apiFetch("/visits");
   const allTasksRes = await apiFetch("/follow-up-tasks");
-  const allVisits: Visit[] = allVisitsRes.ok ? await allVisitsRes.json() : [];
-  const allTasks: FollowUpTask[] = allTasksRes.ok ? await allTasksRes.json() : [];
+  const allVisits = (allVisitsRes.ok ? await allVisitsRes.json() : []) as Visit[];
+  const allTasks = (allTasksRes.ok ? await allTasksRes.json() : []) as FollowUpTask[];
 
   const todayVisits = allVisits.filter((v) => isSameDayInBogota(v.scheduledAt, new Date()));
 

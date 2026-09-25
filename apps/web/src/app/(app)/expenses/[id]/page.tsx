@@ -141,14 +141,14 @@ export default async function ExpenseDetailPage({
     notFound();
   }
 
-  const expense: CommercialExpense = await expenseRes.json();
+  const expense = (await expenseRes.json()) as CommercialExpense;
   const [user, customersRes, visitsRes] = await Promise.all([
     getCurrentUser(),
     apiFetch("/customers"),
     apiFetch("/visits"),
   ]);
-  const customers: Customer[] = customersRes.ok ? await customersRes.json() : [];
-  const visits: Visit[] = visitsRes.ok ? await visitsRes.json() : [];
+  const customers = (customersRes.ok ? await customersRes.json() : []) as Customer[];
+  const visits = (visitsRes.ok ? await visitsRes.json() : []) as Visit[];
   const role = user?.role ?? null;
   const canEdit = canEditExpense(user?.id ?? null, role, expense);
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -52,10 +53,10 @@ export function InvoicePaymentForm({
     const body = {
       invoiceId,
       amount,
-      method: String(formData.get("method")),
-      reference: String(formData.get("reference") || ""),
-      notes: String(formData.get("notes") || ""),
-      paymentDate: String(formData.get("paymentDate")),
+      method: formValue(formData, "method"),
+      reference: formValue(formData, "reference"),
+      notes: formValue(formData, "notes"),
+      paymentDate: formValue(formData, "paymentDate"),
     };
 
     try {
@@ -64,7 +65,7 @@ export function InvoicePaymentForm({
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al registrar pago");
         setLoading(false);
         return;
@@ -87,7 +88,7 @@ export function InvoicePaymentForm({
 
   return (
     <form
-      onSubmit={handleSubmit}
+      onSubmit={(e) => void handleSubmit(e)}
       className="mt-4 grid gap-3 rounded-xl border border-border bg-muted p-4"
     >
       <h4 className="text-sm font-semibold">Registrar pago</h4>

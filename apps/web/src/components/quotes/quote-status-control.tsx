@@ -43,7 +43,7 @@ export function QuoteStatusControl({ quoteId, currentStatus }: QuoteStatusContro
         setMessage("Estado actualizado correctamente.");
         router.refresh();
       } else {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setMessage(data.message || "Error al actualizar el estado.");
       }
     } catch {
@@ -70,7 +70,7 @@ export function QuoteStatusControl({ quoteId, currentStatus }: QuoteStatusContro
 
         <button
           type="button"
-          onClick={handleUpdate}
+          onClick={() => void handleUpdate()}
           disabled={loading || target === currentStatus}
           style={{
             minHeight: 44,

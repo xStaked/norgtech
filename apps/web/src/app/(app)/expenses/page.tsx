@@ -206,8 +206,8 @@ export default async function ExpensesPage({
     getCurrentUser(),
   ]);
 
-  const expenses: CommercialExpense[] = response.ok ? await response.json() : [];
-  const summary: ExpenseSummary = summaryResponse.ok ? await summaryResponse.json() : {};
+  const expenses = (response.ok ? await response.json() : []) as CommercialExpense[];
+  const summary = (summaryResponse.ok ? await summaryResponse.json() : {}) as ExpenseSummary;
   const role = user?.role ?? null;
 
   const rows: ExpenseRow[] = expenses.map((expense) => ({

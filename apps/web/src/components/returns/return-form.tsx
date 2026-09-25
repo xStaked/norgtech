@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -55,8 +56,8 @@ export function ReturnForm({
 
     const formData = new FormData(event.currentTarget);
     const optionalString = (key: string) => {
-      const value = formData.get(key);
-      return value && String(value).trim() ? String(value).trim() : undefined;
+      const value = formValue(formData, key);
+      return value.trim() ? value.trim() : undefined;
     };
 
     const body: Record<string, unknown> = {
@@ -64,7 +65,7 @@ export function ReturnForm({
       invoiceId: invoiceId || undefined,
       returnDate: optionalString("returnDate"),
       amount: Number(formData.get("amount")),
-      reason: String(formData.get("reason")).trim(),
+      reason: formValue(formData, "reason").trim(),
       notes: optionalString("notes"),
     };
 
@@ -74,7 +75,7 @@ export function ReturnForm({
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al registrar devolucion");
         setLoading(false);
         return;
@@ -87,7 +88,7 @@ export function ReturnForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-2xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

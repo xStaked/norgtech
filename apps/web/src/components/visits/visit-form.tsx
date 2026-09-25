@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -38,17 +39,17 @@ export function VisitForm({ customers, opportunities }: VisitFormProps) {
     const formData = new FormData(event.currentTarget);
 
     const optionalString = (key: string) => {
-      const value = formData.get(key);
-      return value && String(value).trim() ? String(value).trim() : undefined;
+      const value = formValue(formData, key);
+      return value.trim() ? value.trim() : undefined;
     };
 
     const body = {
-      customerId: String(formData.get("customerId")),
+      customerId: formValue(formData, "customerId"),
       opportunityId: optionalString("opportunityId"),
       // El input da una hora local sin offset; se convierte a un instante real
       // para que el servidor no la reinterprete en SU zona (VIS-03).
-      scheduledAt: toInstantString(String(formData.get("scheduledAt"))),
-      summary: String(formData.get("summary")),
+      scheduledAt: toInstantString(formValue(formData, "scheduledAt")),
+      summary: formValue(formData, "summary"),
       notes: optionalString("notes"),
       nextStep: optionalString("nextStep"),
     };
@@ -60,13 +61,13 @@ export function VisitForm({ customers, opportunities }: VisitFormProps) {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear la visita");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
+      const created = (await response.json()) as { id: string };
       router.push(`/visits/${created.id}`);
     } catch {
       setError("Error de conexión");
@@ -75,7 +76,7 @@ export function VisitForm({ customers, opportunities }: VisitFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-2xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

@@ -153,6 +153,7 @@ export function SellerGoalsDrawer({ user, onOpenChange }: SellerGoalsDrawerProps
   }, [userId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset sincrónico del drawer al cambiar de vendedor antes de recargar
     setGoals([]);
     setProgress({});
     setEditingGoalId(null);
@@ -310,7 +311,7 @@ export function SellerGoalsDrawer({ user, onOpenChange }: SellerGoalsDrawerProps
                   setDraft={setDraft}
                   saving={saving}
                   submitLabel="Guardar meta"
-                  onSubmit={submitDraft}
+                  onSubmit={(e) => void submitDraft(e)}
                   onCancel={() => {
                     setEditingGoalId(null);
                     setDraft(null);
@@ -391,7 +392,7 @@ export function SellerGoalsDrawer({ user, onOpenChange }: SellerGoalsDrawerProps
               setDraft={setDraft}
               saving={saving}
               submitLabel="Crear meta"
-              onSubmit={submitDraft}
+              onSubmit={(e) => void submitDraft(e)}
               onCancel={() => setDraft(null)}
             />
           ) : (

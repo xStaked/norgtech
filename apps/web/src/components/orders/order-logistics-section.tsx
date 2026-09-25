@@ -77,7 +77,7 @@ export function OrderLogisticsSection({
         }),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al actualizar logística");
         setLoading(false);
         return;
@@ -182,7 +182,7 @@ export function OrderLogisticsSection({
             />
           </Field>
           <div className="flex gap-2">
-            <Button size="sm" onClick={handleSave} disabled={loading}>
+            <Button size="sm" onClick={() => void handleSave()} disabled={loading}>
               {loading ? "Guardando..." : "Guardar"}
             </Button>
             <Button

@@ -37,7 +37,7 @@ export default async function UsersPage() {
     return errorState;
   }
 
-  const users: ManagedUser[] = await response.json();
+  const users = (await response.json()) as ManagedUser[];
 
   let goalProgress: SellerGoalProgress[] = [];
   if (goalsResponse?.ok) {

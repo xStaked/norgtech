@@ -32,6 +32,7 @@ export function usePricingPreview(
     };
 
     if (!cid || lines.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reseteo síncrono del preview cuando no hay ítems que cotizar
       setPreview(null);
       setError(null);
       setLoading(false);
@@ -41,13 +42,15 @@ export function usePricingPreview(
     let cancelled = false;
     setLoading(true);
 
-    const timer = setTimeout(async () => {
-      const result = await fetchPricingPreview(endpoint, cid, lines);
-      // Guard against an earlier, slower response overwriting a newer one.
-      if (cancelled) return;
-      setPreview(result.preview);
-      setError(result.error);
-      setLoading(false);
+    const timer = setTimeout(() => {
+      void (async () => {
+        const result = await fetchPricingPreview(endpoint, cid, lines);
+        // Guard against an earlier, slower response overwriting a newer one.
+        if (cancelled) return;
+        setPreview(result.preview);
+        setError(result.error);
+        setLoading(false);
+      })();
     }, 300);
 
     return () => {

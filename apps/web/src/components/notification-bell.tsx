@@ -61,7 +61,7 @@ export function NotificationBell() {
   }
 
   return (
-    <DropdownMenu onOpenChange={loadItems}>
+    <DropdownMenu onOpenChange={(open) => void loadItems(open)}>
       <DropdownMenuTrigger className="relative flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
         <Bell className="h-[18px] w-[18px]" />
         {count > 0 && (
@@ -76,7 +76,7 @@ export function NotificationBell() {
           <span className="text-[12.5px] font-semibold">Notificaciones</span>
           {items.length > 0 && (
             <button
-              onClick={markAll}
+              onClick={() => void markAll()}
               className="text-[11.5px] text-muted-foreground hover:text-foreground"
             >
               Marcar todas
@@ -91,7 +91,7 @@ export function NotificationBell() {
           items.map((item) => (
             <DropdownMenuItem
               key={item.id}
-              onClick={() => openItem(item)}
+              onClick={() => void openItem(item)}
               className="flex flex-col items-start gap-0.5"
             >
               <span className="text-[12.5px] font-medium">{item.title}</span>

@@ -101,7 +101,6 @@ async function fetchLauraStream(
   contextType?: string,
   contextEntityId?: string,
 ): Promise<NoraAssistantResponse> {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
   const token = getSessionTokenClient();
 
   const response = await fetch(`${NORA_API_URL}/messages/stream`, {
@@ -145,7 +144,7 @@ async function fetchLauraStream(
         try {
           const parsed = JSON.parse(line.slice(6)) as { event?: string; node?: string; mode?: string; sessionId?: string; message?: string } & NoraAssistantResponse;
           if (parsed.event === "result" || parsed.mode) {
-            result = parsed as NoraAssistantResponse;
+            result = parsed;
           }
         } catch {
           // skip non-JSON data
@@ -240,7 +239,7 @@ export function NoraChat({
       setMessages((current) =>
         current.map((message) =>
           message.id === clientMessage.id
-            ? { ...message, status: "confirmed" as NoraMessageStatus }
+            ? { ...message, status: "confirmed" }
             : message,
         ),
       );
@@ -287,7 +286,7 @@ export function NoraChat({
       setMessages((current) =>
         current.map((message) =>
           message.id === clientMessage.id
-            ? { ...message, status: "error" as NoraMessageStatus }
+            ? { ...message, status: "error" }
             : message,
         ),
       );
@@ -441,7 +440,7 @@ export function NoraChat({
                 key={suggestion}
                 type="button"
                 disabled={busy || confirming}
-                onClick={() => handleSend(suggestion)}
+                onClick={() => void handleSend(suggestion)}
                 className="flex w-full items-center gap-2 rounded-lg border border-[#ece8f8] p-2 text-left text-[12px] text-[#4a4470] transition-colors hover:bg-[#f6f4ff] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#9b5cf0]" />
@@ -487,7 +486,7 @@ export function NoraChat({
             messages={messages}
             busy={busy}
             onRetry={handleRetry}
-            onSend={handleSend}
+            onSend={(content) => void handleSend(content)}
           />
 
           {/* Clarification Options */}
@@ -502,7 +501,7 @@ export function NoraChat({
                     key={option.id}
                     type="button"
                     disabled={busy}
-                    onClick={() => handleSend(option.label)}
+                    onClick={() => void handleSend(option.label)}
                     className="rounded-full border border-[#ddd6f7] bg-card px-4 py-2 text-[13px] font-semibold text-[#5a4bc4] transition-colors hover:bg-[#f6f4ff] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {option.label}

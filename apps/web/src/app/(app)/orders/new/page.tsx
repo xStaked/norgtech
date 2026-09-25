@@ -35,10 +35,10 @@ export default async function NewOrderPage() {
     apiFetch("/quotes"),
   ]);
 
-  const customers: Customer[] = customersRes.ok ? await customersRes.json() : [];
-  const opportunities: Opportunity[] = opportunitiesRes.ok ? await opportunitiesRes.json() : [];
-  const products: Product[] = productsRes.ok ? await productsRes.json() : [];
-  const quotes: Quote[] = quotesRes.ok ? await quotesRes.json() : [];
+  const customers = (customersRes.ok ? await customersRes.json() : []) as Customer[];
+  const opportunities = (opportunitiesRes.ok ? await opportunitiesRes.json() : []) as Opportunity[];
+  const products = (productsRes.ok ? await productsRes.json() : []) as Product[];
+  const quotes = (quotesRes.ok ? await quotesRes.json() : []) as Quote[];
 
   return (
     <div className="space-y-6">

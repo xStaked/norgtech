@@ -103,7 +103,7 @@ export default async function ReturnsPage({
   const params = await searchParams;
   const [response, user] = await Promise.all([apiFetch("/returns"), getCurrentUser()]);
 
-  const returns: ReturnItem[] = response.ok ? await response.json() : [];
+  const returns = (response.ok ? await response.json() : []) as ReturnItem[];
   const role = user?.role ?? null;
 
   const rows: ReturnRow[] = returns.map((item) => ({

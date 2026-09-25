@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -110,12 +111,12 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
     const formData = new FormData(event.currentTarget);
 
     const optionalString = (key: string) => {
-      const value = formData.get(key);
-      return value && String(value).trim() ? String(value).trim() : undefined;
+      const value = formValue(formData, key);
+      return value.trim() ? value.trim() : undefined;
     };
 
     const body = {
-      customerId: String(formData.get("customerId")),
+      customerId: formValue(formData, "customerId"),
       opportunityId: optionalString("opportunityId"),
       notes: optionalString("notes"),
       validUntil: optionalString("validUntil"),
@@ -143,13 +144,13 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear la cotización");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
+      const created = (await response.json()) as { id: string };
       router.push(`/quotes/${created.id}`);
     } catch {
       setError("Error de conexión");
@@ -158,7 +159,7 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-3xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-3xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

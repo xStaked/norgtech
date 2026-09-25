@@ -72,7 +72,7 @@ export default async function CompaniesPage({
 }) {
   const params = await searchParams;
   const response = await apiFetch("/companies?includeInactive=true");
-  const companies: Company[] = response.ok ? await response.json() : [];
+  const companies = (response.ok ? await response.json() : []) as Company[];
 
   const rows: CompanyRow[] = companies;
   const filtered = applyFilters(rows, params, {

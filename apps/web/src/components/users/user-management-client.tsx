@@ -99,6 +99,7 @@ export function UserManagementClient({
   const [secondsLeft, setSecondsLeft] = useState(TEMP_PASSWORD_TTL_SECONDS);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza users con la prop initialUsers; usar key= cambiaría el ciclo de vida
     setUsers(initialUsers);
   }, [initialUsers]);
 
@@ -107,6 +108,7 @@ export function UserManagementClient({
   useEffect(() => {
     if (!tempPassword) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reinicia el contador de la contraseña temporal en el momento de mostrarse
     setSecondsLeft(TEMP_PASSWORD_TTL_SECONDS);
     const intervalId = window.setInterval(() => {
       setSecondsLeft((current) => {

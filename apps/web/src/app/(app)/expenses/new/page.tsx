@@ -22,8 +22,8 @@ export default async function NewExpensePage() {
     apiFetch("/visits"),
   ]);
 
-  const customers: Customer[] = customersRes.ok ? await customersRes.json() : [];
-  const visits: Visit[] = visitsRes.ok ? await visitsRes.json() : [];
+  const customers = (customersRes.ok ? await customersRes.json() : []) as Customer[];
+  const visits = (visitsRes.ok ? await visitsRes.json() : []) as Visit[];
 
   return (
     <div style={{ display: "grid", gap: 24 }}>

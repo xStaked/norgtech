@@ -145,7 +145,7 @@ export default async function OpportunitiesPage({
   const userRole = user?.role ?? null;
 
   const response = await apiFetch("/opportunities");
-  const opportunities: Opportunity[] = response.ok ? await response.json() : [];
+  const opportunities = (response.ok ? await response.json() : []) as Opportunity[];
 
   const rows: OpportunityRow[] = opportunities.map((opportunity) => ({
     id: opportunity.id,

@@ -59,7 +59,7 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear solicitud");
         setLoading(false);
         return;
@@ -88,7 +88,7 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
             <DialogTitle>Nueva solicitud de facturación</DialogTitle>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="grid gap-4 py-2">
+          <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-4 py-2">
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <div className="grid gap-2">

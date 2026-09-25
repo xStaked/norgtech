@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, KeyRound, Mail, MailCheck } from "lucide-react";
@@ -132,7 +133,7 @@ export default function ForgotPasswordPage() {
         className="mt-6"
         onSubmit={(event) => {
           event.preventDefault();
-          const email = String(new FormData(event.currentTarget).get("email"));
+          const email = formValue(new FormData(event.currentTarget), "email");
           void requestLink(email);
         }}
       >

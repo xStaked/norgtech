@@ -19,7 +19,7 @@ const toneDotClasses: Record<string, string> = {
   neutral: "bg-slate-500 shadow-[0_0_8px_rgba(100,116,139,0.5)]",
 };
 
-export function ShiftKpiCard({ label, value, tone = "neutral", detail, index = 0 }: ShiftKpiCardProps) {
+export function ShiftKpiCard({ label, value, tone = "neutral", detail }: ShiftKpiCardProps) {
   return (
     <ShiftCard
       className="h-[180px] w-full md:h-[200px]"

@@ -68,7 +68,7 @@ export function ExpenseStatusAction({ id, currentStatus, canChange }: ExpenseSta
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(getErrorMessage(data));
         return;
       }

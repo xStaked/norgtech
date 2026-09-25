@@ -7,7 +7,7 @@ import { PriceMatrix } from "@/components/products/price-matrix";
 import { apiFetch } from "@/lib/api.server";
 import { canCreate } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth.server";
-import type { ProductDetail } from "@/lib/catalog";
+import type { PriceListRef, ProductDetail } from "@/lib/catalog";
 
 const AVATAR_COLORS = [
   "#0f5c8a",
@@ -52,8 +52,8 @@ export default async function ProductDetailPage({
     notFound();
   }
 
-  const product: ProductDetail = await productResponse.json();
-  const totalLists: number = listsResponse.ok ? (await listsResponse.json()).length : 0;
+  const product = (await productResponse.json()) as ProductDetail;
+  const totalLists = listsResponse.ok ? ((await listsResponse.json()) as PriceListRef[]).length : 0;
   const canEdit = canCreate(user?.role ?? null, "product");
 
   const activePresentations = product.presentations.filter((p) => p.active);

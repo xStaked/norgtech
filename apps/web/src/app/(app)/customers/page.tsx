@@ -196,17 +196,17 @@ export default async function CustomersPage({
     hasFilters ? apiFetch("/customers?includeInactive=true") : null,
   ]);
 
-  const customers: Customer[] = response.ok ? await response.json() : [];
-  const companies: { id: string; name: string }[] = companiesResponse.ok
+  const customers = (response.ok ? await response.json() : []) as Customer[];
+  const companies = (companiesResponse.ok
     ? await companiesResponse.json()
-    : [];
-  const sellers: { id: string; name: string }[] = sellersResponse.ok
+    : []) as { id: string; name: string }[];
+  const sellers = (sellersResponse.ok
     ? await sellersResponse.json()
-    : [];
+    : []) as { id: string; name: string }[];
 
   let total = customers.length;
   if (totalResponse?.ok) {
-    const all: unknown[] = await totalResponse.json();
+    const all = (await totalResponse.json()) as unknown[];
     total = all.length;
   }
 

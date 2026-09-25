@@ -169,7 +169,7 @@ export default async function OrdersPage({
   if (companyId) apiQuery.set("companyId", companyId);
   const apiPath = apiQuery.toString() ? `/orders?${apiQuery.toString()}` : "/orders";
   const response = await apiFetch(apiPath);
-  const orders: Order[] = response.ok ? await response.json() : [];
+  const orders = (response.ok ? await response.json() : []) as Order[];
 
   const rows: OrderRow[] = orders.map((order) => ({
     id: order.id,

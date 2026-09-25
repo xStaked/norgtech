@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { apiFetch } from "@/lib/api.server";
-import { canCreate, type UserRole } from "@/lib/auth";
+import type { UserRole } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth.server";
 
 interface InvoicePaymentSupport {
@@ -113,7 +113,7 @@ export default async function InvoiceDetailPage({
     notFound();
   }
 
-  const invoice: Invoice = await response.json();
+  const invoice = (await response.json()) as Invoice;
   const role = user?.role ?? null;
   const canEdit = isControlRole(role);
 

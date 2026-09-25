@@ -92,7 +92,7 @@ export async function CreditInfoCard({ customerId }: CreditInfoCardProps) {
     );
   }
 
-  const data: CreditSummary = await res.json();
+  const data = (await res.json()) as CreditSummary;
 
   return (
     <SectionCard

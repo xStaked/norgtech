@@ -43,6 +43,7 @@ export function ThemeProvider({
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación de tema: localStorage solo existe en cliente
     setMounted(true);
     const stored = localStorage.getItem("theme") as Theme | null;
     const initialTheme = stored ?? defaultTheme;
@@ -55,6 +56,7 @@ export function ThemeProvider({
   React.useEffect(() => {
     if (!mounted) return;
     const resolved = getResolvedTheme(theme);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- resolvedTheme se deriva de theme; calcularlo en render causaría mismatch de hidratación
     setResolvedTheme(resolved);
     document.documentElement.classList.toggle("dark", resolved === "dark");
     localStorage.setItem("theme", theme);

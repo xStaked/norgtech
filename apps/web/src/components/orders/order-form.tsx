@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState, useEffect, useMemo } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
@@ -66,7 +67,7 @@ const emptyItem = (): OrderItem => ({
 });
 
 function optionalString(value: FormDataEntryValue | null) {
-  const text = String(value ?? "").trim();
+  const text = typeof value === "string" ? value.trim() : "";
   return text ? text : undefined;
 }
 
@@ -116,6 +117,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   useEffect(() => {
     if (!selectedCustomerId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reseteo síncrono de zonas/crédito al cambiar de cliente dentro del effect
       setCustomerZones([]);
       setCreditSummary(null);
       return;
@@ -149,12 +151,14 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
   // ser valida: se limpia en vez de enviarse y provocar el 400 del backend.
   useEffect(() => {
     if (opportunityId && !customerOpportunities.some((o) => o.id === opportunityId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- invalidación síncrona de la oportunidad seleccionada cuando cambia el filtro de clientes
       setOpportunityId("");
     }
   }, [customerOpportunities, opportunityId]);
 
   useEffect(() => {
     if (sourceQuoteId && !customerQuotes.some((q) => q.id === sourceQuoteId)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- invalidación síncrona de la cotización origen cuando cambia el filtro de clientes
       setSourceQuoteId("");
     }
   }, [customerQuotes, sourceQuoteId]);
@@ -241,9 +245,9 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
     }));
 
     const body = {
-      companyId: String(formData.get("companyId")),
+      companyId: formValue(formData, "companyId"),
       customerZoneId: optionalString(formData.get("customerZoneId")),
-      customerId: String(formData.get("customerId")),
+      customerId: formValue(formData, "customerId"),
       sellerUserId: optionalString(formData.get("sellerUserId")),
       // Desde el estado, no del FormData: los selects deshabilitados (sin
       // cliente) no aparecen en el FormData y la seleccion huerfana ya se
@@ -317,13 +321,13 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear el pedido");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
+      const created = (await response.json()) as { id: string };
       router.push(`/orders/${created.id}`);
     } catch {
       setError("Error de conexión");
@@ -332,7 +336,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-6">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <FormSection title="Encabezado del pedido">

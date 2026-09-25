@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -97,13 +98,13 @@ export function CustomerForm({
     const formData = new FormData(event.currentTarget);
 
     const optionalString = (key: string) => {
-      const value = formData.get(key);
-      return value && String(value).trim() ? String(value).trim() : undefined;
+      const value = formValue(formData, key);
+      return value.trim() ? value.trim() : undefined;
     };
 
     const body: Record<string, unknown> = {
-      legalName: String(formData.get("legalName")),
-      displayName: String(formData.get("displayName")),
+      legalName: formValue(formData, "legalName"),
+      displayName: formValue(formData, "displayName"),
       taxId: optionalString("taxId"),
       phone: optionalString("phone"),
       email: optionalString("email"),
@@ -115,7 +116,7 @@ export function CustomerForm({
       notes: optionalString("notes"),
       // El segmento no se pide: es una etiqueta que el backend deriva de
       // customerType. El negocio solo maneja listas de precios.
-      companyId: String(formData.get("companyId")),
+      companyId: formValue(formData, "companyId"),
       // null, no undefined: "Sin asignar" tiene que poder quitarle el vendedor
       // a un cliente. Con undefined el backend no tocaba el campo y la opción
       // no hacía nada. Al crear no aplica, ahí sí es "no vino el dato".
@@ -144,7 +145,7 @@ export function CustomerForm({
     if (!isEditing) {
       body.contacts = [
         {
-          fullName: String(formData.get("contactFullName")),
+          fullName: formValue(formData, "contactFullName"),
           roleTitle: optionalString("contactRoleTitle"),
           phone: optionalString("contactPhone"),
           email: optionalString("contactEmail"),
@@ -175,13 +176,13 @@ export function CustomerForm({
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al guardar el cliente");
         setLoading(false);
         return;
       }
 
-      const result = await response.json();
+      const result = (await response.json()) as { id: string };
       router.push(`/customers/${result.id}`);
     } catch {
       setError("Error de conexion");
@@ -190,7 +191,7 @@ export function CustomerForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-2xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

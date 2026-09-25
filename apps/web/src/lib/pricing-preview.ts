@@ -51,7 +51,7 @@ export async function fetchPricingPreview(
     // El backend rechaza la línea cuando el producto tiene varios empaques con
     // precio en la lista del cliente. Tragarse ese mensaje dejaba el total en
     // "—" sin decir por qué.
-    const data = await response.json().catch(() => ({}));
+    const data = (await response.json().catch(() => ({}))) as { message?: string };
     return { preview: null, error: data?.message ?? "No se pudo calcular el precio." };
   }
 

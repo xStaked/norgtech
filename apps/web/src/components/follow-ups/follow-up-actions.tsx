@@ -31,7 +31,7 @@ export function FollowUpActions({ taskId }: FollowUpActionsProps) {
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
       <button
         type="button"
-        onClick={markComplete}
+        onClick={() => void markComplete()}
         disabled={loading}
         style={{
           minHeight: 44,

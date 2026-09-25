@@ -67,7 +67,7 @@ export function ConversationComposer({
           onKeyDown={(event) => {
             if (event.key === "Enter" && !event.shiftKey) {
               event.preventDefault();
-              sendMessage();
+              void sendMessage();
             }
           }}
           rows={1}
@@ -77,7 +77,7 @@ export function ConversationComposer({
         />
         <button
           type="button"
-          onClick={sendMessage}
+          onClick={() => void sendMessage()}
           disabled={!conversationId || !body.trim() || sending}
           title="Enviar"
           className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[#25d366] text-white transition-colors hover:bg-[#1eb955] disabled:cursor-not-allowed disabled:opacity-50"

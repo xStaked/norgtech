@@ -51,7 +51,7 @@ export function formatOrderTotal(total: string | number | null | undefined) {
   if (total == null) return null;
   const value = typeof total === "string" ? Number(total) : total;
   if (!Number.isFinite(value)) return typeof total === "string" ? total : null;
-  return currencyFormatter.format(value as number);
+  return currencyFormatter.format(value);
 }
 
 /** Roles que atienden el unicanal (espejo de UNICANAL_AGENT_ROLES del API). */

@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -52,16 +53,16 @@ export function FollowUpTaskForm({
     const formData = new FormData(event.currentTarget);
 
     const optionalString = (key: string) => {
-      const value = formData.get(key);
-      return value && String(value).trim() ? String(value).trim() : undefined;
+      const value = formValue(formData, key);
+      return value.trim() ? value.trim() : undefined;
     };
 
     const body = {
-      customerId: String(formData.get("customerId")),
+      customerId: formValue(formData, "customerId"),
       opportunityId: optionalString("opportunityId"),
-      type: String(formData.get("type")),
-      title: String(formData.get("title")),
-      dueAt: String(formData.get("dueAt")),
+      type: formValue(formData, "type"),
+      title: formValue(formData, "title"),
+      dueAt: formValue(formData, "dueAt"),
       notes: optionalString("notes"),
     };
 
@@ -72,13 +73,13 @@ export function FollowUpTaskForm({
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear la tarea");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
+      const created = (await response.json()) as { id: string };
       router.push(`/follow-ups/${created.id}`);
     } catch {
       setError("Error de conexión");
@@ -87,7 +88,7 @@ export function FollowUpTaskForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-2xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

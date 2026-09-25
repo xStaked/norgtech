@@ -25,8 +25,8 @@ export default async function NewReturnPage() {
     apiFetch("/invoices"),
   ]);
 
-  const customersRaw: CustomerResponse[] = customersRes.ok ? await customersRes.json() : [];
-  const invoicesRaw: InvoiceResponse[] = invoicesRes.ok ? await invoicesRes.json() : [];
+  const customersRaw = (customersRes.ok ? await customersRes.json() : []) as CustomerResponse[];
+  const invoicesRaw = (invoicesRes.ok ? await invoicesRes.json() : []) as InvoiceResponse[];
 
   const customers: ReturnFormCustomer[] = customersRaw.map((c) => ({
     id: c.id,

@@ -49,7 +49,7 @@ export default async function ZonesPage({
 }) {
   const params = await searchParams;
   const response = await apiFetch("/zones?includeInactive=true");
-  const zones: Zone[] = response.ok ? await response.json() : [];
+  const zones = (response.ok ? await response.json() : []) as Zone[];
 
   const filtered = applyFilters(zones, params, {
     search: (zone) => [zone.name, zone.department],

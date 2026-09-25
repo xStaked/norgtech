@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -26,7 +27,7 @@ function ResetPasswordForm() {
     event.preventDefault();
     setError(null);
     setLoading(true);
-    const password = String(new FormData(event.currentTarget).get("password"));
+    const password = formValue(new FormData(event.currentTarget), "password");
 
     try {
       const response = await apiFetchClient("/auth/reset-password", {
@@ -34,7 +35,9 @@ function ResetPasswordForm() {
         body: JSON.stringify({ token, password }),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => null);
+        const data = (await response.json().catch(() => null)) as {
+          message?: string;
+        } | null;
         setError(
           typeof data?.message === "string"
             ? data.message
@@ -127,7 +130,7 @@ function ResetPasswordForm() {
             </div>
           ) : null}
 
-          <form onSubmit={handleSubmit} className="mt-6">
+          <form onSubmit={(e) => void handleSubmit(e)} className="mt-6">
             <label
               htmlFor="password"
               className="mb-[7px] block text-[12.5px] font-semibold text-[#3a4658]"

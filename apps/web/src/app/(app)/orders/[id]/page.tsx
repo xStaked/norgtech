@@ -164,7 +164,7 @@ export default async function OrderDetailPage({
     notFound();
   }
 
-  const order: Order = await response.json();
+  const order = (await response.json()) as Order;
   const user = await getCurrentUser();
   const role = user?.role ?? null;
 

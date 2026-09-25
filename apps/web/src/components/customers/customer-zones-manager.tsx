@@ -57,7 +57,7 @@ export function CustomerZonesManager({
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al asignar la zona");
         setLoading(false);
         return;
@@ -94,7 +94,7 @@ export function CustomerZonesManager({
       )}
 
       {canAssign && (
-        <form onSubmit={handleAssign} className="mt-4 grid gap-3 border-t border-border/60 pt-4">
+        <form onSubmit={(e) => void handleAssign(e)} className="mt-4 grid gap-3 border-t border-border/60 pt-4">
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="grid gap-1">

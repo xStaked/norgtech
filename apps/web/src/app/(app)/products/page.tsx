@@ -46,8 +46,8 @@ export default async function ProductsPage({
     apiFetch(`/products?${buildQueryString({ includeInactive: "true", customerId })}`),
     apiFetch("/customers"),
   ]);
-  const all: Product[] = response.ok ? await response.json() : [];
-  const customers: Customer[] = customersResponse.ok ? await customersResponse.json() : [];
+  const all = (response.ok ? await response.json() : []) as Product[];
+  const customers = (customersResponse.ok ? await customersResponse.json() : []) as Customer[];
 
   const products = applyFilters(all, params, {
     search: (product) => [product.name, product.sku, product.description],

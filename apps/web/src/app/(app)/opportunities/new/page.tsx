@@ -11,7 +11,7 @@ interface Customer {
 
 export default async function NewOpportunityPage() {
   const response = await apiFetch("/customers");
-  const customers: Customer[] = response.ok ? await response.json() : [];
+  const customers = (response.ok ? await response.json() : []) as Customer[];
 
   return (
     <div className="space-y-6">

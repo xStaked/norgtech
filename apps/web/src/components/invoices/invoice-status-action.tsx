@@ -52,7 +52,7 @@ export function InvoiceStatusAction({
         },
       );
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al cambiar estado");
         setLoading(false);
         return;
@@ -73,7 +73,7 @@ export function InvoiceStatusAction({
           key={status}
           variant="outline"
           size="sm"
-          onClick={() => handleChange(status)}
+          onClick={() => void handleChange(status)}
           disabled={loading}
         >
           {statusLabels[status] ?? status}

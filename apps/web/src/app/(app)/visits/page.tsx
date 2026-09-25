@@ -141,10 +141,10 @@ export default async function VisitsPage({
   const apiPath = filterParam ? `/visits?${filterParam}` : "/visits";
 
   const response = await apiFetch(apiPath);
-  const visits: Visit[] = response.ok ? await response.json() : [];
+  const visits = (response.ok ? await response.json() : []) as Visit[];
 
   const allResponse = await apiFetch("/visits");
-  const allVisits: Visit[] = allResponse.ok ? await allResponse.json() : [];
+  const allVisits = (allResponse.ok ? await allResponse.json() : []) as Visit[];
 
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;

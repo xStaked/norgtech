@@ -26,13 +26,18 @@ function normalizeEntityType(entityType: string): string {
 }
 
 function getItemPrimaryText(item: Record<string, unknown>, index: number): string {
-  return String(
-    item.label ?? item.displayName ?? item.name ?? item.title ?? item.fullName ?? `#${index + 1}`,
-  );
+  const primary = (item.label ??
+    item.displayName ??
+    item.name ??
+    item.title ??
+    item.fullName ??
+    `#${index + 1}`) as string;
+  return String(primary);
 }
 
 function getItemSecondaryText(item: Record<string, unknown>): string {
-  return String(item.phone ?? item.email ?? item.sku ?? item.status ?? "");
+  const secondary = (item.phone ?? item.email ?? item.sku ?? item.status ?? "") as string;
+  return String(secondary);
 }
 
 function summarizeAdaptiveContext(data: unknown): string[] {
@@ -112,8 +117,8 @@ export function NoraDataCard({ entityType, action, data, summary }: DataCardProp
           )}
         </div>
         <div>
-          {data.slice(0, 10).map((item: any, index: number) => (
-            <div key={item.id ?? index} className="grid grid-cols-2 gap-2 px-3.5 py-2.5 text-sm border-b border-border/20 last:border-0">
+          {(data as Array<Record<string, unknown>>).slice(0, 10).map((item, index) => (
+            <div key={String((item.id ?? index) as string)} className="grid grid-cols-2 gap-2 px-3.5 py-2.5 text-sm border-b border-border/20 last:border-0">
               <span className="font-semibold text-foreground">{getItemPrimaryText(item, index)}</span>
               <span className="text-muted-foreground">{getItemSecondaryText(item)}</span>
             </div>
@@ -150,10 +155,10 @@ export function NoraDataCard({ entityType, action, data, summary }: DataCardProp
         )}
       </div>
       <div>
-        {displayFields.map(([key, value], index) => (
+        {displayFields.map(([key, value]) => (
           <div key={key} className="grid grid-cols-[140px_1fr] gap-2 px-3.5 py-2 text-sm border-b border-border/20 last:border-0">
             <span className="font-semibold text-muted-foreground">{key}</span>
-            <span className="text-foreground">{value === null || value === undefined ? "—" : String(value)}</span>
+            <span className="text-foreground">{value === null || value === undefined ? "—" : String(value as string)}</span>
           </div>
         ))}
       </div>

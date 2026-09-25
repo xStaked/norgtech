@@ -115,7 +115,7 @@ export function NewUserDialog({ open, onOpenChange, onCreated }: NewUserDialogPr
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="px-6 pt-5 pb-6">
+        <form onSubmit={(e) => void handleSubmit(e)} className="px-6 pt-5 pb-6">
           {error ? (
             <p className="mb-4 rounded-lg border border-[#f5c9c4] bg-[#fcebe9] px-3 py-2 text-[12.5px] font-semibold text-[#b42318]">
               {error}

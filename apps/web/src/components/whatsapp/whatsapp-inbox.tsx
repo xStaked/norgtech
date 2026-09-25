@@ -46,7 +46,7 @@ export function WhatsAppInbox({
   async function refreshList() {
     const response = await apiFetchClient("/whatsapp/conversations");
     if (response.ok) {
-      setConversations(await response.json());
+      setConversations((await response.json()) as WhatsAppConversation[]);
     }
   }
 
@@ -57,11 +57,12 @@ export function WhatsAppInbox({
     }
     const response = await apiFetchClient(`/whatsapp/conversations/${id}`);
     if (response.ok) {
-      setSelectedConversation(await response.json());
+      setSelectedConversation((await response.json()) as WhatsAppConversationDetail | null);
     }
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadConversation limpia selectedId de forma síncrona al iniciar el effect
     void loadConversation(selectedId);
     if (!selectedId) return;
     // ponytail: poll de 4s sobre la conversación abierta en vez de websocket.
@@ -179,7 +180,7 @@ export function WhatsAppInbox({
               </span>
               <button
                 type="button"
-                onClick={() => activeConversation && claimConversation(activeConversation.id)}
+                onClick={() => void (activeConversation && claimConversation(activeConversation.id))}
                 className="rounded-md bg-[#0f5c8a] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#0c4a70]"
               >
                 Tomar conversación
@@ -189,18 +190,18 @@ export function WhatsAppInbox({
           <ConversationComposer
             conversationId={selectedId}
             suggestedReply={suggestedReply}
-            onSent={refreshSelected}
+            onSent={() => void refreshSelected()}
           />
         </div>
         <CustomerInfoPanel
           conversation={activeConversation}
-          onStatusChange={updateConversationStatus}
-          onRoleChange={reassignRole}
+          onStatusChange={(status) => void updateConversationStatus(status)}
+          onRoleChange={(role) => void reassignRole(role)}
           canReassign={
             isSupervisor ||
             (myUserId != null && activeConversation?.assignedToUser?.id === myUserId)
           }
-          onCreated={refreshSelected}
+          onCreated={() => void refreshSelected()}
         />
       </div>
     </div>

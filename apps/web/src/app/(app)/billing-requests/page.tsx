@@ -5,8 +5,6 @@ import { ListFilters } from "@/components/ui/list-filters";
 import { applyFilters, type SearchParams } from "@/lib/list-filter";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
-import { StatusBadge } from "@/components/ui/status-badge";
-import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
 import { BillingRequestStatusAction } from "@/components/billing-requests/billing-request-status-action";
@@ -65,12 +63,6 @@ const statusLabels: Record<string, string> = {
   rechazada: "Rechazada",
 };
 
-const statusTones: Record<string, CrmStatusTone> = {
-  pendiente: "warning",
-  procesada: "success",
-  rechazada: "danger",
-};
-
 const sourceTypeLabels: Record<string, string> = {
   quote: "Cotización",
   order: "Pedido",
@@ -97,10 +89,10 @@ export default async function BillingRequestsPage({
     getCurrentUser(),
   ]);
 
-  const billingRequests: BillingRequest[] = response.ok ? await response.json() : [];
-  const customers: Array<{ id: string; displayName: string }> = customersResponse.ok
+  const billingRequests = (response.ok ? await response.json() : []) as BillingRequest[];
+  const customers = (customersResponse.ok
     ? await customersResponse.json()
-    : [];
+    : []) as Array<{ id: string; displayName: string }>;
 
   const role = user?.role ?? null;
   const canAct = role === "administrador" || role === "director_comercial" || role === "facturacion";

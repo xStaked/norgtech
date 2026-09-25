@@ -46,11 +46,11 @@ export default async function CustomerEditPage({
     notFound();
   }
 
-  const customer: Customer = await customerResponse.json();
-  const companies = companiesResponse.ok ? await companiesResponse.json() : [];
-  const priceLists: PriceListRef[] = priceListsResponse.ok
+  const customer = (await customerResponse.json()) as Customer;
+  const companies = (companiesResponse.ok ? await companiesResponse.json() : []) as { id: string; name: string }[];
+  const priceLists = (priceListsResponse.ok
     ? await priceListsResponse.json()
-    : [];
+    : []) as PriceListRef[];
 
   return (
     <div style={{ display: "grid", gap: 24 }}>

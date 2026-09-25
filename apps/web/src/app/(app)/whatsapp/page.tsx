@@ -10,7 +10,7 @@ export default async function WhatsAppPage({
   let conversations: WhatsAppConversation[] = [];
   try {
     const response = await apiFetch("/whatsapp/conversations");
-    conversations = response.ok ? await response.json() : [];
+    conversations = (response.ok ? await response.json() : []) as WhatsAppConversation[];
   } catch {
     conversations = [];
   }

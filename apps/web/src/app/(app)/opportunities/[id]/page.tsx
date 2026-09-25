@@ -57,7 +57,7 @@ export default async function OpportunityDetailPage({
     notFound();
   }
 
-  const opportunity: Opportunity = await response.json();
+  const opportunity = (await response.json()) as Opportunity;
 
   return (
     <div className="grid gap-6">

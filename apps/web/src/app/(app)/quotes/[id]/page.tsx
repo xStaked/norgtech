@@ -139,7 +139,7 @@ export default async function QuoteDetailPage({
     notFound();
   }
 
-  const quote: Quote = await response.json();
+  const quote = (await response.json()) as Quote;
 
   return (
     <div

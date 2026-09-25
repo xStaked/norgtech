@@ -21,7 +21,6 @@ import {
   fetchAnalytics,
   fetchFilterOptions,
   money,
-  number,
   percent,
   toneAscending,
   toneDescending,

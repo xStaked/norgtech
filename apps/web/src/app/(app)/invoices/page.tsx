@@ -10,7 +10,7 @@ import { StatCard } from "@/components/ui/stat-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
-import { canCreate, type UserRole } from "@/lib/auth";
+import { canCreate } from "@/lib/auth";
 import { getCurrentUser } from "@/lib/auth.server";
 import { buildQueryString } from "@/lib/query-string";
 
@@ -192,7 +192,7 @@ export default async function InvoicesPage({
     getCurrentUser(),
   ]);
 
-  const invoices: Invoice[] = response.ok ? await response.json() : [];
+  const invoices = (response.ok ? await response.json() : []) as Invoice[];
   const role = user?.role ?? null;
 
   const rows: InvoiceRow[] = invoices.map((invoice) => ({

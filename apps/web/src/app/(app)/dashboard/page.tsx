@@ -19,14 +19,8 @@ import {
 import { CreditAlertsWidget } from "@/components/dashboard/credit-alerts-widget";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
-import { canCreate } from "@/lib/auth";
 import {
   FileText,
-  TrendingUp,
-  DollarSign,
-  Package,
-  CalendarDays,
-  AlertCircle,
   ArrowRight,
   Zap,
   Users,
@@ -65,14 +59,13 @@ interface DashboardSummary {
   recentActivity: ActivityItem[];
 }
 
-const kpiConfig = [
-  { key: "openQuotes" as const, label: "Cotizaciones abiertas", tone: "info" as const, icon: <FileText className="h-5 w-5" /> },
-  { key: "pipelineValue" as const, label: "Valor pipeline", tone: "success" as const, icon: <TrendingUp className="h-5 w-5" /> },
-  { key: "closedDeals" as const, label: "Ventas cerradas 30d", tone: "success" as const, icon: <DollarSign className="h-5 w-5" /> },
-  { key: "activeOrders" as const, label: "Pedidos activos", tone: "warning" as const, icon: <Package className="h-5 w-5" /> },
-  { key: "weeklyVisits" as const, label: "Visitas esta semana", tone: "info" as const, icon: <CalendarDays className="h-5 w-5" /> },
-  { key: "pendingFollowUps" as const, label: "Seguimientos pendientes", tone: "danger" as const, icon: <AlertCircle className="h-5 w-5" /> },
-] as const;
+type KpiKey =
+  | "openQuotes"
+  | "pipelineValue"
+  | "closedDeals"
+  | "activeOrders"
+  | "weeklyVisits"
+  | "pendingFollowUps";
 
 const quickLinks = [
   { href: "/customers/new", label: "Nuevo cliente", icon: <Users className="h-4 w-4" /> },
@@ -90,7 +83,7 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
 const commercialAdvancedRoles = new Set(["administrador", "director_comercial", "comercial"]);
 const sellerGoalsRoles = new Set(["administrador", "director_comercial"]);
 
-function formatKpiValue(summary: DashboardSummary | null, key: (typeof kpiConfig)[number]["key"]) {
+function formatKpiValue(summary: DashboardSummary | null, key: KpiKey) {
   const value = summary?.[key] ?? 0;
   if (key === "pipelineValue") return currencyFormatter.format(Math.round(value));
   return value.toLocaleString("es-CO");
@@ -138,14 +131,17 @@ export default async function DashboardPage({
     apiFetch("/companies"),
   ]);
 
-  const companies: Array<{ id: string; name: string; prefix: string }> =
-    companiesRes.ok ? await companiesRes.json() : [];
+  const companies = (companiesRes.ok
+    ? await companiesRes.json()
+    : []) as Array<{ id: string; name: string; prefix: string }>;
 
-  const summary: DashboardSummary | null = response.ok ? await response.json() : null;
-  const commercialAdvancedSummary: CommercialAdvancedSummary | null =
-    commercialAdvancedResponse?.ok ? await commercialAdvancedResponse.json() : null;
-  const sellerGoalsSummary: SellerGoalsSummary | null =
-    sellerGoalsResponse?.ok ? await sellerGoalsResponse.json() : null;
+  const summary = (response.ok ? await response.json() : null) as DashboardSummary | null;
+  const commercialAdvancedSummary = (commercialAdvancedResponse?.ok
+    ? await commercialAdvancedResponse.json()
+    : null) as CommercialAdvancedSummary | null;
+  const sellerGoalsSummary = (sellerGoalsResponse?.ok
+    ? await sellerGoalsResponse.json()
+    : null) as SellerGoalsSummary | null;
 
   const emailLocal = user?.email?.split("@")[0]?.split(/[._-]/)[0] ?? "";
   const greetingName = emailLocal

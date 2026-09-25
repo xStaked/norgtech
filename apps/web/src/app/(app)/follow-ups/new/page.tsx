@@ -25,8 +25,8 @@ export default async function NewFollowUpPage({
     apiFetch("/opportunities"),
   ]);
 
-  const customers: Customer[] = customersRes.ok ? await customersRes.json() : [];
-  const opportunities: Opportunity[] = opportunitiesRes.ok ? await opportunitiesRes.json() : [];
+  const customers = (customersRes.ok ? await customersRes.json() : []) as Customer[];
+  const opportunities = (opportunitiesRes.ok ? await opportunitiesRes.json() : []) as Opportunity[];
 
   return (
     <div style={{ display: "grid", gap: 24 }}>

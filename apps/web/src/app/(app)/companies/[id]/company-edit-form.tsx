@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -29,10 +30,10 @@ export function CompanyEditForm({ company }: { company: Company }) {
     const formData = new FormData(event.currentTarget);
 
     const body: Record<string, unknown> = {};
-    const name = String(formData.get("name") ?? "").trim();
-    const legalName = String(formData.get("legalName") ?? "").trim();
-    const nit = String(formData.get("nit") ?? "").trim();
-    const prefix = String(formData.get("prefix") ?? "").trim().toUpperCase();
+    const name = formValue(formData, "name").trim();
+    const legalName = formValue(formData, "legalName").trim();
+    const nit = formValue(formData, "nit").trim();
+    const prefix = formValue(formData, "prefix").trim().toUpperCase();
 
     if (name) body.name = name;
     if (legalName) body.legalName = legalName;
@@ -47,7 +48,7 @@ export function CompanyEditForm({ company }: { company: Company }) {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al actualizar la empresa");
         setLoading(false);
         return;
@@ -62,7 +63,7 @@ export function CompanyEditForm({ company }: { company: Company }) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid gap-6 max-w-lg">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-6 max-w-lg">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

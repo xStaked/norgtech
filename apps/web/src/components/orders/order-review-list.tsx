@@ -135,11 +135,11 @@ export function OrderReviewList() {
     try {
       const response = await apiFetchClient("/orders/review-queue");
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "Error al cargar la cola de revisión");
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "Error al cargar la cola de revisión");
         return;
       }
-      const data: ReviewOrder[] = await response.json();
+      const data = (await response.json()) as ReviewOrder[];
       setOrders(Array.isArray(data) ? data : []);
       setError(null);
     } catch {
@@ -151,6 +151,7 @@ export function OrderReviewList() {
   }, []);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- load() marca `refrescando` de forma síncrona antes del primer await
     void load();
   }, [load]);
 
@@ -184,8 +185,7 @@ export function OrderReviewList() {
       if (sort === "newest") return b.createdAt.localeCompare(a.createdAt);
       return a.createdAt.localeCompare(b.createdAt);
     });
-    // `blocked`/`ready` se derivan de `orders`, no hace falta listarlos aparte.
-  }, [orders, tab, search, company, seller, sort]);
+  }, [orders, tab, search, company, seller, sort, blocked, ready]);
 
   const companyOptions = useMemo(
     () =>
@@ -385,7 +385,7 @@ export function OrderReviewList() {
           order={resolvingOrder}
           item={resolvingItem}
           onClose={() => setResolving(null)}
-          onResolved={() => afterResolve(resolvingOrder.id, resolvingItem.id)}
+          onResolved={() => void afterResolve(resolvingOrder.id, resolvingItem.id)}
         />
       )}
 
@@ -393,9 +393,11 @@ export function OrderReviewList() {
         <ApproveDialog
           order={approvingOrder}
           onClose={() => setApproving(null)}
-          onDone={async () => {
-            setApproving(null);
-            await load();
+          onDone={() => {
+            void (async () => {
+              setApproving(null);
+              await load();
+            })();
           }}
         />
       )}
@@ -404,9 +406,11 @@ export function OrderReviewList() {
         <RejectDialog
           order={rejectingOrder}
           onClose={() => setRejecting(null)}
-          onDone={async () => {
-            setRejecting(null);
-            await load();
+          onDone={() => {
+            void (async () => {
+              setRejecting(null);
+              await load();
+            })();
           }}
         />
       )}
@@ -780,8 +784,8 @@ function ResolveDialog({
         body: JSON.stringify({ productId, unitPrice: line.unitPrice }),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "No se pudo resolver el ítem");
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "No se pudo resolver el ítem");
         return;
       }
       setProductId("");
@@ -924,8 +928,8 @@ function ApproveDialog({
     try {
       const response = await apiFetchClient(`/orders/${order.id}/approve`, { method: "PATCH" });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "No se pudo aprobar");
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "No se pudo aprobar");
         return;
       }
       onDone();
@@ -1055,8 +1059,8 @@ function RejectDialog({
         body: JSON.stringify({ reason }),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "No se pudo rechazar");
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "No se pudo rechazar");
         return;
       }
       onDone();

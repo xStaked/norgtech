@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -26,8 +27,8 @@ export default function LoginPage() {
     setLoading(true);
 
     const formData = new FormData(event.currentTarget);
-    const email = String(formData.get("email"));
-    const password = String(formData.get("password"));
+    const email = formValue(formData, "email");
+    const password = formValue(formData, "password");
 
     try {
       const response = await apiFetchClient("/auth/login", {
@@ -41,7 +42,7 @@ export default function LoginPage() {
         return;
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as { accessToken?: string };
       const token = data.accessToken;
 
       if (token) {
@@ -89,7 +90,7 @@ export default function LoginPage() {
         </div>
       ) : null}
 
-      <form onSubmit={handleSubmit} className="mt-6">
+      <form onSubmit={(e) => void handleSubmit(e)} className="mt-6">
         <label
           htmlFor="email"
           className="mb-[7px] block text-[12.5px] font-semibold text-[#3a4658]"

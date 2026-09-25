@@ -65,20 +65,23 @@ export function Topbar({ userRole }: { userRole: UserRole | null }) {
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- limpieza síncrona de resultados del debounce cuando la query es corta
       setHits([]);
       return;
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      try {
-        const res = await apiFetchClient(`/search?q=${encodeURIComponent(q)}`, {
-          signal: controller.signal,
-        });
-        setHits(res.ok ? ((await res.json()) as SearchHit[]) : []);
-      } catch {
-        // abortado o red caida: el palette sigue sirviendo para navegar modulos
-      }
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await apiFetchClient(`/search?q=${encodeURIComponent(q)}`, {
+            signal: controller.signal,
+          });
+          setHits(res.ok ? ((await res.json()) as SearchHit[]) : []);
+        } catch {
+          // abortado o red caida: el palette sigue sirviendo para navegar modulos
+        }
+      })();
     }, 250);
 
     return () => {

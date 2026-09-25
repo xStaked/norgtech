@@ -152,22 +152,22 @@ export default async function CustomerDetailPage({
     notFound();
   }
 
-  const customer: Customer = await response.json();
+  const customer = (await response.json()) as Customer;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
   const goalsResponse = await apiFetch(`/customers/${id}/goal-progress`);
-  const goalProgress: GoalProgress | null = goalsResponse.ok
+  const goalProgress = (goalsResponse.ok
     ? await goalsResponse.json()
-    : null;
+    : null) as GoalProgress | null;
 
   const zonesRes = await apiFetch(`/customers/${id}/zones`);
-  const customerZones: Array<{
+  const customerZones = (zonesRes.ok ? await zonesRes.json() : []) as Array<{
     id: string;
     zone: { id: string; name: string };
     address: string | null;
     assignedTo: { id: string; name: string } | null;
-  }> = zonesRes.ok ? await zonesRes.json() : [];
+  }>;
 
   return (
     <div style={{ display: "grid", gap: 24 }}>

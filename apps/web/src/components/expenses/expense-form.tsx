@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -83,7 +84,7 @@ function dateInputValue(value?: string) {
 }
 
 function optionalString(value: FormDataEntryValue | null) {
-  const text = value ? String(value).trim() : "";
+  const text = typeof value === "string" ? value.trim() : "";
   return text || undefined;
 }
 
@@ -156,10 +157,10 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
         ? await apiFetchClient(`/commercial-expenses/${initialValues?.id}`, {
             method: "PATCH",
             body: JSON.stringify({
-              expenseDate: String(formData.get("expenseDate")),
-              category: String(formData.get("category")),
+              expenseDate: formValue(formData, "expenseDate"),
+              category: formValue(formData, "category"),
               amount: Number(amount),
-              description: String(formData.get("description")).trim(),
+              description: formValue(formData, "description").trim(),
               customerId: optionalStringOrNull(formData.get("customerId")),
               visitId: optionalStringOrNull(formData.get("visitId")),
               supplierName: optionalStringOrNull(formData.get("supplierName")),
@@ -178,13 +179,13 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
           });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(getErrorMessage(data, isEditing ? "Error al actualizar el gasto" : "Error al crear el gasto"));
         setLoading(false);
         return;
       }
 
-      const saved = await response.json();
+      const saved = (await response.json()) as { id: string };
       router.push(`/expenses/${saved.id}`);
       router.refresh();
     } catch {
@@ -255,7 +256,7 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-2xl gap-4">
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {!isEditing ? (

@@ -54,7 +54,7 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
         body: JSON.stringify({ status: next }),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al actualizar estado");
         setLoading(false);
         return;
@@ -75,7 +75,7 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
         method: "POST",
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear solicitud de facturación");
         setLoading(false);
         return;
@@ -94,7 +94,7 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
     try {
       const response = await apiFetchClient(`/orders/${orderId}/export`);
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al exportar el formato Excel");
         return;
       }
@@ -123,17 +123,17 @@ export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
     <div>
       {error && <p className="mb-3 text-sm text-destructive">{error}</p>}
       <div className="flex flex-wrap gap-3">
-        <Button onClick={exportExcel} disabled={exporting} variant="outline">
+        <Button onClick={() => void exportExcel()} disabled={exporting} variant="outline">
           {exporting ? "Exportando..." : "Exportar formato Excel"}
         </Button>
         {canAdvance && (
-          <Button onClick={advanceStatus} disabled={loading}>
+          <Button onClick={() => void advanceStatus()} disabled={loading}>
             {loading ? "Procesando..." : `Avanzar a ${statusLabels[nextStatusMap[currentStatus]]}`}
           </Button>
         )}
         {canBill && (
           <Button
-            onClick={createBillingRequest}
+            onClick={() => void createBillingRequest()}
             disabled={loading}
             variant="secondary"
           >

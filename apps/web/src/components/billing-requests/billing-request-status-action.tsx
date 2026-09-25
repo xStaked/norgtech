@@ -38,7 +38,7 @@ export function BillingRequestStatusAction({ id, currentStatus, canChange }: Bil
         body: JSON.stringify({ status: newStatus }),
       });
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al cambiar estado");
         setLoading(false);
         return;
@@ -60,7 +60,7 @@ export function BillingRequestStatusAction({ id, currentStatus, canChange }: Bil
         {canChange && currentStatus === "pendiente" && (
           <div style={{ display: "flex", gap: 6 }}>
             <button
-              onClick={() => changeStatus("procesada")}
+              onClick={() => void (changeStatus("procesada"))}
               disabled={loading}
               style={{
                 padding: "4px 10px",
@@ -77,7 +77,7 @@ export function BillingRequestStatusAction({ id, currentStatus, canChange }: Bil
               Procesar
             </button>
             <button
-              onClick={() => changeStatus("rechazada")}
+              onClick={() => void (changeStatus("rechazada"))}
               disabled={loading}
               style={{
                 padding: "4px 10px",

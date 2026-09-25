@@ -71,7 +71,7 @@ export default async function VisitDetailPage({
     notFound();
   }
 
-  const visit: Visit = await response.json();
+  const visit = (await response.json()) as Visit;
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
   const scheduledAt = dateTimeFormatter.format(new Date(visit.scheduledAt));

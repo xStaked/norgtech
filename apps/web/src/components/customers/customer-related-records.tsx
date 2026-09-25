@@ -1,7 +1,6 @@
 "use client";
 
 import { InlineMetric } from "@/components/ui/inline-metric";
-import { crmTheme } from "@/components/ui/theme";
 
 interface CustomerRelatedRecordsProps {
   opportunitiesCount: number;

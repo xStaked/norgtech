@@ -46,7 +46,7 @@ export default async function ReportDetailPage({
     notFound();
   }
 
-  const report: ReportApiResponse = await response.json();
+  const report = (await response.json()) as ReportApiResponse;
   const createdAt = dateFormatter.format(new Date(report.createdAt));
 
   return (

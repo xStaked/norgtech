@@ -20,8 +20,8 @@ export default async function EditProductPage({
     notFound();
   }
 
-  const product: ProductDetail = await productResponse.json();
-  const priceLists: PriceListRef[] = listsResponse.ok ? await listsResponse.json() : [];
+  const product = (await productResponse.json()) as ProductDetail;
+  const priceLists = (listsResponse.ok ? await listsResponse.json() : []) as PriceListRef[];
 
   return (
     <div className="space-y-4">

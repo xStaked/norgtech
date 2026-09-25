@@ -75,7 +75,7 @@ export default async function FollowUpDetailPage({
     notFound();
   }
 
-  const task: FollowUpTask = await response.json();
+  const task = (await response.json()) as FollowUpTask;
   const dueAt = dateTimeFormatter.format(new Date(task.dueAt));
   // "Vencida" es estado derivado; la columna solo guarda decisiones humanas.
   const statusLabel = task.isOverdue ? "Vencida" : statusLabels[task.status] ?? task.status;

@@ -56,6 +56,7 @@ export function LinePriceResolution({
 
   useEffect(() => {
     if (!productId || !customerId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reseteo síncrono de la resolución al deseleccionar producto o cliente
       setResolution(null);
       return;
     }

@@ -235,7 +235,7 @@ export function CustomerInfoPanel({
         {error ? <p className="mb-2 text-xs text-[#c2410c]">{error}</p> : null}
         <button
           type="button"
-          onClick={createOrder}
+          onClick={() => void createOrder()}
           disabled={!canCreate || creating}
           title={
             canCreate

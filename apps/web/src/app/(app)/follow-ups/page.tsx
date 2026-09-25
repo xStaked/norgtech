@@ -159,10 +159,10 @@ export default async function FollowUpsPage({
   const apiPath = filterParam ? `/follow-up-tasks?${filterParam}` : "/follow-up-tasks";
 
   const response = await apiFetch(apiPath);
-  const tasks: FollowUpTask[] = response.ok ? await response.json() : [];
+  const tasks = (response.ok ? await response.json() : []) as FollowUpTask[];
 
   const allResponse = await apiFetch("/follow-up-tasks");
-  const allTasks: FollowUpTask[] = allResponse.ok ? await allResponse.json() : [];
+  const allTasks = (allResponse.ok ? await allResponse.json() : []) as FollowUpTask[];
 
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;

@@ -10,12 +10,12 @@ import type { PriceListRef } from "@/lib/catalog";
 export default async function NewCustomerPage() {
   const user = await getCurrentUser();
   const companiesResponse = await apiFetch("/companies");
-  const companies = companiesResponse.ok ? await companiesResponse.json() : [];
+  const companies = (companiesResponse.ok ? await companiesResponse.json() : []) as { id: string; name: string }[];
 
   const priceListsResponse = await apiFetch("/price-lists");
-  const priceLists: PriceListRef[] = priceListsResponse.ok
+  const priceLists = (priceListsResponse.ok
     ? await priceListsResponse.json()
-    : [];
+    : []) as PriceListRef[];
 
   return (
     <div className="space-y-6">

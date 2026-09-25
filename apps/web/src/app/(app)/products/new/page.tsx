@@ -5,7 +5,7 @@ import type { PriceListRef } from "@/lib/catalog";
 
 export default async function NewProductPage() {
   const response = await apiFetch("/price-lists");
-  const priceLists: PriceListRef[] = response.ok ? await response.json() : [];
+  const priceLists = (response.ok ? await response.json() : []) as PriceListRef[];
 
   return (
     <div className="space-y-4">

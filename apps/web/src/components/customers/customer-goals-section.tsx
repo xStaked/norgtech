@@ -107,11 +107,11 @@ export function CustomerGoalsSection({
         throw new Error("Error al cargar las metas");
       }
 
-      const goalsData: Goal[] = await goalsRes.json();
+      const goalsData = (await goalsRes.json()) as Goal[];
       setGoals(goalsData);
 
       if (progressRes.ok) {
-        const progressData: GoalProgress = await progressRes.json();
+        const progressData = (await progressRes.json()) as GoalProgress;
         setProgress(progressData);
       } else if (progressRes.status === 404) {
         setProgress(null);
@@ -126,7 +126,8 @@ export function CustomerGoalsSection({
   }, [customerId]);
 
   useEffect(() => {
-    loadData();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loadData reinicia `loading` sincrónicamente al iniciar el effect
+    void loadData();
   }, [loadData]);
 
   async function handleCreate(e: React.FormEvent) {
@@ -275,7 +276,7 @@ export function CustomerGoalsSection({
                   <Button
                     variant="destructive"
                     size="sm"
-                    onClick={() => handleDelete(goal.id)}
+                    onClick={() => void handleDelete(goal.id)}
                   >
                     Eliminar
                   </Button>
@@ -285,7 +286,7 @@ export function CustomerGoalsSection({
           )}
 
           {/* Formulario para crear meta */}
-          <form onSubmit={handleCreate} className="grid gap-4">
+          <form onSubmit={(e) => void handleCreate(e)} className="grid gap-4">
             <div className="text-sm font-semibold">Nueva meta</div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div className="grid gap-1.5">

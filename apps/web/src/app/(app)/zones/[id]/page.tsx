@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState, useEffect, type FormEvent } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -22,7 +23,7 @@ export default function ZoneDetailPage() {
   } | null>(null);
 
   useEffect(() => {
-    apiFetchClient(`/zones/${id}`)
+    void apiFetchClient(`/zones/${id}`)
       .then((r) => r.json())
       .then(setZone);
   }, [id]);
@@ -33,8 +34,8 @@ export default function ZoneDetailPage() {
     setLoading(true);
     const formData = new FormData(event.currentTarget);
     const body: Record<string, unknown> = {};
-    const name = String(formData.get("name") ?? "").trim();
-    const department = String(formData.get("department") ?? "").trim();
+    const name = formValue(formData, "name").trim();
+    const department = formValue(formData, "department").trim();
     if (name) body.name = name;
     if (department) body.department = department;
     body.isActive = formData.get("isActive") === "on";
@@ -44,7 +45,7 @@ export default function ZoneDetailPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
+        const d = (await res.json().catch(() => ({}))) as { message?: string };
         setError(d.message || "Error");
         setLoading(false);
         return;
@@ -66,7 +67,7 @@ export default function ZoneDetailPage() {
         actions={<ButtonLink href="/zones" variant="secondary">Volver</ButtonLink>}
       />
       <SectionCard>
-        <form onSubmit={handleSubmit} className="grid gap-6 max-w-lg">
+        <form onSubmit={(e) => void handleSubmit(e)} className="grid gap-6 max-w-lg">
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="grid gap-1">
             <Label htmlFor="name">Nombre</Label>

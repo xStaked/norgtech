@@ -14,7 +14,7 @@ export default async function CompanyDetailPage({
   const response = await apiFetch(`/companies/${id}`);
   if (!response.ok) notFound();
 
-  const company = await response.json();
+  const company = (await response.json()) as Parameters<typeof CompanyEditForm>[0]["company"];
 
   return (
     <div className="space-y-6">

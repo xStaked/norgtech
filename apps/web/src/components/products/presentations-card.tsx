@@ -78,7 +78,7 @@ export function PresentationsCard({
     setSaving(false);
 
     if (!response?.ok) {
-      const data = await response?.json().catch(() => ({}));
+      const data = (await response?.json().catch(() => ({}))) as { message?: string } | undefined;
       setError(data?.message ?? "No se pudo guardar la presentación.");
       return;
     }
@@ -153,7 +153,7 @@ export function PresentationsCard({
             key={presentation.id}
             draft={draft}
             setDraft={setDraft}
-            onSave={save}
+            onSave={() => void save()}
             onCancel={cancel}
             saving={saving}
           />
@@ -182,7 +182,7 @@ export function PresentationsCard({
                   </button>
                   <button
                     type="button"
-                    onClick={() => toggleActive(presentation)}
+                    onClick={() => void toggleActive(presentation)}
                     disabled={saving}
                     className="text-xs font-bold text-muted-foreground hover:text-foreground disabled:opacity-50"
                   >
@@ -199,7 +199,7 @@ export function PresentationsCard({
         <DraftRow
           draft={draft}
           setDraft={setDraft}
-          onSave={save}
+          onSave={() => void save()}
           onCancel={cancel}
           saving={saving}
         />

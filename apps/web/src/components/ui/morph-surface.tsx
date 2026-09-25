@@ -570,7 +570,7 @@ const MorphSurfaceFeedback = React.forwardRef<
 
   return (
     <form
-      onSubmit={handleSubmit}
+      onSubmit={(e) => void handleSubmit(e)}
       className={cn("absolute bottom-0", contentClassName)}
       style={{
         width: expandedWidth,

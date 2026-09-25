@@ -31,7 +31,7 @@ export function usePollCount(path: string, intervalMs = 15000) {
     }
 
     void poll();
-    const id = setInterval(poll, intervalMs);
+    const id = setInterval(() => void poll(), intervalMs);
     return () => {
       alive = false;
       clearInterval(id);

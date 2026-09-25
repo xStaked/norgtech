@@ -145,7 +145,7 @@ export default async function QuotesPage({
   const userRole = user?.role ?? null;
 
   const response = await apiFetch("/quotes");
-  const quotes: Quote[] = response.ok ? await response.json() : [];
+  const quotes = (response.ok ? await response.json() : []) as Quote[];
 
   const rows: QuoteRow[] = quotes.map((quote) => ({
     id: quote.id,

@@ -1,5 +1,6 @@
 "use client";
 
+import { formValue } from "@/lib/utils";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
@@ -41,12 +42,12 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
 
     const formData = new FormData(event.currentTarget);
 
-    const lostReasonRaw = String(formData.get("lostReason") ?? "").trim();
+    const lostReasonRaw = formValue(formData, "lostReason").trim();
 
     const body = {
-      customerId: String(formData.get("customerId")),
-      title: String(formData.get("title")),
-      stage: String(formData.get("stage")),
+      customerId: formValue(formData, "customerId"),
+      title: formValue(formData, "title"),
+      stage: formValue(formData, "stage"),
       estimatedValue: formData.get("estimatedValue")
         ? Number(formData.get("estimatedValue"))
         : undefined,
@@ -66,13 +67,13 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al crear la oportunidad");
         setLoading(false);
         return;
       }
 
-      const created = await response.json();
+      const created = (await response.json()) as { id: string };
       router.push(`/opportunities/${created.id}`);
     } catch {
       setError("Error de conexión");
@@ -81,7 +82,7 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="grid max-w-2xl gap-4">
+    <form onSubmit={(e) => void handleSubmit(e)} className="grid max-w-2xl gap-4">
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="grid gap-1">

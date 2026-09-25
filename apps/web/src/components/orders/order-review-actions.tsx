@@ -107,8 +107,8 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
         body: JSON.stringify({ productId: resolution.productId, unitPrice: resolution.unitPrice }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "Error al resolver el ítem");
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "Error al resolver el ítem");
         return;
       }
       router.refresh();
@@ -125,8 +125,8 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
     try {
       const res = await apiFetchClient(`/orders/${orderId}/approve`, { method: "PATCH" });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "No se pudo aprobar");
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "No se pudo aprobar");
         return;
       }
       router.refresh();
@@ -146,8 +146,8 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
         body: JSON.stringify({ reason: rejectReason }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        setError((data as { message?: string }).message || "No se pudo rechazar");
+        const data = (await res.json().catch(() => ({}))) as { message?: string };
+        setError(data.message || "No se pudo rechazar");
         return;
       }
       router.refresh();
@@ -212,7 +212,7 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => resolveItem(item.id)}
+                      onClick={() => void resolveItem(item.id)}
                       disabled={loading || !resolution.productId}
                     >
                       {loading ? "..." : "Resolver"}
@@ -233,7 +233,7 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={approve} disabled={loading || unresolvedItems.length > 0}>
+        <Button onClick={() => void approve()} disabled={loading || unresolvedItems.length > 0}>
           {loading ? "Procesando..." : "Aprobar pedido"}
         </Button>
       </div>
@@ -249,7 +249,7 @@ export function OrderReviewActions({ orderId, approvalStatus, items }: OrderRevi
         />
         <Button
           variant="destructive"
-          onClick={reject}
+          onClick={() => void reject()}
           disabled={loading || !rejectReason.trim()}
           className="w-fit"
         >

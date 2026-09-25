@@ -83,7 +83,7 @@ export function CustomerGoalsDashboard() {
           throw new Error("Error al cargar los clientes");
         }
 
-        const allCustomers: Customer[] = await customersRes.json();
+        const allCustomers = (await customersRes.json()) as Customer[];
         const limitedCustomers = allCustomers.slice(0, 20);
 
         const progressResults = await Promise.all(
@@ -91,7 +91,7 @@ export function CustomerGoalsDashboard() {
             try {
               const res = await apiFetchClient(`/customers/${customer.id}/goal-progress`);
               if (res.ok) {
-                const progress: GoalProgress = await res.json();
+                const progress = (await res.json()) as GoalProgress;
                 return { ...customer, progress };
               }
               return { ...customer, progress: null };
@@ -118,7 +118,7 @@ export function CustomerGoalsDashboard() {
       }
     }
 
-    loadData();
+    void loadData();
 
     return () => {
       cancelled = true;
@@ -129,8 +129,8 @@ export function CustomerGoalsDashboard() {
     .map((c) => c.progress)
     .filter((p): p is GoalProgress => p !== null);
 
-  const totalTarget = goalsProgress.reduce((sum, g) => sum + (Number(g?.targetAmount) ?? 0), 0);
-  const totalSold = goalsProgress.reduce((sum, g) => sum + (Number(g?.soldAmount) ?? 0), 0);
+  const totalTarget = goalsProgress.reduce((sum, g) => sum + Number(g?.targetAmount), 0);
+  const totalSold = goalsProgress.reduce((sum, g) => sum + Number(g?.soldAmount), 0);
   const overallPercentage = totalTarget > 0 ? (totalSold / totalTarget) * 100 : 0;
 
   return (

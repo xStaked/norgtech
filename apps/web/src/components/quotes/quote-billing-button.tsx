@@ -25,7 +25,7 @@ export function QuoteBillingButton({ quoteId }: QuoteBillingButtonProps) {
         setMessage("Solicitud de facturación generada correctamente.");
         router.refresh();
       } else {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setMessage(data.message || "Error al generar la solicitud de facturación.");
       }
     } catch {
@@ -41,7 +41,7 @@ export function QuoteBillingButton({ quoteId }: QuoteBillingButtonProps) {
     <div style={{ display: "grid", gap: 10, justifyItems: "start" }}>
       <button
         type="button"
-        onClick={handleClick}
+        onClick={() => void handleClick()}
         disabled={loading}
         style={{
           minHeight: 44,

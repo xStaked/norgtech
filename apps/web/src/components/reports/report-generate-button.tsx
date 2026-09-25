@@ -24,13 +24,13 @@ export function ReportGenerateButton({ visitId }: ReportGenerateButtonProps) {
       });
 
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
+        const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || `Error ${response.status}: no se pudo generar el reporte`);
         setLoading(false);
         return;
       }
 
-      const report = await response.json();
+      const report = (await response.json()) as { id: string };
       router.push(`/reports/${report.id}`);
     } catch {
       setError("Error de conexión con el servidor");
@@ -45,7 +45,7 @@ export function ReportGenerateButton({ visitId }: ReportGenerateButtonProps) {
       )}
       <button
         type="button"
-        onClick={handleGenerate}
+        onClick={() => void handleGenerate()}
         disabled={loading}
         style={{
           minHeight: 44,

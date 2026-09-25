@@ -21,7 +21,7 @@ export default async function ReportsPage({
 }) {
   const params = await searchParams;
   const response = await apiFetch("/reports");
-  const reports: ReportApiItem[] = response.ok ? await response.json() : [];
+  const reports = (response.ok ? await response.json() : []) as ReportApiItem[];
 
   const rows = reports.map((report) => ({
     id: report.id,

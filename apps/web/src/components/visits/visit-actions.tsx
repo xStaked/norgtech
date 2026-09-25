@@ -47,7 +47,7 @@ export function VisitActions({ visitId }: VisitActionsProps) {
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
       <button
         type="button"
-        onClick={markComplete}
+        onClick={() => void markComplete()}
         disabled={loading}
         style={{
           minHeight: 44,
@@ -66,7 +66,7 @@ export function VisitActions({ visitId }: VisitActionsProps) {
       </button>
       <button
         type="button"
-        onClick={markCancelled}
+        onClick={() => void markCancelled()}
         disabled={loading}
         style={{
           minHeight: 44,

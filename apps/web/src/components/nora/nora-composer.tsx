@@ -82,7 +82,7 @@ export function NoraComposer({
         ))}
       </div>
 
-      <form onSubmit={handleSubmit} className="relative">
+      <form onSubmit={(e) => void handleSubmit(e)} className="relative">
         <div
           className={cn(
             "flex items-center gap-2 rounded-[24px] border border-[#ddd6f7] bg-card px-4 shadow-[0_4px_16px_rgba(109,79,240,.10)] transition-all",

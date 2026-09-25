@@ -102,10 +102,11 @@ async function options(
 
 export async function fetchFilterOptions(): Promise<AnalyticsFilterOptions> {
   const [companies, sellers, zones, segments] = await Promise.all([
-    options("/companies", (row) => ({
-      value: String(row.id),
-      label: row.prefix ? `${row.name} (${row.prefix})` : String(row.name),
-    })),
+    options("/companies", (row) => {
+      const name = String(row.name);
+      const prefix = row.prefix as string;
+      return { value: String(row.id), label: prefix ? `${name} (${prefix})` : name };
+    }),
     options("/users/sellers", (row) => ({ value: String(row.id), label: String(row.name) })),
     options("/zones", (row) => ({ value: String(row.id), label: String(row.name) })),
     options("/customer-segments", (row) => ({ value: String(row.id), label: String(row.name) })),
