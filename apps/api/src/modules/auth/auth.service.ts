@@ -3,6 +3,9 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AUTH_JWT_SECRET } from "./auth.constants";
 import { sendPasswordResetEmail } from "./password-reset-email";
 import type { UserRole } from "@prisma/client";
+import bcryptPkg from "bcryptjs";
+import jsonwebtokenPkg from "jsonwebtoken";
+import crypto from "crypto";
 
 const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 const PASSWORD_RESET_TTL_MINUTES = 30;
@@ -21,9 +24,8 @@ type JsonWebTokenModule = {
   verify(token: string, secret: string): unknown;
 };
 
-const bcrypt = require("bcryptjs") as BcryptModule;
-const jsonwebtoken = require("jsonwebtoken") as JsonWebTokenModule;
-const crypto = require("crypto");
+const bcrypt = bcryptPkg as unknown as BcryptModule;
+const jsonwebtoken = jsonwebtokenPkg as unknown as JsonWebTokenModule;
 
 @Injectable()
 export class AuthService {

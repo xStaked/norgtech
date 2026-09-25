@@ -3,6 +3,7 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CalculatorsService } from "../calculators/calculators.service";
+import { auditState } from "../audit/audit-state";
 
 export interface ReportFilters {
   customerId?: string;
@@ -116,7 +117,7 @@ export class ReportsService {
         title: `Reporte Ejecutivo - ${visit.customer.displayName}`,
         customerId: visit.customerId,
         visitId: visit.id,
-        payload: JSON.parse(JSON.stringify(payload)),
+        payload: auditState(payload),
         createdBy: user.id,
       },
       include: { customer: true, visit: true, creator: { select: { id: true, name: true, email: true } } },
@@ -176,7 +177,7 @@ export class ReportsService {
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     let page = pdfDoc.addPage([612, 792]);
-    const { width, height } = page.getSize();
+    const { height } = page.getSize();
 
     let y = height - 50;
 

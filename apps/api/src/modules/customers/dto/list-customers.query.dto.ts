@@ -47,7 +47,7 @@ export class ListCustomersQueryDto extends IncludeInactiveQueryDto {
   // (que significaria "solo inactivos" de forma silenciosa e incoherente con
   // como se comporta paymentCondition ante un valor invalido).
   @IsOptional()
-  @Transform(({ value }) =>
+  @Transform(({ value }: { value: unknown }) =>
     value === undefined
       ? undefined
       : value === true || value === "true"

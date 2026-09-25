@@ -215,7 +215,7 @@ export class NotificationsCron {
           discriminator: goal.periodValue,
         });
       } catch (error) {
-        this.logger.warn(`Meta ${goal.id} omitida en el barrido: ${error}`);
+        this.logger.warn(`Meta ${goal.id} omitida en el barrido: ${String(error)}`);
       }
     }
   }

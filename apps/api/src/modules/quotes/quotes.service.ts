@@ -7,6 +7,7 @@ import { PricingCustomer } from "../pricing/pricing.types";
 import { CreateQuoteDto } from "./dto/create-quote.dto";
 import { PreviewQuoteDto } from "./dto/preview-quote.dto";
 import { UpdateQuoteStatusDto } from "./dto/update-quote-status.dto";
+import { auditState } from "../audit/audit-state";
 
 @Injectable()
 export class QuotesService {
@@ -72,7 +73,7 @@ export class QuotesService {
           entityId: quote.id,
           action: "quote.created",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(quote)),
+          nextState: auditState(quote),
         },
         tx,
       );
@@ -101,7 +102,7 @@ export class QuotesService {
       throw new NotFoundException("Quote not found");
     }
 
-    const previousState = JSON.parse(JSON.stringify(quote));
+    const previousState = auditState(quote);
 
     const updated = await this.prisma.quote.update({
       where: { id: quoteId },
@@ -115,7 +116,7 @@ export class QuotesService {
       action: "quote.status_changed",
       actorUserId: user.id,
       previousState,
-      nextState: JSON.parse(JSON.stringify(updated)),
+      nextState: auditState(updated),
     });
 
     return updated;
@@ -168,7 +169,7 @@ export class QuotesService {
           entityId: billingRequest.id,
           action: "billing_request.created_from_quote",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(billingRequest)),
+          nextState: auditState(billingRequest),
         },
         tx,
       );
@@ -192,6 +193,6 @@ export class QuotesService {
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
-    return customer as unknown as PricingCustomer;
+    return customer;
   }
 }

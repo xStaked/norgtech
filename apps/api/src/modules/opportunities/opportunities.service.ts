@@ -11,6 +11,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOpportunityDto } from "./dto/create-opportunity.dto";
 import { UpdateOpportunityStageDto } from "./dto/update-opportunity-stage.dto";
 import { allowedTransitions } from "./opportunity-stage-transition-map";
+import { auditState } from "../audit/audit-state";
 
 @Injectable()
 export class OpportunitiesService {
@@ -123,7 +124,7 @@ export class OpportunitiesService {
         entityId: opportunity.id,
         action: "opportunity.created",
         actorUserId: user.id,
-        nextState: JSON.parse(JSON.stringify(opportunity)),
+        nextState: auditState(opportunity),
       },
       client,
     );
@@ -193,8 +194,8 @@ export class OpportunitiesService {
         entityId: updatedOpportunity.id,
         action: "opportunity.stage_changed",
         actorUserId: user.id,
-        previousState: JSON.parse(JSON.stringify(opportunity)),
-        nextState: JSON.parse(JSON.stringify(updatedOpportunity)),
+        previousState: auditState(opportunity),
+        nextState: auditState(updatedOpportunity),
       },
       client,
     );

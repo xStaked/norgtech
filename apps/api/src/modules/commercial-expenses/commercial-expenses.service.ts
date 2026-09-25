@@ -35,6 +35,7 @@ import { ListCommercialExpensesDto } from "./dto/list-commercial-expenses.dto";
 import { UpdateCommercialExpenseStatusDto } from "./dto/update-commercial-expense-status.dto";
 import { UpdateCommercialExpenseDto } from "./dto/update-commercial-expense.dto";
 import { R2StorageService, UploadedExpenseSupport } from "./r2-storage.service";
+import { auditState } from "../audit/audit-state";
 
 type ExpenseSupportFile = Express.Multer.File;
 
@@ -161,7 +162,7 @@ export class CommercialExpensesService {
             entityId: expense.id,
             action: "commercial_expense.created",
             actorUserId: user.id,
-            nextState: JSON.parse(JSON.stringify(expense)),
+            nextState: auditState(expense),
           },
           tx,
         );
@@ -235,7 +236,7 @@ export class CommercialExpensesService {
       const visitId = dto.visitId === undefined ? expense.visitId : dto.visitId;
       await this.validateOptionalRelations(customerId, visitId, tx);
 
-      const previousState = JSON.parse(JSON.stringify(expense));
+      const previousState = auditState(expense);
       const data: Prisma.CommercialExpenseUncheckedUpdateManyInput = {
         updatedBy: user.id,
       };
@@ -331,7 +332,7 @@ export class CommercialExpensesService {
           action: "commercial_expense.updated",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -378,7 +379,7 @@ export class CommercialExpensesService {
         throw new BadRequestException("Review note is required for this status");
       }
 
-      const previousState = JSON.parse(JSON.stringify(expense));
+      const previousState = auditState(expense);
 
       const updatedCount = await tx.commercialExpense.updateMany({
         where: {
@@ -416,7 +417,7 @@ export class CommercialExpensesService {
           action: "commercial_expense.status_changed",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );

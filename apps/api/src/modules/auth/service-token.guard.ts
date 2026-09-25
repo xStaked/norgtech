@@ -14,8 +14,10 @@ export class ServiceTokenGuard implements CanActivate {
       throw new UnauthorizedException("Service token not configured");
     }
 
-    const request = context.switchToHttp().getRequest();
-    const authHeader = request.headers["authorization"] as string | undefined;
+    const request = context
+      .switchToHttp()
+      .getRequest<{ headers: Record<string, string | undefined> }>();
+    const authHeader = request.headers["authorization"];
 
     if (!authHeader) {
       throw new UnauthorizedException("Missing authorization header");

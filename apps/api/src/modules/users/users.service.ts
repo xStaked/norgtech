@@ -6,12 +6,13 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { UpdateUserDto } from "./dto/update-user.dto";
 import { SELLER_ROLES } from "../seller-goals/seller-eligibility";
+import bcryptPkg from "bcryptjs";
 
 type BcryptModule = {
   hash(value: string, rounds: number): Promise<string>;
 };
 
-const bcrypt = require("bcryptjs") as BcryptModule;
+const bcrypt = bcryptPkg as unknown as BcryptModule;
 
 const publicUserSelect = {
   id: true,

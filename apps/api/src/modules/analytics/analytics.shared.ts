@@ -288,7 +288,7 @@ export function toCsv<T>(rows: T[], columns: CsvColumn<T>[]): string {
   for (const row of rows) {
     lines.push(columns.map((column) => escape(column.value(row))).join(";"));
   }
-  return `﻿${lines.join("\n")}`;
+  return `\uFEFF${lines.join("\n")}`;
 }
 
 /** Envoltura comun de las 4 pantallas (docs/analytics-spec.md §2.2). */

@@ -102,7 +102,7 @@ export class WhatsAppNotificationsCron {
           detalle,
         );
       } catch (error) {
-        this.logger.warn(`Notificacion ${notification.id} no se pudo empujar: ${error}`);
+        this.logger.warn(`Notificacion ${notification.id} no se pudo empujar: ${String(error)}`);
       }
     }
   }

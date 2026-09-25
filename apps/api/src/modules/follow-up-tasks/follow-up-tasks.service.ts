@@ -17,6 +17,7 @@ import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateFollowUpTaskDto } from "./dto/create-follow-up-task.dto";
 import { UpdateTaskStatusDto } from "./dto/update-task-status.dto";
+import { auditState } from "../audit/audit-state";
 
 export interface FollowUpTaskFilters {
   status?: FollowUpTaskStatus;
@@ -115,8 +116,8 @@ export class FollowUpTasksService {
           entityId: updatedTask.id,
           action: "follow_up_task.status_changed",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(task)),
-          nextState: JSON.parse(JSON.stringify(updatedTask)),
+          previousState: auditState(task),
+          nextState: auditState(updatedTask),
         },
         tx,
       );
@@ -169,8 +170,8 @@ export class FollowUpTasksService {
           entityId: updatedTask.id,
           action: "follow_up_task.completed",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(task)),
-          nextState: JSON.parse(JSON.stringify(updatedTask)),
+          previousState: auditState(task),
+          nextState: auditState(updatedTask),
         },
         tx,
       );
@@ -315,7 +316,7 @@ export class FollowUpTasksService {
         entityId: task.id,
         action: "follow_up_task.created",
         actorUserId: user.id,
-        nextState: JSON.parse(JSON.stringify(task)),
+        nextState: auditState(task),
       },
       client,
     );

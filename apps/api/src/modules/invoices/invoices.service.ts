@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, UserRole } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -19,6 +19,7 @@ import { ListInvoicesDto } from "./dto/list-invoices.dto";
 import { UpdateInvoiceStatusDto } from "./dto/update-invoice-status.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { CreditService } from "../credit/credit.service";
+import { auditState } from "../audit/audit-state";
 
 const includeInvoiceRelations = {
   company: true,
@@ -121,7 +122,7 @@ export class InvoicesService {
               entityId: invoice.id,
               action: "invoice.created",
               actorUserId: user.id,
-              nextState: JSON.parse(JSON.stringify(invoice)),
+              nextState: auditState(invoice),
             },
             tx,
           );
@@ -193,8 +194,8 @@ export class InvoicesService {
           entityId: id,
           action: "invoice.status_changed",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(invoice)),
-          nextState: JSON.parse(JSON.stringify(updated)),
+          previousState: auditState(invoice),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -287,7 +288,7 @@ export class InvoicesService {
             entityId: payment.id,
             action: "invoice.payment_created",
             actorUserId: user.id,
-            nextState: JSON.parse(JSON.stringify({ payment, invoice: updatedInvoice })),
+            nextState: auditState({ payment, invoice: updatedInvoice }),
           },
           tx,
         );
@@ -326,7 +327,7 @@ export class InvoicesService {
       },
     });
     if (!payment) throw new NotFoundException("Payment not found");
-    await this.assertCanRead(user, payment.invoice.customerId);
+    this.assertCanRead(user, payment.invoice.customerId);
 
     const support = payment.supports.find((s) => s.id === supportId);
     if (!support) throw new NotFoundException("Payment support not found");
@@ -450,13 +451,13 @@ export class InvoicesService {
     return where;
   }
 
-  private assertCanRead(user: AuthUser, customerId: string) {
+  private assertCanRead(user: AuthUser, _customerId: string) {
     if (this.isControlRole(user.role)) return;
     // If comercial, we rely on query filters rather than per-record checks for performance
     // This is a safety net for direct lookups
   }
 
-  private isControlRole(role: UserRole | string) {
+  private isControlRole(role: string) {
     return ["administrador", "director_comercial", "facturacion"].includes(role);
   }
 

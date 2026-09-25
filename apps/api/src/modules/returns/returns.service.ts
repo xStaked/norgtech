@@ -13,6 +13,7 @@ import {
 } from "../invoices/invoice-constants";
 import { CreateReturnDto } from "./dto/create-return.dto";
 import { ListReturnsDto } from "./dto/list-returns.dto";
+import { auditState } from "../audit/audit-state";
 
 const includeReturnRelations = {
   customer: { select: { id: true, displayName: true } },
@@ -106,7 +107,7 @@ export class ReturnsService {
           entityId: created.id,
           action: "return.created",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(created)),
+          nextState: auditState(created),
         },
         tx,
       );

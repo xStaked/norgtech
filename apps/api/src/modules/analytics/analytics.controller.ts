@@ -23,8 +23,13 @@ import { SellerReportService } from "./seller-report.service";
 
 type Row = Record<string, unknown>;
 
-const text = (row: Row, key: string) => (row[key] === null || row[key] === undefined ? "" : String(row[key]));
-const num = (row: Row, key: string) => (typeof row[key] === "number" ? (row[key] as number) : "");
+const text = (row: Row, key: string) => {
+  const value = row[key];
+  if (value === null || value === undefined) return "";
+  const primitive = value as string | number | boolean | bigint | symbol;
+  return String(primitive);
+};
+const num = (row: Row, key: string) => (typeof row[key] === "number" ? row[key] : "");
 
 /** El CSV exporta el breakdown principal de cada pantalla (spec §2.5). */
 const CSV_COLUMNS: Record<string, CsvColumn<Row>[]> = {

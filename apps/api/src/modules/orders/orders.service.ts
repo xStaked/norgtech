@@ -17,6 +17,7 @@ import { CreditSummaryDto } from "../credit/dto/credit-summary.dto";
 import { WhatsAppService } from "../whatsapp/whatsapp.service";
 import { allowedTransitions } from "./order-status-transition-map";
 import { isEligibleSeller } from "../seller-goals/seller-eligibility";
+import { auditState } from "../audit/audit-state";
 
 const COP = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -257,7 +258,7 @@ export class OrdersService {
           entityId: order.id,
           action: "order.created",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(order)),
+          nextState: auditState(order),
         },
         tx,
       );
@@ -336,7 +337,7 @@ export class OrdersService {
           const issueDate = new Date();
           const dueDate = this.calculateInvoiceDueDate(issueDate, order.customer.paymentDays);
           const invoiceNumber = await this.nextInvoiceNumber(order.company.prefix, tx);
-          const previousOrderState = JSON.parse(JSON.stringify(order));
+          const previousOrderState = auditState(order);
 
           const invoice = await tx.invoice.create({
             data: {
@@ -374,7 +375,7 @@ export class OrdersService {
                 action: "order.status_changed",
                 actorUserId: user.id,
                 previousState: previousOrderState,
-                nextState: JSON.parse(JSON.stringify(updatedOrder)),
+                nextState: auditState(updatedOrder),
               },
               tx,
             );
@@ -386,11 +387,11 @@ export class OrdersService {
               entityId: invoice.id,
               action: "invoice.created_from_order",
               actorUserId: user.id,
-              nextState: JSON.parse(JSON.stringify({
+              nextState: auditState({
                 invoice,
                 orderTotal: order.total,
                 computedItemTotal: totals.itemTotal,
-              })),
+              }),
             },
             tx,
           );
@@ -474,7 +475,7 @@ export class OrdersService {
         });
       }
 
-      const previousState = JSON.parse(JSON.stringify(order));
+      const previousState = auditState(order);
 
       const data: Parameters<typeof tx.order.update>[0]["data"] = {
         status: dto.status,
@@ -507,7 +508,7 @@ export class OrdersService {
           action: "order.status_changed",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -550,7 +551,7 @@ export class OrdersService {
         await this.assertUserExists(dto.assignedLogisticsUserId);
       }
 
-      const previousState = JSON.parse(JSON.stringify(order));
+      const previousState = auditState(order);
 
       const updated = await tx.order.update({
         where: { id: orderId },
@@ -585,7 +586,7 @@ export class OrdersService {
           action: "order.logistics_updated",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -634,7 +635,7 @@ export class OrdersService {
           entityId: billingRequest.id,
           action: "billing_request.created_from_order",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(billingRequest)),
+          nextState: auditState(billingRequest),
         },
         tx,
       );
@@ -733,7 +734,7 @@ export class OrdersService {
           entityId: orderId,
           action: "order.item_resolved",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -806,7 +807,7 @@ export class OrdersService {
         excludeOrderId: order.id,
       });
 
-      const previousState = JSON.parse(JSON.stringify(order));
+      const previousState = auditState(order);
       const reviewer =
         (await tx.user.findUnique({ where: { id: user.id } }))?.name ?? user.email;
 
@@ -831,7 +832,7 @@ export class OrdersService {
           action: "order.approved",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -854,7 +855,7 @@ export class OrdersService {
       if (order.approvalStatus !== "en_revision") {
         throw new BadRequestException("Order is not pending review");
       }
-      const previousState = JSON.parse(JSON.stringify(order));
+      const previousState = auditState(order);
       const reviewer =
         (await tx.user.findUnique({ where: { id: user.id } }))?.name ?? user.email;
 
@@ -877,7 +878,7 @@ export class OrdersService {
           action: "order.rejected",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );

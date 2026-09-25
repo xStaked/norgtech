@@ -16,6 +16,7 @@ import { CreateCustomerDto } from "./dto/create-customer.dto";
 import { ListCustomersQueryDto } from "./dto/list-customers.query.dto";
 import { UpdateCustomerDto } from "./dto/update-customer.dto";
 import { UpdateCustomerZoneDto } from "./dto/update-customer-zone.dto";
+import { auditState } from "../audit/audit-state";
 
 @Injectable()
 export class CustomersService {
@@ -98,7 +99,7 @@ export class CustomersService {
             entityId: customer.id,
             action: "customer.created",
             actorUserId: user.id,
-            nextState: JSON.parse(JSON.stringify(customer)),
+            nextState: auditState(customer),
           },
           tx,
         );
@@ -315,8 +316,8 @@ export class CustomersService {
           entityId: id,
           action: "customer.updated",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(customer)),
-          nextState: JSON.parse(JSON.stringify(result)),
+          previousState: auditState(customer),
+          nextState: auditState(result),
         },
         tx,
       );

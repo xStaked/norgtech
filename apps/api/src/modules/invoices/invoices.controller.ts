@@ -46,7 +46,14 @@ const validationPipe = new ValidationPipe({
 });
 
 function sanitizeDownloadFileName(fileName: string): string {
-  const sanitized = fileName.replace(/[\x00-\x1F\x7F"\\]/g, "").trim();
+  const sanitized = fileName
+    .split("")
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code >= 0x20 && code !== 0x7f && char !== "\"" && char !== "\\";
+    })
+    .join("")
+    .trim();
   return sanitized || "soporte";
 }
 

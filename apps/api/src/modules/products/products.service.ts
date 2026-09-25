@@ -180,7 +180,7 @@ export class ProductsService {
       ...presentation,
       prices: priceItems.map((item) => {
         columns.set(item.priceList.id, item.priceList);
-        const { priceListId, presentationId, priceList, id: itemId, ...prices } = item;
+        const { priceListId, presentationId: _presentationId, priceList, id: itemId, ...prices } = item;
         return {
           id: itemId,
           priceListId,

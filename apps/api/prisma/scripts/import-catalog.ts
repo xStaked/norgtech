@@ -20,13 +20,16 @@ export const clean = (v: unknown): string => {
     const c = v as { text?: unknown; result?: unknown };
     return clean(c.text ?? c.result ?? "");
   }
-  return String(v).trim().replace(/\s+/g, " ");
+  const primitive = v as string | number | boolean | bigint | symbol;
+  return String(primitive).trim().replace(/\s+/g, " ");
 };
 
 export const num = (v: unknown): number | null => {
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
-  if (v && typeof v === "object" && typeof (v as any).result === "number")
-    return (v as any).result;
+  if (v && typeof v === "object") {
+    const { result } = v as { result?: unknown };
+    if (typeof result === "number") return result;
+  }
   return null;
 };
 
@@ -293,7 +296,9 @@ async function run(filePath: string, dry: boolean) {
   return { report, customerLinks };
 }
 
-function itemData(p1: any, p2: any, p3: any) {
+type PricePair = { sin: number | null; con: number | null };
+
+function itemData(p1?: PricePair, p2?: PricePair, p3?: PricePair) {
   return {
     priceSinIva: p1?.sin ?? null,
     priceConIva: p1?.con ?? null,

@@ -721,7 +721,7 @@ export class DashboardService {
       return (value as { toNumber: () => number }).toNumber();
     }
     if (value && typeof value === "object" && "toString" in value) {
-      return Number(value.toString());
+      return Number((value as { toString(): string }).toString());
     }
     return 0;
   }

@@ -70,7 +70,7 @@ async function main() {
 
   console.log(`Visita completada: ${updated.id} (${visit.customer.displayName})`);
   console.log(`Ahora si se puede generar el reporte: POST /reports/from-visit/${updated.id}`);
-  console.log(`Para revertir: status -> "${visit.status}", completedAt -> ${visit.completedAt}`);
+  console.log(`Para revertir: status -> "${visit.status}", completedAt -> ${String(visit.completedAt)}`);
 }
 
 main()

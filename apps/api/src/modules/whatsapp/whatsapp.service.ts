@@ -869,7 +869,7 @@ export class WhatsAppService {
 
   private jsonObjectValue(value: Prisma.JsonValue): Record<string, unknown> {
     return value && typeof value === "object" && !Array.isArray(value)
-      ? (value as Record<string, unknown>)
+      ? value
       : {};
   }
 
@@ -1009,7 +1009,7 @@ export class WhatsAppService {
       }
       if (!isAttendableRole(assignedUser.role)) {
         throw new BadRequestException(
-          `${assignedUser.name} no atiende el unicanal (rol ${assignedUser.role})`,
+          `${assignedUser.name} no atiende el unicanal (rol ${String(assignedUser.role)})`,
         );
       }
       assignedUserRole = assignedUser.role;

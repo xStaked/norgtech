@@ -5,6 +5,7 @@ import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { UpdateBillingStatusDto } from "./dto/update-billing-status.dto";
 import { CreateBillingRequestDto } from "./dto/create-billing-request.dto";
+import { auditState } from "../audit/audit-state";
 
 const allowedStatusTransitions: Record<BillingRequestStatus, BillingRequestStatus[]> = {
   pendiente: ["procesada", "rechazada"],
@@ -96,7 +97,7 @@ export class BillingRequestsService {
           entityId: billingRequest.id,
           action: "billing_request.created_direct",
           actorUserId: user.id,
-          nextState: JSON.parse(JSON.stringify(billingRequest)),
+          nextState: auditState(billingRequest),
         },
         tx,
       );
@@ -119,7 +120,7 @@ export class BillingRequestsService {
         throw new BadRequestException("Invalid billing request status transition");
       }
 
-      const previousState = JSON.parse(JSON.stringify(billingRequest));
+      const previousState = auditState(billingRequest);
 
       const updated = await tx.billingRequest.update({
         where: { id },
@@ -133,7 +134,7 @@ export class BillingRequestsService {
           action: "billing_request.status_changed",
           actorUserId: user.id,
           previousState,
-          nextState: JSON.parse(JSON.stringify(updated)),
+          nextState: auditState(updated),
         },
         tx,
       );
@@ -167,7 +168,7 @@ export class BillingRequestsService {
       return;
     }
 
-    const previousState = JSON.parse(JSON.stringify(order));
+    const previousState = auditState(order);
     const updatedOrder = await tx.order.update({
       where: { id: order.id },
       data: { status: OrderStatus.facturado, updatedBy: user.id },
@@ -180,7 +181,7 @@ export class BillingRequestsService {
         action: "order.status_changed",
         actorUserId: user.id,
         previousState,
-        nextState: JSON.parse(JSON.stringify(updatedOrder)),
+        nextState: auditState(updatedOrder),
       },
       tx,
     );

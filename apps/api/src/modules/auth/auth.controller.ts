@@ -63,7 +63,7 @@ export class AuthController {
   @Post("refresh")
   @HttpCode(200)
   async refresh(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const raw = (req as Request & { cookies?: Record<string, string> }).cookies?.[
+    const raw = (req as unknown as { cookies?: Record<string, string> }).cookies?.[
       REFRESH_COOKIE
     ];
     if (!raw) {
@@ -83,7 +83,7 @@ export class AuthController {
   @Post("logout")
   @HttpCode(200)
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
-    const raw = (req as Request & { cookies?: Record<string, string> }).cookies?.[
+    const raw = (req as unknown as { cookies?: Record<string, string> }).cookies?.[
       REFRESH_COOKIE
     ];
     if (raw) {

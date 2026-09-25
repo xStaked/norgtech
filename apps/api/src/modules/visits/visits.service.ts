@@ -19,6 +19,7 @@ import { CompleteVisitDto } from "./dto/complete-visit.dto";
 import { CreateVisitDto } from "./dto/create-visit.dto";
 import { UpdateVisitDto } from "./dto/update-visit.dto";
 import { UpdateVisitStatusDto } from "./dto/update-visit-status.dto";
+import { auditState } from "../audit/audit-state";
 
 export interface VisitFilters {
   status?: VisitStatus;
@@ -143,8 +144,8 @@ export class VisitsService {
           entityId: updatedVisit.id,
           action: "visit.status_changed",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(visit)),
-          nextState: JSON.parse(JSON.stringify(updatedVisit)),
+          previousState: auditState(visit),
+          nextState: auditState(updatedVisit),
         },
         tx,
       );
@@ -203,8 +204,8 @@ export class VisitsService {
           entityId: updatedVisit.id,
           action: "visit.completed",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(visit)),
-          nextState: JSON.parse(JSON.stringify(updatedVisit)),
+          previousState: auditState(visit),
+          nextState: auditState(updatedVisit),
         },
         tx,
       );
@@ -256,8 +257,8 @@ export class VisitsService {
           entityId: updatedVisit.id,
           action: "visit.updated",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(visit)),
-          nextState: JSON.parse(JSON.stringify(updatedVisit)),
+          previousState: auditState(visit),
+          nextState: auditState(updatedVisit),
         },
         tx,
       );
@@ -293,7 +294,7 @@ export class VisitsService {
           entityId: visit.id,
           action: "visit.deleted",
           actorUserId: user.id,
-          previousState: JSON.parse(JSON.stringify(visit)),
+          previousState: auditState(visit),
         },
         tx,
       );
@@ -461,7 +462,7 @@ export class VisitsService {
         entityId: visit.id,
         action: "visit.created",
         actorUserId: user.id,
-        nextState: JSON.parse(JSON.stringify(visit)),
+        nextState: auditState(visit),
       },
       client,
     );

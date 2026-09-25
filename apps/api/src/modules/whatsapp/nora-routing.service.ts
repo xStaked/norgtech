@@ -24,6 +24,7 @@ import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { isAttendableRole } from "./unicanal-roles";
 import { ResolvedWhatsAppSender, WhatsAppService } from "./whatsapp.service";
 import { WhatsAppOrderAutomationService } from "./whatsapp-order-automation.service";
+import { auditState } from "../audit/audit-state";
 
 type RouteInboundMessageInput = {
   conversation: WhatsAppConversation;
@@ -574,7 +575,7 @@ export class NoraRoutingService {
             automationResult?.decision === "created"
               ? NoraActionStatus.executed
               : NoraActionStatus.proposed,
-          output: output as Prisma.InputJsonValue,
+          output,
         },
       });
 
@@ -1170,7 +1171,9 @@ export class NoraRoutingService {
   private visitMatchByNumber(caseRecord: NoraConversationCase, number: number) {
     const proposal = this.objectValue(caseRecord.proposal);
     const payload = this.objectValue(proposal?.payload);
-    const matches = Array.isArray(payload?.customerMatches) ? payload.customerMatches : [];
+    const matches: unknown[] = Array.isArray(payload?.customerMatches)
+      ? payload.customerMatches
+      : [];
     const match = matches[number - 1];
     return match && typeof match === "object" && !Array.isArray(match)
       ? (match as { id: string; displayName?: string | null; legalName?: string | null; taxId?: string | null; city?: string | null })
@@ -2176,7 +2179,7 @@ export class NoraRoutingService {
   }
 
   private toJsonSafeValue(value: unknown) {
-    return JSON.parse(JSON.stringify(value)) as Prisma.InputJsonValue;
+    return auditState(value);
   }
 
   private safeErrorMessage(error: unknown) {

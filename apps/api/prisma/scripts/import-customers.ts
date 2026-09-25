@@ -53,7 +53,8 @@ export const clean = (v: unknown): string => {
     const cell = v as { text?: unknown; result?: unknown };
     return clean(cell.text ?? cell.result ?? "");
   }
-  return String(v).trim().replace(/\s+/g, " ");
+  const primitive = v as string | number | boolean | bigint | symbol;
+  return String(primitive).trim().replace(/\s+/g, " ");
 };
 
 /** Digito de verificacion DIAN. Solo se usa para reportar cuales no cuadran:

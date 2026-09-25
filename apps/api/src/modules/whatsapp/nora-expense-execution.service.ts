@@ -79,7 +79,7 @@ export class NoraExpenseExecutionService {
         (dto as Record<string, unknown>).extractionModel = extractedData.extractionModel;
       }
 
-      const expense = await this.expensesService.createFromBuffer(input.user, dto as CreateCommercialExpenseDto, {
+      const expense = await this.expensesService.createFromBuffer(input.user, dto, {
         buffer,
         originalname: attachment.fileName ?? "soporte-whatsapp.jpg",
         mimetype: attachment.contentType ?? "image/jpeg",

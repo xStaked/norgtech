@@ -10,7 +10,7 @@ export class UpdateUserDto {
   @Matches(/\S/)
   name?: string;
 
-  @Transform(({ value }) => (typeof value === "string" ? value.trim() : value))
+  @Transform(({ value }: { value: unknown }) => (typeof value === "string" ? value.trim() : value))
   @ValidateIf((_, value) => value !== undefined)
   @IsString()
   @Matches(internationalPhonePattern)

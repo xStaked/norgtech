@@ -3,10 +3,8 @@ import {
   ArrayMinSize,
   IsArray,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
-  Matches,
   ValidateNested,
 } from "class-validator";
 import { CreateQuoteItemDto } from "./create-quote-item.dto";

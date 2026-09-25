@@ -2,6 +2,7 @@ import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
 import { AUTH_JWT_SECRET } from "./auth.constants";
 import { AuthenticatedUser } from "./types/authenticated-request";
+import jsonwebtokenPkg from "jsonwebtoken";
 
 type JsonWebTokenModule = {
   verify(token: string, secret: string): {
@@ -11,7 +12,7 @@ type JsonWebTokenModule = {
   };
 };
 
-const jsonwebtoken = require("jsonwebtoken") as JsonWebTokenModule;
+const jsonwebtoken = jsonwebtokenPkg as unknown as JsonWebTokenModule;
 
 @Injectable()
 export class JwtStrategy {

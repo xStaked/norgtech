@@ -150,30 +150,32 @@ export class OpenAIExpenseExtractionProvider
   private stringField<K extends StringFieldKey>(
     key: K,
     field?: ModelField<string> | null,
-  ): Pick<ExtractCommercialExpenseSupportResult["fields"], K> | {} {
+  ): Pick<ExtractCommercialExpenseSupportResult["fields"], K> | Record<string, never> {
     const normalized = this.normalizeField(field, "string");
-    return normalized ? { [key]: normalized } : {};
+    return normalized
+      ? ({ [key]: normalized } as Pick<ExtractCommercialExpenseSupportResult["fields"], K>)
+      : {};
   }
 
   private numberField(
     key: "amount",
     field?: ModelField<number> | null,
-  ): Pick<ExtractCommercialExpenseSupportResult["fields"], "amount"> | {} {
+  ): Pick<ExtractCommercialExpenseSupportResult["fields"], "amount"> | Record<string, never> {
     const normalized = this.normalizeField(field, "number");
     return normalized ? { [key]: normalized } : {};
   }
 
   private categoryField(
     field?: ModelField<CommercialExpenseCategory> | null,
-  ): Pick<ExtractCommercialExpenseSupportResult["fields"], "category"> | {} {
+  ): Pick<ExtractCommercialExpenseSupportResult["fields"], "category"> | Record<string, never> {
     const normalized = this.normalizeField(field, "string");
     if (!normalized) return {};
-    if (!expenseCategories.includes(normalized.value as CommercialExpenseCategory)) {
+    if (!expenseCategories.includes(normalized.value)) {
       return {};
     }
     return {
       category: {
-        value: normalized.value as CommercialExpenseCategory,
+        value: normalized.value,
         confidence: normalized.confidence,
       },
     };

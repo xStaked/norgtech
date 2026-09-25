@@ -24,7 +24,7 @@ export class NoraAgentController {
     return this.execution.executeFromWhatsApp({
       user,
       conversationId,
-      dto: expense as never,
+      dto: expense,
     });
   }
 
@@ -44,7 +44,7 @@ export class NoraAgentController {
       user,
       conversationId,
       expenseId: id,
-      dto: expense as never,
+      dto: expense,
     });
   }
 }

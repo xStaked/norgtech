@@ -1,10 +1,11 @@
-import { PrismaClient, UserRole, OpportunityStage, QuoteStatus, OrderStatus, BillingRequestStatus, VisitStatus, FollowUpTaskStatus, FollowUpTaskType, CommercialExpenseCategory, CommercialExpenseStatus } from "@prisma/client";
+import { PrismaClient, UserRole, OpportunityStage, QuoteStatus, OrderStatus, BillingRequestStatus, VisitStatus, FollowUpTaskType, CommercialExpenseCategory, CommercialExpenseStatus } from "@prisma/client";
+import bcryptPkg from "bcryptjs";
 
 type BcryptModule = {
   hash(value: string, rounds: number): Promise<string>;
 };
 
-const bcrypt = require("bcryptjs") as BcryptModule;
+const bcrypt = bcryptPkg as unknown as BcryptModule;
 
 const prisma = new PrismaClient();
 

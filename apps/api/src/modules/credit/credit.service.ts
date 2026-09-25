@@ -159,7 +159,7 @@ export class CreditService {
 
     const isNearLimit = utilizationPercent != null && utilizationPercent >= ALERT_THRESHOLD_PERCENT;
 
-    let purchaseProgress: PurchaseProgressDto = {
+    const purchaseProgress: PurchaseProgressDto = {
       currentMonthSales: 0,
       budget: customer.purchaseBudget ? customer.purchaseBudget.toNumber() : null,
       percent: null,

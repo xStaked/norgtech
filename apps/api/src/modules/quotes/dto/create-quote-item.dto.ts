@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsNumber, IsOptional, IsString, Matches, Min } from "class-validator";
+import { IsNumber, IsOptional, IsString, Min } from "class-validator";
 
 export class CreateQuoteItemDto {
   @IsOptional()
