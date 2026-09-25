@@ -991,7 +991,6 @@ describe("WhatsApp inbox", () => {
         count: async () => orders.length,
         findMany: async ({
           where,
-          orderBy,
           take,
           select,
         }: {
@@ -1036,13 +1035,12 @@ describe("WhatsApp inbox", () => {
           orders.find((order) => order.id === id) ?? null,
       },
       invoice: {
-        findMany: async ({
-          where,
-          select,
-        }: {
-          where?: { customerId?: string };
-          select?: Record<string, unknown>;
-        } = {}) => {
+        findMany: async (
+          _args: {
+            where?: { customerId?: string };
+            select?: Record<string, unknown>;
+          } = {},
+        ) => {
           // No invoices in the test fixtures; return empty array
           return [];
         },
@@ -1769,7 +1767,6 @@ describe("WhatsApp inbox", () => {
     );
 
     expect(result.decision).toBe("created");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const created = result as any;
     expect(created.summary.items).toHaveLength(1);
     expect(created.summary.items[0].needsResolution).toBe(true);

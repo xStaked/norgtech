@@ -1,9 +1,8 @@
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const jsonwebtoken = require("jsonwebtoken") as { verify(token: string, secret: string): unknown };
 import { INestApplication } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
 import { CommercialExpenseCategory, NoraConversationCaseStatus, UserRole } from "@prisma/client";
 import request from "supertest";
+import jsonwebtokenPkg from "jsonwebtoken";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { refreshTokenStub } from "./helpers/login-as";
@@ -18,6 +17,8 @@ import { NoraExpenseExecutionService } from "../src/modules/whatsapp/nora-expens
 import { NoraAgentController } from "../src/modules/whatsapp/nora-agent.controller";
 import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 import { NotificationsService } from "../src/modules/notifications/notifications.service";
+
+const jsonwebtoken = jsonwebtokenPkg as unknown as { verify(token: string, secret: string): unknown };
 
 // ---------------------------------------------------------------------------
 // Task 1: NoraCaseService.updateCase persists executedEntityType/executedEntityId

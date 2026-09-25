@@ -10,11 +10,8 @@ import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 const outboundMessages: Array<Record<string, unknown>> = [];
 
 declare global {
-  // eslint-disable-next-line no-var
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
-  // eslint-disable-next-line no-var
   var __ADMIN_TOKEN__: string | undefined;
-  // eslint-disable-next-line no-var
   var __FACTURACION_TOKEN__: string | undefined;
 }
 
@@ -550,7 +547,7 @@ describe("Orders", () => {
               pendingInvoices.push(invoice);
               return invoice;
             },
-            update: async ({ where: { id }, data, include }: { where: { id: string }; data: Record<string, any>; include?: Record<string, unknown> }) => {
+            update: async ({ where: { id }, data }: { where: { id: string }; data: Record<string, any>; include?: Record<string, unknown> }) => {
               const idx = invoices.findIndex((invoice) => invoice.id === id);
               if (idx !== -1) {
                 invoices[idx] = { ...invoices[idx], ...data, updatedAt: new Date() };

@@ -7,9 +7,7 @@ import { PrismaService } from "../src/prisma/prisma.service";
 import { findMockUserByEmail, loginAs, refreshTokenStub } from "./helpers/login-as";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
-  // eslint-disable-next-line no-var
   var __ADMIN_TOKEN__: string | undefined;
 }
 

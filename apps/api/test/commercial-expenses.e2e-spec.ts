@@ -15,10 +15,8 @@ import { CommercialExpensesService } from "../src/modules/commercial-expenses/co
 import { R2StorageService } from "../src/modules/commercial-expenses/r2-storage.service";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { refreshTokenStub } from "./helpers/login-as";
-import { WhatsAppService } from "../src/modules/whatsapp/whatsapp.service";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
 }
 

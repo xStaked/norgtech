@@ -3,9 +3,9 @@ import { UserRole } from "@prisma/client";
 import { AuthService } from "../src/modules/auth/auth.service";
 import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
 import { PrismaService } from "../src/prisma/prisma.service";
+import jsonwebtokenPkg from "jsonwebtoken";
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const jsonwebtoken = require("jsonwebtoken") as {
+const jsonwebtoken = jsonwebtokenPkg as unknown as {
   decode(token: string): { exp: number; iat: number } | null;
   verify(token: string, secret: string): unknown;
 };

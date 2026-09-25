@@ -9,7 +9,6 @@ import { refreshTokenStub } from "./helpers/login-as";
 import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
 
 declare global {
-  // eslint-disable-next-line no-var
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
 }
 
@@ -299,7 +298,7 @@ describe("Invoices", () => {
       $transaction: async (fn: any) => fn(txStub),
     };
 
-    const auditStub = {
+    const _auditStub = {
       record: async (payload: Record<string, unknown>) => {
         auditLogs.push(payload);
       },

@@ -97,7 +97,7 @@ test("create order and view logistics section", async ({ page, request }) => {
   // Verify we returned to view mode (Editar button visible again)
   await expect(page.getByRole("button", { name: "Editar" })).toBeVisible();
   // Verify the date is displayed (format may vary by timezone)
-  await expect(page.getByText(/\d{1,2}[\/\-]\d{1,2}[\/\-]2026/).first()).toBeVisible();
+  await expect(page.getByText(/\d{1,2}[/-]\d{1,2}[/-]2026/).first()).toBeVisible();
 });
 
 test("advance order status and create billing request", async ({ page, request }) => {

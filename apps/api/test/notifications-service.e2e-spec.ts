@@ -1,4 +1,4 @@
-import { NotificationType, UserRole } from "@prisma/client";
+import { NotificationType } from "@prisma/client";
 import {
   NotificationsService,
   dedupeKeyFor,

@@ -3,11 +3,7 @@ import { UserRole } from "@prisma/client";
 import { AuthService } from "../src/modules/auth/auth.service";
 import { renderPasswordResetEmail } from "../src/modules/auth/password-reset-email";
 import { PrismaService } from "../src/prisma/prisma.service";
-
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const bcrypt = require("bcryptjs") as {
-  compare(value: string, hash: string): Promise<boolean>;
-};
+import bcrypt from "bcryptjs";
 
 type ResetRecord = {
   id: string;
