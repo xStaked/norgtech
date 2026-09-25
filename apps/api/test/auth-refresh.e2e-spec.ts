@@ -1,9 +1,9 @@
 import { UnauthorizedException } from "@nestjs/common";
 import { UserRole } from "@prisma/client";
+import jsonwebtokenPkg from "jsonwebtoken";
 import { AuthService } from "../src/modules/auth/auth.service";
 import { AUTH_JWT_SECRET } from "../src/modules/auth/auth.constants";
 import { PrismaService } from "../src/prisma/prisma.service";
-import jsonwebtokenPkg from "jsonwebtoken";
 
 const jsonwebtoken = jsonwebtokenPkg as unknown as {
   decode(token: string): { exp: number; iat: number } | null;

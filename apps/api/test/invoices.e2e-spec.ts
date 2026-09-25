@@ -298,12 +298,6 @@ describe("Invoices", () => {
       $transaction: async (fn: any) => fn(txStub),
     };
 
-    const _auditStub = {
-      record: async (payload: Record<string, unknown>) => {
-        auditLogs.push(payload);
-      },
-    };
-
     const storageStub = {
       uploadFile: async () => ({ bucket: "test-bucket", objectKey: "test-key" }),
       deleteObject: async () => undefined,

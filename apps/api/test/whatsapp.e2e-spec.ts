@@ -1035,12 +1035,7 @@ describe("WhatsApp inbox", () => {
           orders.find((order) => order.id === id) ?? null,
       },
       invoice: {
-        findMany: async (
-          _args: {
-            where?: { customerId?: string };
-            select?: Record<string, unknown>;
-          } = {},
-        ) => {
+        findMany: async () => {
           // No invoices in the test fixtures; return empty array
           return [];
         },
