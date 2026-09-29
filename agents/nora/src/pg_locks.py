@@ -20,13 +20,12 @@ LOCK_TIMEOUT_SQLSTATE = "55P03"
 
 def pg_locks_available() -> bool:
     """Hay pool compartido abierto: se puede usar el lock distribuido."""
-    pool = persistence._pool
-    return pool is not None and not pool.closed
+    return persistence.get_pool() is not None
 
 
 def _require_pool():
-    pool = persistence._pool
-    if pool is None or pool.closed:
+    pool = persistence.get_pool()
+    if pool is None:
         raise RuntimeError(
             "pg_locks sin pool: llamar a create_saver() primero "
             "(o NORA_LOCAL_LOCKS=1 para locks en memoria)"

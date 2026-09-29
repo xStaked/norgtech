@@ -223,6 +223,3 @@ def build_nora_graph(checkpointer=None):
     # Checkpointer para memoria entre turnos
     memory = checkpointer if checkpointer is not None else MemorySaver()
     return workflow.compile(checkpointer=memory)
-
-# Singleton del grafo
-nora_graph = build_nora_graph()

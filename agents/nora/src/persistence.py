@@ -15,6 +15,13 @@ _pool: AsyncConnectionPool | None = None
 _pool_dsn: str | None = None
 
 
+def get_pool() -> AsyncConnectionPool | None:
+    """Pool compartido si está abierto; None sin DB (modo memoria)."""
+    if _pool is None or _pool.closed:
+        return None
+    return _pool
+
+
 async def _configure_conn(conn: AsyncConnection) -> None:
     """Cada conexión del pool apunta al schema de Nora."""
     await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")

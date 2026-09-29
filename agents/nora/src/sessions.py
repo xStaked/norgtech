@@ -10,7 +10,7 @@ Sesiones de Nora: metadata de sesión (dueño + contexto) con backend dual.
 
 La API pública no cambia: clase `SessionStore`, `get_or_create(...)` y `get(...)`.
 """
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import time
@@ -31,8 +31,8 @@ class SessionContext:
 
 async def setup_sessions() -> None:
     """Crea la tabla `nora_sessions` sobre el pool compartido (ver Task 1)."""
-    pool = persistence._pool
-    if pool is None or pool.closed:
+    pool = persistence.get_pool()
+    if pool is None:
         raise RuntimeError("setup_sessions sin pool: llamar a create_saver() primero")
     async with pool.connection() as conn:
         await conn.execute(
@@ -68,10 +68,7 @@ class SessionStore:
 
     def _pool(self):
         """Pool compartido si está abierto; None en dev sin DB (modo memoria)."""
-        pool = persistence._pool
-        if pool is None or pool.closed:
-            return None
-        return pool
+        return persistence.get_pool()
 
     def _cutoff(self) -> datetime:
         return datetime.now(timezone.utc) - timedelta(seconds=self._ttl_seconds)

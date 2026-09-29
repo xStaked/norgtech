@@ -1,5 +1,6 @@
 import os
 import uuid
+import logging
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -37,6 +38,9 @@ from .whatsapp_router import route_whatsapp_message
 from .whatsapp_agent import run_whatsapp_agent
 from .whatsapp_general_agent import run_whatsapp_general_agent
 from .whatsapp_customer_agent import run_whatsapp_customer_agent
+
+
+logger = logging.getLogger(__name__)
 
 
 def _workers_from_argv() -> int | None:
@@ -104,14 +108,18 @@ async def lifespan(_app: FastAPI):
             nora_graph = build_nora_graph(checkpointer=saver)
             db_status = "up"
         except Exception:
+            logger.exception("nora lifespan: postgres no disponible, db_status=down")
             db_status = "down"
+    else:
+        nora_graph = build_nora_graph()
+        db_status = "memory"
     try:
         yield
     finally:
         try:
             await close_pool()
         except Exception:
-            pass
+            logger.exception("nora lifespan: error cerrando el pool")
 
 
 # Fallback en proceso (dev/tests sin DATABASE_URL, y tests que no corren el
@@ -457,6 +465,7 @@ async def get_session(
     """
     Obtiene la sesión con sus mensajes y propuestas.
     """
+    _require_db()
     user_id = require_user_id(authorization)
     ctx = await session_store.get(session_id)
     if not ctx:
@@ -467,8 +476,9 @@ async def get_session(
     # Obtener historial del checkpointer de LangGraph
     config = {"configurable": {"thread_id": session_id}}
     try:
-        state = nora_graph.get_state(config)
+        state = await nora_graph.aget_state(config)
     except Exception:
+        logger.exception("get_session: no se pudo leer el estado del hilo")
         state = None
     
     messages = []
