@@ -57,10 +57,26 @@ def _workers_from_argv() -> int | None:
     return None
 
 
+def pg_backend_active() -> bool:
+    """Backend Postgres activo: turnos y sesiones viven en la DB.
+
+    Hay `DATABASE_URL` y no se forzaron locks locales (`NORA_LOCAL_LOCKS=1`
+    conserva `src/locks.py` en dev sin DB). Se lee de env —no del pool— porque
+    el guard corre en el lifespan antes de abrir conexiones.
+    """
+    if os.getenv("NORA_LOCAL_LOCKS") == "1":
+        return False
+    return bool(os.getenv("DATABASE_URL"))
+
+
 def assert_single_worker() -> None:
-    """Nora usa MemorySaver/SessionStore en proceso: más de 1 worker parte
-    la memoria en dos (split-brain de hilos y bypass de ownership).
-    Hasta Fase 2 (PostgresSaver) se exige un solo worker."""
+    """N workers solo con backend PG; en local se exige 1.
+
+    Sin Postgres la memoria (hilos, sesiones, locks) vive en proceso: más de
+    1 worker parte la memoria en dos (split-brain de hilos y bypass de
+    ownership). Con backend PG (Tasks 1-2: saver + advisory locks + sesiones
+    en la DB) N workers comparten el estado y son seguros.
+    """
     try:
         workers = int(os.getenv("WEB_CONCURRENCY", "1"))
     except ValueError:
@@ -68,8 +84,11 @@ def assert_single_worker() -> None:
     argv_workers = _workers_from_argv()
     if argv_workers is not None:
         workers = max(workers, argv_workers)
-    if workers > 1:
-        raise RuntimeError("Nora exige 1 worker hasta Fase 2 (WEB_CONCURRENCY>1)")
+    if workers > 1 and not pg_backend_active():
+        raise RuntimeError(
+            "Nora exige 1 worker sin backend Postgres "
+            "(WEB_CONCURRENCY>1 con NORA_LOCAL_LOCKS=1 o sin DATABASE_URL)"
+        )
 
 
 @asynccontextmanager
