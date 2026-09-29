@@ -98,7 +98,7 @@ def detect_response_mode(result: dict, session_id: str) -> NoraResponse:
                     data = json.loads(msg.content) if isinstance(msg.content, str) else msg.content
                     if "items" in data:
                         agenda_data = data
-                except:
+                except Exception:
                     pass
         return AgendaResponse(
             sessionId=session_id,
@@ -377,7 +377,7 @@ async def get_session(
     config = {"configurable": {"thread_id": session_id}}
     try:
         state = nora_graph.get_state(config)
-    except:
+    except Exception:
         state = None
     
     messages = []

@@ -166,21 +166,6 @@ def create_llm() -> ChatOpenAI:
             request_timeout=settings.llm_request_timeout,
             max_tokens=settings.llm_max_tokens,
         )
-    elif settings.llm_provider == "openai":
-        return ChatOpenAI(
-            model=settings.llm_model or "gpt-4o-mini",
-            api_key=settings.openai_api_key,
-            temperature=settings.llm_temperature,
-            streaming=True,
-            # Los 429 por TPM son transitorios ("try again in 558ms"): sin
-            # reintentos suficientes el turno se cae y el usuario ve el fallback.
-            max_retries=settings.llm_max_retries,
-            # Sin esto el SDK espera 600s por llamada y con los reintentos el
-            # peor caso es de horas: una llamada que no vuelve en 60s esta
-            # colgada, mejor cortarla y reintentar.
-            request_timeout=settings.llm_request_timeout,
-            max_tokens=settings.llm_max_tokens,
-        )
     else:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
 
