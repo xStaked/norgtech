@@ -29,13 +29,31 @@ from .models.whatsapp_models import (
 from contextlib import asynccontextmanager
 
 from .agent import nora_graph, NoraState
-from .locks import LOCK_WAIT_TIMEOUT, locked_session
+from .locks import LOCK_WAIT_TIMEOUT, get_session_lock
 from .roles import user_id_from_token
 from .sessions import session_store, SessionOwnershipError
 from .whatsapp_router import route_whatsapp_message
 from .whatsapp_agent import run_whatsapp_agent
 from .whatsapp_general_agent import run_whatsapp_general_agent
 from .whatsapp_customer_agent import run_whatsapp_customer_agent
+
+
+def _workers_from_argv() -> int | None:
+    import sys
+
+    argv = sys.argv
+    for i, arg in enumerate(argv):
+        if arg == "--workers" and i + 1 < len(argv):
+            try:
+                return int(argv[i + 1])
+            except ValueError:
+                return None
+        if arg.startswith("--workers="):
+            try:
+                return int(arg.split("=", 1)[1])
+            except ValueError:
+                return None
+    return None
 
 
 def assert_single_worker() -> None:
@@ -46,6 +64,9 @@ def assert_single_worker() -> None:
         workers = int(os.getenv("WEB_CONCURRENCY", "1"))
     except ValueError:
         workers = 1
+    argv_workers = _workers_from_argv()
+    if argv_workers is not None:
+        workers = max(workers, argv_workers)
     if workers > 1:
         raise RuntimeError("Nora exige 1 worker hasta Fase 2 (WEB_CONCURRENCY>1)")
 
@@ -315,15 +336,21 @@ async def send_message(
     # Serializado por sesión: sin lock dos turnos concurrentes leen el mismo
     # checkpoint y uno pisa al otro (y duplica create_order/visit/expense).
     # El segundo espera hasta 60s, luego 409 para que el front reintente.
+    # Solo el timeout del LOCK es 409: un TimeoutError interno del grafo/LLM
+    # debe propagarse como 500, no como turn_in_progress.
+    lock = get_session_lock(session_id)
     try:
-        async with locked_session(session_id, LOCK_WAIT_TIMEOUT):
-            result = await nora_graph.ainvoke(initial_state, config=config)
-    except TimeoutError:
+        await asyncio.wait_for(lock.acquire(), LOCK_WAIT_TIMEOUT)
+    except (asyncio.TimeoutError, TimeoutError):
         raise HTTPException(
             status_code=409,
             detail="turn_in_progress",
             headers={"Retry-After": "2"},
         )
+    try:
+        result = await nora_graph.ainvoke(initial_state, config=config)
+    finally:
+        lock.release()
     
     # Extraer último mensaje del agente
     last_msg = result["messages"][-1]
@@ -444,63 +471,73 @@ async def stream_message(
         "conversation_id": None,
     }
 
+    # 409 uniforme antes de enviar headers: si el turno anterior sigue en
+    # curso, el front recibe el mismo 409+Retry-After que en /messages.
+    stream_lock = get_session_lock(session_id)
+    try:
+        await asyncio.wait_for(stream_lock.acquire(), LOCK_WAIT_TIMEOUT)
+    except (asyncio.TimeoutError, TimeoutError):
+        raise HTTPException(
+            status_code=409,
+            detail="turn_in_progress",
+            headers={"Retry-After": "2"},
+        )
+
     async def event_stream():
         try:
-            async with locked_session(session_id, LOCK_WAIT_TIMEOUT):
-                full_response = ""
-                tool_outputs = []
-                tool_results = []
-                async for event in nora_graph.astream_events(initial_state, config=config, version="v2"):
-                    if await request.is_disconnected():
-                        break
-                    kind = event.get("event")
+            full_response = ""
+            tool_outputs = []
+            tool_results = []
+            async for event in nora_graph.astream_events(initial_state, config=config, version="v2"):
+                if await request.is_disconnected():
+                    break
+                kind = event.get("event")
 
-                    if kind == "on_chat_model_stream":
-                        chunk = event["data"]["chunk"]
-                        if hasattr(chunk, "content") and chunk.content:
-                            full_response += chunk.content
-                            data = json_lib.dumps({"token": chunk.content})
-                            yield f"data: {data}\n\n"
-
-                    elif kind == "on_tool_start":
-                        tool_name = event.get("name", "unknown")
-                        tool_outputs.append(tool_name)
-                        data = json_lib.dumps({"event": "tool_start", "tool": tool_name})
+                if kind == "on_chat_model_stream":
+                    chunk = event["data"]["chunk"]
+                    if hasattr(chunk, "content") and chunk.content:
+                        full_response += chunk.content
+                        data = json_lib.dumps({"token": chunk.content})
                         yield f"data: {data}\n\n"
 
-                    elif kind == "on_tool_end":
-                        tool_name = event.get("name", "unknown")
-                        tool_output = event.get("data", {}).get("output", "")
-                        tool_results.append({"name": tool_name, "output": tool_output})
-                        data = json_lib.dumps({"event": "tool_end", "tool": tool_name})
-                        yield f"data: {data}\n\n"
+                elif kind == "on_tool_start":
+                    tool_name = event.get("name", "unknown")
+                    tool_outputs.append(tool_name)
+                    data = json_lib.dumps({"event": "tool_start", "tool": tool_name})
+                    yield f"data: {data}\n\n"
 
-                # Detectar modo de respuesta basado en tools ejecutadas
-                if "get_agenda" in tool_outputs:
-                    agenda_data = {"items": []}
-                    for tr in tool_results:
-                        if tr["name"] == "get_agenda" and tr["output"]:
-                            try:
-                                parsed = json_lib.loads(tr["output"]) if isinstance(tr["output"], str) else tr["output"]
-                                if isinstance(parsed, dict) and "items" in parsed:
-                                    agenda_data = parsed
-                            except Exception:
-                                pass
-                    result = AgendaResponse(
-                        sessionId=session_id,
-                        message=full_response,
-                        agenda=agenda_data,
-                    )
-                else:
-                    result = GreetingResponse(
-                        sessionId=session_id,
-                        message=full_response,
-                    )
-                yield f"data: {json_lib.dumps(result.model_dump())}\n\n"
-                yield "data: [DONE]\n\n"
-        except TimeoutError:
-            yield f"data: {json_lib.dumps({'detail': 'turn_in_progress'})}\n\n"
+                elif kind == "on_tool_end":
+                    tool_name = event.get("name", "unknown")
+                    tool_output = event.get("data", {}).get("output", "")
+                    tool_results.append({"name": tool_name, "output": tool_output})
+                    data = json_lib.dumps({"event": "tool_end", "tool": tool_name})
+                    yield f"data: {data}\n\n"
+
+            # Detectar modo de respuesta basado en tools ejecutadas
+            if "get_agenda" in tool_outputs:
+                agenda_data = {"items": []}
+                for tr in tool_results:
+                    if tr["name"] == "get_agenda" and tr["output"]:
+                        try:
+                            parsed = json_lib.loads(tr["output"]) if isinstance(tr["output"], str) else tr["output"]
+                            if isinstance(parsed, dict) and "items" in parsed:
+                                agenda_data = parsed
+                        except Exception:
+                            pass
+                result = AgendaResponse(
+                    sessionId=session_id,
+                    message=full_response,
+                    agenda=agenda_data,
+                )
+            else:
+                result = GreetingResponse(
+                    sessionId=session_id,
+                    message=full_response,
+                )
+            yield f"data: {json_lib.dumps(result.model_dump())}\n\n"
             yield "data: [DONE]\n\n"
+        finally:
+            stream_lock.release()
     
     return StreamingResponse(
         event_stream(),
