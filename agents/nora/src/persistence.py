@@ -3,37 +3,41 @@
 El pool vive en este módulo y es ÚNICO: las tareas siguientes (locks
 pg, sesiones) lo importan de aquí, no crean pools propios. Costo de
 duplicarlo: locks contra un pool y checkpoints contra otro.
+
+Los imports de psycopg son perezosos a propósito: sin libpq del sistema
+el modo memoria (sin DATABASE_URL) debe arrancar igual.
 """
-from psycopg import AsyncConnection
-from psycopg.rows import dict_row
-from psycopg_pool import AsyncConnectionPool
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from __future__ import annotations
 
 SCHEMA = "nora_langgraph"
 
-_pool: AsyncConnectionPool | None = None
+_pool = None
 _pool_dsn: str | None = None
 
 
-def get_pool() -> AsyncConnectionPool | None:
+def get_pool():
     """Pool compartido si está abierto; None sin DB (modo memoria)."""
     if _pool is None or _pool.closed:
         return None
     return _pool
 
 
-async def _configure_conn(conn: AsyncConnection) -> None:
+async def _configure_conn(conn) -> None:
     """Cada conexión del pool apunta al schema de Nora."""
     await conn.execute(f"CREATE SCHEMA IF NOT EXISTS {SCHEMA}")
     await conn.execute(f"SET search_path TO {SCHEMA}, public")
 
 
-async def create_saver(dsn: str) -> AsyncPostgresSaver:
+async def create_saver(dsn: str):
     """Saver contra el pool compartido del módulo (lo abre si falta).
 
     Dos llamadas devuelven instancias distintas sobre el mismo pool, así
     que ven el mismo estado de cada thread.
     """
+    from psycopg.rows import dict_row
+    from psycopg_pool import AsyncConnectionPool
+    from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+
     global _pool, _pool_dsn
     if _pool is None or _pool.closed or _pool_dsn != dsn:
         if _pool is not None and not _pool.closed:
@@ -60,7 +64,7 @@ async def create_saver(dsn: str) -> AsyncPostgresSaver:
     return AsyncPostgresSaver(conn=_pool)
 
 
-async def setup_saver(saver: AsyncPostgresSaver) -> None:
+async def setup_saver(saver) -> None:
     """Crea el schema `nora_langgraph` + tablas (vía el setup() del saver)."""
     if _pool is not None and not _pool.closed:
         async with _pool.connection() as conn:
