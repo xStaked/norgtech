@@ -170,8 +170,12 @@ def create_llm() -> ChatOpenAI:
         raise ValueError(f"Unknown LLM provider: {settings.llm_provider}")
 
 # ── Graph ───────────────────────────────────────────────
-def build_nora_graph():
-    """Construye el state graph de Nora."""
+def build_nora_graph(checkpointer=None):
+    """Construye el state graph de Nora.
+
+    Sin checkpointer usa MemorySaver en proceso (dev/tests). En prod el
+    lifespan pasa el AsyncPostgresSaver compartido de persistence.py.
+    """
     llm = create_llm()
 
     # ToolNode se queda con TODAS: solo ejecuta lo que el LLM llamo, y el LLM
@@ -210,13 +214,14 @@ def build_nora_graph():
     )
     workflow.add_edge("tools", "agent")
     
-    # ponytail: memoria en proceso. Aguanta porque el front no persiste el
-    # sessionId (se pierde con un F5 igual) y hoy corre una sola replica. Techo:
-    # con mas de una replica, el turno siguiente puede caer en otro proceso y
-    # perder el hilo. Upgrade: AsyncPostgresSaver construido en el lifespan de
-    # FastAPI (el grafo ya no podria ser un singleton de modulo).
+    # Sin checkpointer explícito: memoria en proceso. Aguanta porque el
+    # front no persiste el sessionId (se pierde con un F5 igual) y hoy corre
+    # una sola replica. Techo: con mas de una replica, el turno siguiente
+    # puede caer en otro proceso y perder el hilo. En prod el lifespan pasa
+    # el AsyncPostgresSaver compartido (persistence.py) y el grafo se
+    # reconstruye contra Postgres (ya no es un singleton de módulo).
     # Checkpointer para memoria entre turnos
-    memory = MemorySaver()
+    memory = checkpointer if checkpointer is not None else MemorySaver()
     return workflow.compile(checkpointer=memory)
 
 # Singleton del grafo

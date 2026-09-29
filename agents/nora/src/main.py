@@ -28,7 +28,8 @@ from .models.whatsapp_models import (
 )
 from contextlib import asynccontextmanager
 
-from .agent import nora_graph, NoraState
+from .agent import build_nora_graph, NoraState
+from .persistence import close_pool, create_saver, setup_saver
 from .locks import LOCK_WAIT_TIMEOUT, get_session_lock
 from .roles import user_id_from_token
 from .sessions import session_store, SessionOwnershipError
@@ -74,7 +75,35 @@ def assert_single_worker() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     assert_single_worker()
-    yield
+    global nora_graph, db_status
+    dsn = os.getenv("DATABASE_URL")
+    if dsn:
+        try:
+            saver = await create_saver(dsn)
+            await setup_saver(saver)
+            nora_graph = build_nora_graph(checkpointer=saver)
+            db_status = "up"
+        except Exception:
+            db_status = "down"
+    try:
+        yield
+    finally:
+        try:
+            await close_pool()
+        except Exception:
+            pass
+
+
+# Fallback en proceso (dev/tests sin DATABASE_URL, y tests que no corren el
+# lifespan): el lifespan lo reconstruye contra Postgres cuando hay DSN.
+nora_graph = build_nora_graph()
+db_status = "memory"
+
+
+def _require_db() -> None:
+    """503 si Postgres está caído (nunca 409: no es un turno en curso)."""
+    if db_status == "down":
+        raise HTTPException(status_code=503, detail="database_unavailable")
 
 
 app = FastAPI(title="Magali Agent", version="0.1.0", lifespan=lifespan)
@@ -270,7 +299,7 @@ def session_for_user(
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "db": db_status}
 
 
 @app.post("/whatsapp/route", response_model=WhatsAppRouteResponse)
@@ -303,6 +332,7 @@ async def send_message(
     Recibe mensaje del usuario, ejecuta el agente, devuelve respuesta.
     Mantiene compatibilidad exacta con el contrato NestJS actual.
     """
+    _require_db()
     session_id = body.sessionId or str(uuid.uuid4())
     
     # Obtener/crear metadata de sesión (atada al dueño del JWT)
@@ -445,6 +475,7 @@ async def stream_message(
     Serializado por sesión igual que /messages; el lock se sostiene durante
     todo el stream y se libera en finally (incluye disconnect del cliente).
     """
+    _require_db()
     session_id = sessionId or str(uuid.uuid4())
 
     ctx = session_for_user(
