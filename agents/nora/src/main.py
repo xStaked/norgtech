@@ -1,4 +1,3 @@
-import asyncio
 import os
 import uuid
 from fastapi import FastAPI, Depends, Header, HTTPException, Request
@@ -30,9 +29,10 @@ from contextlib import asynccontextmanager
 
 from .agent import build_nora_graph, NoraState
 from .persistence import close_pool, create_saver, setup_saver
-from .locks import LOCK_WAIT_TIMEOUT, get_session_lock
+from .locks import LOCK_WAIT_TIMEOUT, locked_session
+from .pg_locks import acquire_session_lock, pg_locks_available
 from .roles import user_id_from_token
-from .sessions import session_store, SessionOwnershipError
+from .sessions import session_store, SessionOwnershipError, setup_sessions
 from .whatsapp_router import route_whatsapp_message
 from .whatsapp_agent import run_whatsapp_agent
 from .whatsapp_general_agent import run_whatsapp_general_agent
@@ -81,6 +81,7 @@ async def lifespan(_app: FastAPI):
         try:
             saver = await create_saver(dsn)
             await setup_saver(saver)
+            await setup_sessions()
             nora_graph = build_nora_graph(checkpointer=saver)
             db_status = "up"
         except Exception:
@@ -278,7 +279,23 @@ def require_user_id(authorization: str) -> str:
     return user_id
 
 
-def session_for_user(
+def _session_lock(session_id: str, timeout: float = LOCK_WAIT_TIMEOUT):
+    """CM del turno: advisory lock PG si hay pool, o lock local en dev.
+
+    `NORA_LOCAL_LOCKS=1` conserva `src/locks.py` aunque haya DB. Sin pool
+    (dev sin DB, tests sin lifespan) también se usa el lock local.
+    """
+    if os.getenv("NORA_LOCAL_LOCKS") == "1" or not pg_locks_available():
+        return locked_session(session_id, timeout=timeout)
+    return acquire_session_lock(session_id, timeout=timeout)
+
+
+def _is_turn_in_progress(exc: BaseException) -> bool:
+    """Solo el timeout del LOCK es 409 (el front reintenta)."""
+    return isinstance(exc, TimeoutError) and str(exc).startswith("turn_in_progress")
+
+
+async def session_for_user(
     session_id: str,
     authorization: str,
     context_type: str = None,
@@ -287,7 +304,7 @@ def session_for_user(
     """Sesión atada al dueño del JWT. 403 si la sesión es de otro usuario."""
     user_id = require_user_id(authorization)
     try:
-        return session_store.get_or_create(
+        return await session_store.get_or_create(
             session_id=session_id,
             owner_user_id=user_id,
             context_type=context_type,
@@ -334,9 +351,9 @@ async def send_message(
     """
     _require_db()
     session_id = body.sessionId or str(uuid.uuid4())
-    
+
     # Obtener/crear metadata de sesión (atada al dueño del JWT)
-    ctx = session_for_user(
+    ctx = await session_for_user(
         session_id=session_id,
         authorization=authorization,
         context_type=body.contextType,
@@ -368,19 +385,17 @@ async def send_message(
     # El segundo espera hasta 60s, luego 409 para que el front reintente.
     # Solo el timeout del LOCK es 409: un TimeoutError interno del grafo/LLM
     # debe propagarse como 500, no como turn_in_progress.
-    lock = get_session_lock(session_id)
     try:
-        await asyncio.wait_for(lock.acquire(), LOCK_WAIT_TIMEOUT)
-    except (asyncio.TimeoutError, TimeoutError):
+        async with _session_lock(session_id, LOCK_WAIT_TIMEOUT):
+            result = await nora_graph.ainvoke(initial_state, config=config)
+    except TimeoutError as exc:
+        if not _is_turn_in_progress(exc):
+            raise
         raise HTTPException(
             status_code=409,
             detail="turn_in_progress",
             headers={"Retry-After": "2"},
         )
-    try:
-        result = await nora_graph.ainvoke(initial_state, config=config)
-    finally:
-        lock.release()
     
     # Extraer último mensaje del agente
     last_msg = result["messages"][-1]
@@ -424,7 +439,7 @@ async def get_session(
     Obtiene la sesión con sus mensajes y propuestas.
     """
     user_id = require_user_id(authorization)
-    ctx = session_store.get(session_id)
+    ctx = await session_store.get(session_id)
     if not ctx:
         raise HTTPException(status_code=404, detail="Session not found")
     if ctx.owner_user_id != user_id:
@@ -478,7 +493,7 @@ async def stream_message(
     _require_db()
     session_id = sessionId or str(uuid.uuid4())
 
-    ctx = session_for_user(
+    ctx = await session_for_user(
         session_id=session_id,
         authorization=authorization,
         context_type=contextType,
@@ -504,15 +519,19 @@ async def stream_message(
 
     # 409 uniforme antes de enviar headers: si el turno anterior sigue en
     # curso, el front recibe el mismo 409+Retry-After que en /messages.
-    stream_lock = get_session_lock(session_id)
+    # El lock se sostiene durante todo el stream y se libera en finally
+    # (incluye disconnect del cliente).
+    stream_guard = _session_lock(session_id, LOCK_WAIT_TIMEOUT)
     try:
-        await asyncio.wait_for(stream_lock.acquire(), LOCK_WAIT_TIMEOUT)
-    except (asyncio.TimeoutError, TimeoutError):
+        await stream_guard.__aenter__()
+    except TimeoutError as exc:
+        if not _is_turn_in_progress(exc):
+            raise
         raise HTTPException(
             status_code=409,
             detail="turn_in_progress",
             headers={"Retry-After": "2"},
-        )
+        ) from exc
 
     async def event_stream():
         try:
@@ -568,7 +587,7 @@ async def stream_message(
             yield f"data: {json_lib.dumps(result.model_dump())}\n\n"
             yield "data: [DONE]\n\n"
         finally:
-            stream_lock.release()
+            await stream_guard.__aexit__(None, None, None)
     
     return StreamingResponse(
         event_stream(),

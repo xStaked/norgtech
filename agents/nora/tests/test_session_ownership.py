@@ -4,6 +4,7 @@ El `sessionId` lo manda el cliente y se usa tal cual como `thread_id` del
 checkpointer: sin esta validación, quien adivine el sessionId de otro lee su
 hilo (y con roles distintos eso es fuga entre niveles).
 """
+import asyncio
 import base64
 import json
 from unittest.mock import AsyncMock, patch
@@ -53,7 +54,7 @@ def test_owner_can_continue_own_session():
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["sessionId"] == "sess-owner"
-    assert session_store.get("sess-owner").owner_user_id == "user-owner"
+    assert asyncio.run(session_store.get("sess-owner")).owner_user_id == "user-owner"
 
 
 def test_other_user_gets_403_and_no_history():
@@ -85,7 +86,7 @@ def test_other_user_gets_403_and_no_history():
         assert SECRET not in response.text
         assert "messages" not in response.json()
     # El dueño original sigue siendo el dueño.
-    assert session_store.get("sess-shared").owner_user_id == "user-owner"
+    assert asyncio.run(session_store.get("sess-shared")).owner_user_id == "user-owner"
 
 
 def test_token_without_user_cannot_hijack_session():
