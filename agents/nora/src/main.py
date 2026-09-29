@@ -1,3 +1,4 @@
+import os
 import uuid
 from fastapi import FastAPI, Depends, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,8 @@ from .models.whatsapp_models import (
     WhatsAppAgentRequest,
     WhatsAppAgentResponse,
 )
+from contextlib import asynccontextmanager
+
 from .agent import nora_graph, NoraState
 from .roles import user_id_from_token
 from .sessions import session_store, SessionOwnershipError
@@ -32,7 +35,26 @@ from .whatsapp_agent import run_whatsapp_agent
 from .whatsapp_general_agent import run_whatsapp_general_agent
 from .whatsapp_customer_agent import run_whatsapp_customer_agent
 
-app = FastAPI(title="Magali Agent", version="0.1.0")
+
+def assert_single_worker() -> None:
+    """Nora usa MemorySaver/SessionStore en proceso: más de 1 worker parte
+    la memoria en dos (split-brain de hilos y bypass de ownership).
+    Hasta Fase 2 (PostgresSaver) se exige un solo worker."""
+    try:
+        workers = int(os.getenv("WEB_CONCURRENCY", "1"))
+    except ValueError:
+        workers = 1
+    if workers > 1:
+        raise RuntimeError("Nora exige 1 worker hasta Fase 2 (WEB_CONCURRENCY>1)")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    assert_single_worker()
+    yield
+
+
+app = FastAPI(title="Magali Agent", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
