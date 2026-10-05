@@ -283,6 +283,8 @@ model User {
   uploadedPaymentSupports       PaymentSupport[]
   assignedCustomerZones         CustomerZone[]             @relation("CustomerZoneAssignedUser")
   sellerGoals                   SellerGoal[]
+  commissionRules               CommissionRule[]
+  commissions                   Commission[]
   refreshTokens                 RefreshToken[]
   passwordResetTokens           PasswordResetToken[]
   notifications                 Notification[]
@@ -929,6 +931,69 @@ model SellerGoal {
   @@index([periodType, periodValue])
 }
 
+model CommissionRule {
+  id           String   @id @default(cuid())
+  sellerUserId String
+  periodType   String
+  periodValue  String
+  percent      Decimal  @db.Decimal(5, 2)
+  createdBy    String
+  updatedBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  seller User @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerUserId, periodType, periodValue])
+  @@index([periodType, periodValue])
+}
+
+enum CommissionStatus {
+  causada
+  reversada
+}
+
+// Causacion al cobrar (Frente 3, fase 2): una fila por pago, proporcional al
+// recaudo. base = valor del pago, amount = base * percent / 100. Ante nota
+// credito/devolucion atada a la factura, el reverso es proporcional al credito
+// (misma matematica de % que la causacion): reversedAmount acumula lo
+// revertido y neto = amount - reversedAmount. status pasa a reversada solo
+// cuando la fila queda totalmente revertida.
+//
+// Liquidacion (Frente 3, fase 2, Task 3): paidAt/paidBy marcan que el neto ya
+// se le pagó al vendedor. Es un estado de liquidacion SEPARADO del status de
+// causacion a proposito: asi una nota credito posterior sigue revirtiendo la
+// fila (el reverso solo toca status causada) y el reporte muestra el neto vivo.
+//
+// LIMITACION PRE-EXISTENTE (ticket producto): el reverso por nota credito
+// solo cubre facturas parcialmente cobradas — ReturnsService topa la nota
+// credito al saldo pendiente de cobro, de modo que sobre una factura saldada
+// el reverso de comision es inalcanzable. Para anular comisiones de facturas
+// saldadas se requiere un flujo de nota credito sobre saldo (credit-balance)
+// o un ajuste manual de comision: decision pendiente de producto.
+model Commission {
+  id           String           @id @default(cuid())
+  sellerUserId String
+  invoiceId    String
+  paymentId    String           @unique
+  base         Decimal          @db.Decimal(14, 2)
+  percent      Decimal          @db.Decimal(5, 2)
+  amount       Decimal          @db.Decimal(14, 2)
+  reversedAmount Decimal        @default(0) @db.Decimal(14, 2)
+  status       CommissionStatus @default(causada)
+  paidAt       DateTime?
+  paidBy       String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  seller  User           @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
+  invoice Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment InvoicePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([sellerUserId])
+  @@index([invoiceId])
+}
+
 model BillingRequest {
   id                String               @id @default(cuid())
   customerId        String
@@ -1033,6 +1098,7 @@ model Invoice {
   order           Order?           @relation(fields: [orderId], references: [id])
   payments        InvoicePayment[]
   returns         Return[]
+  commissions     Commission[]
 
   @@index([customerId, status])
   @@index([dueDate, status])
@@ -1072,6 +1138,7 @@ model InvoicePayment {
   createdAt   DateTime         @default(now())
   invoice     Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   supports    PaymentSupport[]
+  commission  Commission?
 
   @@index([invoiceId, paymentDate])
 }

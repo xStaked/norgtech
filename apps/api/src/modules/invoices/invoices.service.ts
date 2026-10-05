@@ -19,6 +19,7 @@ import { ListInvoicesDto } from "./dto/list-invoices.dto";
 import { UpdateInvoiceStatusDto } from "./dto/update-invoice-status.dto";
 import { CreatePaymentDto } from "./dto/create-payment.dto";
 import { CreditService } from "../credit/credit.service";
+import { CommissionsService } from "../commissions/commissions.service";
 import { auditState } from "../audit/audit-state";
 
 const includeInvoiceRelations = {
@@ -44,6 +45,7 @@ export class InvoicesService {
     private readonly auditService: AuditService,
     private readonly storage: R2StorageService,
     private readonly credit: CreditService,
+    private readonly commissions: CommissionsService,
   ) {}
 
   async create(user: AuthUser, dto: CreateInvoiceDto) {
@@ -280,6 +282,25 @@ export class InvoicesService {
             updatedBy: user.id,
           },
           include: includeInvoiceRelations,
+        });
+
+        // Causación al cobrar (Frente 3, fase 2): proporcional al pago, en la
+        // misma transacción. Sin vendedor o sin regla no comisiona.
+        const sellerUserId = invoice.orderId
+          ? (
+              await tx.order.findUnique({
+                where: { id: invoice.orderId },
+                select: { sellerUserId: true },
+              })
+            )?.sellerUserId ?? null
+          : null;
+
+        await this.commissions.accrueFromPayment(tx, {
+          sellerUserId,
+          invoiceId: dto.invoiceId,
+          paymentId: payment.id,
+          base: amount,
+          paymentDate: payment.paymentDate,
         });
 
         await this.auditService.record(

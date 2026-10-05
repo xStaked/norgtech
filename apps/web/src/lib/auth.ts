@@ -117,6 +117,11 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/returns": ["administrador", "director_comercial", "facturacion", "comercial"],
     "/products": ["administrador", "director_comercial", "comercial"],
     "/price-lists": ["administrador", "director_comercial", "comercial", "facturacion"],
+    // Liquidacion de comisiones: direccion ve todas y puede liquidar; un
+    // comercial entra a ver solo las suyas (el back le fuerza sellerUserId a su
+    // id, espejo de @Roles del CommissionsLedgerController). tecnico,
+    // facturacion y logistica no participan.
+    "/commissions": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
     // Direccion ve la operacion completa; un comercial entra a las mismas
     // pantallas pero el back le fuerza `sellerUserId` a su propio id. Espeja el

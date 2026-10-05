@@ -13,6 +13,7 @@ import {
 } from "../invoices/invoice-constants";
 import { CreateReturnDto } from "./dto/create-return.dto";
 import { ListReturnsDto } from "./dto/list-returns.dto";
+import { CommissionsService } from "../commissions/commissions.service";
 import { auditState } from "../audit/audit-state";
 
 const includeReturnRelations = {
@@ -26,6 +27,7 @@ export class ReturnsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    private readonly commissions: CommissionsService,
   ) {}
 
   async create(user: AuthUser, dto: CreateReturnDto) {
@@ -99,6 +101,10 @@ export class ReturnsService {
             updatedBy: user.id,
           },
         });
+
+        // Reverso proporcional al crédito de las comisiones causadas de la
+        // factura, en la transacción.
+        await this.commissions.reverseForInvoice(tx, invoice.id, amount);
       }
 
       await this.auditService.record(

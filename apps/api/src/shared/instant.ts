@@ -10,6 +10,27 @@ export const BOGOTA_OFFSET = "-05:00";
 const HAS_OFFSET = /(?:Z|[+-]\d{2}:?\d{2})$/;
 const LOOKS_LIKE_DATETIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?$/;
 
+/** Milisegundos de BOGOTA_OFFSET ("-05:00" -> -18_000_000). Derivado de la
+ * constante para no duplicar el -5: si BOGOTA_OFFSET deja de matchear el
+ * formato, el offset cae a 0 y el wall time = UTC. */
+const BOGOTA_OFFSET_MS = (() => {
+  const match = /^([+-])(\d{2}):(\d{2})$/.exec(BOGOTA_OFFSET);
+  if (!match) return 0;
+  const sign = match[1] === "-" ? -1 : 1;
+  return sign * (Number(match[2]) * 3600 + Number(match[3]) * 60) * 1000;
+})();
+
+/**
+ * Instancia "virtual" con los campos UTC de la hora de pared de Bogota: leer
+ * getUTCFullYear/getUTCMonth/getUTCDate sobre este valor equivale a leer la
+ * fecha en Colombia. Sirve para derivar buckets de periodo (mes/trimestre/anio)
+ * con el mismo criterio de fronteras que `dayBoundary` (BOGOTA_OFFSET):
+ * 2026-07-01T02:00Z son las 21:00 del 30 de junio en Bogota -> junio.
+ */
+export function bogotaWallTime(date: Date): Date {
+  return new Date(date.getTime() + BOGOTA_OFFSET_MS);
+}
+
 /**
  * Convierte una fecha-hora del cliente en un instante.
  *
