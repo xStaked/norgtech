@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { Prisma, UserRole } from "@prisma/client";
+import { CommissionStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { isEligibleSeller } from "../seller-goals/seller-eligibility";
@@ -167,6 +167,66 @@ export class CommissionsService {
     });
 
     return rule ? Number(rule.percent) : 0;
+  }
+
+  /**
+   * Causa la comisión de un pago dentro de la transacción que lo crea
+   * (Task 2, causación al cobrar). Una fila por pago, proporcional al
+   * recaudo: base = valor del pago, amount = base * percent / 100, con el %
+   * mensual vigente a la fecha del pago. Sin vendedor o sin regla → null
+   * (no comisiona, nunca bloquea el pago).
+   */
+  async accrueFromPayment(
+    tx: Prisma.TransactionClient,
+    args: {
+      sellerUserId: string | null | undefined;
+      invoiceId: string;
+      paymentId: string;
+      base: Prisma.Decimal | number | string;
+      paymentDate: Date;
+    },
+  ) {
+    if (!args.sellerUserId) return null;
+
+    const percent = await this.resolvePercent(
+      args.sellerUserId,
+      "mensual",
+      this.monthPeriodValue(args.paymentDate),
+    );
+    if (!percent || percent <= 0) return null;
+
+    const base = new Prisma.Decimal(args.base);
+    const amount = base.mul(percent).div(100).toDecimalPlaces(2);
+
+    return tx.commission.create({
+      data: {
+        sellerUserId: args.sellerUserId,
+        invoiceId: args.invoiceId,
+        paymentId: args.paymentId,
+        base,
+        percent,
+        amount,
+        status: CommissionStatus.causada,
+      },
+    });
+  }
+
+  /**
+   * Reverso ante nota crédito/devolución atada a la factura: las comisiones
+   * causadas de esa factura pasan a reversada dentro de la misma
+   * transacción. Reverso total por factura (YAGNI, sin prorrateo parcial).
+   */
+  async reverseForInvoice(tx: Prisma.TransactionClient, invoiceId: string) {
+    return tx.commission.updateMany({
+      where: { invoiceId, status: CommissionStatus.causada },
+      data: { status: CommissionStatus.reversada },
+    });
+  }
+
+  private monthPeriodValue(date: Date): string {
+    const year = date.getUTCFullYear();
+    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    return `${year}-${month}`;
   }
 
   private ensureCanWrite(user: AuthUser) {

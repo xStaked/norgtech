@@ -284,6 +284,7 @@ model User {
   assignedCustomerZones         CustomerZone[]             @relation("CustomerZoneAssignedUser")
   sellerGoals                   SellerGoal[]
   commissionRules               CommissionRule[]
+  commissions                   Commission[]
   refreshTokens                 RefreshToken[]
   passwordResetTokens           PasswordResetToken[]
   notifications                 Notification[]
@@ -947,6 +948,35 @@ model CommissionRule {
   @@index([periodType, periodValue])
 }
 
+enum CommissionStatus {
+  causada
+  reversada
+}
+
+// Causacion al cobrar (Frente 3, fase 2): una fila por pago, proporcional al
+// recaudo. base = valor del pago, amount = base * percent / 100. Ante nota
+// credito/devolucion atada a la factura, la fila pasa a reversada (reverso
+// total por factura: YAGNI, sin prorrateo parcial).
+model Commission {
+  id           String           @id @default(cuid())
+  sellerUserId String
+  invoiceId    String
+  paymentId    String           @unique
+  base         Decimal          @db.Decimal(14, 2)
+  percent      Decimal          @db.Decimal(5, 2)
+  amount       Decimal          @db.Decimal(14, 2)
+  status       CommissionStatus @default(causada)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  seller  User           @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
+  invoice Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  payment InvoicePayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([sellerUserId])
+  @@index([invoiceId])
+}
+
 model BillingRequest {
   id                String               @id @default(cuid())
   customerId        String
@@ -1051,6 +1081,7 @@ model Invoice {
   order           Order?           @relation(fields: [orderId], references: [id])
   payments        InvoicePayment[]
   returns         Return[]
+  commissions     Commission[]
 
   @@index([customerId, status])
   @@index([dueDate, status])
@@ -1090,6 +1121,7 @@ model InvoicePayment {
   createdAt   DateTime         @default(now())
   invoice     Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   supports    PaymentSupport[]
+  commission  Commission?
 
   @@index([invoiceId, paymentDate])
 }
