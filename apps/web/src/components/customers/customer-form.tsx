@@ -1,7 +1,7 @@
 "use client";
 
 import { formValue } from "@/lib/utils";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import type { PriceListRef } from "@/lib/catalog";
+import { buildPriceListOptions, suggestPriceList } from "@/lib/catalog";
 import { UserSelect } from "@/components/users/user-select";
 import { Select } from "@/components/ui/select";
 
@@ -68,18 +69,24 @@ export function CustomerForm({
 
   const [country, setCountry] = useState(customer?.country ?? "Colombia");
   const [priceListId, setPriceListId] = useState(customer?.priceListId ?? "");
+  const [customerType, setCustomerType] = useState(customer?.customerType ?? "cliente_directo");
   const [suggestionDismissed, setSuggestionDismissed] = useState(false);
 
-  // El país solo SUGIERE la lista, nunca la cambia solo: asignarla altera lo
-  // que se le cobra al cliente, y eso lo decide una persona.
-  const suggestedList = priceLists.find(
-    (list) =>
-      list.country &&
-      country.trim().toLowerCase() === list.country.toLowerCase() &&
-      list.kind === "export",
-  );
+  // El país + tipo SOLO sugieren la lista, nunca la cambian solos: asignarla
+  // altera lo que se le cobra al cliente, y eso lo decide una persona.
+  const suggestedList = suggestPriceList(priceLists, {
+    country,
+    customerType,
+    currentPriceListId: priceListId || null,
+  });
   const showSuggestion =
     Boolean(suggestedList) && suggestedList?.id !== priceListId && !suggestionDismissed;
+  const priceListOptions = useMemo(() => buildPriceListOptions(priceLists), [priceLists]);
+  const selectedList = priceLists.find((l) => l.id === priceListId);
+  const selectedIsOrphan =
+    Boolean(priceListId) &&
+    (!selectedList || (selectedList.kind === "cliente" && (selectedList.customers?.length ?? 0) === 0));
+  const showNoListWarning = !priceListId || selectedIsOrphan;
   const countryOptions = [
     ...new Set(["Colombia", ...priceLists.map((list) => list.country).filter(Boolean)]),
   ] as string[];
@@ -129,7 +136,7 @@ export function CustomerForm({
           ? (optionalString("assignedToUserId") ?? null)
           : optionalString("assignedToUserId") || undefined,
       }),
-      customerType: optionalString("customerType") || undefined,
+      customerType: customerType || undefined,
       creditLimit: formData.get("creditLimit")
         ? Number(formData.get("creditLimit"))
         : undefined,
@@ -265,8 +272,8 @@ export function CustomerForm({
       <div className="rounded-[11px] border border-border bg-card px-5 py-[18px]">
         <div className="text-[14.5px] font-extrabold text-foreground">Precios y facturación</div>
         <p className="mt-1 mb-4 text-xs text-muted-foreground">
-          La lista asignada determina a qué precio se cotiza. El país nunca la cambia solo —
-          solo sugiere.
+          La lista asignada determina a qué precio se cotiza. El país y el tipo solo sugieren —
+          asignarla la decide una persona.
         </p>
 
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
@@ -292,14 +299,7 @@ export function CustomerForm({
               value={priceListId}
               onValueChange={setPriceListId}
               searchPlaceholder="Buscar lista…"
-              options={[
-                { value: "", label: "Sin asignar — usa precio base" },
-                ...priceLists.map((list) => ({
-                  value: list.id,
-                  label: list.name,
-                  meta: `${list.kind} · ${list.currency}`,
-                })),
-              ]}
+              options={priceListOptions}
             />
           </div>
         </div>
@@ -308,14 +308,18 @@ export function CustomerForm({
           <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-[10px] border border-[#bcdcf0] bg-[#e4f1f9] px-3.5 py-3">
             <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[#0288c4]" />
             <span className="flex-1 text-[12.5px] leading-snug text-[#3f6a86]">
-              El país es <b>{suggestedList.country}</b>. Existe la lista{" "}
-              <b>{suggestedList.name}</b> ({suggestedList.kind} · {suggestedList.currency}).
-              ¿Asignarla a este cliente?
+              Por país ({country.trim() || "—"}) y tipo conviene la lista{" "}
+              <b>{suggestedList.name}</b> ({suggestedList.kind} · {suggestedList.currency}
+              {suggestedList.country ? ` · ${suggestedList.country}` : ""}). ¿Asignarla a este
+              cliente?
             </span>
             <div className="flex shrink-0 gap-2">
               <button
                 type="button"
-                onClick={() => setPriceListId(suggestedList.id)}
+                onClick={() => {
+                  setPriceListId(suggestedList.id);
+                  setSuggestionDismissed(false);
+                }}
                 className="h-[30px] rounded-[7px] bg-[#0f5c8a] px-3 text-xs font-bold text-white"
               >
                 Asignar {suggestedList.name}
@@ -331,9 +335,20 @@ export function CustomerForm({
           </div>
         ) : null}
 
-        <p className="mt-3 text-[11.5px] text-muted-foreground">
-          Sin lista asignada, las cotizaciones usan el precio base del producto.
-        </p>
+        {showNoListWarning ? (
+          <div className="mt-3.5 flex flex-wrap items-center gap-3 rounded-[10px] border border-[#f0d9b5] bg-[#fef6e7] px-3.5 py-3">
+            <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[#c47f02]" />
+            <span className="flex-1 text-[12.5px] leading-snug text-[#7a5a1f]">
+              {selectedIsOrphan
+                ? "La lista asignada no tiene cliente vinculado. Revisa la asignación antes de cotizar."
+                : "Sin lista asignada, las cotizaciones usan el precio base del producto (precio genérico, no negociado)."}
+            </span>
+          </div>
+        ) : (
+          <p className="mt-3 text-[11.5px] text-muted-foreground">
+            Sin lista asignada, las cotizaciones usan el precio base del producto.
+          </p>
+        )}
       </div>
 
       <div className="grid gap-1">
@@ -356,7 +371,11 @@ export function CustomerForm({
           <Label>Tipo de cliente</Label>
           <Select
             name="customerType"
-            defaultValue={customer?.customerType ?? "cliente_directo"}
+            value={customerType}
+            onValueChange={(value) => {
+              setCustomerType(value);
+              setSuggestionDismissed(false);
+            }}
             options={[
               { value: "distribuidor", label: "Distribuidor" },
               { value: "cliente_directo", label: "Cliente directo" },

@@ -126,3 +126,94 @@ export function priceLevels(cell: PriceCell): PriceLevel[] {
 export function extraLevelCount(cell: PriceCell): number {
   return Math.max(0, priceLevels(cell).length - 1);
 }
+
+export interface PriceListOption {
+  value: string;
+  label: string;
+  meta?: string;
+  group?: string;
+  disabled?: boolean;
+}
+
+/**
+ * Opciones agrupadas para el selector de cliente. Usa el dueño real
+ * (no la hoja del Excel) y bloquea las listas `cliente` huérfanas:
+ * elegirlas cotizaría con una lista que no pertenece a nadie.
+ */
+export function buildPriceListOptions(lists: PriceListRef[]): PriceListOption[] {
+  const kindOrder: Record<PriceListRef["kind"], number> = {
+    segmento: 0,
+    export: 1,
+    linea: 2,
+    cliente: 3,
+  };
+  const sorted = [...lists].sort(
+    (a, b) => kindOrder[a.kind] - kindOrder[b.kind] || priceListOwner(a).localeCompare(priceListOwner(b)),
+  );
+  const options: PriceListOption[] = [
+    {
+      value: "",
+      label: "Sin asignar — usa precio base",
+      meta: "Cotiza a precio base del producto",
+    },
+  ];
+  for (const list of sorted) {
+    const orphan = list.kind === "cliente" && (!list.customers || list.customers.length === 0);
+    options.push({
+      value: list.id,
+      label: priceListOwner(list),
+      meta: priceListContext(list),
+      group: PRICE_LIST_KIND_LABEL[list.kind],
+      ...(orphan ? { disabled: true } : {}),
+    });
+  }
+  return options;
+}
+
+export interface SuggestInput {
+  country?: string | null;
+  customerType?: string | null;
+  currentPriceListId?: string | null;
+}
+
+/**
+ * Sugiere lista sin pisar nunca una asignación manual válida.
+ * Prioridad: 1) export por país, 2) segmento por tipo de cliente.
+ */
+export function suggestPriceList(
+  lists: PriceListRef[],
+  input: SuggestInput,
+): PriceListRef | undefined {
+  if (input.currentPriceListId) {
+    const current = lists.find((l) => l.id === input.currentPriceListId);
+    if (current) {
+      if (current.kind === "cliente") {
+        // Lista de cliente válida ya asignada: no sugerir encima.
+        // Huérfana (sin clientes): seguir y sugerir corrección.
+        if ((current.customers?.length ?? 0) > 0) return undefined;
+      } else {
+        // Ya tiene segmento/export/línea: no sugerir encima.
+        return undefined;
+      }
+    }
+    // Sin current (id desconocido) o huérfana: seguir a sugerencia.
+  }
+
+  const country = (input.country ?? "").trim().toLowerCase();
+  if (country) {
+    const byCountry = lists.find(
+      (l) =>
+        l.kind === "export" && (l.country ?? "").trim().toLowerCase() === country,
+    );
+    if (byCountry) return byCountry;
+  }
+
+  const type = (input.customerType ?? "").trim().toLowerCase();
+  const byName = (name: string) =>
+    lists.find((l) => l.name.trim().toUpperCase() === name);
+  if (type === "distribuidor") {
+    return byName("DISTRIBUIDORES") ?? lists.find((l) => l.kind === "segmento");
+  }
+  // Default nacional: DIRECTOS (directo, planta, maquila, otro o vacío).
+  return byName("DIRECTOS") ?? lists.find((l) => l.kind === "segmento");
+}
