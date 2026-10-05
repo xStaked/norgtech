@@ -41,6 +41,8 @@ export class QuotesService {
       quantity: line.quantity,
       originalUnitPrice: line.originalUnitPrice,
       discountPercent: line.discountPercent,
+      bonusPercent: line.bonusPercent ? line.bonusPercent.toNumber() : null,
+      bonusQty: line.bonusQty,
       unitPrice: line.unitPrice,
       subtotal: line.subtotal,
       notes: dto.items[index].notes,

@@ -38,6 +38,8 @@ interface QuoteItem {
   notes: string;
   /** Empaque elegido. Sin esto el backend rechaza los productos ambiguos. */
   presentationId: string;
+  /** Bonificación fase 2: "" (ninguna) o "10" | "20" | "30" | "40". */
+  bonusPercent: string;
 }
 
 interface QuoteFormProps {
@@ -52,11 +54,11 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
   const [loading, setLoading] = useState(false);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
   const [items, setItems] = useState<QuoteItem[]>([
-    { productId: "", quantity: 1, notes: "", presentationId: "" },
+    { productId: "", quantity: 1, notes: "", presentationId: "", bonusPercent: "" },
   ]);
 
   function addItem() {
-    setItems([...items, { productId: "", quantity: 1, notes: "", presentationId: "" }]);
+    setItems([...items, { productId: "", quantity: 1, notes: "", presentationId: "", bonusPercent: "" }]);
   }
 
   function removeItem(index: number) {
@@ -86,6 +88,7 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         productId: items[i].productId,
         quantity: items[i].quantity,
         presentationId: items[i].presentationId || undefined,
+        bonusPercent: items[i].bonusPercent ? Number(items[i].bonusPercent) : undefined,
         // Ignored by the backend for catalog lines, but the DTO requires it.
         unitPrice: 0,
       })),
@@ -124,6 +127,7 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
         productId: items[i].productId,
         quantity: items[i].quantity,
         presentationId: items[i].presentationId || undefined,
+        bonusPercent: items[i].bonusPercent ? Number(items[i].bonusPercent) : undefined,
         // The backend re-derives this from the catalog; it is sent only
         // because the DTO requires the field.
         unitPrice: 0,
@@ -280,6 +284,33 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
                   {lineFor(index) ? formatMoney(lineFor(index)!.subtotal) : "—"}
                 </div>
               </div>
+            </div>
+
+            <div className="grid gap-1">
+              <Label>Bonificación</Label>
+              <Select
+                aria-label="Bonificación"
+                value={item.bonusPercent}
+                onValueChange={(value) => updateItem(index, "bonusPercent", value)}
+                options={[
+                  { value: "", label: "Sin bonificación" },
+                  { value: "10", label: "10% a $0" },
+                  { value: "20", label: "20% a $0" },
+                  { value: "30", label: "30% a $0" },
+                  { value: "40", label: "40% a $0" },
+                ]}
+              />
+              {(() => {
+                const line = lineFor(index);
+                if (!line || line.bonusQty <= 0) {
+                  return null;
+                }
+                return (
+                  <p className="text-xs text-muted-foreground">
+                    {line.bonusQty} uds bonificadas a $0 (su IVA va en el total).
+                  </p>
+                );
+              })()}
             </div>
 
             <div className="grid gap-1">

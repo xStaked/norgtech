@@ -724,6 +724,9 @@ model QuoteItem {
   quantity            Decimal  @db.Decimal(14, 4)
   originalUnitPrice   Decimal? @db.Decimal(14, 2)
   discountPercent     Decimal? @db.Decimal(5, 2)
+  // Bonificación fase 2 comercial: % Tabla (10/20/30/40) y unidades a $0.
+  bonusPercent        Int?
+  bonusQty            Decimal? @db.Decimal(14, 4)
   unitPrice           Decimal  @db.Decimal(14, 2)
   subtotal            Decimal  @db.Decimal(14, 2)
   notes               String?
@@ -863,6 +866,9 @@ model OrderItem {
   quantity             Decimal  @db.Decimal(14, 4)
   originalUnitPrice    Decimal? @db.Decimal(14, 2)
   discountPercent      Decimal? @db.Decimal(5, 2)
+  // Bonificación fase 2 comercial: % Tabla (10/20/30/40) y unidades a $0.
+  bonusPercent         Int?
+  bonusQty             Decimal? @db.Decimal(14, 4)
   unitPrice            Decimal  @db.Decimal(14, 2)
   taxPercent           Decimal  @default(19) @db.Decimal(5, 2)
   taxAmount            Decimal  @default(0) @db.Decimal(14, 2)

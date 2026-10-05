@@ -41,6 +41,12 @@ interface RawPricedLine {
   quantity: number;
   originalUnitPrice: Prisma.Decimal | null;
   discountPercent: Prisma.Decimal | null;
+  /** % Tabla de bonificación (10/20/30/40), o null sin bonus. */
+  bonusPercent: Prisma.Decimal | null;
+  /** Unidades a $0 dentro de quantity. */
+  bonusQty: Prisma.Decimal;
+  /** Unidades cobradas: quantity − bonusQty. */
+  chargedQty: Prisma.Decimal;
   unitPrice: Prisma.Decimal;
   taxPercent: Prisma.Decimal;
   taxAmount: Prisma.Decimal;
@@ -297,6 +303,15 @@ export class PricingService {
             ? new Prisma.Decimal(item.taxPercent ?? 19).toDecimalPlaces(2)
             : new Prisma.Decimal(0);
 
+        // Bonificación fase 2: las unidades bonificadas van a $0 pero causan
+        // IVA sobre el precio de lista sin bonificar (Ruling 1).
+        const bonus = resolveBonus(item.bonusPercent);
+        const quantity = new Prisma.Decimal(item.quantity);
+        const bonusQty = bonus
+          ? quantity.times(bonus).dividedBy(100).toDecimalPlaces(4)
+          : new Prisma.Decimal(0);
+        const chargedQty = quantity.minus(bonusQty);
+
         if (item.productId) {
           const product = await this.prisma.product.findUnique({
             where: { id: item.productId },
@@ -328,11 +343,11 @@ export class PricingService {
               : taxPercent;
 
           const taxAmount = unitPriceRounded.times(lineTax).dividedBy(100).toDecimalPlaces(2);
-          const subtotal = new Prisma.Decimal(item.quantity)
-            .times(unitPriceRounded)
-            .toDecimalPlaces(2);
-          const totalWithTax = new Prisma.Decimal(item.quantity)
-            .times(unitPriceRounded.plus(taxAmount))
+          // Solo se cobra chargedQty; el IVA cubre la cantidad total
+          // (cobradas + bonificadas a $0) sobre el precio de lista (Ruling 1).
+          const subtotal = chargedQty.times(unitPriceRounded).toDecimalPlaces(2);
+          const totalWithTax = subtotal
+            .plus(taxAmount.times(quantity))
             .toDecimalPlaces(2);
 
           return {
@@ -343,6 +358,9 @@ export class PricingService {
             quantity: item.quantity,
             originalUnitPrice: basePrice,
             discountPercent: lineDiscount,
+            bonusPercent: bonus,
+            bonusQty,
+            chargedQty,
             unitPrice: unitPriceRounded,
             taxPercent: lineTax,
             taxAmount,
@@ -357,12 +375,8 @@ export class PricingService {
 
         const unitPriceRounded = new Prisma.Decimal(item.unitPrice ?? 0).toDecimalPlaces(2);
         const taxAmount = unitPriceRounded.times(taxPercent).dividedBy(100).toDecimalPlaces(2);
-        const subtotal = new Prisma.Decimal(item.quantity)
-          .times(unitPriceRounded)
-          .toDecimalPlaces(2);
-        const totalWithTax = new Prisma.Decimal(item.quantity)
-          .times(unitPriceRounded.plus(taxAmount))
-          .toDecimalPlaces(2);
+        const subtotal = chargedQty.times(unitPriceRounded).toDecimalPlaces(2);
+        const totalWithTax = subtotal.plus(taxAmount.times(quantity)).toDecimalPlaces(2);
 
         return {
           productId: null,
@@ -372,6 +386,9 @@ export class PricingService {
           quantity: item.quantity,
           originalUnitPrice: null,
           discountPercent: null,
+          bonusPercent: bonus,
+          bonusQty,
+          chargedQty,
           unitPrice: unitPriceRounded,
           taxPercent,
           taxAmount,
@@ -425,6 +442,9 @@ export class PricingService {
       presentation: line.productPresentation ?? null,
       originalUnitPrice: line.originalUnitPrice ? line.originalUnitPrice.toNumber() : null,
       discountPercent: line.discountPercent ? line.discountPercent.toNumber() : 0,
+      bonusPercent: line.bonusPercent ? line.bonusPercent.toNumber() : null,
+      bonusQty: line.bonusQty.toNumber(),
+      chargedQty: line.chargedQty.toNumber(),
       unitPrice: line.unitPrice.toNumber(),
       quantity: line.quantity,
       subtotal: line.subtotal.toNumber(),
@@ -460,4 +480,20 @@ export class PricingService {
 /** Empaques como "Bolsa x 500 g" vs "bolsa x 500 g" son el mismo. */
 function normalizeEmpaque(value: string | null | undefined): string {
   return (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+/** % Tabla de bonificación. Solo 10/20/30/40; cualquier otro valor es 400. */
+function resolveBonus(
+  value: number | Prisma.Decimal | null | undefined,
+): Prisma.Decimal | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const n = new Prisma.Decimal(value).toNumber();
+  if (![10, 20, 30, 40].includes(n)) {
+    throw new BadRequestException(
+      `bonusPercent inválido: ${String(value)}. Permitidos: 10, 20, 30, 40.`,
+    );
+  }
+  return new Prisma.Decimal(n);
 }

@@ -4,6 +4,12 @@ export interface PricedLine {
   productId: string | null;
   originalUnitPrice: number | null;
   discountPercent: number;
+  /** % Tabla de bonificación (10/20/30/40), o null sin bonus. */
+  bonusPercent: number | null;
+  /** Unidades a $0 dentro de quantity. */
+  bonusQty: number;
+  /** Unidades cobradas: quantity − bonusQty. */
+  chargedQty: number;
   unitPrice: number;
   quantity: number;
   subtotal: number;
@@ -30,6 +36,8 @@ export interface PreviewItemInput {
   quantity: number;
   unitPrice: number;
   taxPercent?: number;
+  /** Bonificación fase 2: % Tabla (10/20/30/40). */
+  bonusPercent?: number;
 }
 
 /**
