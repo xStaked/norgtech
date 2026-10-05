@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Put,
   Query,
   UseGuards,
@@ -12,6 +13,7 @@ import { IncludeInactiveQueryDto } from "../../common/dto/include-inactive.query
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
+import { ApprovalPriceListDto } from "./dto/approval-price-list.dto";
 import { UpsertPriceListItemDto } from "./dto/upsert-price-list-item.dto";
 import { PriceListsService } from "./price-lists.service";
 
@@ -43,5 +45,14 @@ export class PriceListsController {
   @Put(":id/items")
   upsertItem(@Param("id") id: string, @Body(bodyPipe) dto: UpsertPriceListItemDto) {
     return this.priceListsService.upsertItem(id, dto);
+  }
+
+  // Aprobar una lista libera sus precios en cotizaciones: solo admin y
+  // dirección comercial, igual que cambiar precios.
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("administrador", "director_comercial")
+  @Patch(":id/approval")
+  updateApproval(@Param("id") id: string, @Body(bodyPipe) dto: ApprovalPriceListDto) {
+    return this.priceListsService.updateApproval(id, dto.action);
   }
 }

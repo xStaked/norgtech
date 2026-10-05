@@ -218,7 +218,9 @@ export class PricingService {
           active: true,
           ...(hint.presentationId ? { id: hint.presentationId } : {}),
         },
-        priceList: { active: true },
+        // Solo una lista aprobada libera precio: una especial en borrador,
+        // en revisión o rechazada se ignora y la cotización cae a basePrice.
+        priceList: { active: true, status: "aprobada" },
       },
       include: {
         priceList: { select: { name: true, currency: true } },

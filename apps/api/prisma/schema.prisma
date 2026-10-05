@@ -648,6 +648,9 @@ model PriceList {
   currency  String          @default("COP") // COP | USD
   country   String?         @default("Colombia") // lista de exportación → país destino
   active    Boolean         @default(true)
+  // Las listas especiales no liberan precio hasta estar aprobadas: solo
+  // `aprobada` alimenta cotizaciones (ver PricingService.resolveListMatches).
+  status    PriceListStatus @default(borrador)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   items     PriceListItem[]
@@ -679,6 +682,13 @@ enum PriceListKind {
   cliente
   export
   linea
+}
+
+enum PriceListStatus {
+  borrador
+  en_revision
+  aprobada
+  rechazada
 }
 
 model Quote {

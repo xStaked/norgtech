@@ -95,4 +95,21 @@ export class PriceListsService {
       create: { priceListId: id, presentationId, ...prices },
     });
   }
+
+  /**
+   * Cierra la revisión de una lista especial: aprobada libera sus precios en
+   * cotizaciones, rechazada los bloquea. Sin máquina de transiciones: la
+   * revisión termina aquí, aprobada o rechazada.
+   */
+  async updateApproval(id: string, action: "aprobar" | "rechazar") {
+    const list = await this.prisma.priceList.findUnique({ where: { id } });
+    if (!list) {
+      throw new NotFoundException("Lista de precios no encontrada");
+    }
+
+    return this.prisma.priceList.update({
+      where: { id },
+      data: { status: action === "aprobar" ? "aprobada" : "rechazada" },
+    });
+  }
 }
