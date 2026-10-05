@@ -283,6 +283,7 @@ model User {
   uploadedPaymentSupports       PaymentSupport[]
   assignedCustomerZones         CustomerZone[]             @relation("CustomerZoneAssignedUser")
   sellerGoals                   SellerGoal[]
+  commissionRules               CommissionRule[]
   refreshTokens                 RefreshToken[]
   passwordResetTokens           PasswordResetToken[]
   notifications                 Notification[]
@@ -926,6 +927,23 @@ model SellerGoal {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, periodType, periodValue])
+  @@index([periodType, periodValue])
+}
+
+model CommissionRule {
+  id           String   @id @default(cuid())
+  sellerUserId String
+  periodType   String
+  periodValue  String
+  percent      Decimal  @db.Decimal(5, 2)
+  createdBy    String
+  updatedBy    String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  seller User @relation(fields: [sellerUserId], references: [id], onDelete: Cascade)
+
+  @@unique([sellerUserId, periodType, periodValue])
   @@index([periodType, periodValue])
 }
 

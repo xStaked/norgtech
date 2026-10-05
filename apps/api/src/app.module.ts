@@ -25,6 +25,7 @@ import { ReportsModule } from "./modules/reports/reports.module";
 import { VisitsModule } from "./modules/visits/visits.module";
 import { BillingRequestsModule } from "./modules/billing-requests/billing-requests.module";
 import { CustomerGoalsModule } from "./modules/customer-goals/customer-goals.module";
+import { CommissionsModule } from "./modules/commissions/commissions.module";
 import { SellerGoalsModule } from "./modules/seller-goals/seller-goals.module";
 import { WhatsAppModule } from "./modules/whatsapp/whatsapp.module";
 import { InvoicesModule } from "./modules/invoices/invoices.module";
@@ -66,6 +67,7 @@ import { PrismaModule } from "./prisma/prisma.module";
     CommercialExpensesModule,
     CreditModule,
     CustomerGoalsModule,
+    CommissionsModule,
     SellerGoalsModule,
     WhatsAppModule,
     InvoicesModule,
