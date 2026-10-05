@@ -176,6 +176,14 @@ export const primaryNavItems = [
     requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
   },
   {
+    href: "/price-lists",
+    label: "Listas de precios",
+    shortLabel: "LP",
+    description: "Consulta de listas y precios por presentacion",
+    group: "Catalogo",
+    requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion"] as const,
+  },
+  {
     href: "/zones",
     label: "Zonas",
     shortLabel: "ZN",

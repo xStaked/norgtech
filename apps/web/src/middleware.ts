@@ -93,5 +93,6 @@ export const config = {
     "/users/:path*",
     "/whatsapp/:path*",
     "/returns/:path*",
+    "/price-lists/:path*",
   ],
 };

@@ -116,6 +116,7 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     "/invoices": ["administrador", "director_comercial", "facturacion", "comercial"],
     "/returns": ["administrador", "director_comercial", "facturacion", "comercial"],
     "/products": ["administrador", "director_comercial", "comercial"],
+    "/price-lists": ["administrador", "director_comercial", "comercial", "facturacion"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
     // Direccion ve la operacion completa; un comercial entra a las mismas
     // pantallas pero el back le fuerza `sellerUserId` a su propio id. Espeja el
