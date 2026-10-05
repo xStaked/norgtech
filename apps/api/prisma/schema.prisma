@@ -959,6 +959,11 @@ enum CommissionStatus {
 // (misma matematica de % que la causacion): reversedAmount acumula lo
 // revertido y neto = amount - reversedAmount. status pasa a reversada solo
 // cuando la fila queda totalmente revertida.
+//
+// Liquidacion (Frente 3, fase 2, Task 3): paidAt/paidBy marcan que el neto ya
+// se le pagó al vendedor. Es un estado de liquidacion SEPARADO del status de
+// causacion a proposito: asi una nota credito posterior sigue revirtiendo la
+// fila (el reverso solo toca status causada) y el reporte muestra el neto vivo.
 model Commission {
   id           String           @id @default(cuid())
   sellerUserId String
@@ -969,6 +974,8 @@ model Commission {
   amount       Decimal          @db.Decimal(14, 2)
   reversedAmount Decimal        @default(0) @db.Decimal(14, 2)
   status       CommissionStatus @default(causada)
+  paidAt       DateTime?
+  paidBy       String?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 

@@ -7,6 +7,7 @@ import {
 } from "@nestjs/common";
 import { CommissionStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { BOGOTA_OFFSET } from "../../shared/instant";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { isEligibleSeller } from "../seller-goals/seller-eligibility";
 import { CreateCommissionRuleDto } from "./dto/create-commission-rule.dto";
@@ -16,7 +17,11 @@ const WRITE_ROLES: UserRole[] = [
   UserRole.administrador,
   UserRole.director_comercial,
 ];
+// Liquidacion: los vendedores consultan las suyas; el resto de roles no
+// participa (matriz Frente 0, espeja el @Roles del CommissionsLedgerController).
+const READ_ROLES: UserRole[] = [...WRITE_ROLES, UserRole.comercial];
 const PERIOD_TYPES = ["mensual", "trimestral", "anual"];
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
 @Injectable()
 export class CommissionsService {
@@ -333,6 +338,117 @@ export class CommissionsService {
       anual,
     );
     return { percent: anualPercent, periodType: "anual", periodValue: anual };
+  }
+
+  /**
+   * Liquidacion por periodo (Task 3): filas de comision con vendedor, factura,
+   * cliente y fecha de pago. Direccion ve todas y puede filtrar por vendedor;
+   * un comercial SIEMPRE ve solo las suyas (sellerUserId forzado a su id, mismo
+   * patron que `resolveFilters` en analitica §2.4). El periodo filtra por fecha
+   * de pago (el hecho generador), con fronteras de dia en hora de Colombia.
+   */
+  async findCommissions(
+    user: AuthUser,
+    filters: { from?: string; to?: string; sellerUserId?: string },
+  ) {
+    if (!READ_ROLES.includes(user.role)) {
+      throw new ForbiddenException("Insufficient permissions");
+    }
+
+    const sellerUserId =
+      user.role === UserRole.comercial
+        ? user.id
+        : filters.sellerUserId || undefined;
+
+    const range = this.paymentDateRange(filters.from, filters.to);
+
+    return this.prisma.commission.findMany({
+      where: {
+        ...(sellerUserId ? { sellerUserId } : {}),
+        ...(range
+          ? { payment: { paymentDate: range } }
+          : {}),
+      },
+      orderBy: { createdAt: "desc" },
+      include: {
+        seller: { select: { id: true, name: true } },
+        invoice: {
+          select: {
+            id: true,
+            invoiceNumber: true,
+            customer: { select: { id: true, displayName: true } },
+          },
+        },
+        payment: { select: { id: true, paymentDate: true } },
+      },
+    });
+  }
+
+  /**
+   * Marcar pagada (solo admin/director): el neto causado se le entrego al
+   * vendedor. Con `paidAt`/`paidBy` separado del status de causacion: una nota
+   * credito posterior sigue revirtiendo la fila (el reverso toca status
+   * causada) y el reporte muestra el neto vivo. No se permite pagar dos veces
+   * ni pagar una fila sin neto (totalmente revertida).
+   */
+  async markPaid(user: AuthUser, commissionId: string) {
+    this.ensureCanWrite(user);
+
+    const commission = await this.prisma.commission.findUnique({
+      where: { id: commissionId },
+    });
+    if (!commission) {
+      throw new NotFoundException("Commission not found");
+    }
+
+    if (commission.paidAt) {
+      throw new ConflictException("Commission already marked as paid");
+    }
+
+    const net = new Prisma.Decimal(commission.amount).minus(
+      new Prisma.Decimal(commission.reversedAmount),
+    );
+    if (net.lte(0)) {
+      throw new ConflictException("Commission has no net amount left to pay");
+    }
+
+    return this.prisma.commission.update({
+      where: { id: commissionId },
+      data: { paidAt: new Date(), paidBy: user.id },
+    });
+  }
+
+  /**
+   * Fronteras de dia en hora de Colombia (mismo criterio que analitica): una
+   * fecha invalida es 400, no un listado sin filtro que aparenta funcionar.
+   */
+  private paymentDateRange(
+    from?: string,
+    to?: string,
+  ): { gte?: Date; lte?: Date } {
+    const gte = this.dayBoundary(from, "00:00:00.000");
+    const lte = this.dayBoundary(to, "23:59:59.999");
+    if (gte && lte && gte.getTime() > lte.getTime()) {
+      throw new BadRequestException("`from` es posterior a `to`.");
+    }
+    return {
+      ...(gte ? { gte } : {}),
+      ...(lte ? { lte } : {}),
+    };
+  }
+
+  private dayBoundary(day: string | undefined, time: string): Date | undefined {
+    if (!day) return undefined;
+    if (!DATE_ONLY.test(day)) {
+      throw new BadRequestException(
+        `Fecha invalida: "${day}". Formato esperado YYYY-MM-DD.`,
+      );
+    }
+    const parsed = new Date(`${day}T${time}${BOGOTA_OFFSET}`);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(`Fecha invalida: "${day}".`);
+    }
+    return parsed;
   }
 
   private monthPeriodValue(date: Date): string {
