@@ -26,27 +26,43 @@ nativo y agenda como lista (hoy/semana/vencidos).
 - Evaluar librería vs. componente propio (seguir patrón `Select` sobre `@base-ui/react`).
 
 ## 3. Listas especiales por cliente con aprobación del admin
-El comercial solicita lista especial para un cliente; queda pendiente hasta que el
-admin la aprueba (flujo tipo `orders/review`). Definir estados y quién puede usarla
-mientras está pendiente. Detalle pendiente de transcripción.
+Fuente: transcripción Sec. 1. El comercial monta la lista/cotización especial y queda
+guardada en estado revisión; hasta que el admin la aprueba no se libera el precio.
+Recoger las negociaciones ya hechas: Aviesa y Cámbulos tienen lista especial.
+Duda operativa (Sec. 1, SPEAKER_02): qué pasa sin señal — hoy queda registrada en
+revisión y se libera al aprobar. Por definir si el comercial puede cotizar con ella
+mientras está pendiente o solo después de aprobada.
 
-## 4. Bonificaciones por distribuidor (10, 20, 30 o 40)
-Unidades bonificadas a cero pesos pero con IVA calculado. Definir base del IVA y cómo
-se refleja en cotización/pedido/factura. Detalle pendiente de transcripción.
+## 4. Bonificaciones por distribuidor (10, 20, 30 o 40%)
+Fuente: transcripción Sec. 1. Opción de bonificación sobre la lista de precios.
+La unidad bonificada va a cero pesos pero sí se calcula el IVA.
+Abierto: confirmar la base del IVA (transcripción entrecortada en ese punto).
 
 ## 5. Histórico de precios por producto
-Ver evolución de cada precio (lista/presentación) con quién y cuándo lo cambió.
-Se apoya en el `PUT /price-lists/:id/items` actual; falta persistir y mostrar el log.
-Relacionado con punto 1.
+Fuente: transcripción Sec. 3. Dos cosas distintas pedidas:
+a) último precio vendido por producto + cliente (ej. "último precio de CK a Grupo Bios")
+como referencia al cotizar; b) historial del precio de lista.
+Hoy no existe ninguno de los dos. Se apoya en el `PUT /price-lists/:id/items` actual;
+falta persistir y mostrar el log. Relacionado con punto 1.
 
 ## 6. Reportes de deudores + morosos desde el agente
-- Reporte/pantalla de deudores (cartera vencida por cliente, aging).
-- El agente (Nora) debe responder cuáles son los clientes morosos.
-Detalle y formato pendiente de transcripción.
+Fuente: transcripción Sec. 5–8. Decisión explícita: el agente SÍ puede informar
+quiénes están en mora / +30 días (herramienta de consulta), pero NO envía mensajes
+ni hace cobro automático — tema sensible y personalizado, descartado (SPEAKER_03).
+Si lo insisten, se consulta con la parte administrativa.
+El informe de cartera ya circula por correo; pidieron retroalimentación a más tardar mañana.
 
 ## 7. Ajuste contable / facturación / cartera
-Revisión con la parte administrativa en próxima reunión. Alcance pendiente.
+Fuente: transcripción Sec. 8–10. Revisión con la parte administrativa + capacitación
+del equipo administrativo (esta tarde o mañana en la mañana). Incluye transición a
+comisionar por ventas por cuotas/cumplimiento. Alcance detallado pendiente de esa reunión.
 
 ## 8. Modales para formularios pequeños
-Pasar la creación de entidades chicas a modal en vez de página completa.
-Lista exacta de formularios pendiente de transcripción.
+No aparece en la transcripción (20 min). Se mantiene el pedido del equipo:
+pasar la creación de entidades chicas a modal en vez de página completa.
+Falta la lista exacta de formularios.
+
+## 9. Inmediato post-reunión (operativo, no desarrollo)
+Fuente: transcripción Sec. 10–14. Crear usuarios a todos hoy; enviar link de la
+plataforma + teléfono del agente; el equipo prueba y retroalimenta; nueva reunión
+de seguimiento en 2–3 días (tarde, 5:30–6pm).
