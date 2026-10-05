@@ -262,6 +262,50 @@ describe("Commissions rules", () => {
       .expect(403);
   });
 
+  it("finds a stored rule with a lowercase periodValue filter", async () => {
+    const token = await loginAs(app, UserRole.administrador);
+
+    await request(app.getHttpServer())
+      .post("/commissions/rules")
+      .set(authHeader(token))
+      .send({
+        sellerUserId: sellerId,
+        periodType: "trimestral",
+        periodValue: "2026-Q2",
+        percent: 7.5,
+      })
+      .expect(201);
+
+    const list = await request(app.getHttpServer())
+      .get(
+        `/commissions/rules?sellerUserId=${sellerId}&periodType=trimestral&periodValue=2026-q2`,
+      )
+      .set(authHeader(token))
+      .expect(200);
+
+    expect(list.body).toHaveLength(1);
+    expect(list.body[0].periodValue).toBe("2026-Q2");
+  });
+
+  it("rejects invalid period filters with 400 instead of an empty list", async () => {
+    const token = await loginAs(app, UserRole.administrador);
+
+    await request(app.getHttpServer())
+      .get("/commissions/rules?periodType=mensual&periodValue=not-a-period")
+      .set(authHeader(token))
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get("/commissions/rules?periodType=semanal")
+      .set(authHeader(token))
+      .expect(400);
+
+    await request(app.getHttpServer())
+      .get("/commissions/rules?periodValue=2026-06")
+      .set(authHeader(token))
+      .expect(400);
+  });
+
   it("resolves 0% for a seller without a rule for the period", async () => {
     const token = await loginAs(app, UserRole.administrador);
 

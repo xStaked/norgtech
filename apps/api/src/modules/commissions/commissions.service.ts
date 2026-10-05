@@ -16,6 +16,7 @@ const WRITE_ROLES: UserRole[] = [
   UserRole.administrador,
   UserRole.director_comercial,
 ];
+const PERIOD_TYPES = ["mensual", "trimestral", "anual"];
 
 @Injectable()
 export class CommissionsService {
@@ -60,14 +61,15 @@ export class CommissionsService {
     filters: { sellerUserId?: string; periodType?: string; periodValue?: string },
   ) {
     this.ensureCanWrite(user);
+    const { periodType, periodValue } = this.normalizeFilters(filters);
 
     return this.prisma.commissionRule.findMany({
       where: {
         ...(filters.sellerUserId
           ? { sellerUserId: filters.sellerUserId }
           : {}),
-        ...(filters.periodType ? { periodType: filters.periodType } : {}),
-        ...(filters.periodValue ? { periodValue: filters.periodValue } : {}),
+        ...(periodType ? { periodType } : {}),
+        ...(periodValue ? { periodValue } : {}),
       },
       orderBy: [{ periodValue: "desc" }, { createdAt: "desc" }],
     });
@@ -204,8 +206,42 @@ export class CommissionsService {
     }
   }
 
-  private normalizeAndValidatePeriod(periodType: string, periodValue: string) {
-    const normalized = periodValue.toUpperCase();
+  /**
+   * Filtros de listado por el mismo camino que el resto: un periodValue sin
+   * periodType no se puede interpretar (400, no vacío silencioso) y un par
+   * completo se normaliza/valida igual que en create/effective.
+   */
+  private normalizeFilters(filters: {
+    periodType?: string;
+    periodValue?: string;
+  }): { periodType?: string; periodValue?: string } {
+    const { periodType, periodValue } = filters;
+
+    if (periodValue !== undefined && periodType === undefined) {
+      throw new BadRequestException(
+        "periodType is required with periodValue",
+      );
+    }
+
+    if (periodType === undefined) {
+      return {};
+    }
+
+    if (!PERIOD_TYPES.includes(periodType)) {
+      throw new BadRequestException("Invalid periodType");
+    }
+
+    if (periodValue === undefined) {
+      return { periodType };
+    }
+
+    return {
+      periodType,
+      periodValue: this.normalizeAndValidatePeriod(periodType, periodValue),
+    };
+  }
+
+  private normalizeAndValidatePeriod(periodType: string, periodValue: string) {    const normalized = periodValue.toUpperCase();
 
     switch (periodType) {
       case "mensual":
