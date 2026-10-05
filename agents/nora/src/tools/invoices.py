@@ -216,21 +216,29 @@ async def get_invoice(
 async def list_overdue_invoices(
     auth_token: Annotated[str, InjectedState("auth_token")],
     customer_id: Optional[str] = None,
+    min_dias_mora: Optional[int] = None,
 ) -> str:
     """
     Facturas vencidas y sin pagar, de la más antigua a la más reciente, con los
     días de mora y el saldo de cada una. Úsala para "¿cuáles facturas están
-    vencidas?", "¿qué tiene vencido Acme?", "¿a quién hay que cobrarle?".
+    vencidas?", "¿qué tiene vencido Acme?", "¿a quién hay que cobrarle?",
+    "clientes en mora" y "morosos de más de 30 días" (con min_dias_mora=30).
+
+    SOLO LECTURA: lista morosos, no envía mensajes ni hace cobros. Registrar
+    pagos o anular facturas es de roles de control y no se hace aquí.
 
     Para el aging agregado de toda la cartera usa get_cartera; esta tool lista
     las facturas vencidas una por una.
 
     El customer_id se resuelve ANTES con search_customers; no inventes IDs. El
-    endpoint no filtra por cliente, así que el filtro se aplica aquí sobre la
-    lista que devuelve el API (ya acotada al usuario actual).
+    endpoint no filtra por cliente ni por días de mora, así que esos filtros se
+    aplican aquí sobre la lista que devuelve el API (ya acotada al usuario
+    actual).
 
     Args:
         customer_id: Deja solo las vencidas de ese cliente.
+        min_dias_mora: Deja solo las vencidas con al menos esos días de mora
+            (ej. 30 para "morosos +30 días").
     """
     try:
         client = NestJSClient(auth_token)
@@ -241,6 +249,12 @@ async def list_overdue_invoices(
                 i
                 for i in invoices
                 if (i.get("customer") or {}).get("id") == customer_id
+            ]
+        if min_dias_mora is not None:
+            invoices = [
+                i
+                for i in invoices
+                if (_days_overdue(i) or 0) >= min_dias_mora
             ]
         if not invoices:
             return (

@@ -214,6 +214,39 @@ def test_overdue_sin_resultados_para_el_cliente():
     assert "no tiene facturas vencidas" in out
 
 
+def test_overdue_min_dias_mora_deja_solo_los_mas_vencidos():
+    vieja = _invoice(1, dueDate=(date.today() - timedelta(days=45)).isoformat() + "T00:00:00.000Z"
+    )
+    reciente = _invoice(2, dueDate=(date.today() - timedelta(days=10)).isoformat() + "T00:00:00.000Z")
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[vieja, reciente])
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        payload = json.loads(
+            asyncio.run(
+                list_overdue_invoices.ainvoke(
+                    {"auth_token": "Bearer x", "min_dias_mora": 30}
+                )
+            )
+        )
+
+    assert fake_client.get.await_args.args[0] == "/invoices/overdue"
+    assert payload["total_facturas"] == 1
+    assert payload["vencidas"][0]["dias_mora"] == 45
+
+
+def test_overdue_min_dias_mora_sin_resultados():
+    reciente = _invoice(2, dueDate=(date.today() - timedelta(days=10)).isoformat() + "T00:00:00.000Z")
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[reciente])
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        out = asyncio.run(
+            list_overdue_invoices.ainvoke(
+                {"auth_token": "Bearer x", "min_dias_mora": 30}
+            )
+        )
+    assert "No hay facturas vencidas" in out
+
+
 def test_get_invoice_payments_suma_y_cuenta_soportes():
     fake_client = AsyncMock()
     fake_client.get = AsyncMock(
