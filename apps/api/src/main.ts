@@ -5,7 +5,9 @@ import cookieParser from "cookie-parser";
 import { AppModule } from "./app.module";
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // rawBody: true guarda los bytes crudos en request.rawBody: el KapsoWebhookGuard
+  // firma/verifica el HMAC de Kapso contra los bytes originales del webhook.
+  const app = await NestFactory.create(AppModule, { rawBody: true });
   const configService = app.get(ConfigService);
 
   app.use(cookieParser());

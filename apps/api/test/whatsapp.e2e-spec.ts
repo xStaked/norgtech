@@ -24,10 +24,16 @@ describe("WhatsApp inbox", () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
   const passwordHash = "$2a$10$eHlBtTx4HDVGtfsH8BSxG.JwwXsYNrKcdePOt3.1/./NPQ0CHs.w2";
+  // Fase 3 seguridad: el webhook de Kapso exige credenciales (KapsoWebhookGuard).
+  // El secreto de test se fija en beforeAll ANTES de compilar (process.env gana
+  // sobre el .env de un desarrollador al inicializar ConfigModule) y todos los
+  // fixtures del webhook añaden X-Webhook-Token con este valor.
+  const kapsoWebhookToken = "whatsapp-e2e-kapso-token";
   let adminToken: string;
   let noraCaseService: NoraCaseService;
   let originalFetch: typeof globalThis.fetch;
   let originalNoraAutomationUserId: string | undefined;
+  let originalKapsoWebhookSecret: string | undefined;
   let conversationUpdateMock: jest.Mock;
   let internalNoteCreateMock: jest.Mock;
 
@@ -569,6 +575,8 @@ describe("WhatsApp inbox", () => {
     originalFetch = globalThis.fetch;
     originalNoraAutomationUserId = process.env.NORA_AUTOMATION_USER_ID;
     process.env.NORA_AUTOMATION_USER_ID = "admin-user-id";
+    originalKapsoWebhookSecret = process.env.KAPSO_WEBHOOK_SECRET;
+    process.env.KAPSO_WEBHOOK_SECRET = kapsoWebhookToken;
     globalThis.fetch = jest.fn(async () => ({
       ok: true,
       json: async () => ({
@@ -1135,6 +1143,11 @@ describe("WhatsApp inbox", () => {
       delete process.env.NORA_AUTOMATION_USER_ID;
     } else {
       process.env.NORA_AUTOMATION_USER_ID = originalNoraAutomationUserId;
+    }
+    if (originalKapsoWebhookSecret === undefined) {
+      delete process.env.KAPSO_WEBHOOK_SECRET;
+    } else {
+      process.env.KAPSO_WEBHOOK_SECRET = originalKapsoWebhookSecret;
     }
     if (app) {
       await app.close();
@@ -1872,6 +1885,7 @@ describe("WhatsApp inbox", () => {
   it("receives a Kapso message webhook and persists inbox records", async () => {
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -2051,6 +2065,7 @@ describe("WhatsApp inbox", () => {
     try {
       await request(app.getHttpServer())
         .post("/whatsapp/webhooks/kapso")
+        .set("X-Webhook-Token", kapsoWebhookToken)
         .send({
           type: "whatsapp.message.received",
           data: [
@@ -2117,6 +2132,7 @@ describe("WhatsApp inbox", () => {
     try {
       await request(app.getHttpServer())
         .post("/whatsapp/webhooks/kapso")
+        .set("X-Webhook-Token", kapsoWebhookToken)
         .send({
           type: "whatsapp.message.received",
           data: [
@@ -2174,6 +2190,7 @@ describe("WhatsApp inbox", () => {
 
     await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: [
@@ -2281,11 +2298,13 @@ describe("WhatsApp inbox", () => {
 
     const firstResponse = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send(webhookPayload)
       .expect(201);
 
     await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send(webhookPayload)
       .expect(201);
 
@@ -2350,6 +2369,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: [
@@ -2396,6 +2416,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -2440,6 +2461,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -2551,6 +2573,7 @@ describe("WhatsApp inbox", () => {
 
     await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -2638,6 +2661,7 @@ describe("WhatsApp inbox", () => {
     try {
       const response = await request(app.getHttpServer())
         .post("/whatsapp/webhooks/kapso")
+        .set("X-Webhook-Token", kapsoWebhookToken)
         .send({
           type: "whatsapp.message.received",
           data: {
@@ -2791,6 +2815,7 @@ describe("WhatsApp inbox", () => {
     try {
       const response = await request(app.getHttpServer())
         .post("/whatsapp/webhooks/kapso")
+        .set("X-Webhook-Token", kapsoWebhookToken)
         .send({
           type: "whatsapp.message.received",
           data: {
@@ -2934,6 +2959,7 @@ describe("WhatsApp inbox", () => {
     try {
       const response = await request(app.getHttpServer())
         .post("/whatsapp/webhooks/kapso")
+        .set("X-Webhook-Token", kapsoWebhookToken)
         .send({
           type: "whatsapp.message.received",
           data: {
@@ -3014,6 +3040,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3051,6 +3078,7 @@ describe("WhatsApp inbox", () => {
   it("receives a top-level Kapso v2 message webhook", async () => {
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         phone_number_id: "phone-number-v2",
         message: {
@@ -3119,6 +3147,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3148,6 +3177,7 @@ describe("WhatsApp inbox", () => {
   it("ignores non-message Kapso webhook events", async () => {
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({ type: "whatsapp.message.status", data: { messageId: "wamid-1" } })
       .expect(201);
 
@@ -3157,6 +3187,7 @@ describe("WhatsApp inbox", () => {
   it("rejects Kapso message webhooks missing required fields", async () => {
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3175,6 +3206,7 @@ describe("WhatsApp inbox", () => {
   it("rejects Kapso message webhooks missing text body", async () => {
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3210,6 +3242,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3240,6 +3273,7 @@ describe("WhatsApp inbox", () => {
   const sendInbound = (from: string, body: string, id: string) =>
     request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3348,6 +3382,7 @@ describe("WhatsApp inbox", () => {
 
     const response = await request(app.getHttpServer())
       .post("/whatsapp/webhooks/kapso")
+      .set("X-Webhook-Token", kapsoWebhookToken)
       .send({
         type: "whatsapp.message.received",
         data: {
@@ -3456,6 +3491,7 @@ describe("WhatsApp inbox", () => {
       try {
         const response = await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -3590,6 +3626,7 @@ describe("WhatsApp inbox", () => {
       try {
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -3687,6 +3724,7 @@ describe("WhatsApp inbox", () => {
       try {
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -3795,6 +3833,7 @@ describe("WhatsApp inbox", () => {
       try {
         const response = await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -3892,6 +3931,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4000,6 +4040,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4111,6 +4152,7 @@ describe("WhatsApp inbox", () => {
       try {
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4253,6 +4295,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4364,6 +4407,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4484,6 +4528,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4590,6 +4635,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4693,6 +4739,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4790,6 +4837,7 @@ describe("WhatsApp inbox", () => {
       try {
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4883,6 +4931,7 @@ describe("WhatsApp inbox", () => {
 
         await request(app.getHttpServer())
           .post("/whatsapp/webhooks/kapso")
+          .set("X-Webhook-Token", kapsoWebhookToken)
           .send({
             type: "whatsapp.message.received",
             data: {
@@ -4973,6 +5022,7 @@ describe("WhatsApp inbox", () => {
     const postCustomerWebhookText = (body: string) =>
       request(app.getHttpServer())
         .post("/whatsapp/webhooks/kapso")
+        .set("X-Webhook-Token", kapsoWebhookToken)
         .send({
           type: "whatsapp.message.received",
           data: {
