@@ -4,11 +4,11 @@ Fuente de verdad para los Frentes 1–3. Toda fila está anclada en código real
 
 - API: `@Roles` de cada controller en `apps/api/src/modules/*/*.controller.ts`
   (agrupaciones en `apps/api/src/modules/auth/permissions.ts`, `ROLE_GROUPS`).
-- Web lectura/nav: `apps/web/src/lib/auth.ts:100-133` (`canAccess`),
+- Web lectura/nav: `apps/web/src/lib/auth.ts:100-134` (`canAccess`),
   `apps/web/src/lib/theme.ts:33-210` (`primaryNavItems`, `requiredRoles`) y
   `noraNavItem` (`theme.ts:243-250`).
 - Web creación: `apps/web/src/lib/auth.ts:146-166` (`canCreate`) y
-  `apps/web/src/lib/route-guards.ts:37-48` (`roleRestrictedRoutes`).
+  `apps/web/src/lib/route-guards.ts:37-49` (`roleRestrictedRoutes`).
 - Reglas de alcance por fila (forzados por rol): services citados en cada caso.
 
 Roles válidos: `administrador` (adm), `director_comercial` (dir), `comercial` (com),
@@ -31,9 +31,9 @@ Convenciones de la tabla:
 | Módulo (ruta) | adm | dir | com | tec | fac | log | Crear (web) | Fuentes |
 |---|---|---|---|---|---|---|---|---|
 | Dashboard (`/dashboard`) | V | V | V | V | V | V | — | `@Roles` en `dashboard.controller.ts:18` (summary, los 6 roles); `canAccess "/dashboard"`; nav `theme.ts:33-41` |
-| Agenda (`/agenda`) | V | V | V | V | O | O | — (crea visitas/seguimientos) | Sin controller propio: agrega `visits` + `follow-up-tasks` (`agenda/page.tsx`); `canAccess "/agenda"` (adm, dir, com, tec); nav `theme.ts:42-49` |
+| Agenda (`/agenda`) | V | V | V | V | O | O | — (crea visitas/seguimientos) | No hay `@Roles` directo para Agenda porque no existe un controller propio: agrega `visits` + `follow-up-tasks` (`agenda/page.tsx`); `canAccess "/agenda"` (adm, dir, com, tec); nav `theme.ts:42-49` |
 | WhatsApp (`/whatsapp`) | V | V | V | V | V | V | — (notas, mensajes y borrador de pedido bajo el mismo guard) | `@Roles` a nivel de clase `whatsapp.controller.ts:45-52` (los 6 roles); `canAccess "/whatsapp"`; nav `theme.ts:50-57` |
-| Magali (`/nora`) | V | V | V | V | O | O | — | `canAccess "/nora"` (adm, dir, com, tec); nav `noraNavItem theme.ts:243-250`; API de gastos de Nora admite fac (ver D6) |
+| Magali (`/nora`) | V | V | V | V | O | O | — | No hay `@Roles` directo para la pantalla `/nora` porque la atiende el `NoraAgentController` de WhatsApp, no un controller `/nora`; `canAccess "/nora"` (adm, dir, com, tec); nav `noraNavItem theme.ts:243-250`; API de gastos de Nora admite fac (ver D6) |
 | Visitas (`/visits`) | V+C | V+C | V+C | V+C | O | O | `visit` = adm, dir, com, tec | `@Roles` en `visits.controller.ts:30-133` (crear, listar, detalle, estados: los 4 roles); `canAccess "/visits"`; `canCreate visit`; nav `theme.ts:58-65` |
 | Gastos (`/expenses`) | V+C | V+C | V+C | O | V | O | `expense` = adm, dir, com (ver D2: la API admite fac en POST) | `@Roles expenseRoles` en `commercial-expenses.controller.ts:31-36,64-166` (adm, dir, com, fac; `PATCH :id/status` solo adm, dir, fac en línea 156); `canAccess "/expenses"`; `canCreate expense`; nav `theme.ts:66-73` |
 | Analítica (`/analytics`: ventas, cartera, embudo, desempeño) | V | V | V propio | O | O | O | — | `@Roles` de clase `analytics.controller.ts:88` (adm, dir, com); `canAccess "/analytics"`; nav `theme.ts:74-89` + hijos ventas/cartera/embudo/desempeño; alcance en §R1 |
@@ -58,7 +58,7 @@ Convenciones de la tabla:
 **R1 — Datos de otros vendedores (analítica y desempeño).**
 Un `comercial` entra a las mismas 4 pantallas de `/analytics`, pero `resolveFilters`
 le fuerza `sellerUserId` a su propio id (`analytics.shared.ts:64-97`); el comentario
-de `auth.ts:121-125` y del `AnalyticsController` (`analytics.controller.ts:78-85`)
+de `auth.ts:121-124` y del `AnalyticsController` (`analytics.controller.ts:78-85`)
 lo exigen en espejo. Reglas para el front: no mostrar selectores de vendedor ni
 comparativos entre vendedores al rol `comercial`; no enviar `sellerUserId` ajeno
 (el back lo ignora/fuerza igual). La pantalla de desempeño expone por vendedor
@@ -141,10 +141,10 @@ acceso de terceros; los selectores usan los endpoints mínimos (`sellers`,
   `/zones` es solo adm/dir. No exponer la pantalla; el endpoint de lista sigue
   disponible para selects.
 - **D5 — `/orders/review` sin entrada en `canAccess`.**
-  `route-guards.ts:37-48` no la restringe por rol; hoy solo la gobierna
-  `requiredRoles` del nav (`theme.ts:138-145`). El Frente 2 debe aplicar
-  `requiredRoles` del nav en el guard o agregar la entrada `"/orders/review"`
-  antes de construir sobre esa ruta.
+  `route-guards.ts:37-49` no la restringe por rol; hoy solo la gobierna
+  `requiredRoles` del nav (`theme.ts:138-145`). **Dueño: Cierre** (ruling 2 del
+  ledger): aplicar `requiredRoles` del nav en el guard o agregar la entrada
+  `"/orders/review"` antes de construir sobre esa ruta.
 - **D6 — Nora +fac en API de gastos.** `NoraAgentController`
   (`nora-agent.controller.ts:16-49`) admite `facturacion` en gastos vía WhatsApp,
   aunque el nav de Magali la excluye. Coherente (fac registra gastos sin pantalla
