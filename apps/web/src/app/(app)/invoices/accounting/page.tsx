@@ -123,7 +123,7 @@ export default async function AccountingPage({
       <PageHeader
         eyebrow="Cartera"
         title={`Contable · ${from} a ${to}`}
-        description="Ventas por periodo con IVA discriminado, pagos recibidos y notas credito. Solo lectura, sin retenciones ni DIAN."
+        description="Ventas por periodo con IVA discriminado, pagos recibidos y notas crédito. Solo lectura, sin retenciones ni DIAN."
       />
 
       <div
@@ -145,7 +145,7 @@ export default async function AccountingPage({
           tone="success"
         />
         <StatCard
-          label="Notas credito"
+          label="Notas crédito"
           value={formatCurrency(summary.creditNotes)}
           tone="warning"
         />

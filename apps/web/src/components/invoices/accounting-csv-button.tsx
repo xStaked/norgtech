@@ -39,7 +39,7 @@ export function buildAccountingCsv(
       String(summary.salesByTax.rate5.count),
     ),
     row("Pagos recibidos", "", "", toCsvDecimal(summary.paymentsReceived), ""),
-    row("Notas credito", "", "", toCsvDecimal(summary.creditNotes), ""),
+    row("Notas crédito", "", "", toCsvDecimal(summary.creditNotes), ""),
   ];
   // BOM para que Excel abra el UTF-8 (tildes) sin romperlo.
   return [`\uFEFF${header}`, ...lines].join("\r\n");

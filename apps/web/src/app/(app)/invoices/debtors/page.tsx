@@ -35,12 +35,6 @@ interface DebtorTableRow {
   mora: "aldia" | "enmora";
 }
 
-const dateFormatter = new Intl.DateTimeFormat("es-CO", {
-  day: "2-digit",
-  month: "short",
-  year: "numeric",
-});
-
 const currencyFormatter = new Intl.NumberFormat("es-CO", {
   style: "currency",
   currency: "COP",
@@ -106,8 +100,8 @@ const columns: readonly DataTableColumn<DebtorTableRow>[] = [
   },
   {
     key: "oldestDueDate",
-    header: "Vto. mas antiguo",
-    render: (row) => dateFormatter.format(new Date(row.oldestDueDate)),
+    header: "Vto. más antiguo",
+    render: (row) => row.oldestDueDate.slice(0, 10),
   },
 ] as const;
 
@@ -157,7 +151,7 @@ export default async function DebtorsPage({
       <PageHeader
         eyebrow="Cartera"
         title={`Deudores · ${rows.length}`}
-        description="Saldos por cliente en buckets por dias de mora, al corte de hoy. Solo lectura: los saldos salen de facturas, pagos y notas credito."
+        description="Saldos por cliente en buckets por días de mora, al corte de hoy. Solo lectura: los saldos salen de facturas, pagos y notas crédito."
       />
 
       <div
@@ -194,7 +188,7 @@ export default async function DebtorsPage({
         selects={[
           {
             key: "mora",
-            allLabel: "Al dia y en mora",
+            allLabel: "Al día y en mora",
             options: [
               { value: "enmora", label: "En mora" },
               { value: "aldia", label: "Al día" },
@@ -209,7 +203,7 @@ export default async function DebtorsPage({
 
       <SectionCard
         title="Deudores"
-        description="Cada cliente muestra su saldo total, lo vigente y lo vencido por tramos. El CSV trae lo que se esta viendo."
+        description="Cada cliente muestra su saldo total, lo vigente y lo vencido por tramos. El CSV trae lo que se está viendo."
         actions={<DebtorsCsvButton rows={filtered} asOf={asOf} />}
       >
         <DataTable

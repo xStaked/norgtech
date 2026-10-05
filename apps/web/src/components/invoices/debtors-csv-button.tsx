@@ -23,7 +23,7 @@ function buildCsv(rows: DebtorRow[]): string {
     "31-60",
     "61-90",
     "+90",
-    "Vencimiento mas antiguo",
+    "Vencimiento más antiguo",
   ].join(";");
   const lines = rows.map((row) =>
     [
