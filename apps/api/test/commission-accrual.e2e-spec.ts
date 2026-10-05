@@ -149,6 +149,17 @@ describe("Commission accrual on payment (RED)", () => {
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
     },
+    {
+      id: "order-accrual-9",
+      customerId: "customer-1",
+      orderNumber: "PED-ACC-009",
+      status: "entregado",
+      subtotal: new Prisma.Decimal(1000000),
+      total: new Prisma.Decimal(1000000),
+      sellerUserId: sellerId,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+    },
   ];
 
   function matchesRule(
@@ -639,5 +650,30 @@ describe("Commission accrual on payment (RED)", () => {
     expect(rows).toHaveLength(1);
     expect(Number(rows[0].percent)).toBe(4);
     expect(Number(rows[0].amount)).toBe(40000);
+  });
+
+  // Tope del reverso: factura 1M con solo 200k pagados (causado 20k al 10%) +
+  // credito de 800k (cabe en el saldo pendiente de 800k) -> revierte 20k
+  // (todo lo causado), nunca 800k x 10% = 80k.
+  it("never reverses more than the accrued amount", async () => {
+    const invoiceId = await createInvoice("order-accrual-9", 1000000);
+    await pay(invoiceId, 200000, "2026-06-15");
+
+    const token = await loginAs(app, UserRole.facturacion);
+    await request(app.getHttpServer())
+      .post("/returns")
+      .set(authHeader(token))
+      .send({
+        customerId: "customer-1",
+        invoiceId,
+        amount: 800000,
+        reason: "Devolucion mayor que lo pagado",
+      })
+      .expect(201);
+
+    const rows = commissions.filter((c) => c.invoiceId === invoiceId);
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].reversedAmount)).toBe(20000);
+    expect(rows[0].status).toBe("reversada");
   });
 });

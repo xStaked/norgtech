@@ -19,6 +19,15 @@ import { PrismaService } from "../src/prisma/prisma.service";
  *   npx jest --config test/jest-e2e.json test/commission-atomicity.e2e-spec.ts
  * (base scratch: `prisma migrate deploy` + filas con marcador, limpieza total
  * en afterAll aunque las aserciones fallen).
+ *
+ * Nota CI/DB: la suite jest-e2e no tiene patrón de skip (ningún spec usa
+ * skipIf/describe.skip) ni config de CI en el repo. La mayoría de specs usan
+ * stub de PrismaService (pasan sin DATABASE_URL), pero los real-DB (este y
+ * credit-concurrency.e2e-spec.ts) la necesitan: este spec es real-DB a
+ * propósito — el stub no puede probar atomicidad de transacciones — y falla
+ * rápido y ruidoso (~2s, exit 1, mensaje claro) sin DB, en vez de colgarse
+ * como el precedente y en vez de saltarse en silencio una verificación de
+ * atomicidad (un DATABASE_URL apuntando mal se notaría de inmediato).
  */
 const MARKER = `e2e-comm-atom-${process.pid}`;
 const SELLER_ID = `${MARKER}-seller`;
@@ -28,7 +37,9 @@ const SEGMENT_ID = `${MARKER}-segment`;
 const CUSTOMER_ID = `${MARKER}-customer`;
 const ORDER_ID = `${MARKER}-order`;
 const INVOICE_ID = `${MARKER}-invoice`;
+const INVOICE_RACE_ID = `${MARKER}-invoice-race`;
 const ROLLBACK_PAYMENT_ID = `${MARKER}-payment-rollback`;
+const RACE_PAYMENT_ID = `${MARKER}-payment-race`;
 
 describe("Commission atomicity on real Postgres", () => {
   let app: INestApplication;
@@ -178,6 +189,39 @@ describe("Commission atomicity on real Postgres", () => {
         createdBy: MARKER,
       },
     });
+    await prisma.invoice.create({
+      data: {
+        id: INVOICE_RACE_ID,
+        invoiceNumber: INVOICE_RACE_ID,
+        customerId: CUSTOMER_ID,
+        companyId: COMPANY_ID,
+        dueDate: new Date("2026-07-15T00:00:00.000Z"),
+        subtotal: new Prisma.Decimal(1000000),
+        taxAmount: new Prisma.Decimal(0),
+        totalAmount: new Prisma.Decimal(1000000),
+        createdBy: MARKER,
+        updatedBy: MARKER,
+      },
+    });
+    await prisma.invoicePayment.create({
+      data: {
+        id: RACE_PAYMENT_ID,
+        invoiceId: INVOICE_RACE_ID,
+        paymentDate: new Date("2026-06-15T00:00:00.000Z"),
+        amount: new Prisma.Decimal(500000),
+        method: PaymentMethod.transferencia,
+        createdBy: MARKER,
+      },
+    });
+    await prisma.$transaction(async (tx) => {
+      await commissions.accrueFromPayment(tx, {
+        sellerUserId: SELLER_ID,
+        invoiceId: INVOICE_RACE_ID,
+        paymentId: RACE_PAYMENT_ID,
+        base: new Prisma.Decimal(500000),
+        paymentDate: new Date("2026-06-15T00:00:00.000Z"),
+      });
+    });
   });
 
   afterAll(async () => {
@@ -193,10 +237,12 @@ describe("Commission atomicity on real Postgres", () => {
           where: { sellerUserId: SELLER_ID },
         });
         await prisma.invoicePayment.deleteMany({
-          where: { invoiceId: INVOICE_ID },
+          where: { invoiceId: { in: [INVOICE_ID, INVOICE_RACE_ID] } },
         });
         await prisma.return.deleteMany({ where: { customerId: CUSTOMER_ID } });
-        await prisma.invoice.deleteMany({ where: { id: INVOICE_ID } });
+        await prisma.invoice.deleteMany({
+          where: { id: { in: [INVOICE_ID, INVOICE_RACE_ID] } },
+        });
         await prisma.order.deleteMany({ where: { id: ORDER_ID } });
         await prisma.customer.deleteMany({ where: { id: CUSTOMER_ID } });
         await prisma.customerSegment.deleteMany({ where: { id: SEGMENT_ID } });
@@ -208,7 +254,11 @@ describe("Commission atomicity on real Postgres", () => {
         expect(
           await prisma.commission.count({ where: { sellerUserId: SELLER_ID } }),
         ).toBe(0);
-        expect(await prisma.invoice.count({ where: { id: INVOICE_ID } })).toBe(0);
+        expect(
+          await prisma.invoice.count({
+            where: { id: { in: [INVOICE_ID, INVOICE_RACE_ID] } },
+          }),
+        ).toBe(0);
       }
     } finally {
       if (app) await app.close();
@@ -274,5 +324,43 @@ describe("Commission atomicity on real Postgres", () => {
     expect(rows[0].status).toBe("causada");
     expect(rows[0].reversedAmount.toNumber()).toBe(10000);
     expect(rows[0].amount.minus(rows[0].reversedAmount).toNumber()).toBe(40000);
+  });
+
+  it("serializes two concurrent reversals: no lost update, never over cap", async () => {
+    // Barrera (patrón credit-concurrency): ambas tx abiertas y con al menos
+    // un statement antes de que cualquiera revierta. Sin el FOR UPDATE de
+    // reverseForInvoice, ambas calculan el mismo pendiente (25k) y el último
+    // SET pisa al primero -> 25k en vez de 50k. Con el lock, la segunda relee
+    // lo ya revertido y completa hasta el tope exacto.
+    let openReady!: () => void;
+    const bothOpen = new Promise<void>((resolve) => {
+      let count = 0;
+      openReady = () => {
+        if (++count === 2) resolve();
+      };
+    });
+
+    const reverseOnce = () =>
+      prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT 1`;
+        openReady();
+        await bothOpen;
+        return commissions.reverseForInvoice(tx, INVOICE_RACE_ID, 250000);
+      });
+
+    const results = await Promise.all([reverseOnce(), reverseOnce()]);
+    expect(results).toHaveLength(2);
+    const total = results.reduce(
+      (sum, r) => sum.plus(r.reversed),
+      new Prisma.Decimal(0),
+    );
+    expect(total.toNumber()).toBe(50000);
+
+    const rows = await prisma.commission.findMany({
+      where: { invoiceId: INVOICE_RACE_ID },
+    });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reversedAmount.toNumber()).toBe(50000);
+    expect(rows[0].status).toBe("reversada");
   });
 });

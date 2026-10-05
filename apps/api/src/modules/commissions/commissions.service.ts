@@ -228,6 +228,18 @@ export class CommissionsService {
     const credit = new Prisma.Decimal(creditAmount);
     if (credit.lte(0)) return { count: 0, reversed: new Prisma.Decimal(0) };
 
+    // Serializa reversos concurrentes sobre la misma factura tomando row lock
+    // sobre sus comisiones ANTES de leer lo pendiente (mismo patrón que
+    // CreditService.lockCustomerForUpdate para el TOCTOU del cupo). Sin esto,
+    // dos devoluciones concurrentes calculan el mismo pendiente y el último
+    // SET pisa al primero (lost update: sub-reverso) o, con updates
+    // aditivos, superarían el tope. Prisma corre en READ COMMITTED, así que
+    // cada statement ve un snapshot nuevo: el que espera el lock relee lo ya
+    // revertido por el otro y solo revierte el resto. Solo aplica con `tx`.
+    await tx.$queryRaw<{ id: string }[]>`
+      SELECT id FROM "Commission" WHERE "invoiceId" = ${invoiceId} FOR UPDATE
+    `;
+
     const rows = (
       await tx.commission.findMany({
         where: { invoiceId, status: CommissionStatus.causada },
