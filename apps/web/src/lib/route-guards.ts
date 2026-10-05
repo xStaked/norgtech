@@ -42,6 +42,8 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   { prefix: "/invoices/new", isAllowed: (role) => canCreate(role, "invoice") },
   // Misma guarda que /invoices: solo roles con acceso a cartera ven deudores.
   { prefix: "/invoices/debtors", isAllowed: (role) => canAccess(role, "/invoices") },
+  // Igual que deudores: reporte contable de lectura sobre la misma cartera.
+  { prefix: "/invoices/accounting", isAllowed: (role) => canAccess(role, "/invoices") },
   { prefix: "/companies", isAllowed: (role) => canAccess(role, "/companies") },
   { prefix: "/zones", isAllowed: (role) => canAccess(role, "/zones") },
   { prefix: "/analytics", isAllowed: (role) => canAccess(role, "/analytics") },
