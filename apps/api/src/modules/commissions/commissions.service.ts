@@ -173,8 +173,8 @@ export class CommissionsService {
    * Causa la comisión de un pago dentro de la transacción que lo crea
    * (Task 2, causación al cobrar). Una fila por pago, proporcional al
    * recaudo: base = valor del pago, amount = base * percent / 100, con el %
-   * mensual vigente a la fecha del pago. Sin vendedor o sin regla → null
-   * (no comisiona, nunca bloquea el pago).
+   * vigente a la fecha del pago (fallback mensual → trimestral → anual).
+   * Sin vendedor o sin regla → null (no comisiona, nunca bloquea el pago).
    */
   async accrueFromPayment(
     tx: Prisma.TransactionClient,
@@ -188,10 +188,9 @@ export class CommissionsService {
   ) {
     if (!args.sellerUserId) return null;
 
-    const percent = await this.resolvePercent(
+    const { percent } = await this.resolvePercentWithFallback(
       args.sellerUserId,
-      "mensual",
-      this.monthPeriodValue(args.paymentDate),
+      args.paymentDate,
     );
     if (!percent || percent <= 0) return null;
 
@@ -212,21 +211,132 @@ export class CommissionsService {
   }
 
   /**
-   * Reverso ante nota crédito/devolución atada a la factura: las comisiones
-   * causadas de esa factura pasan a reversada dentro de la misma
-   * transacción. Reverso total por factura (YAGNI, sin prorrateo parcial).
+   * Reverso proporcional ante nota crédito/devolución atada a la factura,
+   * dentro de la misma transacción. El crédito cubre base pagada, así que
+   * revierte crédito × (causado pendiente / base pendiente) con la misma
+   * matemática de % de la causación, repartido FIFO (filas más viejas
+   * primero). `reversedAmount` acumula por fila; la fila pasa a reversada
+   * solo al quedar totalmente revertida. Nunca revierte más de lo causado.
    */
-  async reverseForInvoice(tx: Prisma.TransactionClient, invoiceId: string) {
-    return tx.commission.updateMany({
-      where: { invoiceId, status: CommissionStatus.causada },
-      data: { status: CommissionStatus.reversada },
-    });
+  async reverseForInvoice(
+    tx: Prisma.TransactionClient,
+    invoiceId: string,
+    creditAmount: Prisma.Decimal | number | string,
+  ) {
+    const dec = (value: unknown) =>
+      new Prisma.Decimal(value as string | number | Prisma.Decimal);
+    const credit = new Prisma.Decimal(creditAmount);
+    if (credit.lte(0)) return { count: 0, reversed: new Prisma.Decimal(0) };
+
+    const rows = (
+      await tx.commission.findMany({
+        where: { invoiceId, status: CommissionStatus.causada },
+        orderBy: { createdAt: "asc" },
+      })
+    ).filter((row) => dec(row.percent).gt(0));
+
+    const accrued = rows.reduce(
+      (sum, row) => sum.plus(dec(row.amount).minus(dec(row.reversedAmount))),
+      new Prisma.Decimal(0),
+    );
+    const paidBase = rows.reduce(
+      (sum, row) =>
+        sum.plus(
+          dec(row.base).minus(
+            dec(row.reversedAmount).mul(100).div(dec(row.percent)),
+          ),
+        ),
+      new Prisma.Decimal(0),
+    );
+
+    if (accrued.lte(0) || paidBase.lte(0)) {
+      return { count: 0, reversed: new Prisma.Decimal(0) };
+    }
+
+    let toReverse = Prisma.Decimal.min(credit.mul(accrued).div(paidBase), accrued)
+      .toDecimalPlaces(2);
+    let count = 0;
+    let reversed = new Prisma.Decimal(0);
+
+    for (const row of rows) {
+      if (toReverse.lte(0)) break;
+      const pending = dec(row.amount).minus(dec(row.reversedAmount));
+      if (pending.lte(0)) continue;
+      const piece = Prisma.Decimal.min(pending, toReverse).toDecimalPlaces(2);
+      const newReversed = dec(row.reversedAmount).plus(piece);
+      await tx.commission.update({
+        where: { id: row.id },
+        data: {
+          reversedAmount: newReversed,
+          status: newReversed.equals(dec(row.amount))
+            ? CommissionStatus.reversada
+            : CommissionStatus.causada,
+        },
+      });
+      toReverse = toReverse.minus(piece);
+      reversed = reversed.plus(piece);
+      count += 1;
+    }
+
+    return { count, reversed };
+  }
+
+  /**
+   * % vigente a una fecha con fallback mensual → trimestral → anual,
+   * reutilizando `resolvePercent` por tipo de periodo. Devuelve también el
+   * periodo que aportó el % (trazabilidad para la Task 3).
+   */
+  async resolvePercentWithFallback(
+    sellerUserId: string,
+    date: Date,
+  ): Promise<{ percent: number; periodType: string; periodValue: string }> {
+    const mensual = this.monthPeriodValue(date);
+    const mensualPercent = await this.resolvePercent(
+      sellerUserId,
+      "mensual",
+      mensual,
+    );
+    if (mensualPercent > 0) {
+      return { percent: mensualPercent, periodType: "mensual", periodValue: mensual };
+    }
+
+    const trimestral = this.quarterPeriodValue(date);
+    const trimestralPercent = await this.resolvePercent(
+      sellerUserId,
+      "trimestral",
+      trimestral,
+    );
+    if (trimestralPercent > 0) {
+      return {
+        percent: trimestralPercent,
+        periodType: "trimestral",
+        periodValue: trimestral,
+      };
+    }
+
+    const anual = this.yearPeriodValue(date);
+    const anualPercent = await this.resolvePercent(
+      sellerUserId,
+      "anual",
+      anual,
+    );
+    return { percent: anualPercent, periodType: "anual", periodValue: anual };
   }
 
   private monthPeriodValue(date: Date): string {
     const year = date.getUTCFullYear();
     const month = String(date.getUTCMonth() + 1).padStart(2, "0");
     return `${year}-${month}`;
+  }
+
+  private quarterPeriodValue(date: Date): string {
+    const year = date.getUTCFullYear();
+    const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+    return `${year}-Q${quarter}`;
+  }
+
+  private yearPeriodValue(date: Date): string {
+    return String(date.getUTCFullYear());
   }
 
   private ensureCanWrite(user: AuthUser) {

@@ -102,8 +102,9 @@ export class ReturnsService {
           },
         });
 
-        // Reverso de comisiones causadas de la factura, en la transacción.
-        await this.commissions.reverseForInvoice(tx, invoice.id);
+        // Reverso proporcional al crédito de las comisiones causadas de la
+        // factura, en la transacción.
+        await this.commissions.reverseForInvoice(tx, invoice.id, amount);
       }
 
       await this.auditService.record(

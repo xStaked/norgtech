@@ -955,8 +955,10 @@ enum CommissionStatus {
 
 // Causacion al cobrar (Frente 3, fase 2): una fila por pago, proporcional al
 // recaudo. base = valor del pago, amount = base * percent / 100. Ante nota
-// credito/devolucion atada a la factura, la fila pasa a reversada (reverso
-// total por factura: YAGNI, sin prorrateo parcial).
+// credito/devolucion atada a la factura, el reverso es proporcional al credito
+// (misma matematica de % que la causacion): reversedAmount acumula lo
+// revertido y neto = amount - reversedAmount. status pasa a reversada solo
+// cuando la fila queda totalmente revertida.
 model Commission {
   id           String           @id @default(cuid())
   sellerUserId String
@@ -965,6 +967,7 @@ model Commission {
   base         Decimal          @db.Decimal(14, 2)
   percent      Decimal          @db.Decimal(5, 2)
   amount       Decimal          @db.Decimal(14, 2)
+  reversedAmount Decimal        @default(0) @db.Decimal(14, 2)
   status       CommissionStatus @default(causada)
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
