@@ -2,16 +2,31 @@ import { ListFilters } from "@/components/ui/list-filters";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { ReportList } from "@/components/reports/report-list";
+import { PendingReportsList } from "@/components/reports/pending-reports-list";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
+import { canCreate } from "@/lib/auth";
 import { applyFilters, optionsFrom, type SearchParams } from "@/lib/list-filter";
+import { pendingReportVisits } from "@/lib/pending-reports";
 
 interface ReportApiItem {
   id: string;
   title: string;
   customerId: string;
   customer: { id: string; displayName: string } | null;
+  visitId?: string | null;
+  visit?: { id: string } | null;
   createdAt: string;
   creator: { id: string; name: string } | null;
+}
+
+interface VisitApiItem {
+  id: string;
+  status: string;
+  summary: string | null;
+  scheduledAt: string;
+  completedAt: string | null;
+  customer: { id: string; displayName: string } | null;
 }
 
 export default async function ReportsPage({
@@ -20,8 +35,25 @@ export default async function ReportsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const response = await apiFetch("/reports");
-  const reports = (response.ok ? await response.json() : []) as ReportApiItem[];
+  const [reportsResponse, visitsResponse, user] = await Promise.all([
+    apiFetch("/reports"),
+    apiFetch("/visits?status=completada"),
+    getCurrentUser(),
+  ]);
+  const reports = (reportsResponse.ok ? await reportsResponse.json() : []) as ReportApiItem[];
+  const visits = (visitsResponse.ok ? await visitsResponse.json() : []) as VisitApiItem[];
+  const canGenerate = canCreate(user?.role ?? null, "report");
+
+  const pending = canGenerate
+    ? pendingReportVisits(visits, reports).map((v) => ({
+        id: v.id,
+        customerName: v.customer?.displayName ?? null,
+        customerId: v.customer?.id ?? null,
+        completedAt: v.completedAt,
+        scheduledAt: v.scheduledAt,
+        summary: v.summary,
+      }))
+    : [];
 
   const rows = reports.map((report) => ({
     id: report.id,
@@ -42,8 +74,17 @@ export default async function ReportsPage({
       <PageHeader
         eyebrow="Inteligencia comercial"
         title="Reportes ejecutivos"
-        description="Historial de reportes generados desde visitas completadas, con diagnóstico, costos, ROI y cotización."
+        description="Genera reportes desde visitas completadas y consulta el historial con diagnóstico, costos, ROI y cotización."
       />
+
+      {pending.length > 0 ? (
+        <SectionCard
+          title="Pendientes por generar"
+          description="Visitas completadas con resumen y aún sin reporte. Genéralos sin ir a cada visita."
+        >
+          <PendingReportsList visits={pending} />
+        </SectionCard>
+      ) : null}
 
       <ListFilters
         searchPlaceholder="Buscar por título, cliente o autor"
