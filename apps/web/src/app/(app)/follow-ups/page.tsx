@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
+import { CreateFollowUpModal } from "@/components/follow-ups/create-follow-up-modal";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListFilters } from "@/components/ui/list-filters";
@@ -167,6 +168,17 @@ export default async function FollowUpsPage({
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
+  const [customersRes, opportunitiesRes] = await Promise.all([
+    canCreate(userRole, "followUp") ? apiFetch("/customers") : null,
+    canCreate(userRole, "followUp") ? apiFetch("/opportunities") : null,
+  ]);
+  const modalCustomers = (
+    customersRes?.ok ? await customersRes.json() : []
+  ) as Array<{ id: string; displayName: string }>;
+  const modalOpportunities = (
+    opportunitiesRes?.ok ? await opportunitiesRes.json() : []
+  ) as Array<{ id: string; title: string }>;
+
   const rows: FollowUpRow[] = tasks.map((task) => ({
     id: task.id,
     customerName: task.customer?.displayName ?? null,
@@ -202,7 +214,9 @@ export default async function FollowUpsPage({
         description="Centraliza tareas pendientes por cliente, canal y vencimiento para priorizar el trabajo diario."
         actions={
           <>
-            {canCreate(userRole, "followUp") && <ButtonLink href="/follow-ups/new">Nueva tarea</ButtonLink>}
+            {canCreate(userRole, "followUp") && (
+              <CreateFollowUpModal customers={modalCustomers} opportunities={modalOpportunities} />
+            )}
             <ButtonLink href="/visits" variant="secondary">
               Ver visitas
             </ButtonLink>

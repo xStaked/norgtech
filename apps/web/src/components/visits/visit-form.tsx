@@ -24,9 +24,11 @@ interface Opportunity {
 interface VisitFormProps {
   customers: Customer[];
   opportunities: Opportunity[];
+  /** En modal: se llama en vez de navegar al detalle. */
+  onSuccess?: () => void;
 }
 
-export function VisitForm({ customers, opportunities }: VisitFormProps) {
+export function VisitForm({ customers, opportunities, onSuccess }: VisitFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -68,6 +70,10 @@ export function VisitForm({ customers, opportunities }: VisitFormProps) {
       }
 
       const created = (await response.json()) as { id: string };
+      if (onSuccess) {
+        onSuccess();
+        return;
+      }
       router.push(`/visits/${created.id}`);
     } catch {
       setError("Error de conexión");

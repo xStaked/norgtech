@@ -32,9 +32,12 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
 export function ReturnForm({
   customers,
   invoices,
+  onSuccess,
 }: {
   customers: ReturnFormCustomer[];
   invoices: ReturnFormInvoice[];
+  /** En modal: se llama en vez de navegar a la lista. */
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +81,10 @@ export function ReturnForm({
         const data = (await response.json().catch(() => ({}))) as { message?: string };
         setError(data.message || "Error al registrar devolucion");
         setLoading(false);
+        return;
+      }
+      if (onSuccess) {
+        onSuccess();
         return;
       }
       router.push("/returns");

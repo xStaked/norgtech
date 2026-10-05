@@ -25,6 +25,8 @@ interface FollowUpTaskFormProps {
   opportunities: Opportunity[];
   /** Preselecciona el cliente cuando se llega desde un pedido o cliente. */
   defaultCustomerId?: string;
+  /** En modal: se llama en vez de navegar al detalle. */
+  onSuccess?: () => void;
 }
 
 const types = [
@@ -40,6 +42,7 @@ export function FollowUpTaskForm({
   customers,
   opportunities,
   defaultCustomerId,
+  onSuccess,
 }: FollowUpTaskFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -80,6 +83,10 @@ export function FollowUpTaskForm({
       }
 
       const created = (await response.json()) as { id: string };
+      if (onSuccess) {
+        onSuccess();
+        return;
+      }
       router.push(`/follow-ups/${created.id}`);
     } catch {
       setError("Error de conexión");

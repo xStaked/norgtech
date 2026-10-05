@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
+import { CreateReturnModal } from "@/components/returns/create-return-modal";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListFilters } from "@/components/ui/list-filters";
@@ -101,10 +102,39 @@ export default async function ReturnsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [response, user] = await Promise.all([apiFetch("/returns"), getCurrentUser()]);
+  const [response, user, customersRes, invoicesRes] = await Promise.all([
+    apiFetch("/returns"),
+    getCurrentUser(),
+    apiFetch("/customers"),
+    apiFetch("/invoices"),
+  ]);
 
   const returns = (response.ok ? await response.json() : []) as ReturnItem[];
   const role = user?.role ?? null;
+
+  // Mismo recorte que returns/new: solo facturas con saldo absorben nota crédito.
+  const invoicesRaw = (invoicesRes.ok ? await invoicesRes.json() : []) as Array<{
+    id: string;
+    invoiceNumber: string;
+    customer: { id: string };
+    totalAmount: string;
+    totalPaid: string;
+    creditNoteTotal?: string;
+    status: string;
+  }>;
+  const modalCustomers = (
+    customersRes.ok ? await customersRes.json() : []
+  ) as Array<{ id: string; displayName: string }>;
+  const modalInvoices = invoicesRaw
+    .filter((i) => i.status !== "anulada")
+    .map((i) => ({
+      id: i.id,
+      invoiceNumber: i.invoiceNumber,
+      customerId: i.customer.id,
+      outstanding:
+        Number(i.totalAmount) - Number(i.totalPaid) - Number(i.creditNoteTotal ?? 0),
+    }))
+    .filter((i) => i.outstanding > 0);
 
   const rows: ReturnRow[] = returns.map((item) => ({
     id: item.id,
@@ -134,7 +164,7 @@ export default async function ReturnsPage({
         description="Devoluciones de clientes y notas credito que ajustan la cartera."
         actions={
           canCreate(role, "returns") && (
-            <ButtonLink href="/returns/new">Nueva devolucion</ButtonLink>
+            <CreateReturnModal customers={modalCustomers} invoices={modalInvoices} />
           )
         }
       />

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
+import { CreateOpportunityModal } from "@/components/opportunities/create-opportunity-modal";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListFilters } from "@/components/ui/list-filters";
@@ -147,6 +148,11 @@ export default async function OpportunitiesPage({
   const response = await apiFetch("/opportunities");
   const opportunities = (response.ok ? await response.json() : []) as Opportunity[];
 
+  const customersResponse = canCreate(userRole, "opportunity") ? await apiFetch("/customers") : null;
+  const customers = (
+    customersResponse?.ok ? await customersResponse.json() : []
+  ) as Array<{ id: string; displayName: string }>;
+
   const rows: OpportunityRow[] = opportunities.map((opportunity) => ({
     id: opportunity.id,
     title: opportunity.title,
@@ -172,7 +178,7 @@ export default async function OpportunitiesPage({
         actions={
           <>
             {canCreate(userRole, "opportunity") && (
-              <ButtonLink href="/opportunities/new">Nueva oportunidad</ButtonLink>
+              <CreateOpportunityModal customers={customers} />
             )}
             {canCreate(userRole, "quote") && (
               <ButtonLink href="/quotes/new" variant="secondary">

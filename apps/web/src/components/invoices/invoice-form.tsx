@@ -20,9 +20,12 @@ export interface InvoiceFormCustomer {
 export function InvoiceForm({
   customers,
   orders,
+  onSuccess,
 }: {
   customers: InvoiceFormCustomer[];
   orders: OriginOrder[];
+  /** En modal: se llama en vez de navegar al detalle. */
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -81,6 +84,10 @@ export function InvoiceForm({
         return;
       }
       const result = (await response.json()) as { id: string };
+      if (onSuccess) {
+        onSuccess();
+        return;
+      }
       router.push(`/invoices/${result.id}`);
     } catch {
       setError("Error de conexion");

@@ -16,6 +16,8 @@ interface Customer {
 
 interface OpportunityFormProps {
   customers: Customer[];
+  /** En modal: se llama en vez de navegar al detalle. */
+  onSuccess?: () => void;
 }
 
 const stages = [
@@ -29,7 +31,7 @@ const stages = [
   { value: "perdida", label: "Perdida" },
 ];
 
-export function OpportunityForm({ customers }: OpportunityFormProps) {
+export function OpportunityForm({ customers, onSuccess }: OpportunityFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -74,6 +76,10 @@ export function OpportunityForm({ customers }: OpportunityFormProps) {
       }
 
       const created = (await response.json()) as { id: string };
+      if (onSuccess) {
+        onSuccess();
+        return;
+      }
       router.push(`/opportunities/${created.id}`);
     } catch {
       setError("Error de conexión");

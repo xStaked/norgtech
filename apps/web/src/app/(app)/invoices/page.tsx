@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
+import { CreateInvoiceModal } from "@/components/invoices/create-invoice-modal";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListFilters } from "@/components/ui/list-filters";
@@ -187,13 +188,25 @@ export default async function InvoicesPage({
   });
   const listPath = queryString ? `/invoices?${queryString}` : "/invoices";
 
-  const [response, user] = await Promise.all([
+  const [response, user, customersRes, ordersRes] = await Promise.all([
     apiFetch(listPath),
     getCurrentUser(),
+    apiFetch("/customers"),
+    apiFetch("/orders"),
   ]);
 
   const invoices = (response.ok ? await response.json() : []) as Invoice[];
   const role = user?.role ?? null;
+  const modalCustomers = (
+    customersRes.ok ? await customersRes.json() : []
+  ) as Array<{ id: string; displayName: string }>;
+  const modalOrders = (ordersRes.ok ? await ordersRes.json() : []) as Array<{
+    id: string;
+    customerId?: string | null;
+    customer?: { id: string } | null;
+    orderNumber?: string | null;
+    total?: string | number | null;
+  }>;
 
   const rows: InvoiceRow[] = invoices.map((invoice) => ({
     id: invoice.id,
@@ -225,7 +238,7 @@ export default async function InvoicesPage({
         actions={
           <>
             {canCreate(role, "invoice") && (
-              <ButtonLink href="/invoices/new">Nueva factura</ButtonLink>
+              <CreateInvoiceModal customers={modalCustomers} orders={modalOrders} />
             )}
           </>
         }

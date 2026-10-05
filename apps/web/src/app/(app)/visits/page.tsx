@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button-link";
+import { CreateVisitModal } from "@/components/visits/create-visit-modal";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListFilters } from "@/components/ui/list-filters";
@@ -149,6 +150,17 @@ export default async function VisitsPage({
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
+  const [customersRes, opportunitiesRes] = await Promise.all([
+    canCreate(userRole, "visit") ? apiFetch("/customers") : null,
+    canCreate(userRole, "visit") ? apiFetch("/opportunities") : null,
+  ]);
+  const modalCustomers = (
+    customersRes?.ok ? await customersRes.json() : []
+  ) as Array<{ id: string; displayName: string }>;
+  const modalOpportunities = (
+    opportunitiesRes?.ok ? await opportunitiesRes.json() : []
+  ) as Array<{ id: string; title: string }>;
+
   const rows: VisitRow[] = visits.map((visit) => ({
     id: visit.id,
     customerName: visit.customer?.displayName ?? null,
@@ -182,7 +194,9 @@ export default async function VisitsPage({
         description="Planea y revisa la ejecución comercial presencial con foco en agenda, cliente y resultado."
         actions={
           <>
-            {canCreate(userRole, "visit") && <ButtonLink href="/visits/new">Nueva visita</ButtonLink>}
+            {canCreate(userRole, "visit") && (
+              <CreateVisitModal customers={modalCustomers} opportunities={modalOpportunities} />
+            )}
             <ButtonLink href="/follow-ups" variant="secondary">
               Ver seguimientos
             </ButtonLink>
