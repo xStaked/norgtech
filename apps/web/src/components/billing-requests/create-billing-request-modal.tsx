@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
@@ -10,17 +10,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CompanySelect } from "@/components/companies/company-select";
 import { Select } from "@/components/ui/select";
+import {
+  orderOptionsForCustomer,
+  quoteOptionsForCustomer,
+  type OriginOrder,
+  type OriginQuote,
+} from "@/lib/origin-select";
 
 interface CreateBillingRequestModalProps {
   customers: Array<{ id: string; displayName: string }>;
+  orders: OriginOrder[];
+  quotes: OriginQuote[];
 }
 
-export function CreateBillingRequestModal({ customers }: CreateBillingRequestModalProps) {
+export function CreateBillingRequestModal({ customers, orders, quotes }: CreateBillingRequestModalProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,6 +39,15 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
   const [sourceOrderId, setSourceOrderId] = useState("");
   const [sourceQuoteId, setSourceQuoteId] = useState("");
   const [notes, setNotes] = useState("");
+
+  const customerOrders = useMemo(
+    () => orderOptionsForCustomer(orders, customerId),
+    [orders, customerId],
+  );
+  const customerQuotes = useMemo(
+    () => quoteOptionsForCustomer(quotes, customerId),
+    [quotes, customerId],
+  );
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -101,7 +117,11 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
               <Select
                 id="customerId"
                 value={customerId}
-                onValueChange={setCustomerId}
+                onValueChange={(value) => {
+                  setCustomerId(value);
+                  setSourceOrderId("");
+                  setSourceQuoteId("");
+                }}
                 placeholder="Seleccionar cliente"
                 searchPlaceholder="Buscar cliente…"
                 options={customers.map((c) => ({ value: c.id, label: c.displayName }))}
@@ -110,21 +130,35 @@ export function CreateBillingRequestModal({ customers }: CreateBillingRequestMod
 
             <div className="grid gap-2">
               <Label htmlFor="sourceOrderId">Pedido origen (opcional)</Label>
-              <Input
+              <Select
                 id="sourceOrderId"
                 value={sourceOrderId}
-                onChange={(e) => setSourceOrderId(e.target.value)}
-                placeholder="ID del pedido"
+                onValueChange={(value) => {
+                  setSourceOrderId(value);
+                  if (value) setSourceQuoteId("");
+                }}
+                disabled={!customerId}
+                hint={customerId ? "Solo pedidos de este cliente. Al elegir pedido se limpia la cotización." : "Elige primero un cliente."}
+                placeholder="Sin pedido"
+                searchPlaceholder="Buscar pedido…"
+                options={[{ value: "", label: "Sin pedido" }, ...customerOrders]}
               />
             </div>
 
             <div className="grid gap-2">
               <Label htmlFor="sourceQuoteId">Cotización origen (opcional)</Label>
-              <Input
+              <Select
                 id="sourceQuoteId"
                 value={sourceQuoteId}
-                onChange={(e) => setSourceQuoteId(e.target.value)}
-                placeholder="ID de la cotización"
+                onValueChange={(value) => {
+                  setSourceQuoteId(value);
+                  if (value) setSourceOrderId("");
+                }}
+                disabled={!customerId}
+                hint={customerId ? "Solo cotizaciones de este cliente. Al elegir cotización se limpia el pedido." : "Elige primero un cliente."}
+                placeholder="Sin cotización"
+                searchPlaceholder="Buscar cotización…"
+                options={[{ value: "", label: "Sin cotización" }, ...customerQuotes]}
               />
             </div>
 

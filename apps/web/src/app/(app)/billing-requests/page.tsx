@@ -83,9 +83,11 @@ export default async function BillingRequestsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const [response, customersResponse, user] = await Promise.all([
+  const [response, customersResponse, ordersResponse, quotesResponse, user] = await Promise.all([
     apiFetch("/billing-requests"),
     apiFetch("/customers"),
+    apiFetch("/orders"),
+    apiFetch("/quotes"),
     getCurrentUser(),
   ]);
 
@@ -93,6 +95,20 @@ export default async function BillingRequestsPage({
   const customers = (customersResponse.ok
     ? await customersResponse.json()
     : []) as Array<{ id: string; displayName: string }>;
+  const orders = (ordersResponse.ok ? await ordersResponse.json() : []) as Array<{
+    id: string;
+    customerId?: string | null;
+    customer?: { id: string } | null;
+    orderNumber?: string | null;
+    total?: string | number | null;
+  }>;
+  const quotes = (quotesResponse.ok ? await quotesResponse.json() : []) as Array<{
+    id: string;
+    customerId?: string | null;
+    customer?: { id: string } | null;
+    total?: string | number | null;
+    status?: string | null;
+  }>;
 
   const role = user?.role ?? null;
   const canAct = role === "administrador" || role === "director_comercial" || role === "facturacion";
@@ -205,7 +221,7 @@ export default async function BillingRequestsPage({
         eyebrow="Facturación"
         title="Solicitudes de facturación"
         description="Solicitudes generadas desde cotizaciones y pedidos para seguimiento operativo."
-        actions={canAct ? <CreateBillingRequestModal customers={customers} /> : undefined}
+        actions={canAct ? <CreateBillingRequestModal customers={customers} orders={orders} quotes={quotes} /> : undefined}
       />
 
       <ListFilters
