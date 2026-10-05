@@ -7,7 +7,7 @@ import {
 } from "@nestjs/common";
 import { CommissionStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
-import { BOGOTA_OFFSET } from "../../shared/instant";
+import { BOGOTA_OFFSET, bogotaWallTime } from "../../shared/instant";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { isEligibleSeller } from "../seller-goals/seller-eligibility";
 import { CreateCommissionRuleDto } from "./dto/create-commission-rule.dto";
@@ -302,42 +302,58 @@ export class CommissionsService {
    * % vigente a una fecha con fallback mensual → trimestral → anual,
    * reutilizando `resolvePercent` por tipo de periodo. Devuelve también el
    * periodo que aportó el % (trazabilidad para la Task 3).
+   *
+   * Una regla ALMACENADA es un hard stop del fallback aunque tenga 0%: el 0%
+   * explicito del periodo es una decision del vendedor (no comisiona ese
+   * periodo), no una ausencia a rellenar con el periodo superior. Solo la
+   * AUSENCIA de regla cae al siguiente tipo; el percent 0 que aporta una regla
+   * existente hace que `accrueFromPayment` no cause fila.
    */
   async resolvePercentWithFallback(
     sellerUserId: string,
     date: Date,
   ): Promise<{ percent: number; periodType: string; periodValue: string }> {
     const mensual = this.monthPeriodValue(date);
-    const mensualPercent = await this.resolvePercent(
-      sellerUserId,
-      "mensual",
-      mensual,
-    );
-    if (mensualPercent > 0) {
-      return { percent: mensualPercent, periodType: "mensual", periodValue: mensual };
+    const mensualRule = await this.prisma.commissionRule.findFirst({
+      where: { sellerUserId, periodType: "mensual", periodValue: mensual },
+    });
+    if (mensualRule) {
+      return {
+        percent: Number(mensualRule.percent),
+        periodType: "mensual",
+        periodValue: mensual,
+      };
     }
 
     const trimestral = this.quarterPeriodValue(date);
-    const trimestralPercent = await this.resolvePercent(
-      sellerUserId,
-      "trimestral",
-      trimestral,
-    );
-    if (trimestralPercent > 0) {
+    const trimestralRule = await this.prisma.commissionRule.findFirst({
+      where: {
+        sellerUserId,
+        periodType: "trimestral",
+        periodValue: trimestral,
+      },
+    });
+    if (trimestralRule) {
       return {
-        percent: trimestralPercent,
+        percent: Number(trimestralRule.percent),
         periodType: "trimestral",
         periodValue: trimestral,
       };
     }
 
     const anual = this.yearPeriodValue(date);
-    const anualPercent = await this.resolvePercent(
-      sellerUserId,
-      "anual",
-      anual,
-    );
-    return { percent: anualPercent, periodType: "anual", periodValue: anual };
+    const anualRule = await this.prisma.commissionRule.findFirst({
+      where: { sellerUserId, periodType: "anual", periodValue: anual },
+    });
+    if (anualRule) {
+      return {
+        percent: Number(anualRule.percent),
+        periodType: "anual",
+        periodValue: anual,
+      };
+    }
+
+    return { percent: 0, periodType: "anual", periodValue: anual };
   }
 
   /**
@@ -390,44 +406,67 @@ export class CommissionsService {
    * credito posterior sigue revirtiendo la fila (el reverso toca status
    * causada) y el reporte muestra el neto vivo. No se permite pagar dos veces
    * ni pagar una fila sin neto (totalmente revertida).
+   *
+   * Check-then-act bajo lock: el chequeo de neto/paidAt y el stamp viven en la
+   * MISMA transaccion que primero toma el row lock (mismo patron que
+   * `reverseForInvoice` contra los reversos concurrentes, con tx). Sin el
+   * lock, un reverso concurrente podia revertir la fila DESPUES del read de
+   * markPaid (que paso el chequeo con neto > 0) y ANTES del updateMany: la
+   * liquidacion stampaba `paidAt` sobre una fila ya con neto 0 (se liquida el
+   * 0). Bajo el lock los dos ordenes quedan bien: reverso primero → markPaid
+   * re-lee neto 0 dentro de la tx y responde 409; markPaid primero → el
+   * reverso no puede intercalar y solo revierte despues de liquidar.
    */
   async markPaid(user: AuthUser, commissionId: string) {
     this.ensureCanWrite(user);
 
-    const commission = await this.prisma.commission.findUnique({
-      where: { id: commissionId },
+    return this.prisma.$transaction(async (tx) => {
+      // El lock se toma ANTES de leer: serializa la liquidacion con los
+      // reversos de la misma factura (Prisma corre READ COMMITTED, asi que el
+      // read del paso siguiente ve lo ya commiteado por quien sostuvo el lock
+      // antes — mismo razonamiento del bloque de `reverseForInvoice`).
+      await tx.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Commission" WHERE id = ${commissionId} FOR UPDATE
+      `;
+
+      const commission = await tx.commission.findUnique({
+        where: { id: commissionId },
+      });
+      if (!commission) {
+        throw new NotFoundException("Commission not found");
+      }
+
+      if (commission.paidAt) {
+        throw new ConflictException("Commission already marked as paid");
+      }
+
+      // Chequeo de neto Y status re-hecho dentro de la tx (post-lock): una
+      // fila totalmente revertida llega aqui con neto 0 y status reversada.
+      const net = new Prisma.Decimal(commission.amount).minus(
+        new Prisma.Decimal(commission.reversedAmount),
+      );
+      if (
+        commission.status === CommissionStatus.reversada ||
+        net.lte(0)
+      ) {
+        throw new ConflictException("Commission has no net amount left to pay");
+      }
+
+      // La guarda `paidAt: null` en el WHERE cierra la carrera find-then-update
+      // entre dos liquidaciones que ya sostienen lock o corren pre-fix
+      // (mismo patron que `VisitsService.update`/`completar`): solo la primera
+      // muta la fila; la otra ve count 0 y termina en 409.
+      const updatedCount = await tx.commission.updateMany({
+        where: { id: commissionId, paidAt: null },
+        data: { paidAt: new Date(), paidBy: user.id },
+      });
+
+      if (updatedCount.count !== 1) {
+        throw new ConflictException("Commission already marked as paid");
+      }
+
+      return tx.commission.findUnique({ where: { id: commissionId } });
     });
-    if (!commission) {
-      throw new NotFoundException("Commission not found");
-    }
-
-    if (commission.paidAt) {
-      throw new ConflictException("Commission already marked as paid");
-    }
-
-    const net = new Prisma.Decimal(commission.amount).minus(
-      new Prisma.Decimal(commission.reversedAmount),
-    );
-    if (net.lte(0)) {
-      throw new ConflictException("Commission has no net amount left to pay");
-    }
-
-    // La guarda `paidAt: null` en el WHERE cierra la carrera find-then-update:
-    // dos liquidaciones concurrentes cargaban la fila sin paidAt, ambas pasaban
-    // el chequeo y el segundo update pisaba silenciosamente el rastro del
-    // primero. Con updateMany condicional (mismo patron que
-    // `VisitsService.update`/`completar`) solo la primera muta la fila; la otra
-    // ve count 0 y termina en 409.
-    const updatedCount = await this.prisma.commission.updateMany({
-      where: { id: commissionId, paidAt: null },
-      data: { paidAt: new Date(), paidBy: user.id },
-    });
-
-    if (updatedCount.count !== 1) {
-      throw new ConflictException("Commission already marked as paid");
-    }
-
-    return this.prisma.commission.findUnique({ where: { id: commissionId } });
   }
 
   /**
@@ -463,20 +502,26 @@ export class CommissionsService {
     return parsed;
   }
 
+  // Buckets de periodo en hora de Colombia (bogotaWallTime sobre la fecha del
+  // pago) — el mismo criterio de fronteras del dia que usa el listado de la
+  // liquidacion (dayBoundary con BOGOTA_OFFSET): 2026-07-01T02:00Z son las
+  // 21:00 del 30 de junio en Bogota, y con rule lookup debe caer en junio.
   private monthPeriodValue(date: Date): string {
-    const year = date.getUTCFullYear();
-    const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+    const wall = bogotaWallTime(date);
+    const year = wall.getUTCFullYear();
+    const month = String(wall.getUTCMonth() + 1).padStart(2, "0");
     return `${year}-${month}`;
   }
 
   private quarterPeriodValue(date: Date): string {
-    const year = date.getUTCFullYear();
-    const quarter = Math.floor(date.getUTCMonth() / 3) + 1;
+    const wall = bogotaWallTime(date);
+    const year = wall.getUTCFullYear();
+    const quarter = Math.floor(wall.getUTCMonth() / 3) + 1;
     return `${year}-Q${quarter}`;
   }
 
   private yearPeriodValue(date: Date): string {
-    return String(date.getUTCFullYear());
+    return String(bogotaWallTime(date).getUTCFullYear());
   }
 
   private ensureCanWrite(user: AuthUser) {
@@ -551,7 +596,8 @@ export class CommissionsService {
     };
   }
 
-  private normalizeAndValidatePeriod(periodType: string, periodValue: string) {    const normalized = periodValue.toUpperCase();
+  private normalizeAndValidatePeriod(periodType: string, periodValue: string) {
+    const normalized = periodValue.toUpperCase();
 
     switch (periodType) {
       case "mensual":

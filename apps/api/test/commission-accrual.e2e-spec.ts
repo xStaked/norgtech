@@ -652,6 +652,78 @@ describe("Commission accrual on payment (RED)", () => {
     expect(Number(rows[0].amount)).toBe(40000);
   });
 
+  // Regla explicita con 0% es un hard stop del fallback: existe la regla
+  // mensual del mes (aunque en 0), asi que NO debe caer al anual 2026 al 4%.
+  it("does not accrue when a stored mensual rule exists with 0 percent", async () => {
+    const adminToken = await loginAs(app, UserRole.administrador);
+    await request(app.getHttpServer())
+      .post("/commissions/rules")
+      .set(authHeader(adminToken))
+      .send({
+        sellerUserId: sellerId,
+        periodType: "mensual",
+        periodValue: "2026-04",
+        percent: 0,
+      })
+      .expect(201);
+
+    orders.push({
+      id: "order-accrual-10",
+      customerId: "customer-1",
+      orderNumber: "PED-ACC-010",
+      status: "entregado",
+      subtotal: new Prisma.Decimal(1000000),
+      total: new Prisma.Decimal(1000000),
+      sellerUserId: sellerId,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+    });
+    const invoiceId = await createInvoice("order-accrual-10", 1000000);
+    await pay(invoiceId, 1000000, "2026-04-15");
+
+    // Pre-fix (0% tratado como ausencia): cae al anual 2026 (4%) y causa fila.
+    const rows = commissions.filter((c) => c.invoiceId === invoiceId);
+    expect(rows).toHaveLength(0);
+  });
+
+  // Frontera de mes en hora de Colombia: 2026-07-01T02:00Z = 2026-06-30 21:00
+  // en Bogota (UTC-5), asi que el periodo mensual del pago es 2026-06 — el
+  // mismo criterio de fronteras del listado (dayBoundary con BOGOTA_OFFSET).
+  it("derives the mensual period at the Bogota month edge as the PREVIOUS month", async () => {
+    const adminToken = await loginAs(app, UserRole.administrador);
+    await request(app.getHttpServer())
+      .post("/commissions/rules")
+      .set(authHeader(adminToken))
+      .send({
+        sellerUserId: sellerWithoutRuleId,
+        periodType: "mensual",
+        periodValue: "2026-06",
+        percent: 12,
+      })
+      .expect(201);
+
+    orders.push({
+      id: "order-accrual-edge",
+      customerId: "customer-1",
+      orderNumber: "PED-ACC-EDGE",
+      status: "entregado",
+      subtotal: new Prisma.Decimal(1000000),
+      total: new Prisma.Decimal(1000000),
+      sellerUserId: sellerWithoutRuleId,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+    });
+    const invoiceId = await createInvoice("order-accrual-edge", 1000000);
+    await pay(invoiceId, 1000000, "2026-07-01T02:00:00.000Z");
+
+    // Pre-fix (campos UTC): 2026-07/2026-Q3/2026 — sin reglas para este
+    // vendedor -> no causa. Post-fix: mensual 2026-06 (12%).
+    const rows = commissions.filter((c) => c.invoiceId === invoiceId);
+    expect(rows).toHaveLength(1);
+    expect(Number(rows[0].percent)).toBe(12);
+    expect(Number(rows[0].amount)).toBe(120000);
+  });
+
   // Tope del reverso: factura 1M con solo 200k pagados (causado 20k al 10%) +
   // credito de 800k (cabe en el saldo pendiente de 800k) -> revierte 20k
   // (todo lo causado), nunca 800k x 10% = 80k.

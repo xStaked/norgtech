@@ -1,4 +1,4 @@
-import { INestApplication } from "@nestjs/common";
+import { ConflictException, INestApplication } from "@nestjs/common";
 import { Test } from "@nestjs/testing";
 import { PaymentMethod, Prisma, UserRole } from "@prisma/client";
 import { AppModule } from "../src/app.module";
@@ -40,6 +40,9 @@ const INVOICE_ID = `${MARKER}-invoice`;
 const INVOICE_RACE_ID = `${MARKER}-invoice-race`;
 const ROLLBACK_PAYMENT_ID = `${MARKER}-payment-rollback`;
 const RACE_PAYMENT_ID = `${MARKER}-payment-race`;
+const INVOICE_MARK_ID = `${MARKER}-invoice-mark`;
+const MARK_PAYMENT_ID = `${MARKER}-payment-mark`;
+const MARK_ADMIN_ID = `${MARKER}-admin`;
 
 describe("Commission atomicity on real Postgres", () => {
   let app: INestApplication;
@@ -54,6 +57,14 @@ describe("Commission atomicity on real Postgres", () => {
     email: `${MARKER}@norgtech.local`,
     role: UserRole.facturacion,
   };
+
+  const adminUser: AuthUser = {
+    id: MARK_ADMIN_ID,
+    email: `admin-${MARKER}@norgtech.local`,
+    role: UserRole.administrador,
+  };
+
+  let markCommissionId = "";
 
   async function connectOrFail() {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -222,6 +233,43 @@ describe("Commission atomicity on real Postgres", () => {
         paymentDate: new Date("2026-06-15T00:00:00.000Z"),
       });
     });
+
+    // Factura para la carrera markPaid vs reverso (ultimo test del spec).
+    await prisma.invoice.create({
+      data: {
+        id: INVOICE_MARK_ID,
+        invoiceNumber: INVOICE_MARK_ID,
+        customerId: CUSTOMER_ID,
+        companyId: COMPANY_ID,
+        dueDate: new Date("2026-07-15T00:00:00.000Z"),
+        subtotal: new Prisma.Decimal(1000000),
+        taxAmount: new Prisma.Decimal(0),
+        totalAmount: new Prisma.Decimal(1000000),
+        createdBy: MARKER,
+        updatedBy: MARKER,
+      },
+    });
+    await prisma.invoicePayment.create({
+      data: {
+        id: MARK_PAYMENT_ID,
+        invoiceId: INVOICE_MARK_ID,
+        paymentDate: new Date("2026-06-15T00:00:00.000Z"),
+        amount: new Prisma.Decimal(500000),
+        method: PaymentMethod.transferencia,
+        createdBy: MARKER,
+      },
+    });
+    const markRow = await prisma.$transaction(async (tx) =>
+      commissions.accrueFromPayment(tx, {
+        sellerUserId: SELLER_ID,
+        invoiceId: INVOICE_MARK_ID,
+        paymentId: MARK_PAYMENT_ID,
+        base: new Prisma.Decimal(500000),
+        paymentDate: new Date("2026-06-15T00:00:00.000Z"),
+      }),
+    );
+    markCommissionId = markRow?.id ?? "";
+    expect(markCommissionId).not.toBe("");
   });
 
   afterAll(async () => {
@@ -237,11 +285,15 @@ describe("Commission atomicity on real Postgres", () => {
           where: { sellerUserId: SELLER_ID },
         });
         await prisma.invoicePayment.deleteMany({
-          where: { invoiceId: { in: [INVOICE_ID, INVOICE_RACE_ID] } },
+          where: {
+            invoiceId: { in: [INVOICE_ID, INVOICE_RACE_ID, INVOICE_MARK_ID] },
+          },
         });
         await prisma.return.deleteMany({ where: { customerId: CUSTOMER_ID } });
         await prisma.invoice.deleteMany({
-          where: { id: { in: [INVOICE_ID, INVOICE_RACE_ID] } },
+          where: {
+            id: { in: [INVOICE_ID, INVOICE_RACE_ID, INVOICE_MARK_ID] },
+          },
         });
         await prisma.order.deleteMany({ where: { id: ORDER_ID } });
         await prisma.customer.deleteMany({ where: { id: CUSTOMER_ID } });
@@ -256,7 +308,7 @@ describe("Commission atomicity on real Postgres", () => {
         ).toBe(0);
         expect(
           await prisma.invoice.count({
-            where: { id: { in: [INVOICE_ID, INVOICE_RACE_ID] } },
+            where: { id: { in: [INVOICE_ID, INVOICE_RACE_ID, INVOICE_MARK_ID] } },
           }),
         ).toBe(0);
       }
@@ -362,5 +414,71 @@ describe("Commission atomicity on real Postgres", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].reversedAmount.toNumber()).toBe(50000);
     expect(rows[0].status).toBe("reversada");
+  });
+
+  it("does not stamp paidAt when a concurrent full reversal beats markPaid", async () => {
+    // Carrera markPaid vs reverso, determinista por orden de lock (patron de
+    // la barrera `bothOpen`): el reverso abre su tx y TOMA el row lock de las
+    // comisiones de la factura ANTES de quedarse esperando en la barrera. Sin
+    // transaccion+lock en markPaid, el read-then-check de markPaid ya corrio
+    // (neto > 0) cuando el reverso revierte todo: el updateMany posterior
+    // pisa `paidAt` sobre una fila con neto 0 (se liquida lo ya revertido).
+    // Con el FOR UPDATE dentro de la misma tx, markPaid queda bloqueado en el
+    // lock del reverso y, cuando entra, re-lee el neto (0) dentro de la tx y
+    // responde 409 sin stamp.
+    let openReady!: () => void;
+    const reversalOpen = new Promise<void>((resolve) => {
+      openReady = resolve;
+    });
+    let releaseReversal!: () => void;
+    const go = new Promise<void>((resolve) => {
+      releaseReversal = resolve;
+    });
+
+    const reversalPromise = prisma.$transaction(async (tx) => {
+      // Lock de fila ANTES del signal: al momento de lanzar markPaid, el
+      // reverso YA sostiene el lock (el orden del interleave deja de ser
+      // suerte).
+      await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT id FROM "Commission" WHERE "invoiceId" = ${INVOICE_MARK_ID} FOR UPDATE`;
+      openReady();
+      await go;
+      return commissions.reverseForInvoice(
+        tx,
+        INVOICE_MARK_ID,
+        new Prisma.Decimal(500000),
+      );
+    });
+    await reversalOpen;
+
+    const paidPromise = commissions.markPaid(adminUser, markCommissionId);
+    const settledEarly = await Promise.race([
+      paidPromise.then(() => true),
+      new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 250)),
+    ]);
+    // Si markPaid resolvio con el reverso aun esperando en la barrera, corrio
+    // SIN respetar el lock del reverso (pre-fix: 200 con paidAt stampado).
+    expect(settledEarly).toBe(false);
+
+    releaseReversal();
+    const [paidOutcome, reversalOutcome] = await Promise.all([
+      paidPromise.then(
+        () => "paid" as const,
+        (error: unknown) => error,
+      ),
+      reversalPromise,
+    ]);
+
+    // markPaid NO liquida: el neto ya era 0 cuando re-entro (reverso primero).
+    expect(paidOutcome).toBeInstanceOf(ConflictException);
+    expect(reversalOutcome.reversed.toNumber()).toBe(50000);
+
+    const stored = await prisma.commission.findUnique({
+      where: { id: markCommissionId },
+    });
+    expect(stored).not.toBeNull();
+    expect(stored?.paidAt).toBeNull();
+    expect(stored?.status).toBe("reversada");
   });
 });

@@ -964,6 +964,13 @@ enum CommissionStatus {
 // se le pagó al vendedor. Es un estado de liquidacion SEPARADO del status de
 // causacion a proposito: asi una nota credito posterior sigue revirtiendo la
 // fila (el reverso solo toca status causada) y el reporte muestra el neto vivo.
+//
+// LIMITACION PRE-EXISTENTE (ticket producto): el reverso por nota credito
+// solo cubre facturas parcialmente cobradas — ReturnsService topa la nota
+// credito al saldo pendiente de cobro, de modo que sobre una factura saldada
+// el reverso de comision es inalcanzable. Para anular comisiones de facturas
+// saldadas se requiere un flujo de nota credito sobre saldo (credit-balance)
+// o un ajuste manual de comision: decision pendiente de producto.
 model Commission {
   id           String           @id @default(cuid())
   sellerUserId String

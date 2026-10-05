@@ -229,6 +229,13 @@ describe("Commissions ledger (liquidacion)", () => {
           return { count: 1 };
         },
       },
+      // El fix del TOCTOU markPaid-vs-reverso mueve el chequeo dentro de una
+      // $transaction con FOR UPDATE; el stub ejecuta el callback con el propio
+      // stub como tx (sin lock real — la carrera con reverso se prueba en el
+      // spec real-DB commission-atomicity) y el $queryRaw del lock es no-op.
+      $queryRaw: async () => [],
+      $transaction: async (fn: unknown) =>
+        (fn as (tx: unknown) => unknown)(prismaStub),
     };
 
     moduleRef = await Test.createTestingModule({
@@ -424,6 +431,15 @@ describe("Commissions ledger (liquidacion)", () => {
         .patch("/commissions/commission-4/paid")
         .set(authHeader(token))
         .expect(409);
+
+      // Y no deja stamp en la fila: el neto 0 se queda sin paidAt/paidBy
+      // (revision final: la liquidacion nunca cae sobre una fila totalmente
+      // revertida — el caso intercalado con el reverso vive en el spec
+      // real-DB commission-atomicity).
+      const stored = rows.find((item) => item.id === "commission-4")!;
+      expect(stored.paidAt).toBeNull();
+      expect(stored.paidBy).toBeNull();
+      expect(stored.status).toBe("reversada");
     });
 
     it("does not let a concurrent second liquidation overwrite the first trace", async () => {
