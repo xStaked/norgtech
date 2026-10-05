@@ -1,10 +1,16 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../../prisma/prisma.service";
+import { auditState } from "../audit/audit-state";
+import { AuditService } from "../audit/audit.service";
+import { AuthUser } from "../auth/types/authenticated-request";
 import { UpsertPriceListItemDto } from "./dto/upsert-price-list-item.dto";
 
 @Injectable()
 export class PriceListsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
   /**
    * Índice de listas. Muchas no tienen clientes asignados y eso es normal: las
@@ -71,12 +77,12 @@ export class PriceListsService {
     };
   }
 
-  async upsertItem(id: string, dto: UpsertPriceListItemDto) {
+  async upsertItem(id: string, dto: UpsertPriceListItemDto, user: AuthUser) {
     const [list, presentation] = await Promise.all([
       this.prisma.priceList.findUnique({ where: { id }, select: { id: true } }),
       this.prisma.productPresentation.findUnique({
         where: { id: dto.presentationId },
-        select: { id: true },
+        select: { id: true, empaque: true },
       }),
     ]);
 
@@ -89,11 +95,60 @@ export class PriceListsService {
 
     const { presentationId, ...prices } = dto;
 
-    return this.prisma.priceListItem.upsert({
+    // El antes se lee ANTES del upsert: es lo que el timeline muestra como
+    // "precio anterior". Null = la presentación entra por primera vez.
+    const before = await this.prisma.priceListItem.findUnique({
+      where: { priceListId_presentationId: { priceListId: id, presentationId } },
+    });
+
+    const item = await this.prisma.priceListItem.upsert({
       where: { priceListId_presentationId: { priceListId: id, presentationId } },
       update: prices,
       create: { priceListId: id, presentationId, ...prices },
     });
+
+    await this.auditService.record({
+      entityType: "PriceList",
+      entityId: id,
+      action: "price_list.item_upserted",
+      actorUserId: user.id,
+      previousState: auditState(before ? { ...priceSnapshot(before), empaque: presentation.empaque } : null),
+      nextState: auditState({
+        ...priceSnapshot(item),
+        presentationId,
+        empaque: presentation.empaque,
+      }),
+    });
+
+    return item;
+  }
+
+  /**
+   * Último precio VENDIDO a un cliente para un producto: el OrderItem más
+   * reciente de sus pedidos reales. Las cotizaciones (QuoteItem, otra tabla)
+   * nunca se leen aquí: cotizar no es vender.
+   */
+  async findLastSoldPrice(customerId: string, productId: string) {
+    const item = await this.prisma.orderItem.findFirst({
+      where: { productId, order: { customerId } },
+      orderBy: { order: { orderDate: "desc" } },
+      include: {
+        order: { select: { orderNumber: true, orderDate: true, status: true } },
+      },
+    });
+
+    if (!item) {
+      return null;
+    }
+
+    return {
+      customerId,
+      productId,
+      unitPrice: item.unitPrice,
+      orderNumber: item.order.orderNumber,
+      orderDate: item.order.orderDate,
+      orderStatus: item.order.status,
+    };
   }
 
   /**
@@ -112,4 +167,28 @@ export class PriceListsService {
       data: { status: action === "aprobar" ? "aprobada" : "rechazada" },
     });
   }
+}
+
+/**
+ * Lo único que el timeline necesita de un PriceListItem: los precios que el
+ * cliente mandó tal cual (sin/con IVA + niveles 2/3 opcionales).
+ */
+function priceSnapshot(item: {
+  priceSinIva: unknown;
+  priceConIva: unknown;
+  taxPercent: unknown;
+  priceSinIva2: unknown;
+  priceConIva2: unknown;
+  priceSinIva3: unknown;
+  priceConIva3: unknown;
+}) {
+  return {
+    priceSinIva: item.priceSinIva,
+    priceConIva: item.priceConIva,
+    taxPercent: item.taxPercent,
+    priceSinIva2: item.priceSinIva2,
+    priceConIva2: item.priceConIva2,
+    priceSinIva3: item.priceSinIva3,
+    priceConIva3: item.priceConIva3,
+  };
 }

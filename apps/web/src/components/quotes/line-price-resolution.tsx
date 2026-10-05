@@ -157,12 +157,14 @@ export function LinePriceResolution({
     );
   }
 
+  // Sin lista: el cliente cotiza a precio base. Warning explícito (punto 1 de
+  // pendientes-fase2): quien cotiza debe notar que no hay precio negociado.
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md bg-[#eef1f5] px-3 py-1.5 text-[12.5px] text-[#5b6b80]">
-      <span className="rounded bg-[#fdf0dc] px-1.5 py-px text-[10.5px] font-bold text-[#9a6410]">
-        Sin lista asignada
+    <div className="flex flex-wrap items-center gap-2 rounded-md border border-[#f5dfb8] bg-[#fdf0dc] px-3 py-1.5 text-[12.5px] text-[#6d4a10]">
+      <span className="rounded bg-[#f3d9a4] px-1.5 py-px text-[10.5px] font-bold text-[#6d4a10]">
+        Va a precio base
       </span>
-      <span>precio base del producto</span>
+      <span>el cliente no tiene este producto en su lista</span>
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { LinePriceResolution } from "./line-price-resolution";
+import { LastSoldPrice } from "./last-sold-price";
 
 interface Product {
   id: string;
@@ -231,14 +232,17 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
                 ]}
               />
               {item.productId && selectedCustomerId ? (
-                <LinePriceResolution
-                  productId={item.productId}
-                  customerId={selectedCustomerId}
-                  presentationId={item.presentationId}
-                  onSelectPresentation={(presentationId) =>
-                    updateItem(index, "presentationId", presentationId)
-                  }
-                />
+                <>
+                  <LinePriceResolution
+                    productId={item.productId}
+                    customerId={selectedCustomerId}
+                    presentationId={item.presentationId}
+                    onSelectPresentation={(presentationId) =>
+                      updateItem(index, "presentationId", presentationId)
+                    }
+                  />
+                  <LastSoldPrice customerId={selectedCustomerId} productId={item.productId} />
+                </>
               ) : null}
               {(() => {
                 const line = lineFor(index);
