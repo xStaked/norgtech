@@ -49,6 +49,13 @@ test("parsea estrictamente YYYY-MM-DD", () => {
   assert.equal(parseIsoDate(""), null);
 });
 
+test("rechaza el año 0000 (no es una fecha navegable)", () => {
+  // El guard de `year >= 1` vive en parseIsoDate; antes lo parcheaba
+  // `parseMonthParam` y cualquier otro consumidor se lo perdía.
+  assert.equal(parseIsoDate("0000-05-01"), null);
+  assert.equal(parseIsoDate("0000-01-01"), null);
+});
+
 test("los meses traen sus días (bisiesto y no)", () => {
   assert.equal(daysInMonth(2024, 2), 29);
   assert.equal(daysInMonth(2026, 2), 28);

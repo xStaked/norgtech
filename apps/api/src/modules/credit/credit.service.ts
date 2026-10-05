@@ -215,13 +215,19 @@ export class CreditService {
     };
   }
 
-  async getCreditAlerts(companyId?: string): Promise<CreditAlertDto[]> {
+  async getCreditAlerts(companyId?: string, user?: AuthUser): Promise<CreditAlertDto[]> {
+    // B-FILT-1 (alertas): mismo acote por cartera que `getCreditSummary` — el
+    // comercial solo ve alertas de SUS clientes, con igualdad estricta sobre
+    // `assignedToUserId` (los clientes sin asignar quedan fuera). Dirección,
+    // administrador y llamadas internas (sin usuario) ven toda la empresa.
+    const ownPortfolioOnly = user?.role === UserRole.comercial;
     const customers = await this.prisma.customer.findMany({
       where: {
         creditLimit: { gt: 0 },
         ...(companyId
           ? { invoices: { some: { companyId } } }
           : {}),
+        ...(ownPortfolioOnly ? { assignedToUserId: user.id } : {}),
       },
       select: {
         id: true,

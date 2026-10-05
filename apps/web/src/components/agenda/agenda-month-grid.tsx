@@ -66,7 +66,8 @@ const KIND_COLORS: Record<MonthAgendaItem["kind"], string> = {
 const OVERDUE_COLOR = "#b42318";
 
 // 3 compromisos por celda: en un ancho de ~1/7 de tarjeta caben 3 chips de
-// una línea; el resto se anuncia con "+N más" (el detalle vive en la lista).
+// una línea; el resto se anuncia con "+N más", que enlaza a la lista de la
+// agenda (misma página, filtro por defecto) donde vive el detalle.
 const MAX_CHIPS_PER_CELL = 3;
 
 const monthHref = (year: number, month: number) =>
@@ -186,9 +187,12 @@ export function AgendaMonthGrid({ year, month, byDay, today }: AgendaMonthGridPr
                     );
                   })}
                   {overflow > 0 && (
-                    <span className="block px-1.5 text-[10px] font-bold text-muted-foreground">
+                    <Link
+                      href="/agenda"
+                      className="block rounded-md px-1.5 text-[10px] font-bold text-muted-foreground no-underline transition-colors outline-none hover:bg-[#e6f0f6] hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40"
+                    >
                       +{overflow} más
-                    </span>
+                    </Link>
                   )}
                 </div>
               </div>

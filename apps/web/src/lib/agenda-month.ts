@@ -31,11 +31,10 @@ export function parseMonthParam(
   todayDayKey: string,
 ): { year: number; month: number } {
   const match = /^(\d{4})-(\d{2})$/.exec(value ?? "");
-  // El parseo estricto de date-grid valida el mes; el año >= 1 se exige aquí
-  // porque `parseIsoDate` no lo hace (ese guard vive en `isoFromParts`) y
-  // "0000-05" no es un mes navegable de la agenda.
+  // El parseo estricto de date-grid valida mes y año (>= 1): "0000-05" no es
+  // un mes navegable y cae al respaldo junto con el resto de inválidos.
   const candidate = match ? parseIsoDate(`${match[1]}-${match[2]}-01`) : null;
-  if (candidate && candidate.year >= 1) return { year: candidate.year, month: candidate.month };
+  if (candidate) return { year: candidate.year, month: candidate.month };
   return { year: Number(todayDayKey.slice(0, 4)), month: Number(todayDayKey.slice(5, 7)) };
 }
 

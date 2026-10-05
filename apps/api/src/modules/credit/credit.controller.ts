@@ -23,7 +23,10 @@ export class CreditController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "comercial")
   @Get("dashboard/alerts")
-  getDashboardAlerts(@Query("companyId") companyId?: string) {
-    return this.creditService.getCreditAlerts(companyId);
+  getDashboardAlerts(
+    @CurrentUser() user: AuthUser,
+    @Query("companyId") companyId?: string,
+  ) {
+    return this.creditService.getCreditAlerts(companyId, user);
   }
 }

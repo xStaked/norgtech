@@ -64,6 +64,10 @@ export function parseIsoDate(value: string): ParsedIsoDate | null {
   const year = Number(match[1]);
   const month = Number(match[2]);
   const day = Number(match[3]);
+  // El año 0000 no existe: ninguna fecha navegable del sistema lo usa y dejar
+  // pasar el cero rompería a quién reconstruya la terna (p.ej. `formatDateShort`
+  // con `Date.UTC`). El guard vive aquí (antes lo parcheaba `parseMonthParam`).
+  if (year < 1) return null;
   if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) return null;
   return { year, month, day };
 }
