@@ -45,6 +45,7 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   { prefix: "/analytics", isAllowed: (role) => canAccess(role, "/analytics") },
   { prefix: "/reports", isAllowed: (role) => canAccess(role, "/reports") },
   { prefix: "/price-lists", isAllowed: (role) => canAccess(role, "/price-lists") },
+  { prefix: "/users", isAllowed: (role) => canAccess(role, "/users") },
 ];
 
 export function matchesPrefix(pathname: string, prefix: string) {
