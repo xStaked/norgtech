@@ -234,6 +234,16 @@ def test_overdue_min_dias_mora_deja_solo_los_mas_vencidos():
     assert payload["vencidas"][0]["dias_mora"] == 45
 
 
+def test_overdue_llama_al_endpoint_sin_params():
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[])
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        asyncio.run(list_overdue_invoices.ainvoke({"auth_token": "Bearer x"}))
+    # Fija el contrato de endpoint: un solo GET a /invoices/overdue, sin
+    # params (el equivalente ?overdue=true lo reusa list_invoices).
+    fake_client.get.assert_awaited_once_with("/invoices/overdue")
+
+
 def test_overdue_sin_filtro_trae_todas_las_vencidas():
     vieja = _invoice(
         1, dueDate=(date.today() - timedelta(days=45)).isoformat() + "T00:00:00.000Z"

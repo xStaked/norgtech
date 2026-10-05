@@ -252,6 +252,17 @@ async def list_overdue_invoices(
         return "min_dias_mora debe ser 0 o más. Con 0 (o sin el parámetro) se listan todas las vencidas."
     try:
         client = NestJSClient(auth_token)
+        # Endpoint: GET /invoices/overdue (NO ?overdue=true). Equivalencia
+        # verificada en el API:
+        # - controller L93-95 (@Get("overdue") -> getOverdueInvoices) vs L75-80
+        #   (findAll acepta ListInvoicesDto.overdue?: "true", dto L36).
+        # - service getOverdueInvoices L414-422: dueDate < now, status notIn
+        #   [pagada, anulada], scoping comercial por assignedToUserId (L420)
+        #   y orderBy dueDate ASC — el mismo where que buildWhere L446-448 +
+        #   scoping L431 aplica para ?overdue=true. Se usa este endpoint porque
+        #   su orden (vencida más antigua primero) es el contrato de la tool;
+        #   ?overdue=true ordena por issueDate DESC (service L155) y ya lo
+        #   reusa list_invoices(only_overdue=True).
         data = await client.get("/invoices/overdue")
         invoices = _items(data)
         if customer_id:
