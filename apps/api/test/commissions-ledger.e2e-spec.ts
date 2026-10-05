@@ -58,6 +58,32 @@ describe("Commissions ledger (liquidacion)", () => {
   let rows: CommissionRow[];
   let whereCaptures: Array<Record<string, unknown> | undefined>;
 
+  /**
+   * Ventana de carrera opt-in: con valor 2, las proximas DOS lecturas de
+   * `commission.findUnique` se sincronizan en una barrera antes de responder,
+   * para que ambas vean la fila SIN pagar (el interleave de dos PATCH
+   * concurrentes en la vida real; mismo recurso que la barrera `bothOpen` del
+   * spec real-DB de la Task 2). Con 0 responde al vuelo.
+   */
+  let raceBarrier = 0;
+  let raceArrived = 0;
+  let raceRelease: (() => void) | null = null;
+
+  function arriveRaceBarrier(): Promise<void> {
+    raceArrived += 1;
+    if (raceArrived >= raceBarrier) {
+      raceBarrier = 0;
+      raceArrived = 0;
+      const release = raceRelease;
+      raceRelease = null;
+      release?.();
+      return Promise.resolve();
+    }
+    return new Promise<void>((resolve) => {
+      raceRelease = resolve;
+    });
+  }
+
   function seedLedger(): void {
     rows = [
       row({
@@ -180,19 +206,27 @@ describe("Commissions ledger (liquidacion)", () => {
             .filter((item) => matchesWhere(item, where))
             .map((item) => ({ ...item, payment: { ...item.payment! } }));
         },
-        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
-          rows.find((item) => item.id === id) ?? null,
-        update: async ({
-          where: { id },
+        findUnique: async ({ where: { id } }: { where: { id: string } }) => {
+          if (raceBarrier > 0) {
+            await arriveRaceBarrier();
+          }
+          return rows.find((item) => item.id === id) ?? null;
+        },
+        updateMany: async ({
+          where,
           data,
         }: {
-          where: { id: string };
+          where: { id: string; paidAt?: null };
           data: Record<string, unknown>;
         }) => {
-          const found = rows.find((item) => item.id === id);
-          if (!found) throw new Error("Commission not found in stub");
+          const found = rows.find((item) => item.id === where.id);
+          // Semantica real del updateMany condicional: solo muta si TODAS las
+          // condiciones del where siguen vigentes en la fila.
+          if (!found || (where.paidAt === null && found.paidAt)) {
+            return { count: 0 };
+          }
           Object.assign(found, data);
-          return { ...found };
+          return { count: 1 };
         },
       },
     };
@@ -210,6 +244,9 @@ describe("Commissions ledger (liquidacion)", () => {
 
   beforeEach(() => {
     seedLedger();
+    raceBarrier = 0;
+    raceArrived = 0;
+    raceRelease = null;
   });
 
   afterAll(async () => {
@@ -387,6 +424,72 @@ describe("Commissions ledger (liquidacion)", () => {
         .patch("/commissions/commission-4/paid")
         .set(authHeader(token))
         .expect(409);
+    });
+
+    it("does not let a concurrent second liquidation overwrite the first trace", async () => {
+      const adminToken = await loginAs(app, UserRole.administrador);
+      const directorToken = await loginAs(app, UserRole.director_comercial);
+
+      // Dos liquidaciones concurrentes leen la fila antes de que la primera
+      // escriba (barrera de 2 lecturas). Con find-then-update ambas pasaban el
+      // chequeo de paidAt: el segundo update pisaba silenciosamente el
+      // paidAt/paidBy del primero y el rastro de quien liquido se perdia (ambos
+      // 200, rastro = ultimo escritor). Con updateMany condicional, uno gana
+      // (200) y el otro ve count 0 (409).
+      raceBarrier = 2;
+      const settled = await Promise.allSettled([
+        request(app.getHttpServer())
+          .patch("/commissions/commission-1/paid")
+          .set(authHeader(adminToken)),
+        request(app.getHttpServer())
+          .patch("/commissions/commission-1/paid")
+          .set(authHeader(directorToken)),
+      ]);
+      raceBarrier = 0;
+
+      if (settled.some((entry) => entry.status !== "fulfilled")) {
+        throw new Error("both concurrent PATCHes must get a response");
+      }
+      const responses = settled.map(
+        (entry) =>
+          (entry as PromiseFulfilledResult<unknown>).value as {
+            status: number;
+            body: { paidBy: string; paidAt: string; message: string };
+          },
+      );
+
+      // Exactamente una liquidacion pasa; la otra es 409, sin importar el
+      // orden en que llegaron los requests.
+      expect(responses.map((response) => response.status).sort()).toEqual([200, 409]);
+
+      // El rastro queda el del que paso: el perdedor no pisa ni paidAt ni
+      // paidBy (antes del fix quedaba el del ultimo escritor).
+      const winner = responses.find((response) => response.status === 200)!;
+      const stored = rows.find((item) => item.id === "commission-1")!;
+      expect(stored.paidBy).toBe(winner.body.paidBy);
+      expect((stored.paidAt as Date).toISOString()).toBe(winner.body.paidAt);
+      // Y el cuerpo del 409 dice por que.
+      const loser = responses.find((response) => response.status === 409)!;
+      expect(loser.body.message).toBe("Commission already marked as paid");
+    });
+
+    it("rejects a sequential second mark-paid with 409 keeping the first trace", async () => {
+      const adminToken = await loginAs(app, UserRole.administrador);
+      const directorToken = await loginAs(app, UserRole.director_comercial);
+
+      const first = await request(app.getHttpServer())
+        .patch("/commissions/commission-1/paid")
+        .set(authHeader(adminToken))
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .patch("/commissions/commission-1/paid")
+        .set(authHeader(directorToken))
+        .expect(409);
+
+      const stored = rows.find((item) => item.id === "commission-1")!;
+      expect(stored.paidBy).toBe(adminId);
+      expect((stored.paidAt as Date).toISOString()).toBe(first.body.paidAt);
     });
 
     it("returns 404 for an unknown commission", async () => {

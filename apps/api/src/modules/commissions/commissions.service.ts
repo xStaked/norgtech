@@ -412,10 +412,22 @@ export class CommissionsService {
       throw new ConflictException("Commission has no net amount left to pay");
     }
 
-    return this.prisma.commission.update({
-      where: { id: commissionId },
+    // La guarda `paidAt: null` en el WHERE cierra la carrera find-then-update:
+    // dos liquidaciones concurrentes cargaban la fila sin paidAt, ambas pasaban
+    // el chequeo y el segundo update pisaba silenciosamente el rastro del
+    // primero. Con updateMany condicional (mismo patron que
+    // `VisitsService.update`/`completar`) solo la primera muta la fila; la otra
+    // ve count 0 y termina en 409.
+    const updatedCount = await this.prisma.commission.updateMany({
+      where: { id: commissionId, paidAt: null },
       data: { paidAt: new Date(), paidBy: user.id },
     });
+
+    if (updatedCount.count !== 1) {
+      throw new ConflictException("Commission already marked as paid");
+    }
+
+    return this.prisma.commission.findUnique({ where: { id: commissionId } });
   }
 
   /**
