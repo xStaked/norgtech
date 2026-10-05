@@ -702,7 +702,18 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       <FormSection title="Aprobacion">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Aprobacion" htmlFor="approvalStatus">
-            <Input id="approvalStatus" name="approvalStatus" placeholder="Aprobado / Rechazado / Pendiente" />
+            {/* Pedido del equipo nace valido (opcional). Enviar a revisión es la
+                excepción explícita. El texto phá libre se pierde: solo
+                en_revision activa la cola de revisión. */}
+            <Select
+              id="approvalStatus"
+              name="approvalStatus"
+              defaultValue=""
+              options={[
+                { value: "", label: "Válido (nace aprobado)" },
+                { value: "en_revision", label: "Enviar a revisión" },
+              ]}
+            />
           </Field>
           <Field label="Motivo" htmlFor="approvalReason">
             <Input id="approvalReason" name="approvalReason" />

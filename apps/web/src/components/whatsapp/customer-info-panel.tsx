@@ -281,7 +281,10 @@ function buildOrderPayload(
     receiverPhone: getString(proposal.receiverPhone),
     receiverRole: getString(proposal.receiverRole),
     invoiceFilingPlace: getString(proposal.invoiceFilingPlace),
-    approvalStatus: getString(proposal.approvalStatus) ?? "en_revision",
+    // Regla: pedido creado por el EQPUIO desde el inbox nace VÁLIDO; solo los
+    // generados por el cliente (caso Nora) van a revisión. El backend default
+    // ya es válido, así que no enviamos approvalStatus aquí.
+    approvalStatus: undefined,
     approvalReason: getString(proposal.approvalReason),
     approvalName: getString(proposal.approvalName),
     reviewDate: getString(proposal.reviewDate),

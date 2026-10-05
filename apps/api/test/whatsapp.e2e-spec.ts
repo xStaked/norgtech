@@ -1785,7 +1785,9 @@ describe("WhatsApp inbox", () => {
 
     expect(response.body.sourceConversationId).toBe("conversation-1");
     expect(response.body.sourceConversation.id).toBe("conversation-1");
-    expect(response.body.approvalStatus).toBe("en_revision");
+    // Regla: solo los pedidos generados por el CLIENTE (caso Nora) van a
+    // revision. El pedido que el equipo crea desde el inbox nace valido.
+    expect(response.body.approvalStatus).toBeNull();
     // billingCompanyNameSnapshot always reflects the billing company (company.name),
     // regardless of any dto.billingCompanyNameSnapshot override (ORD-03).
     expect(response.body.billingCompanyNameSnapshot).toBe("Norgtech");

@@ -530,10 +530,13 @@ export class WhatsAppService {
 
     this.assertCanAccess(user, conversation);
 
+    // Regla: solo los pedidos generados por el CLIENTE (caso Nora) van a
+    // revision. El pedido que el equipo crea desde el inbox nace valido —
+    // aprobarlo dos veces duplica trabajo y retrasa la operacion.
     return this.ordersService.create(user, {
       ...dto,
       sourceConversationId: conversationId,
-      approvalStatus: dto.approvalStatus ?? "en_revision",
+      approvalStatus: dto.approvalStatus ?? undefined,
     });
   }
 
