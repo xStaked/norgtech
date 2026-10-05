@@ -50,8 +50,8 @@ export class CustomerGoalsController {
     "logistica",
   )
   @Get(":id/goals")
-  findAllByCustomer(@Param("id") customerId: string) {
-    return this.customerGoalsService.findAllByCustomer(customerId);
+  findAllByCustomer(@CurrentUser() user: AuthUser, @Param("id") customerId: string) {
+    return this.customerGoalsService.findAllByCustomer(customerId, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -93,6 +93,7 @@ export class CustomerGoalsController {
   )
   @Get(":id/goal-progress")
   getProgress(
+    @CurrentUser() user: AuthUser,
     @Param("id") customerId: string,
     @Query("periodType") periodType?: string,
     @Query("periodValue") periodValue?: string,
@@ -101,6 +102,7 @@ export class CustomerGoalsController {
       customerId,
       periodType,
       periodValue,
+      user,
     );
   }
 }

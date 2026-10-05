@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
-import { OrderStatus, Prisma } from "@prisma/client";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { OrderStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
+import { AuthUser } from "../auth/types/authenticated-request";
 import { CreditSummaryDto, PurchaseProgressDto } from "./dto/credit-summary.dto";
 import { CreditAlertDto } from "./dto/credit-alert.dto";
 
@@ -138,13 +139,34 @@ export class CreditService {
     }
   }
 
-  async getCreditSummary(customerId: string): Promise<CreditSummaryDto> {
+  /**
+   * B-FILT-1 / R3: el comercial solo consulta el credito de SUS clientes
+   * (asignados a el), igual que las facturas acotan su listado
+   * (invoices.service buildWhere). Dirección y facturación ven todo.
+   */
+  private ensureOwnPortfolio(user: AuthUser, assignedToUserId: string | null): void {
+    if (user.role !== UserRole.comercial) return;
+
+    if (assignedToUserId !== user.id) {
+      throw new ForbiddenException(
+        "Solo puedes consultar el credito de tus clientes asignados",
+      );
+    }
+  }
+
+  async getCreditSummary(customerId: string, user?: AuthUser): Promise<CreditSummaryDto> {
     const customer = await this.prisma.customer.findUnique({
       where: { id: customerId },
-      select: { creditLimit: true, purchaseBudget: true },
+      select: {
+        creditLimit: true,
+        purchaseBudget: true,
+        assignedToUserId: true,
+      },
     });
 
     if (!customer) throw new NotFoundException("Cliente no encontrado");
+
+    if (user) this.ensureOwnPortfolio(user, customer.assignedToUserId);
 
     const currentBalance = (await this.getCustomerExposure(customerId)).toNumber();
     const creditLimit = customer.creditLimit ? customer.creditLimit.toNumber() : null;
@@ -193,13 +215,19 @@ export class CreditService {
     };
   }
 
-  async getCreditAlerts(companyId?: string): Promise<CreditAlertDto[]> {
+  async getCreditAlerts(companyId?: string, user?: AuthUser): Promise<CreditAlertDto[]> {
+    // B-FILT-1 (alertas): mismo acote por cartera que `getCreditSummary` — el
+    // comercial solo ve alertas de SUS clientes, con igualdad estricta sobre
+    // `assignedToUserId` (los clientes sin asignar quedan fuera). Dirección,
+    // administrador y llamadas internas (sin usuario) ven toda la empresa.
+    const ownPortfolioOnly = user?.role === UserRole.comercial;
     const customers = await this.prisma.customer.findMany({
       where: {
         creditLimit: { gt: 0 },
         ...(companyId
           ? { invoices: { some: { companyId } } }
           : {}),
+        ...(ownPortfolioOnly ? { assignedToUserId: user.id } : {}),
       },
       select: {
         id: true,

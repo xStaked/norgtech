@@ -6,7 +6,7 @@ import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { CreditService } from "../src/modules/credit/credit.service";
 import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
-import { refreshTokenStub } from "./helpers/login-as";
+import { MOCK_USERS, loginAs, refreshTokenStub } from "./helpers/login-as";
 
 describe("Credit", () => {
   let app: INestApplication;
@@ -23,6 +23,10 @@ describe("Credit", () => {
       role: UserRole.administrador,
       active: true,
     },
+    // B-FILT-1: usuarios de rol comercial y facturacion para verificar el acote
+    // por cartera del resumen de credito (R3: comercial solo sus clientes).
+    MOCK_USERS[UserRole.comercial],
+    MOCK_USERS[UserRole.facturacion],
   ];
   const companies = [
     { id: "company-a", name: "Norgtech A", prefix: "NTA", isActive: true },
@@ -109,6 +113,50 @@ describe("Credit", () => {
       companyId: "company-a",
       segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
+    // B-FILT-1: comercial acotado a su cartera (R3). Fixture sin facturas ni
+    // pedidos para no alterar las expectativas de las alertas (utilizacion 0%).
+    {
+      id: "customer-own-portfolio",
+      displayName: "Agro Cartera Propia",
+      taxId: "902111000-1",
+      address: "Calle 8",
+      creditLimit: new Prisma.Decimal(800000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      companyId: "company-a",
+      assignedToUserId: MOCK_USERS[UserRole.comercial].id,
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
+    {
+      id: "customer-foreign-portfolio",
+      displayName: "Agro Cartera Ajena",
+      taxId: "902222111-1",
+      address: "Calle 9",
+      creditLimit: new Prisma.Decimal(700000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      companyId: "company-a",
+      assignedToUserId: MOCK_USERS[UserRole.administrador].id,
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
+    // B-FILT-1 (alertas): cliente de la cartera del comercial EN estado de
+    // alerta (920000/1000000 = 92%). Su factura va en company-b para no alterar
+    // el filtro `companyId=company-a` de las pruebas de alertas existentes.
+    {
+      id: "customer-own-alert",
+      displayName: "Agro Alerta Propia",
+      taxId: "902333222-1",
+      address: "Calle 10",
+      creditLimit: new Prisma.Decimal(1000000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      companyId: "company-b",
+      assignedToUserId: MOCK_USERS[UserRole.comercial].id,
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
   ];
   const invoices: Array<{
     id: string;
@@ -163,6 +211,23 @@ describe("Credit", () => {
       orderId: "order-exp-voided",
       status: "anulada",
       totalAmount: new Prisma.Decimal(200000),
+    },
+    // B-FILT-1 (alertas): alerta de un cliente PROPIO del comercial (92%) y de
+    // uno AJENO (asignado a admin, 80%). Ambas en company-b: el filtro
+    // `companyId=company-a` de las pruebas existentes no cambia.
+    {
+      id: "invoice-own-alert",
+      customerId: "customer-own-alert",
+      companyId: "company-b",
+      status: "emitida",
+      totalAmount: new Prisma.Decimal(920000),
+    },
+    {
+      id: "invoice-foreign-alert",
+      customerId: "customer-foreign-portfolio",
+      companyId: "company-b",
+      status: "emitida",
+      totalAmount: new Prisma.Decimal(560000),
     },
   ];
   const orders: Array<Record<string, unknown>> = [
@@ -233,9 +298,21 @@ describe("Credit", () => {
     const customer = {
       findUnique: async ({ where: { id } }: { where: { id: string } }) =>
         customers.find((c) => c.id === id) ?? null,
-      findMany: async ({ where }: { where?: { invoices?: { some?: { companyId?: string } } } }) => {
+      findMany: async ({
+        where,
+      }: {
+        where?: {
+          invoices?: { some?: { companyId?: string } };
+          assignedToUserId?: string;
+        };
+      }) => {
         return customers.filter((c) => {
           if (!c.creditLimit || c.creditLimit.lte(0)) return false;
+          // B-FILT-1: igualdad estricta con assignedToUserId — los clientes sin
+          // asignar (undefined/null) quedan fuera del acote por cartera.
+          if (where?.assignedToUserId && c.assignedToUserId !== where.assignedToUserId) {
+            return false;
+          }
           const companyId = where?.invoices?.some?.companyId;
           if (!companyId) return true;
           return invoices.some((i) => i.customerId === c.id && i.companyId === companyId);
@@ -418,6 +495,36 @@ describe("Credit", () => {
     expect(response.body.availableCredit).toBe(150000);
   });
 
+  describe("B-FILT-1: comercial acotado a su cartera (R3)", () => {
+    it("comercial lee el resumen de credito de SU cliente asignado", async () => {
+      const comercialToken = await loginAs(app, UserRole.comercial);
+      const response = await api()
+        .get("/credit/customers/customer-own-portfolio/summary")
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(200);
+
+      expect(response.body.creditLimit).toBe(800000);
+    });
+
+    it("comercial recibe 403 en el resumen de credito de un cliente ajeno", async () => {
+      const comercialToken = await loginAs(app, UserRole.comercial);
+      await api()
+        .get("/credit/customers/customer-foreign-portfolio/summary")
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(403);
+    });
+
+    it("facturacion (rol de control) sigue viendo clientes ajenos", async () => {
+      const facToken = await loginAs(app, UserRole.facturacion);
+      const response = await api()
+        .get("/credit/customers/customer-foreign-portfolio/summary")
+        .set("Authorization", `Bearer ${facToken}`)
+        .expect(200);
+
+      expect(response.body.creditLimit).toBe(700000);
+    });
+  });
+
   it("returns null credit values for a customer without credit limit", async () => {
     const response = await api()
       .get("/credit/customers/customer-no-limit/summary")
@@ -453,6 +560,13 @@ describe("Credit", () => {
         currentBalance: 950000,
         utilizationPercent: 95,
       }),
+      // B-FILT-1 (alertas): la cartera propia y la ajena de los fixtures
+      // nuevos también alertan (92% y 80%) para el admin, que ve toda la empresa.
+      expect.objectContaining({
+        customerId: "customer-own-alert",
+        currentBalance: 920000,
+        utilizationPercent: 92,
+      }),
       expect.objectContaining({
         customerId: "customer-company-b",
         currentBalance: 900000,
@@ -463,10 +577,55 @@ describe("Credit", () => {
         currentBalance: 850000,
         utilizationPercent: 85,
       }),
+      expect.objectContaining({
+        customerId: "customer-foreign-portfolio",
+        currentBalance: 560000,
+        utilizationPercent: 80,
+      }),
     ]);
     expect(response.body).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ customerId: "customer-low" })]),
     );
+  });
+
+  describe("B-FILT-1 (alertas de dashboard): comercial acotado a su cartera (R3)", () => {
+    it("comercial solo ve alertas de SUS clientes asignados (ni ajenos ni sin asignar)", async () => {
+      const comercialToken = await loginAs(app, UserRole.comercial);
+      const response = await api()
+        .get("/credit/dashboard/alerts")
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(200);
+
+      // Igualdad estricta con assignedToUserId: el unico cliente del comercial
+      // en estado de alerta es customer-own-alert. Quedan fuera los sin
+      // asignar (alert-orders, company-b, high) y el asignado a otro (foreign).
+      expect(response.body).toEqual([
+        expect.objectContaining({
+          customerId: "customer-own-alert",
+          currentBalance: 920000,
+          utilizationPercent: 92,
+        }),
+      ]);
+    });
+
+    it("administrador (rol sin acote) sigue viendo las alertas de toda la empresa", async () => {
+      const response = await api()
+        .get("/credit/dashboard/alerts")
+        .set("Authorization", `Bearer ${token}`)
+        .expect(200);
+
+      const customerIds = response.body.map(
+        (alert: { customerId: string }) => alert.customerId,
+      );
+      expect(customerIds).toEqual(
+        expect.arrayContaining([
+          "customer-alert-orders",
+          "customer-own-alert",
+          "customer-foreign-portfolio",
+          "customer-high",
+        ]),
+      );
+    });
   });
 
   it("filters dashboard alerts by company", async () => {

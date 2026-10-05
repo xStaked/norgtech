@@ -1,12 +1,14 @@
 import { AgendaFilters } from "@/components/agenda/agenda-filters";
 import { AgendaQueue } from "@/components/agenda/agenda-queue";
 import type { AgendaView } from "@/components/agenda/agenda-filters";
+import { AgendaMonthGrid } from "@/components/agenda/agenda-month-grid";
 import { ButtonLink } from "@/components/ui/button-link";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
 import { StatCard } from "@/components/ui/stat-card";
 import { apiFetch } from "@/lib/api.server";
-import { isSameDayInBogota } from "@/lib/datetime";
+import { isSameDayInBogota, dayKeyInBogota } from "@/lib/datetime";
+import { filterByMonth, indexByDay, parseMonthParam } from "@/lib/agenda-month";
 import { getCurrentUser } from "@/lib/auth.server";
 import { canCreate } from "@/lib/auth";
 
@@ -133,6 +135,31 @@ export default async function AgendaPage({
   const user = await getCurrentUser();
   const userRole = user?.role ?? null;
 
+  // ── Vista mensual (VIS-03) ────────────────────────────────────────────────
+  // El API de /visits y /follow-up-tasks no expone parámetros from/to (solo
+  // status/today/thisWeek/overdue/assignedToMe/customerId), así que el mes se
+  // acota aquí, sobre la data que esta página YA trae para las tarjetas de
+  // estadísticas: ninguna petición adicional y ningún rango anual pedido de
+  // una sola vez (Review Focus del plan). El alcance es el mismo de las
+  // vistas hoy/semana/vencidos: mismas peticiones, mismo usuario, sin filtro
+  // por vendedor que puentea (la agenda es la cola compartida del equipo).
+  const today = dayKeyInBogota(new Date());
+  const shownMonth = parseMonthParam(
+    typeof params.mes === "string" ? params.mes : undefined,
+    today,
+  );
+  // Los items de la grilla salen de la lista completa (no de la ventana de la
+  // vista lista): en `view=mes` las peticiones de hoy/semana/vencidos no corren.
+  // El índice agrupa TODA la lista (las celdas de relleno de monthGrid son días
+  // reales de los meses vecinos y pintan sus compromisos tenues); la cuenta de
+  // la pestaña Mes sí queda acotada al mes mostrado.
+  const dayItems = toAgendaItems(allVisits, allTasks).map((item) => ({
+    ...item,
+    day: dayKeyInBogota(item.scheduledAt),
+  }));
+  const monthItems = filterByMonth(dayItems, shownMonth.year, shownMonth.month);
+  const byDay = indexByDay(dayItems);
+
   const counts: Record<AgendaView, number> = {
     hoy: todayVisits.length + dueTodayTasks.length + overdueTasks.filter((t) => !isDueToday(t)).length,
     semana: allVisits.filter((v) => {
@@ -161,6 +188,7 @@ export default async function AgendaPage({
       return d.getTime() >= start.getTime() && d.getTime() <= end.getTime();
     }).length,
     vencidos: overdueTasks.length + overdueVisits.length,
+    mes: monthItems.length,
   };
 
   return (
@@ -218,33 +246,46 @@ export default async function AgendaPage({
             ? "Foco de hoy"
             : view === "semana"
               ? "Agenda de la semana"
-              : "Vencidos y urgentes"
+              : view === "mes"
+                ? "Vista mensual"
+                : "Vencidos y urgentes"
         }
         description={
           view === "hoy"
             ? "Visitas de hoy y tareas que vencen o están vencidas."
             : view === "semana"
               ? "Todas las visitas y seguimientos programados para esta semana."
-              : "Visitas y seguimientos cuya fecha ya pasó y siguen sin resolver."
+              : view === "mes"
+                ? "Visitas y seguimientos del mes. Clic en un compromiso para abrir su detalle."
+                : "Visitas y seguimientos cuya fecha ya pasó y siguen sin resolver."
         }
       >
-        <AgendaQueue
-          items={items}
-          emptyTitle={
-            view === "hoy"
-              ? "Hoy no hay compromisos"
-              : view === "semana"
-                ? "Sin actividades esta semana"
-                : "Sin elementos vencidos"
-          }
-          emptyDescription={
-            view === "hoy"
-              ? "La agenda del día está limpia. Puedes cargar una visita o un seguimiento nuevo."
-              : view === "semana"
-                ? "No hay visitas ni seguimientos programados para esta semana."
-                : "No hay visitas ni seguimientos vencidos."
-          }
-        />
+        {view === "mes" ? (
+          <AgendaMonthGrid
+            year={shownMonth.year}
+            month={shownMonth.month}
+            byDay={byDay}
+            today={today}
+          />
+        ) : (
+          <AgendaQueue
+            items={items}
+            emptyTitle={
+              view === "hoy"
+                ? "Hoy no hay compromisos"
+                : view === "semana"
+                  ? "Sin actividades esta semana"
+                  : "Sin elementos vencidos"
+            }
+            emptyDescription={
+              view === "hoy"
+                ? "La agenda del día está limpia. Puedes cargar una visita o un seguimiento nuevo."
+                : view === "semana"
+                  ? "No hay visitas ni seguimientos programados para esta semana."
+                  : "No hay visitas ni seguimientos vencidos."
+            }
+          />
+        )}
       </SectionCard>
     </div>
   );

@@ -52,6 +52,13 @@ export const dateFormatter = new Intl.DateTimeFormat("es-CO", {
   dateStyle: "medium",
 });
 
+/** Solo la hora ("09:30 a. m."): la usan los chips de la vista mensual. */
+export const shortTimeFormatter = new Intl.DateTimeFormat("es-CO", {
+  timeZone: BOGOTA_TIME_ZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
 const dayKeyFormatter = new Intl.DateTimeFormat("en-CA", {
   timeZone: BOGOTA_TIME_ZONE,
   year: "numeric",

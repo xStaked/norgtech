@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -7,7 +8,7 @@ import { PrismaService } from "../../prisma/prisma.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateCustomerGoalDto } from "./dto/create-customer-goal.dto";
 import { UpdateCustomerGoalDto } from "./dto/update-customer-goal.dto";
-import { OrderStatus } from "@prisma/client";
+import { OrderStatus, UserRole } from "@prisma/client";
 
 @Injectable()
 export class CustomerGoalsService {
@@ -35,7 +36,31 @@ export class CustomerGoalsService {
     });
   }
 
-  findAllByCustomer(customerId: string) {
+  /**
+   * B-FILT-2 / R3: un comercial solo consulta metas y avance de SUS clientes
+   * (asignados a el). Los demas roles de lectura (tec, fac, log) siguen viendo
+   * las metas tal como las muestra la ficha del cliente; escritura sigue
+   * gobernada por los @Roles del controller.
+   */
+  private async ensureOwnPortfolio(user: AuthUser, customerId: string): Promise<void> {
+    if (user.role !== UserRole.comercial) return;
+
+    const customer = await this.prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { assignedToUserId: true },
+    });
+
+    if (!customer) return;
+
+    if (customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException(
+        "Solo puedes consultar las metas de tus clientes asignados",
+      );
+    }
+  }
+
+  async findAllByCustomer(customerId: string, user?: AuthUser) {
+    if (user) await this.ensureOwnPortfolio(user, customerId);
     return this.prisma.customerGoal.findMany({
       where: { customerId },
       orderBy: { periodValue: "desc" },
@@ -80,11 +105,20 @@ export class CustomerGoalsService {
     });
   }
 
+  /**
+   * El `user` va al final y es opcional: el barrido de notificaciones
+   * (notifications.cron.ts) llama a getProgress como trabajo de sistema, sin
+   * usuario, y no debe verse afectado por el acote (solo restringe a
+   * comercial).
+   */
   async getProgress(
     customerId: string,
     periodType?: string,
     periodValue?: string,
+    user?: AuthUser,
   ) {
+    if (user) await this.ensureOwnPortfolio(user, customerId);
+
     let goal: { periodType: string; periodValue: string; targetAmount: number } | null = null;
 
     if (periodType && periodValue) {

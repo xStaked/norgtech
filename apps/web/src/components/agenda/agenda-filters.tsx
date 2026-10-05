@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-export type AgendaView = "hoy" | "semana" | "vencidos";
+export type AgendaView = "hoy" | "semana" | "vencidos" | "mes";
 
 interface AgendaFiltersProps {
   active: AgendaView;
@@ -11,12 +11,13 @@ const viewLabels: Record<AgendaView, string> = {
   hoy: "Hoy",
   semana: "Esta semana",
   vencidos: "Vencidos · urgente",
+  mes: "Mes",
 };
 
 export function AgendaFilters({ active, counts }: AgendaFiltersProps) {
   return (
     <div className="flex flex-wrap items-center gap-6 border-b border-border">
-      {(["hoy", "semana", "vencidos"] as AgendaView[]).map((view) => {
+      {(["hoy", "semana", "vencidos", "mes"] as AgendaView[]).map((view) => {
         const isActive = active === view;
         const isDanger = view === "vencidos";
         return (
