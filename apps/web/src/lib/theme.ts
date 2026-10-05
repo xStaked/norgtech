@@ -158,6 +158,10 @@ export const primaryNavItems = [
     description: "Facturas, pagos y control de cartera",
     group: "Comercial",
     requiredRoles: ["administrador", "director_comercial", "facturacion", "comercial"] as const,
+    children: [
+      { href: "/invoices/debtors", label: "Deudores" },
+      { href: "/invoices/accounting", label: "Contable" },
+    ] as const,
   },
   {
     href: "/returns",

@@ -216,24 +216,53 @@ async def get_invoice(
 async def list_overdue_invoices(
     auth_token: Annotated[str, InjectedState("auth_token")],
     customer_id: Optional[str] = None,
+    min_dias_mora: Optional[int] = None,
 ) -> str:
     """
     Facturas vencidas y sin pagar, de la más antigua a la más reciente, con los
     días de mora y el saldo de cada una. Úsala para "¿cuáles facturas están
-    vencidas?", "¿qué tiene vencido Acme?", "¿a quién hay que cobrarle?".
+    vencidas?", "¿qué tiene vencido Acme?", "¿a quién hay que cobrarle?" y
+    "clientes en mora" (lista TODAS las vencidas). Solo cuando el usuario dé
+    un umbral explícito ("morosos de más de 30 días") pasa min_dias_mora=30.
+
+    SOLO LECTURA: lista morosos, no envía mensajes ni hace cobros. Registrar
+    pagos o anular facturas es de roles de control y no se hace aquí.
 
     Para el aging agregado de toda la cartera usa get_cartera; esta tool lista
     las facturas vencidas una por una.
 
     El customer_id se resuelve ANTES con search_customers; no inventes IDs. El
-    endpoint no filtra por cliente, así que el filtro se aplica aquí sobre la
-    lista que devuelve el API (ya acotada al usuario actual).
+    endpoint no filtra por cliente ni por días de mora, así que esos filtros se
+    aplican aquí sobre la lista completa que devuelve el API (GET
+    /invoices/overdue no pagina: trae todas las vencidas del usuario actual,
+    de la más antigua a la más reciente; el pack muestra 15 filas pero los
+    totales cubren todo lo devuelto).
+
+    min_dias_mora se usa SOLO cuando el usuario da un umbral explícito
+    ("+30 días", "más de 60 días"): "clientes en mora" a secas lista TODAS
+    las vencidas, sin este filtro.
 
     Args:
         customer_id: Deja solo las vencidas de ese cliente.
+        min_dias_mora: Deja solo las vencidas con al menos esos días de mora
+            (ej. 30 para "morosos +30 días"). 0 equivale a no filtrar;
+            negativo es inválido y no toca el API.
     """
+    if min_dias_mora is not None and min_dias_mora < 0:
+        return "min_dias_mora debe ser 0 o más. Con 0 (o sin el parámetro) se listan todas las vencidas."
     try:
         client = NestJSClient(auth_token)
+        # Endpoint: GET /invoices/overdue (NO ?overdue=true). Equivalencia
+        # verificada en el API:
+        # - controller L93-95 (@Get("overdue") -> getOverdueInvoices) vs L75-80
+        #   (findAll acepta ListInvoicesDto.overdue?: "true", dto L36).
+        # - service getOverdueInvoices L414-422: dueDate < now, status notIn
+        #   [pagada, anulada], scoping comercial por assignedToUserId (L420)
+        #   y orderBy dueDate ASC — el mismo where que buildWhere L446-448 +
+        #   scoping L431 aplica para ?overdue=true. Se usa este endpoint porque
+        #   su orden (vencida más antigua primero) es el contrato de la tool;
+        #   ?overdue=true ordena por issueDate DESC (service L155) y ya lo
+        #   reusa list_invoices(only_overdue=True).
         data = await client.get("/invoices/overdue")
         invoices = _items(data)
         if customer_id:
@@ -248,6 +277,19 @@ async def list_overdue_invoices(
                 if customer_id
                 else "No hay facturas vencidas."
             )
+        if min_dias_mora:
+            filtradas = [
+                i
+                for i in invoices
+                if (_days_overdue(i) or 0) >= min_dias_mora
+            ]
+            if not filtradas:
+                return (
+                    f"Ese cliente no tiene facturas vencidas con más de {min_dias_mora} días de mora."
+                    if customer_id
+                    else f"No hay facturas vencidas con más de {min_dias_mora} días de mora."
+                )
+            invoices = filtradas
         return _pack(invoices, key="vencidas")
     except NestJSAPIError as e:
         if e.status_code == 403:
