@@ -1,4 +1,4 @@
-import { PrismaClient, PriceListKind } from "@prisma/client";
+import { PrismaClient, PriceListKind, PriceListStatus } from "@prisma/client";
 import * as ExcelJS from "exceljs";
 
 /**
@@ -268,10 +268,15 @@ async function run(filePath: string, dry: boolean) {
 
   // 3. Listas + ítems.
   for (const sheet of new Set(items.map((i) => i.sheet))) {
+    // La carga masiva nace APROBADA: es el catálogo que el cliente mandó y
+    // solo una lista aprobada libera precio (pricing.service exige status
+    // aprobada). Sin esto las listas nacen en borrador —el default del
+    // schema— y las cotizaciones caen a basePrice en silencio.
     const listData = {
       currency: USD_SHEETS.has(sheet) ? "USD" : "COP",
       country: COUNTRY[sheet] ?? (USD_SHEETS.has(sheet) ? null : "Colombia"),
       kind: KIND[sheet] ?? PriceListKind.cliente,
+      status: PriceListStatus.aprobada,
     };
     const list = await prisma.priceList.upsert({
       where: { name: sheet },

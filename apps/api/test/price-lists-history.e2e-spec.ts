@@ -124,6 +124,17 @@ describe("Price lists history + last sold", () => {
       },
     };
 
+    // upsertItem corre su write + auditoría dentro de una $transaction: el
+    // stub la emula delegando al mismo stub (sin DB real no hay atomicidad
+    // que probar, solo que el servicio pase por la tx).
+    (prismaStub as unknown as Record<string, any>).$transaction = async (
+      callback: (tx: unknown) => Promise<unknown>,
+    ) =>
+      callback({
+        priceListItem: (prismaStub as unknown as Record<string, any>).priceListItem,
+        auditLog: (prismaStub as unknown as Record<string, any>).auditLog,
+      });
+
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })

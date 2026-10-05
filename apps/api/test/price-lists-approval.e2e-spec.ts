@@ -42,6 +42,8 @@ describe("Price lists approval", () => {
     },
   };
 
+  const auditRecords: Array<Record<string, unknown>> = [];
+
   const listItems: Array<Record<string, unknown>> = [
     {
       id: "item-approval-1",
@@ -123,7 +125,27 @@ describe("Price lists approval", () => {
       order: {
         aggregate: async () => ({ _sum: { total: 0 } }),
       },
+      auditLog: {
+        create: async ({ data }: { data: Record<string, unknown> }) => {
+          const entry = {
+            id: `audit-${auditRecords.length + 1}`,
+            createdAt: new Date(),
+            ...data,
+          };
+          auditRecords.push(entry);
+          return entry;
+        },
+        findMany: async () => auditRecords,
+      },
     };
+    (prismaStub as Record<string, unknown>).$transaction = async (
+      callback: (tx: unknown) => Promise<unknown>,
+    ) =>
+      callback({
+        priceList: (prismaStub as Record<string, any>).priceList,
+        priceListItem: (prismaStub as Record<string, any>).priceListItem,
+        auditLog: (prismaStub as Record<string, any>).auditLog,
+      });
 
     const moduleRef: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -175,6 +197,27 @@ describe("Price lists approval", () => {
       .expect(200);
 
     expect(response.body.status).toBe("rechazada");
+  });
+
+  it("registra la aprobación en auditoría con actor y antes/después", async () => {
+    lists["list-por-aprobar"].status = "en_revision";
+    auditRecords.length = 0;
+    const token = await loginAs(app, UserRole.administrador);
+
+    await request(app.getHttpServer())
+      .patch("/price-lists/list-por-aprobar/approval")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ action: "aprobar" })
+      .expect(200);
+
+    expect(auditRecords).toHaveLength(1);
+    const [record] = auditRecords;
+    expect(record.entityType).toBe("PriceList");
+    expect(record.entityId).toBe("list-por-aprobar");
+    expect(record.action).toBe("price_list.approval_updated");
+    expect(record.actorUserId).toBe("00000000-0000-4000-8000-000000000001");
+    expect((record.previousState as Record<string, unknown>).status).toBe("en_revision");
+    expect((record.nextState as Record<string, unknown>).status).toBe("aprobada");
   });
 
   it("la cotización NO toma los precios de una lista en revisión (cae a basePrice)", async () => {

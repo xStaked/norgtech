@@ -74,7 +74,11 @@ export class PriceListsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial")
   @Patch(":id/approval")
-  updateApproval(@Param("id") id: string, @Body(bodyPipe) dto: ApprovalPriceListDto) {
-    return this.priceListsService.updateApproval(id, dto.action);
+  updateApproval(
+    @Param("id") id: string,
+    @Body(bodyPipe) dto: ApprovalPriceListDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    return this.priceListsService.updateApproval(id, dto.action, user);
   }
 }

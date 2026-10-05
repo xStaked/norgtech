@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
+import { PriceListStatus } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { auditState } from "../audit/audit-state";
 import { AuditService } from "../audit/audit.service";
@@ -101,23 +102,38 @@ export class PriceListsService {
       where: { priceListId_presentationId: { priceListId: id, presentationId } },
     });
 
-    const item = await this.prisma.priceListItem.upsert({
-      where: { priceListId_presentationId: { priceListId: id, presentationId } },
-      update: prices,
-      create: { priceListId: id, presentationId, ...prices },
-    });
+    // Decisión de atomicidad (final-review): upsert + auditoría van en la
+    // misma $transaction. La auditoría corría después de un upsert suelto, así
+    // que un fallo del audit dejaba el precio cambiado sin rastro (o el
+    // timeline mentía sobre un precio que nunca se guardó). $transaction es
+    // el patrón estándar del codebase para write+audit (orders, quotes,
+    // invoices lo usan), así que se envuelve en vez de tragar el error.
+    const item = await this.prisma.$transaction(async (tx) => {
+      const upserted = await tx.priceListItem.upsert({
+        where: { priceListId_presentationId: { priceListId: id, presentationId } },
+        update: prices,
+        create: { priceListId: id, presentationId, ...prices },
+      });
 
-    await this.auditService.record({
-      entityType: "PriceList",
-      entityId: id,
-      action: "price_list.item_upserted",
-      actorUserId: user.id,
-      previousState: auditState(before ? { ...priceSnapshot(before), empaque: presentation.empaque } : null),
-      nextState: auditState({
-        ...priceSnapshot(item),
-        presentationId,
-        empaque: presentation.empaque,
-      }),
+      await this.auditService.record(
+        {
+          entityType: "PriceList",
+          entityId: id,
+          action: "price_list.item_upserted",
+          actorUserId: user.id,
+          previousState: auditState(
+            before ? { ...priceSnapshot(before), empaque: presentation.empaque } : null,
+          ),
+          nextState: auditState({
+            ...priceSnapshot(upserted),
+            presentationId,
+            empaque: presentation.empaque,
+          }),
+        },
+        tx,
+      );
+
+      return upserted;
     });
 
     return item;
@@ -127,6 +143,13 @@ export class PriceListsService {
    * Último precio VENDIDO a un cliente para un producto: el OrderItem más
    * reciente de sus pedidos reales. Las cotizaciones (QuoteItem, otra tabla)
    * nunca se leen aquí: cotizar no es vender.
+   *
+   * Decisión de alcance (final-review): NO se excluye ningún status. El enum
+   * OrderStatus hoy es un flujo lineal sin cancelación ni anulación
+   * (recibido → orden_facturacion → facturado → despachado → en_transito →
+   * entregado), así que no hay pedidos cancelados que contaminen el "último
+   * vendido". Si se agrega un status tipo cancelado/anulado, hay que
+   * excluirlo en este where con un test que lo cubra.
    */
   async findLastSoldPrice(customerId: string, productId: string) {
     const item = await this.prisma.orderItem.findFirst({
@@ -156,15 +179,34 @@ export class PriceListsService {
    * cotizaciones, rechazada los bloquea. Sin máquina de transiciones: la
    * revisión termina aquí, aprobada o rechazada.
    */
-  async updateApproval(id: string, action: "aprobar" | "rechazar") {
+  async updateApproval(id: string, action: "aprobar" | "rechazar", user: AuthUser) {
     const list = await this.prisma.priceList.findUnique({ where: { id } });
     if (!list) {
       throw new NotFoundException("Lista de precios no encontrada");
     }
 
-    return this.prisma.priceList.update({
-      where: { id },
-      data: { status: action === "aprobar" ? "aprobada" : "rechazada" },
+    const status: PriceListStatus =
+      action === "aprobar" ? PriceListStatus.aprobada : PriceListStatus.rechazada;
+
+    // Misma atomicidad que upsertItem: el cambio de estado y su rastro van
+    // juntos o no van. Sin el record, una aprobación quedaba sin actor en el
+    // timeline y no había forma de saber quién liberó los precios.
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.priceList.update({ where: { id }, data: { status } });
+
+      await this.auditService.record(
+        {
+          entityType: "PriceList",
+          entityId: id,
+          action: "price_list.approval_updated",
+          actorUserId: user.id,
+          previousState: auditState({ status: list.status }),
+          nextState: auditState({ status }),
+        },
+        tx,
+      );
+
+      return updated;
     });
   }
 }
