@@ -648,6 +648,9 @@ model PriceList {
   currency  String          @default("COP") // COP | USD
   country   String?         @default("Colombia") // lista de exportación → país destino
   active    Boolean         @default(true)
+  // Las listas especiales no liberan precio hasta estar aprobadas: solo
+  // `aprobada` alimenta cotizaciones (ver PricingService.resolveListMatches).
+  status    PriceListStatus @default(borrador)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   items     PriceListItem[]
@@ -679,6 +682,13 @@ enum PriceListKind {
   cliente
   export
   linea
+}
+
+enum PriceListStatus {
+  borrador
+  en_revision
+  aprobada
+  rechazada
 }
 
 model Quote {
@@ -714,6 +724,9 @@ model QuoteItem {
   quantity            Decimal  @db.Decimal(14, 4)
   originalUnitPrice   Decimal? @db.Decimal(14, 2)
   discountPercent     Decimal? @db.Decimal(5, 2)
+  // Bonificación fase 2 comercial: % Tabla (10/20/30/40) y unidades a $0.
+  bonusPercent        Int?
+  bonusQty            Decimal? @db.Decimal(14, 4)
   unitPrice           Decimal  @db.Decimal(14, 2)
   subtotal            Decimal  @db.Decimal(14, 2)
   notes               String?
@@ -853,6 +866,9 @@ model OrderItem {
   quantity             Decimal  @db.Decimal(14, 4)
   originalUnitPrice    Decimal? @db.Decimal(14, 2)
   discountPercent      Decimal? @db.Decimal(5, 2)
+  // Bonificación fase 2 comercial: % Tabla (10/20/30/40) y unidades a $0.
+  bonusPercent         Int?
+  bonusQty             Decimal? @db.Decimal(14, 4)
   unitPrice            Decimal  @db.Decimal(14, 2)
   taxPercent           Decimal  @default(19) @db.Decimal(5, 2)
   taxAmount            Decimal  @default(0) @db.Decimal(14, 2)

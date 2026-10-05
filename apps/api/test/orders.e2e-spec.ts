@@ -810,6 +810,24 @@ describe("Orders", () => {
     orders.push(segmentOrder("order-ignore-price", "customer-goal-met"));
     orderItems.push(unresolvedItem("item-ignore-price", "order-ignore-price"));
 
+    // --- Fixtures de bonificación al resolver ---------------------------------
+    // Línea custom con bonus: al resolverla contra catálogo el bonus se
+    // conserva (validado 10/20/30/40) y el IVA cubre la cantidad total.
+    orders.push(segmentOrder("order-bonus-resolve", "customer-1"));
+    orderItems.push({
+      ...unresolvedItem("item-bonus-resolve", "order-bonus-resolve"),
+      quantity: 10,
+      bonusPercent: 20,
+      bonusQty: null,
+    });
+    // Bonus fuera de tabla: resolver debe rechazar con 400, no persistir nada.
+    orders.push(segmentOrder("order-bonus-invalid", "customer-1"));
+    orderItems.push({
+      ...unresolvedItem("item-bonus-invalid", "order-bonus-invalid"),
+      bonusPercent: 15,
+      bonusQty: null,
+    });
+
     // --- Fixtures de credito (ORD-01) ---------------------------------------
     const creditOrder = (over: Record<string, unknown>) => ({
       companyId: "company-1",
@@ -1829,6 +1847,36 @@ describe("Orders", () => {
     const item = response.body.items.find((i: { id: string }) => i.id === "item-ignore-price");
     expect(Number(item.unitPrice)).toBe(45000);
     expect(Number(response.body.total)).toBe(107100);
+  });
+
+  it("keeps the custom line bonus when resolving: bonus + IVA over the full quantity", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-bonus-resolve/items/item-bonus-resolve/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(200);
+
+    const item = response.body.items.find((i: { id: string }) => i.id === "item-bonus-resolve");
+    // basePrice 50.000 sin descuento (customer-1, segmento 0%).
+    // bonus 20% sobre qty 10 → 2 uds a $0, 8 cobradas; IVA 19% sobre las 10.
+    expect(item.bonusPercent).toBe(20);
+    expect(Number(item.bonusQty)).toBe(2);
+    expect(Number(item.unitPrice)).toBe(50000);
+    expect(Number(item.taxAmount)).toBe(9500);
+    expect(Number(item.subtotal)).toBe(400000);
+    expect(Number(item.totalWithTax)).toBe(495000);
+    expect(Number(response.body.subtotal)).toBe(400000);
+    expect(Number(response.body.total)).toBe(495000);
+  });
+
+  it("rejects resolving a line whose stored bonus is outside 10/20/30/40", async () => {
+    const response = await request(global.__APP__)
+      .patch(`/orders/order-bonus-invalid/items/item-bonus-invalid/resolve`)
+      .set("Authorization", `Bearer ${global.__FACTURACION_TOKEN__}`)
+      .send({ productId: "product-1", unitPrice: 50000 })
+      .expect(400);
+
+    expect(response.body.message).toContain("bonusPercent inválido");
   });
 
   it("blocks resolving an item when the new price would exceed the credit limit", async () => {

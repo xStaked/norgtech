@@ -1,4 +1,4 @@
-import { IsNumber, IsOptional, IsString, Min } from "class-validator";
+import { IsIn, IsNumber, IsOptional, IsString, Min } from "class-validator";
 
 export class CreateQuoteItemDto {
   @IsOptional()
@@ -22,6 +22,11 @@ export class CreateQuoteItemDto {
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
   unitPrice!: number;
+
+  /** Bonificación fase 2: % Tabla (10/20/30/40). */
+  @IsOptional()
+  @IsIn([10, 20, 30, 40])
+  bonusPercent?: number;
 
   @IsOptional()
   @IsString()

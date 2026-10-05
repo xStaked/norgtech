@@ -46,6 +46,8 @@ interface OrderItem {
   quantity: number;
   unitPrice: number;
   taxPercent: number;
+  /** Bonificación fase 2: "" (ninguna) o "10" | "20" | "30" | "40". */
+  bonusPercent: string;
   notes: string;
 }
 
@@ -63,6 +65,7 @@ const emptyItem = (): OrderItem => ({
   quantity: 1,
   unitPrice: 0,
   taxPercent: 19,
+  bonusPercent: "",
   notes: "",
 });
 
@@ -209,6 +212,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
         quantity: items[i].quantity,
         unitPrice: items[i].unitPrice,
         taxPercent: optionalNumber(items[i].taxPercent),
+        bonusPercent: items[i].bonusPercent ? Number(items[i].bonusPercent) : undefined,
       })),
     [items, validIndices],
   );
@@ -241,6 +245,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       quantity: items[i].quantity,
       unitPrice: items[i].unitPrice,
       taxPercent: optionalNumber(items[i].taxPercent),
+      bonusPercent: items[i].bonusPercent ? Number(items[i].bonusPercent) : undefined,
       notes: items[i].notes.trim() || undefined,
     }));
 
@@ -576,6 +581,32 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
                   value={lineFor(index) ? money(lineFor(index)!.totalWithTax) : "—"}
                 />
               </div>
+
+              <Field label="Bonificación" htmlFor={`bonusPercent-${index}`}>
+                <Select
+                  aria-label="Bonificación"
+                  value={item.bonusPercent}
+                  onValueChange={(value) => updateItem(index, "bonusPercent", value)}
+                  options={[
+                    { value: "", label: "Sin bonificación" },
+                    { value: "10", label: "10% a $0" },
+                    { value: "20", label: "20% a $0" },
+                    { value: "30", label: "30% a $0" },
+                    { value: "40", label: "40% a $0" },
+                  ]}
+                />
+                {(() => {
+                  const line = lineFor(index);
+                  if (!line || line.bonusQty <= 0) {
+                    return null;
+                  }
+                  return (
+                    <p className="text-xs text-muted-foreground">
+                      {line.bonusQty} uds bonificadas a $0 (su IVA va en el total).
+                    </p>
+                  );
+                })()}
+              </Field>
 
               <Field label="Notas del item" htmlFor={`notes-${index}`}>
                 <Input

@@ -422,4 +422,91 @@ describe("PricingService", () => {
       expect(result.rawItems[0].unitPrice.toNumber()).toBe(90);
     });
   });
+
+  describe("priceLines - bonificaciones 10/20/30/40 (fase 2)", () => {
+    it("10 uds al 20%: 8 cobradas + 2 a $0, IVA sobre las 10 (Ruling 1)", async () => {
+      const { service } = makeService();
+      const result = await service.priceLines(
+        customerNoSegment,
+        [{ productId: product.id, quantity: 10, taxPercent: 19, bonusPercent: 20 }],
+        "order",
+      );
+
+      const [line] = result.rawItems;
+      expect(line.bonusPercent?.toNumber()).toBe(20);
+      expect(line.bonusQty.toNumber()).toBe(2);
+      expect(line.chargedQty.toNumber()).toBe(8);
+      expect(line.unitPrice.toNumber()).toBe(100);
+      // Cobrado: 8 × 100. Las 2 bonificadas van a $0.
+      expect(line.subtotal.toNumber()).toBe(800);
+      // IVA unitario igual que sin bonus; el total cubre las 10 uds:
+      // 19 × 100 × 10 / 100 = 190.
+      expect(line.taxAmount.toNumber()).toBe(19);
+      expect(line.totalWithTax.toNumber()).toBe(990);
+      expect(result.subtotal.toNumber()).toBe(800);
+      expect(result.taxAmount.toNumber()).toBe(190);
+      expect(result.total.toNumber()).toBe(990);
+    });
+
+    it("sin bonus la linea queda intacta (compatibilidad)", async () => {
+      const { service } = makeService();
+      const result = await service.priceLines(
+        customerNoSegment,
+        [{ productId: product.id, quantity: 3, taxPercent: 19 }],
+        "order",
+      );
+
+      const [line] = result.rawItems;
+      expect(line.bonusPercent).toBeNull();
+      expect(line.bonusQty.toNumber()).toBe(0);
+      expect(line.chargedQty.toNumber()).toBe(3);
+      expect(line.subtotal.toNumber()).toBe(300);
+      expect(line.totalWithTax.toNumber()).toBe(357);
+    });
+
+    it("aplica el bonus en modo quote (sin IVA) solo sobre cobradas", async () => {
+      const { service } = makeService();
+      const result = await service.priceLines(
+        customerNoSegment,
+        [{ productId: product.id, quantity: 10, bonusPercent: 40 }],
+        "quote",
+      );
+
+      const [line] = result.rawItems;
+      expect(line.bonusQty.toNumber()).toBe(4);
+      expect(line.chargedQty.toNumber()).toBe(6);
+      expect(line.subtotal.toNumber()).toBe(600);
+      expect(line.totalWithTax.toNumber()).toBe(600);
+    });
+
+    it("rechaza bonusPercent fuera de 10/20/30/40", async () => {
+      const { service } = makeService();
+
+      await expect(
+        service.priceLines(
+          customerNoSegment,
+          [{ productId: product.id, quantity: 10, bonusPercent: 15 }],
+          "order",
+        ),
+      ).rejects.toThrow(/bonusPercent inválido/);
+    });
+
+    it("buildPreview expone bonusPercent/bonusQty/chargedQty", async () => {
+      const { service } = makeService();
+      const preview = await service.buildPreview(
+        customerNoSegment,
+        [{ productId: product.id, quantity: 10, taxPercent: 19, bonusPercent: 30 }],
+        "order",
+      );
+
+      const [line] = preview.lines;
+      expect(line.bonusPercent).toBe(30);
+      expect(line.bonusQty).toBe(3);
+      expect(line.chargedQty).toBe(7);
+      expect(line.subtotal).toBe(700);
+      // IVA sobre las 10 uds al precio de lista: 190.
+      expect(preview.taxAmount).toBe(190);
+      expect(preview.total).toBe(890);
+    });
+  });
 });

@@ -17,6 +17,7 @@ import {
   priceListOwner,
   type PriceListRef,
 } from "@/lib/catalog";
+import { summarizeHistory, type PriceHistoryEntry } from "@/lib/price-history";
 
 interface PriceListItem {
   id: string;
@@ -74,6 +75,14 @@ export default async function PriceListDetailPage({
   if (!response.ok) {
     notFound();
   }
+
+  // El historial vive en AuditLog (`price_list.item_upserted`). Solo
+  // admin/dirección lo pueden leer: para el resto la página sigue igual.
+  const historyRes = await apiFetch(`/audit?entityType=PriceList&entityId=${encodeURIComponent(id)}`);
+  const history = (
+    historyRes.ok ? await historyRes.json().catch(() => []) : []
+  ) as PriceHistoryEntry[];
+  const timeline = summarizeHistory(history);
 
   const list = (await response.json()) as PriceListDetail;
   const listRef: PriceListRef = {
@@ -208,6 +217,48 @@ export default async function PriceListDetailPage({
         <StatusBadge tone={kindTones[list.kind]}>{PRICE_LIST_KIND_LABEL[list.kind] ?? list.kind}</StatusBadge>{" "}
         Los niveles 2/3 (cuando existen) se gestionan desde Productos.
       </p>
+
+      {timeline.length > 0 ? (
+        <SectionCard
+          title="Historial de cambios"
+          description="Quién y cuándo cambió cada precio, con antes y después por presentación. Solo lectura."
+        >
+          <ul style={{ display: "grid", gap: 12, margin: 0, padding: 0, listStyle: "none" }}>
+            {timeline.map((entry) => {
+              const empaque =
+                entry.nextState?.empaque ?? entry.previousState?.empaque ?? "Presentación";
+              const when = new Date(entry.createdAt);
+              return (
+                <li
+                  key={entry.id}
+                  style={{
+                    display: "grid",
+                    gap: 2,
+                    borderLeft: "3px solid #c7d3df",
+                    paddingLeft: 12,
+                  }}
+                >
+                  <span style={{ fontWeight: 700, color: "#0c2c44", fontSize: 13 }}>
+                    {empaque} · {entry.change}
+                  </span>
+                  <span style={{ fontSize: 12, color: "#6b7787" }}>
+                    {Number.isNaN(+when)
+                      ? entry.createdAt
+                      : when.toLocaleString("es-CO", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                    · {(entry.actorUserId ?? "—").slice(0, 8)}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

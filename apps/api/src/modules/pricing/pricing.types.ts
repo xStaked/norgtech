@@ -34,6 +34,11 @@ export interface PricingItemInput {
   /** Presentación elegida. Es lo que desambigua el precio de lista. */
   presentationId?: string | null;
   /**
+   * Bonificación fase 2 comercial: % Tabla (10/20/30/40). Las unidades
+   * bonificadas van a $0 pero causan IVA sobre el precio de lista (Ruling 1).
+   */
+  bonusPercent?: number | null;
+  /**
    * Empaque en texto (lo que escribió el cliente por WhatsApp, p.ej.). Se usa
    * como segundo intento cuando no viene `presentationId`.
    */
@@ -55,6 +60,12 @@ export interface PricedLine {
   presentation: string | null;
   originalUnitPrice: number | null;
   discountPercent: number;
+  /** % Tabla de bonificación aplicado (10/20/30/40), o null sin bonus. */
+  bonusPercent: number | null;
+  /** Unidades a $0 dentro de quantity. */
+  bonusQty: number;
+  /** Unidades cobradas: quantity − bonusQty. */
+  chargedQty: number;
   unitPrice: number;
   quantity: number;
   subtotal: number;

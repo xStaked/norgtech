@@ -157,6 +157,8 @@ export class OrdersService {
           quantity: line.quantity,
           originalUnitPrice: line.originalUnitPrice,
           discountPercent: line.discountPercent,
+          bonusPercent: line.bonusPercent ? line.bonusPercent.toNumber() : null,
+          bonusQty: line.bonusQty,
           unitPrice: line.unitPrice,
           taxPercent: line.taxPercent,
           taxAmount: line.taxAmount,
@@ -178,6 +180,8 @@ export class OrdersService {
         quantity: line.quantity,
         originalUnitPrice: line.originalUnitPrice,
         discountPercent: line.discountPercent,
+        bonusPercent: line.bonusPercent ? line.bonusPercent.toNumber() : null,
+        bonusQty: line.bonusQty,
         unitPrice: line.unitPrice,
         taxPercent: line.taxPercent,
         taxAmount: line.taxAmount,
@@ -677,6 +681,12 @@ export class OrdersService {
             productId: dto.productId,
             quantity: Number(item.quantity),
             taxPercent: item.taxPercent ?? 19,
+            // La linea custom podia traer bonus: si no se reenvia, priceLines
+            // tarifa sin bonificar y el update de abajo la deja en cero.
+            // La validacion 10/20/30/40 vive en priceLines (resolveBonus),
+            // fuente unica igual que en create(): un bonus fuera de tabla
+            // revienta con 400 en vez de persistir.
+            bonusPercent: item.bonusPercent,
           },
         ],
         "order",
@@ -693,6 +703,8 @@ export class OrdersService {
           customProductName: null,
           originalUnitPrice: line.originalUnitPrice,
           discountPercent: line.discountPercent,
+          bonusPercent: line.bonusPercent ? line.bonusPercent.toNumber() : null,
+          bonusQty: line.bonusQty,
           unitPrice: line.unitPrice,
           taxPercent: line.taxPercent,
           taxAmount: line.taxAmount,
