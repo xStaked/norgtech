@@ -75,7 +75,19 @@ export class CustomersController {
     return this.customersService.update(user, id, dto);
   }
 
-  @UseGuards(JwtAuthGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(
+    "administrador",
+    "director_comercial",
+    "comercial",
+    "tecnico",
+    "facturacion",
+    "logistica",
+  )
+  // B-API-1: la lectura de zonas sigue la regla de la matriz para leer un
+  // cliente (los 6 roles, customers/[id]/page.tsx la pinta) y la consume el
+  // formulario de pedidos (order-form.tsx, con logistica creando pedidos).
+  // Escribir zonas sigue siendo solo adm/dir.
   @Get(":id/zones")
   getZones(@Param("id") id: string) {
     return this.customersService.getCustomerZones(id);

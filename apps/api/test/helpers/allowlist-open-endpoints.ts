@@ -38,6 +38,22 @@ export const ALLOWLIST_OPEN: AllowlistedEndpoint[] = [
   },
   {
     method: "POST",
+    path: "/auth/forgot-password",
+    // Forgot/reset are public by design (docs/seguridad-brechas.md: "auth
+    // forgot/reset públicos por diseño") — same class as login/refresh/logout:
+    // no session exists yet, and reset-password is authorized by the one-time
+    // reset token itself.
+    reason: "Public forgot-password — no session exists yet to carry roles (breach doc: public by design)",
+  },
+  {
+    method: "POST",
+    path: "/auth/reset-password",
+    // Same class as forgot-password: the caller presents a one-time reset
+    // token, not a session; roles cannot apply.
+    reason: "Public reset-password — authorized by one-time reset token, not by role (breach doc: public by design)",
+  },
+  {
+    method: "POST",
     path: "/whatsapp/webhooks/kapso",
     // SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.
     reason:

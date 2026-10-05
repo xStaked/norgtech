@@ -56,6 +56,33 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   // comercial entra, pero el back le fuerza el vendedor (solo las suyas).
   { prefix: "/commissions", isAllowed: (role) => canAccess(role, "/commissions") },
   { prefix: "/users", isAllowed: (role) => canAccess(role, "/users") },
+  // ---------------------------------------------------------------------------
+  // C-WEB-1..13 (docs/seguridad-brechas.md): el resto de pantallas solo se
+  // ocultaba en el nav y un rol indebido con sesión entraba por URL directa.
+  // Cada entrada espeja canAccess; las específicas (conjuntos distintos a los
+  // del genérico) van ANTES para que find() las tome primero.
+  // ---------------------------------------------------------------------------
+
+  // D5 / C-WEB-8: entrar a /orders/review es de adm y fac (requiredRoles del
+  // nav); debe preceder al genérico de /orders.
+  { prefix: "/orders/review", isAllowed: (role) => canAccess(role, "/orders/review") },
+  // D2: crear gastos no es de fac (la web mantiene lo restrictivo; la API sí
+  // la admite por diseño D6/D2). Debe preceder al genérico de /expenses.
+  { prefix: "/expenses/new", isAllowed: (role) => canCreate(role, "expense") },
+  { prefix: "/visits", isAllowed: (role) => canAccess(role, "/visits") },
+  { prefix: "/expenses", isAllowed: (role) => canAccess(role, "/expenses") },
+  { prefix: "/follow-ups", isAllowed: (role) => canAccess(role, "/follow-ups") },
+  { prefix: "/agenda", isAllowed: (role) => canAccess(role, "/agenda") },
+  { prefix: "/nora", isAllowed: (role) => canAccess(role, "/nora") },
+  // C-WEB-6 (D1 en web): la pantalla /opportunities nunca se abrió a tec; la
+  // API solo lo admite para los flujos de visitas/seguimientos.
+  { prefix: "/opportunities", isAllowed: (role) => canAccess(role, "/opportunities") },
+  { prefix: "/quotes", isAllowed: (role) => canAccess(role, "/quotes") },
+  { prefix: "/billing-requests", isAllowed: (role) => canAccess(role, "/billing-requests") },
+  { prefix: "/invoices", isAllowed: (role) => canAccess(role, "/invoices") },
+  { prefix: "/returns", isAllowed: (role) => canAccess(role, "/returns") },
+  { prefix: "/products", isAllowed: (role) => canAccess(role, "/products") },
+  { prefix: "/orders", isAllowed: (role) => canAccess(role, "/orders") },
 ];
 
 export function matchesPrefix(pathname: string, prefix: string) {

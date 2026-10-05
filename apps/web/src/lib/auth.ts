@@ -123,6 +123,10 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     // facturacion y logistica no participan.
     "/commissions": ["administrador", "director_comercial", "comercial"],
     "/reports": ["administrador", "director_comercial", "tecnico"],
+    // D5 / C-WEB-8: revisión de pedidos la gobierna el requiredRoles del nav
+    // (theme.ts): solo adm y fac. Sin esta entrada canAccess daba false y el
+    // guard ni siquiera la miraba (cualquier rol con sesión entraba por URL).
+    "/orders/review": ["administrador", "facturacion"],
     // Direccion ve la operacion completa; un comercial entra a las mismas
     // pantallas pero el back le fuerza `sellerUserId` a su propio id. Espeja el
     // @Roles de AnalyticsController — si aqui se abre y alla no, el usuario

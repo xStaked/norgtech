@@ -6,7 +6,7 @@ import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
 import { CreditService } from "../src/modules/credit/credit.service";
 import { matchesOrderWhere, OrderWhereStub } from "./helpers/order-where";
-import { refreshTokenStub } from "./helpers/login-as";
+import { MOCK_USERS, loginAs, refreshTokenStub } from "./helpers/login-as";
 
 describe("Credit", () => {
   let app: INestApplication;
@@ -23,6 +23,10 @@ describe("Credit", () => {
       role: UserRole.administrador,
       active: true,
     },
+    // B-FILT-1: usuarios de rol comercial y facturacion para verificar el acote
+    // por cartera del resumen de credito (R3: comercial solo sus clientes).
+    MOCK_USERS[UserRole.comercial],
+    MOCK_USERS[UserRole.facturacion],
   ];
   const companies = [
     { id: "company-a", name: "Norgtech A", prefix: "NTA", isActive: true },
@@ -107,6 +111,34 @@ describe("Credit", () => {
       createdBy: "admin-user-id",
       updatedBy: "admin-user-id",
       companyId: "company-a",
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
+    // B-FILT-1: comercial acotado a su cartera (R3). Fixture sin facturas ni
+    // pedidos para no alterar las expectativas de las alertas (utilizacion 0%).
+    {
+      id: "customer-own-portfolio",
+      displayName: "Agro Cartera Propia",
+      taxId: "902111000-1",
+      address: "Calle 8",
+      creditLimit: new Prisma.Decimal(800000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      companyId: "company-a",
+      assignedToUserId: MOCK_USERS[UserRole.comercial].id,
+      segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
+    },
+    {
+      id: "customer-foreign-portfolio",
+      displayName: "Agro Cartera Ajena",
+      taxId: "902222111-1",
+      address: "Calle 9",
+      creditLimit: new Prisma.Decimal(700000),
+      purchaseBudget: null,
+      createdBy: "admin-user-id",
+      updatedBy: "admin-user-id",
+      companyId: "company-a",
+      assignedToUserId: MOCK_USERS[UserRole.administrador].id,
       segment: { discountPercent: new Prisma.Decimal(0), minGoalAmount: new Prisma.Decimal(0) },
     },
   ];
@@ -416,6 +448,36 @@ describe("Credit", () => {
     expect(response.body.currentBalance).toBe(850000);
     expect(response.body.utilizationPercent).toBe(85);
     expect(response.body.availableCredit).toBe(150000);
+  });
+
+  describe("B-FILT-1: comercial acotado a su cartera (R3)", () => {
+    it("comercial lee el resumen de credito de SU cliente asignado", async () => {
+      const comercialToken = await loginAs(app, UserRole.comercial);
+      const response = await api()
+        .get("/credit/customers/customer-own-portfolio/summary")
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(200);
+
+      expect(response.body.creditLimit).toBe(800000);
+    });
+
+    it("comercial recibe 403 en el resumen de credito de un cliente ajeno", async () => {
+      const comercialToken = await loginAs(app, UserRole.comercial);
+      await api()
+        .get("/credit/customers/customer-foreign-portfolio/summary")
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(403);
+    });
+
+    it("facturacion (rol de control) sigue viendo clientes ajenos", async () => {
+      const facToken = await loginAs(app, UserRole.facturacion);
+      const response = await api()
+        .get("/credit/customers/customer-foreign-portfolio/summary")
+        .set("Authorization", `Bearer ${facToken}`)
+        .expect(200);
+
+      expect(response.body.creditLimit).toBe(700000);
+    });
   });
 
   it("returns null credit values for a customer without credit limit", async () => {

@@ -140,4 +140,42 @@ describe("RBAC coverage sweep", () => {
       );
     }
   });
+
+  /**
+   * B-API-1: `GET /customers/:id/zones` era el único endpoint de lectura de
+   * customers sin `@Roles` (solo JwtAuthGuard). La lectura sigue la regla de la
+   * matriz para leer un cliente (los 6 roles) pero el endpoint debe declarar
+   * la regla explícitamente para que el barrido la vea.
+   */
+  it("GET /customers/:id/zones declara @Roles (B-API-1)", () => {
+    const controllers = discoveryService.getControllers();
+    const controller = controllers.find(
+      (wrapper) => (wrapper.metatype as { name?: string })?.name === "CustomersController",
+    );
+
+    if (!controller) throw new Error("CustomersController no encontrado");
+
+    const prototype = Object.getPrototypeOf(controller.instance);
+    let found: { roles: string[] | undefined } | null = null;
+
+    metadataScanner.getAllMethodNames(prototype).forEach((methodName) => {
+      const handler = prototype[methodName];
+      const routeMethod: number | undefined = Reflect.getMetadata(METHOD_METADATA, handler);
+      const handlerPath: string = Reflect.getMetadata(PATH_METADATA, handler) ?? "";
+
+      if (routeMethod === RequestMethod.GET && handlerPath === ":id/zones") {
+        found = { roles: reflector.get<string[] | undefined>(ROLES_KEY, handler) };
+      }
+    });
+
+    if (!found) throw new Error("GET :id/zones no encontrado en CustomersController");
+    expect((found as { roles: string[] | undefined }).roles).toEqual([
+      "administrador",
+      "director_comercial",
+      "comercial",
+      "tecnico",
+      "facturacion",
+      "logistica",
+    ]);
+  });
 });

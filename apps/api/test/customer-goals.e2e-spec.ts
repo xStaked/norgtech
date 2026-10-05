@@ -4,7 +4,7 @@ import { UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
-import { refreshTokenStub } from "./helpers/login-as";
+import { MOCK_USERS, findMockUserByEmail, loginAs, refreshTokenStub } from "./helpers/login-as";
 
 declare global {
   var __APP__: ReturnType<INestApplication["getHttpServer"]> | undefined;
@@ -19,6 +19,9 @@ describe("CustomerGoals", () => {
   const goals: Array<Record<string, unknown>> = [];
   const orders: Array<Record<string, unknown>> = [];
   const customerId = "customer-1";
+  // B-FILT-2: comercial acotado a su cartera (R3). customer-1 queda como cliente
+  // asignado al comercial; customer-foreign-portfolio como ajeno.
+  const foreignCustomerId = "customer-foreign-portfolio";
   let goalCounter = 0;
 
   beforeAll(async () => {
@@ -28,6 +31,8 @@ describe("CustomerGoals", () => {
       }: {
         where: { email?: string; id?: string };
       }) => {
+        // El admin local del spec (fixture original) + los mocados por rol
+        // (comercial, facturacion) de helpers/login-as para B-FILT-2.
         if (where.email === "admin@norgtech.local") {
           return {
             id: "admin-user-id",
@@ -38,7 +43,7 @@ describe("CustomerGoals", () => {
             active: true,
           };
         }
-        return null;
+        return findMockUserByEmail(where.email);
       },
     };
 
@@ -48,6 +53,17 @@ describe("CustomerGoals", () => {
           return {
             id: customerId,
             displayName: "Agro Norte",
+            // B-FILT-2: cliente asignado al comercial mock.
+            assignedToUserId: MOCK_USERS[UserRole.comercial].id,
+            createdBy: "admin-user-id",
+            updatedBy: "admin-user-id",
+          };
+        }
+        if (id === foreignCustomerId) {
+          return {
+            id: foreignCustomerId,
+            displayName: "Agro Cartera Ajena",
+            assignedToUserId: MOCK_USERS[UserRole.administrador].id,
             createdBy: "admin-user-id",
             updatedBy: "admin-user-id",
           };
@@ -438,5 +454,44 @@ describe("CustomerGoals", () => {
       .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
       .query({ periodType: "anual", periodValue: "2099" })
       .expect(404);
+  });
+
+  describe("B-FILT-2: comercial acotado a su cartera (R3)", () => {
+    let comercialToken: string;
+
+    beforeAll(async () => {
+      comercialToken = await loginAs(app, UserRole.comercial);
+    });
+
+    it("comercial lee el listado de metas de SU cliente asignado", async () => {
+      const response = await request(globalThis.__APP__)
+        .get(`/customers/${customerId}/goals`)
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(200);
+
+      expect(response.body.length).toBeGreaterThan(0);
+    });
+
+    it("comercial recibe 403 en las metas de un cliente ajeno", async () => {
+      await request(globalThis.__APP__)
+        .get(`/customers/${foreignCustomerId}/goals`)
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(403);
+    });
+
+    it("comercial recibe 403 en el avance (goal-progress) de un cliente ajeno", async () => {
+      await request(globalThis.__APP__)
+        .get(`/customers/${foreignCustomerId}/goal-progress`)
+        .set("Authorization", `Bearer ${comercialToken}`)
+        .expect(403);
+    });
+
+    it("facturacion sigue viendo metas de clientes ajenos (pantalla de cliente)", async () => {
+      const facToken = await loginAs(app, UserRole.facturacion);
+      await request(globalThis.__APP__)
+        .get(`/customers/${foreignCustomerId}/goals`)
+        .set("Authorization", `Bearer ${facToken}`)
+        .expect(200);
+    });
   });
 });
