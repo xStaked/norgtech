@@ -58,9 +58,10 @@ del equipo administrativo (esta tarde o mañana en la mañana). Incluye transici
 comisionar por ventas por cuotas/cumplimiento. Alcance detallado pendiente de esa reunión.
 
 ## 8. Modales para formularios pequeños
-No aparece en la transcripción (20 min). Se mantiene el pedido del equipo:
-pasar la creación de entidades chicas a modal en vez de página completa.
-Falta la lista exacta de formularios.
+Hecho en commit `6cae28d`: oportunidades, cartera, devoluciones, visitas y
+seguimientos crean en modal desde la lista (mismo patrón que facturación).
+Las páginas `/new` se mantienen como respaldo. Cada form acepta `onSuccess`
+y el modal cierra + refresca la lista.
 
 ## 9. Inmediato post-reunión (operativo, no desarrollo)
 Fuente: transcripción Sec. 10–14. Crear usuarios a todos hoy; enviar link de la
