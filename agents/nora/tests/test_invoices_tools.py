@@ -234,6 +234,25 @@ def test_overdue_min_dias_mora_deja_solo_los_mas_vencidos():
     assert payload["vencidas"][0]["dias_mora"] == 45
 
 
+def test_overdue_sin_filtro_trae_todas_las_vencidas():
+    vieja = _invoice(
+        1, dueDate=(date.today() - timedelta(days=45)).isoformat() + "T00:00:00.000Z"
+    )
+    reciente = _invoice(
+        2, dueDate=(date.today() - timedelta(days=10)).isoformat() + "T00:00:00.000Z"
+    )
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[vieja, reciente])
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        payload = json.loads(
+            asyncio.run(list_overdue_invoices.ainvoke({"auth_token": "Bearer x"}))
+        )
+
+    # "clientes en mora" a secas: SIN min_dias_mora, trae todas.
+    assert payload["total_facturas"] == 2
+    assert sorted(f["dias_mora"] for f in payload["vencidas"]) == [10, 45]
+
+
 def test_overdue_min_dias_mora_sin_resultados():
     reciente = _invoice(2, dueDate=(date.today() - timedelta(days=10)).isoformat() + "T00:00:00.000Z")
     fake_client = AsyncMock()
@@ -244,7 +263,59 @@ def test_overdue_min_dias_mora_sin_resultados():
                 {"auth_token": "Bearer x", "min_dias_mora": 30}
             )
         )
-    assert "No hay facturas vencidas" in out
+    # Hay vencidas, pero ninguna con +30 días: no decir "no hay vencidas".
+    assert "con más de 30 días de mora" in out
+    assert out != "No hay facturas vencidas."
+
+
+def test_overdue_min_dias_mora_sin_resultados_para_el_cliente():
+    reciente = _invoice(2, dueDate=(date.today() - timedelta(days=10)).isoformat() + "T00:00:00.000Z")
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[reciente])
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        out = asyncio.run(
+            list_overdue_invoices.ainvoke(
+                {"auth_token": "Bearer x", "customer_id": "c-1", "min_dias_mora": 30}
+            )
+        )
+    assert "con más de 30 días de mora" in out
+
+
+def test_overdue_min_dias_mora_negativo_no_toca_el_api():
+    fake_client = AsyncMock()
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        out = asyncio.run(
+            list_overdue_invoices.ainvoke(
+                {"auth_token": "Bearer x", "min_dias_mora": -5}
+            )
+        )
+    assert "debe ser 0 o más" in out
+    fake_client.get.assert_not_awaited()
+
+
+def test_overdue_min_dias_mora_cero_trae_todas():
+    vieja = _invoice(
+        1, dueDate=(date.today() - timedelta(days=45)).isoformat() + "T00:00:00.000Z"
+    )
+    fake_client = AsyncMock()
+    fake_client.get = AsyncMock(return_value=[vieja])
+    with patch("src.tools.invoices.NestJSClient", return_value=fake_client):
+        payload = json.loads(
+            asyncio.run(
+                list_overdue_invoices.ainvoke(
+                    {"auth_token": "Bearer x", "min_dias_mora": 0}
+                )
+            )
+        )
+    # 0 equivale a no filtrar.
+    assert payload["total_facturas"] == 1
+
+
+def test_prompt_distinque_mora_general_de_umbral_explicito():
+    from src.prompts.system import NORA_SYSTEM_PROMPT
+
+    assert '"clientes en mora", "¿qué está vencido?" → `list_overdue_invoices` SIN' in NORA_SYSTEM_PROMPT
+    assert "`min_dias_mora=30`. El filtro de días se usa SOLO cuando el usuario dice" in NORA_SYSTEM_PROMPT
 
 
 def test_get_invoice_payments_suma_y_cuenta_soportes():
