@@ -9,6 +9,7 @@ export const ALL_ROLES: UserRole[] = [
   UserRole.tecnico,
   UserRole.facturacion,
   UserRole.logistica,
+  UserRole.promotor,
 ];
 
 /**
@@ -83,6 +84,14 @@ export const MOCK_USERS: Record<UserRole, MockUser> = {
     email: "logistica@norgtech.local",
     passwordHash: MOCK_PASSWORD_HASH,
     role: UserRole.logistica,
+    active: true,
+  },
+  [UserRole.promotor]: {
+    id: "00000000-0000-4000-8000-000000000007",
+    name: "Promotor Mock",
+    email: "promotor@norgtech.local",
+    passwordHash: MOCK_PASSWORD_HASH,
+    role: UserRole.promotor,
     active: true,
   },
 };
