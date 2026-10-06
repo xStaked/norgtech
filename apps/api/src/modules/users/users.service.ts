@@ -153,14 +153,26 @@ export class UsersService {
         });
       }
 
+      const data: Prisma.UserUpdateInput = {
+        ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+        ...(dto.phone !== undefined ? { phone: dto.phone.trim() } : {}),
+        ...(dto.role !== undefined ? { role: dto.role } : {}),
+        ...(dto.active !== undefined ? { active: dto.active } : {}),
+      };
+
+      if (Object.keys(data).length === 0) {
+        const user = await this.prisma.user.findUnique({ where: { id }, select: publicUserSelect });
+
+        if (!user) {
+          throw new NotFoundException("User not found");
+        }
+
+        return user;
+      }
+
       const user = await this.prisma.user.update({
         where: { id },
-        data: {
-          ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
-          ...(dto.phone !== undefined ? { phone: dto.phone.trim() } : {}),
-          ...(dto.role !== undefined ? { role: dto.role } : {}),
-          ...(dto.active !== undefined ? { active: dto.active } : {}),
-        },
+        data,
         select: publicUserSelect,
       });
 
