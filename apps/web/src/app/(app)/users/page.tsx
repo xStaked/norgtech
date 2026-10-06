@@ -7,7 +7,7 @@ import { getCurrentUser } from "@/lib/auth.server";
 export default async function UsersPage() {
   const currentUser = await getCurrentUser();
 
-  if (!currentUser || currentUser.role !== "administrador") {
+  if (!currentUser || (currentUser.role !== "administrador" && currentUser.role !== "promotor")) {
     redirect("/dashboard");
   }
 

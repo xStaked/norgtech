@@ -121,9 +121,10 @@ export default async function AnalyticsSalesPage({
     fetchFilterOptions(),
     getCurrentUser(),
   ]);
-  // Un comercial tiene el vendedor forzado por el back (§2.4): el selector
-  // se bloquea para que la barra no ofrezca un cambio que se ignora.
-  const lockedSeller = user?.role === "comercial";
+  // Un comercial o promotor tiene el vendedor forzado por el back (§2.4 del
+  // diseño rol-promotor): el selector se bloquea para que la barra no ofrezca
+  // un cambio que se ignora.
+  const lockedSeller = user?.role === "comercial" || user?.role === "promotor";
 
   if (!data) {
     return (

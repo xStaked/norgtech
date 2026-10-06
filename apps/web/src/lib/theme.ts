@@ -3,6 +3,7 @@ export type ButtonLinkVariant = "primary" | "secondary" | "ghost" | "danger";
 
 export type UserRole =
   | "administrador"
+  | "promotor"
   | "director_comercial"
   | "comercial"
   | "tecnico"
@@ -37,7 +38,7 @@ export const primaryNavItems = [
     shortLabel: "DB",
     description: "Resumen operativo y actividad reciente",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
   },
   {
     href: "/agenda",
@@ -45,7 +46,7 @@ export const primaryNavItems = [
     shortLabel: "AG",
     description: "Proximos compromisos y eventos",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico"] as const,
   },
   {
     href: "/whatsapp",
@@ -53,7 +54,7 @@ export const primaryNavItems = [
     shortLabel: "WA",
     description: "Inbox de conversaciones y pedidos asistidos",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
   },
   {
     href: "/visits",
@@ -61,7 +62,7 @@ export const primaryNavItems = [
     shortLabel: "VS",
     description: "Ejecucion y seguimiento en campo",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico"] as const,
   },
   {
     href: "/expenses",
@@ -69,7 +70,7 @@ export const primaryNavItems = [
     shortLabel: "GS",
     description: "Gastos de campo y soportes",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "facturacion"] as const,
   },
   {
     href: "/analytics",
@@ -78,8 +79,9 @@ export const primaryNavItems = [
     description: "Ventas, cartera, embudo y desempeño comercial",
     group: "Analisis",
     // Direccion ve la operacion completa; un comercial ve las mismas pantallas
-    // acotadas a su propia gestion (el back le fuerza el vendedor).
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
+    // acotadas a su propia gestion (el back le fuerza el vendedor). Promotor
+    // entra igual: el back le fuerza su propio id.
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial"] as const,
     children: [
       { href: "/analytics/ventas", label: "Ventas" },
       { href: "/analytics/cartera", label: "Cartera" },
@@ -93,7 +95,7 @@ export const primaryNavItems = [
     shortLabel: "RP",
     description: "Reportes ejecutivos generados desde visitas",
     group: "Analisis",
-    requiredRoles: ["administrador", "director_comercial", "tecnico"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "tecnico"] as const,
   },
   {
     href: "/follow-ups",
@@ -101,7 +103,7 @@ export const primaryNavItems = [
     shortLabel: "SG",
     description: "Cola de trabajo comercial pendiente",
     group: "Operacion",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico"] as const,
   },
   {
     href: "/customers",
@@ -109,7 +111,7 @@ export const primaryNavItems = [
     shortLabel: "CL",
     description: "Base comercial y relacion activa",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"] as const,
   },
   {
     href: "/opportunities",
@@ -117,7 +119,7 @@ export const primaryNavItems = [
     shortLabel: "OP",
     description: "Pipeline y gestion por etapa",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial"] as const,
   },
   {
     href: "/quotes",
@@ -125,7 +127,7 @@ export const primaryNavItems = [
     shortLabel: "CT",
     description: "Propuestas comerciales vigentes",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "facturacion"] as const,
   },
   {
     href: "/orders",
@@ -133,7 +135,7 @@ export const primaryNavItems = [
     shortLabel: "PD",
     description: "Pedidos activos y su estado",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion", "logistica"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "facturacion", "logistica"] as const,
   },
   {
     href: "/orders/review",
@@ -141,7 +143,7 @@ export const primaryNavItems = [
     shortLabel: "RV",
     description: "Cola de pedidos en revisión por aprobar",
     group: "Comercial",
-    requiredRoles: ["administrador", "facturacion"] as const,
+    requiredRoles: ["administrador", "promotor", "facturacion"] as const,
   },
   {
     href: "/billing-requests",
@@ -149,7 +151,7 @@ export const primaryNavItems = [
     shortLabel: "FC",
     description: "Solicitudes de facturacion y contexto",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "facturacion"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "facturacion"] as const,
   },
   {
     href: "/invoices",
@@ -157,7 +159,7 @@ export const primaryNavItems = [
     shortLabel: "CT",
     description: "Facturas, pagos y control de cartera",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "facturacion", "comercial"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "facturacion", "comercial"] as const,
     children: [
       { href: "/invoices/debtors", label: "Deudores" },
       { href: "/invoices/accounting", label: "Contable" },
@@ -169,7 +171,7 @@ export const primaryNavItems = [
     shortLabel: "DV",
     description: "Devoluciones y notas credito de clientes",
     group: "Comercial",
-    requiredRoles: ["administrador", "director_comercial", "facturacion", "comercial"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "facturacion", "comercial"] as const,
   },
   {
     href: "/products",
@@ -177,7 +179,7 @@ export const primaryNavItems = [
     shortLabel: "PR",
     description: "Catalogo y disponibilidad comercial",
     group: "Catalogo",
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial"] as const,
   },
   {
     href: "/price-lists",
@@ -185,7 +187,7 @@ export const primaryNavItems = [
     shortLabel: "LP",
     description: "Consulta de listas y precios por presentacion",
     group: "Catalogo",
-    requiredRoles: ["administrador", "director_comercial", "comercial", "facturacion"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "facturacion"] as const,
   },
   {
     href: "/zones",
@@ -193,7 +195,7 @@ export const primaryNavItems = [
     shortLabel: "ZN",
     description: "Catalogo de zonas de despacho",
     group: "Catalogo",
-    requiredRoles: ["administrador", "director_comercial"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial"] as const,
   },
   {
     href: "/users",
@@ -201,7 +203,7 @@ export const primaryNavItems = [
     shortLabel: "US",
     description: "Altas, roles y estado de acceso",
     group: "Admin",
-    requiredRoles: ["administrador"] as const,
+    requiredRoles: ["administrador", "promotor"] as const,
   },
   {
     href: "/companies",
@@ -209,7 +211,7 @@ export const primaryNavItems = [
     shortLabel: "EM",
     description: "Empresas facturadoras del sistema",
     group: "Admin",
-    requiredRoles: ["administrador", "director_comercial"] as const,
+    requiredRoles: ["administrador", "promotor", "director_comercial"] as const,
   },
 ] as const satisfies readonly NavItem[];
 
@@ -250,7 +252,7 @@ const noraNavItem: NavItem = {
   shortLabel: "NA",
   description: "Asistente conversacional para reportes y confirmaciones",
   group: "Operacion",
-  requiredRoles: ["administrador", "director_comercial", "comercial", "tecnico"],
+  requiredRoles: ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
 };
 
 export function filterNavGroups(role: UserRole) {

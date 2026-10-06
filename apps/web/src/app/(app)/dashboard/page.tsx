@@ -80,7 +80,9 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-const commercialAdvancedRoles = new Set(["administrador", "director_comercial", "comercial"]);
+const commercialAdvancedRoles = new Set(["administrador", "promotor", "director_comercial", "comercial"]);
+// Metas por vendedor = desempeño del equipo: promotor NO entra (solo ve lo
+// propio en CommercialAdvanced acotado por la API, como comercial).
 const sellerGoalsRoles = new Set(["administrador", "director_comercial"]);
 
 function formatKpiValue(summary: DashboardSummary | null, key: KpiKey) {
@@ -226,7 +228,9 @@ export default async function DashboardPage({
       {/* Goals Progress Section */}
       <CustomerGoalsDashboard />
 
-      <SellerGoalsDashboard summary={sellerGoalsSummary} companyId={companyId} />
+      {canViewSellerGoals ? (
+        <SellerGoalsDashboard summary={sellerGoalsSummary} companyId={companyId} />
+      ) : null}
 
       <CommercialAdvancedDashboard summary={commercialAdvancedSummary} />
 
