@@ -94,8 +94,5 @@ export const config = {
     "/whatsapp/:path*",
     "/returns/:path*",
     "/price-lists/:path*",
-    // Liquidacion de comisiones: mismo patron que /price-lists. Sin matcher el
-    // middleware nunca corre para esta ruta y el guard por rol seria teorico.
-    "/commissions/:path*",
   ],
 };

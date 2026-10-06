@@ -20,9 +20,6 @@ export const protectedPaths = [
   "/analytics",
   "/reports",
   "/price-lists",
-  // Liquidacion de comisiones: tambien renderiza en servidor con apiFetch, asi
-  // que sin sesion valida iria a /login en vez de pintar una pantalla mocha.
-  "/commissions",
   // Tambien renderizan en servidor: sin sesion valida daban 200 con la pantalla
   // vacia en vez de mandar al login.
   "/users",
@@ -52,9 +49,6 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   { prefix: "/analytics", isAllowed: (role) => canAccess(role, "/analytics") },
   { prefix: "/reports", isAllowed: (role) => canAccess(role, "/reports") },
   { prefix: "/price-lists", isAllowed: (role) => canAccess(role, "/price-lists") },
-  // Liquidacion de comisiones: misma matriz que @Roles del controlador. El
-  // comercial entra, pero el back le fuerza el vendedor (solo las suyas).
-  { prefix: "/commissions", isAllowed: (role) => canAccess(role, "/commissions") },
   { prefix: "/users", isAllowed: (role) => canAccess(role, "/users") },
   // ---------------------------------------------------------------------------
   // C-WEB-1..13 (docs/seguridad-brechas.md): el resto de pantallas solo se

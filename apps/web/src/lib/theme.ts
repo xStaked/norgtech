@@ -164,16 +164,6 @@ export const primaryNavItems = [
     ] as const,
   },
   {
-    href: "/commissions",
-    label: "Comisiones",
-    shortLabel: "CO",
-    description: "Liquidacion de comisiones por periodo y vendedor",
-    group: "Comercial",
-    // Direccion ve todas y liquida; el comercial entra a ver solo las suyas
-    // (el back le fuerza el vendedor). Espeja el @Roles del controlador.
-    requiredRoles: ["administrador", "director_comercial", "comercial"] as const,
-  },
-  {
     href: "/returns",
     label: "Devoluciones",
     shortLabel: "DV",

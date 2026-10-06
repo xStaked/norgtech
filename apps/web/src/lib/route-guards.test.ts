@@ -12,20 +12,13 @@ test("/price-lists exige rol de la matriz", () => {
   assert.equal(resolveRoleRedirect("/price-lists", "facturacion"), null);
 });
 
-// Liquidacion de comisiones: direccion ve todas y un comercial entra a ver
-// solo las suyas (el back le fuerza sellerUserId a su id, espejo de
-// @Roles del controlador de comisiones). tecnico/facturacion/logistica no
-// participan.
-test("comercial entra a /commissions (ve solo las suyas)", () => {
+// 2026-10-06: el modulo de comisiones se OCULTO del front (pantalla eliminada)
+// mientras el negocio define la logica de liquidacion. La API sigue viva y
+// protegida. El pin: la ruta ya no participa del guard (comportamiento de
+// ruta desconocida).
+test("/commissions ya no es ruta protegida del front", () => {
   assert.equal(resolveRoleRedirect("/commissions", "comercial"), null);
-  assert.equal(resolveRoleRedirect("/commissions", "administrador"), null);
-  assert.equal(resolveRoleRedirect("/commissions", "director_comercial"), null);
-});
-
-test("/commissions bloquea roles sin liquidaciones", () => {
-  assert.equal(resolveRoleRedirect("/commissions", "tecnico"), "/dashboard?forbidden=1");
-  assert.equal(resolveRoleRedirect("/commissions", "facturacion"), "/dashboard?forbidden=1");
-  assert.equal(resolveRoleRedirect("/commissions", "logistica"), "/dashboard?forbidden=1");
+  assert.equal(resolveRoleRedirect("/commissions", "tecnico"), null);
 });
 
 test("ruta desconocida no redirige", () => {

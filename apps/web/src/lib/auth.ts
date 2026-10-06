@@ -121,7 +121,8 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
     // comercial entra a ver solo las suyas (el back le fuerza sellerUserId a su
     // id, espejo de @Roles del CommissionsLedgerController). tecnico,
     // facturacion y logistica no participan.
-    "/commissions": ["administrador", "director_comercial", "comercial"],
+    // 2026-10-06: modulo OCULTO del front (pantalla/eliminada); la API sigue
+    // viva mientras el negocio define la logica de liquidacion.
     "/reports": ["administrador", "director_comercial", "tecnico"],
     // D5 / C-WEB-8: revisión de pedidos la gobierna el requiredRoles del nav
     // (theme.ts): solo adm y fac. Sin esta entrada canAccess daba false y el
