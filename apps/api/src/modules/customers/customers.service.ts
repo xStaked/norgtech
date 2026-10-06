@@ -210,6 +210,13 @@ export class CustomersService {
       throw new NotFoundException("Customer not found");
     }
 
+    // Un comercial solo toca su cartera: sin esto podia editar (nombre,
+    // contacto, etc.) el cliente de un companero adivinando el id aunque el
+    // listado ya no se lo mostrara.
+    if (user.role === "comercial" && customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a este cliente");
+    }
+
     if (dto.segmentId) {
       const segment = await this.prisma.customerSegment.findUnique({
         where: { id: dto.segmentId },
@@ -347,7 +354,7 @@ export class CustomersService {
     return updated;
   }
 
-  findAll(query: ListCustomersQueryDto = {}) {
+  findAll(user: AuthUser, query: ListCustomersQueryDto = {}) {
     const {
       includeInactive,
       search,
@@ -367,7 +374,16 @@ export class CustomersService {
     }
     if (companyId) where.companyId = companyId;
     if (segmentId) where.segmentId = segmentId;
-    if (assignedToUserId) where.assignedToUserId = assignedToUserId;
+    // Un comercial solo ve su cartera, mande lo que mande el query: se fuerza
+    // al id autenticado (espejo de InvoicesService.buildWhere y
+    // analytics.shared.resolveFilters). Admin, director y el resto operativo
+    // (tecnico, facturacion, logistica) conservan la vista completa y el
+    // filtro opcional por vendedor.
+    if (user.role === "comercial") {
+      where.assignedToUserId = user.id;
+    } else if (assignedToUserId) {
+      where.assignedToUserId = assignedToUserId;
+    }
     if (paymentCondition) where.paymentCondition = paymentCondition;
     if (customerType) where.customerType = customerType;
     if (search) {
@@ -416,8 +432,8 @@ export class CustomersService {
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.customer.findUnique({
+  async findOne(user: AuthUser, id: string) {
+    const customer = await this.prisma.customer.findUnique({
       where: { id },
       include: {
         segment: true,
@@ -449,9 +465,16 @@ export class CustomersService {
         },
       },
     });
+    // Defensa en profundidad del listado: un comercial que adivine el id no
+    // puede leer la ficha de un cliente ajeno por URL directa.
+    if (customer && user.role === "comercial" && customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a este cliente");
+    }
+    return customer;
   }
 
-  async getCustomerZones(customerId: string) {
+  async getCustomerZones(user: AuthUser, customerId: string) {
+    await this.findOne(user, customerId);
     return this.prisma.customerZone.findMany({
       where: { customerId, isActive: true },
       include: { zone: true, assignedTo: { select: { id: true, name: true } } },

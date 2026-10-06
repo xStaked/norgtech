@@ -46,16 +46,17 @@ export class CustomersController {
   @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get()
   findAll(
+    @CurrentUser() user: AuthUser,
     @Query(new ValidationPipe({ transform: true, whitelist: true })) query: ListCustomersQueryDto,
   ) {
-    return this.customersService.findAll(query);
+    return this.customersService.findAll(user, query);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.customersService.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.customersService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -89,8 +90,8 @@ export class CustomersController {
   // formulario de pedidos (order-form.tsx, con logistica creando pedidos).
   // Escribir zonas sigue siendo solo adm/dir.
   @Get(":id/zones")
-  getZones(@Param("id") id: string) {
-    return this.customersService.getCustomerZones(id);
+  getZones(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.customersService.getCustomerZones(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
