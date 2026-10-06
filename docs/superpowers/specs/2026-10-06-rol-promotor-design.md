@@ -88,5 +88,7 @@ Excepciones (ve solo lo propio, como comercial):
 3. `GET /analytics/*` con `sellerUserId` ajeno lo ignora y devuelve solo lo
    propio; `GET /dashboard/seller-goals` → 403.
 4. Puede crear/reassignar/activar clientes y aprobar flujos como admin.
-5. Web: ve todos los módulos menos `/analytics`; dashboard sin widgets ajenos.
+5. Web: ve todos los módulos INCLUIDO `/analytics` (el API lo acota a sí mismo,
+   igual que al comercial); dashboard sin widgets de desempeño ajeno (oculta
+   `SellerGoalsDashboard`; `CommercialAdvancedDashboard` acotado a sí mismo).
 6. Suite e2e existente sigue verde (solo el fallo pre-existente conocido).
