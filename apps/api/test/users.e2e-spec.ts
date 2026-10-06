@@ -72,6 +72,8 @@ describe("Users", () => {
         select?: MockUserSelect;
       }
     | undefined;
+  let lastRefreshRevokeArgs: { where: Record<string, unknown>; data: Record<string, unknown> } | undefined;
+  let lastResetInvalidateArgs: { where: Record<string, unknown>; data: Record<string, unknown> } | undefined;
 
   /** Id del usuario que, para el test en curso, sí tiene historial en el CRM. */
   let historyFor: string | null = null;
@@ -163,6 +165,16 @@ describe("Users", () => {
         lastUpdateArgs = { where, data, select };
         const existing = users.get(where.id);
         if (!existing) throw new NotFoundException("User not found");
+        if (
+          data.email !== undefined &&
+          Array.from(users.values()).some((u) => u.id !== where.id && u.email === data.email)
+        ) {
+          throw new Prisma.PrismaClientKnownRequestError("Unique constraint failed on the fields: (`email`)", {
+            code: "P2002",
+            clientVersion: "test",
+            meta: { target: ["email"] },
+          });
+        }
         const updated = { ...existing, ...data, updatedAt: new Date("2026-06-11T13:00:00.000Z") };
         users.set(where.id, updated);
         return applySelect(updated, select);
@@ -174,7 +186,20 @@ describe("Users", () => {
         return existing;
       },
     },
-    refreshToken: refreshTokenStub(),
+    refreshToken: {
+      ...refreshTokenStub(),
+      updateMany: async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        lastRefreshRevokeArgs = args;
+        return { count: 0 };
+      },
+    },
+    passwordResetToken: {
+      updateMany: async (args: { where: Record<string, unknown>; data: Record<string, unknown> }) => {
+        lastResetInvalidateArgs = args;
+        return { count: 0 };
+      },
+    },
+    $transaction: async (fn: (tx: any) => Promise<any>) => fn(prismaMock),
     // Historial que bloquea el borrado. Cada test decide cuantas filas "tiene"
     // el usuario poniendo su id en `historyFor`.
     ...Object.fromEntries(
@@ -210,6 +235,8 @@ describe("Users", () => {
     lastFindManyArgs = undefined;
     lastCreateArgs = undefined;
     lastUpdateArgs = undefined;
+    lastRefreshRevokeArgs = undefined;
+    lastResetInvalidateArgs = undefined;
     const now = new Date("2026-06-11T10:00:00.000Z");
     users.set("commercial-id", {
       id: "commercial-id",
@@ -408,7 +435,7 @@ describe("Users", () => {
     expect(response.body).not.toHaveProperty("passwordHash");
     expect(lastFindUniqueArgs).toEqual({
       where: { id: "commercial-id" },
-      select: { id: true, role: true },
+      select: { id: true, role: true, email: true },
     });
     expect(lastUpdateArgs?.select).toEqual(publicUserSelect);
     expect(lastUpdateArgs?.data.phone).toBe("+573001000008");
@@ -448,20 +475,101 @@ describe("Users", () => {
 
     expect(lastFindUniqueArgs).toEqual({
       where: { id: "missing-id" },
-      select: { id: true, role: true },
+      select: { id: true, role: true, email: true },
     });
   });
 
-  it("rejects patch payloads with email", async () => {
+  it("updates another user email, normalizes it, and revokes sessions and reset tokens", async () => {
+    const token = await login("admin@norgtech.com");
+
+    const response = await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "  NUEVO@norgtech.com " })
+      .expect(200);
+
+    expect(response.body.email).toBe("nuevo@norgtech.com");
+    expect(response.body.name).toBe("Comercial");
+    expect(users.get("commercial-id")?.email).toBe("nuevo@norgtech.com");
+    expect(lastRefreshRevokeArgs?.where).toMatchObject({ userId: "commercial-id", revokedAt: null });
+    expect(lastResetInvalidateArgs?.where).toMatchObject({ userId: "commercial-id", usedAt: null });
+  });
+
+  it("does not revoke sessions when the email is unchanged after normalization", async () => {
+    const token = await login("admin@norgtech.com");
+
+    const response = await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "  COMERCIAL@norgtech.com " })
+      .expect(200);
+
+    expect(response.body.email).toBe("comercial@norgtech.com");
+    expect(lastRefreshRevokeArgs).toBeUndefined();
+    expect(lastResetInvalidateArgs).toBeUndefined();
+  });
+
+  it("rejects duplicate emails with 409 and leaves the user untouched", async () => {
+    const now = new Date("2026-06-11T10:00:00.000Z");
+    users.set("other-id", {
+      id: "other-id",
+      name: "Otro",
+      email: "other@norgtech.com",
+      phone: "+573001000010",
+      passwordHash,
+      role: UserRole.comercial,
+      active: true,
+      createdAt: now,
+      updatedAt: now,
+    });
     const token = await login("admin@norgtech.com");
 
     await request(app.getHttpServer())
       .patch("/users/commercial-id")
       .set("Authorization", `Bearer ${token}`)
-      .send({ email: "new@norgtech.com" })
+      .send({ email: "OTHER@norgtech.com" })
+      .expect(409);
+
+    expect(users.get("commercial-id")?.email).toBe("comercial@norgtech.com");
+  });
+
+  it("rejects invalid emails with 400", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "not-an-email" })
       .expect(400);
 
     expect(users.get("commercial-id")?.email).toBe("comercial@norgtech.com");
+  });
+
+  it("rejects null email with 400", async () => {
+    const token = await login("admin@norgtech.com");
+
+    await request(app.getHttpServer())
+      .patch("/users/commercial-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: null })
+      .expect(400);
+
+    expect(users.get("commercial-id")?.email).toBe("comercial@norgtech.com");
+  });
+
+  it("allows an admin to update their own email", async () => {
+    const token = await login("admin@norgtech.com");
+
+    const response = await request(app.getHttpServer())
+      .patch("/users/admin-id")
+      .set("Authorization", `Bearer ${token}`)
+      .send({ email: "  NUEVOADMIN@norgtech.com " })
+      .expect(200);
+
+    expect(response.body.email).toBe("nuevoadmin@norgtech.com");
+    expect(users.get("admin-id")?.email).toBe("nuevoadmin@norgtech.com");
+    expect(lastRefreshRevokeArgs?.where).toMatchObject({ userId: "admin-id", revokedAt: null });
+    expect(lastResetInvalidateArgs?.where).toMatchObject({ userId: "admin-id", usedAt: null });
   });
 
   it("rejects patch payloads with passwordHash", async () => {

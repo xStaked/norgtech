@@ -105,6 +105,7 @@ export class UsersService {
       select: {
         id: true,
         role: true,
+        email: true,
       },
     });
 
@@ -120,18 +121,69 @@ export class UsersService {
       throw new BadRequestException("You cannot deactivate your own user");
     }
 
-    const user = await this.prisma.user.update({
-      where: { id },
-      data: {
+    const normalizedEmail = dto.email !== undefined ? this.normalizeEmail(dto.email) : undefined;
+    const emailChanged = normalizedEmail !== undefined && normalizedEmail !== existing.email;
+
+    try {
+      if (emailChanged) {
+        return await this.prisma.$transaction(async (tx) => {
+          const user = await tx.user.update({
+            where: { id },
+            data: {
+              ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
+              ...(dto.phone !== undefined ? { phone: dto.phone.trim() } : {}),
+              ...(dto.role !== undefined ? { role: dto.role } : {}),
+              ...(dto.active !== undefined ? { active: dto.active } : {}),
+              email: normalizedEmail,
+            },
+            select: publicUserSelect,
+          });
+
+          await tx.refreshToken.updateMany({
+            where: { userId: id, revokedAt: null },
+            data: { revokedAt: new Date() },
+          });
+
+          await tx.passwordResetToken.updateMany({
+            where: { userId: id, usedAt: null },
+            data: { usedAt: new Date() },
+          });
+
+          return user;
+        });
+      }
+
+      const data: Prisma.UserUpdateInput = {
         ...(dto.name !== undefined ? { name: dto.name.trim() } : {}),
         ...(dto.phone !== undefined ? { phone: dto.phone.trim() } : {}),
         ...(dto.role !== undefined ? { role: dto.role } : {}),
         ...(dto.active !== undefined ? { active: dto.active } : {}),
-      },
-      select: publicUserSelect,
-    });
+      };
 
-    return user;
+      if (Object.keys(data).length === 0) {
+        const user = await this.prisma.user.findUnique({ where: { id }, select: publicUserSelect });
+
+        if (!user) {
+          throw new NotFoundException("User not found");
+        }
+
+        return user;
+      }
+
+      const user = await this.prisma.user.update({
+        where: { id },
+        data,
+        select: publicUserSelect,
+      });
+
+      return user;
+    } catch (error) {
+      if (this.isUniqueConstraintError(error)) {
+        throw new ConflictException("Email already exists");
+      }
+
+      throw error;
+    }
   }
 
   /**

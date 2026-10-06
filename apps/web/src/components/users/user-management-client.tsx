@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { apiFetchClient } from "@/lib/api.client";
-import { type UserRole, USER_ROLES, ROLE_LABELS } from "@/lib/auth";
+import { type UserRole, USER_ROLES, ROLE_LABELS, clearSessionClient } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
@@ -43,7 +43,11 @@ import {
 } from "@/components/users/user-format";
 import {
   E164_PHONE_PATTERN,
+  EMAIL_VALIDATION_MESSAGE,
   PHONE_VALIDATION_MESSAGE,
+  emailConflictMessage,
+  isValidEmailInput,
+  normalizeEmailInput,
   normalizePhoneInput,
   readErrorMessage,
 } from "@/components/users/user-mutations";
@@ -93,6 +97,8 @@ export function UserManagementClient({
   const [draftName, setDraftName] = useState("");
   const [draftPhone, setDraftPhone] = useState("");
   const [phoneError, setPhoneError] = useState<string | null>(null);
+  const [draftEmail, setDraftEmail] = useState("");
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [pendingUserIds, setPendingUserIds] = useState<Record<string, true>>({});
 
   const [tempPassword, setTempPassword] = useState<{ name: string; password: string } | null>(null);
@@ -172,16 +178,20 @@ export function UserManagementClient({
     setDraftName(user.name);
     setDraftPhone(user.phone ?? "");
     setPhoneError(null);
+    setDraftEmail(user.email);
+    setEmailError(null);
   }
 
   function cancelEdit() {
     setEditingUserId(null);
     setPhoneError(null);
+    setDraftEmail("");
+    setEmailError(null);
   }
 
   async function patchUser(
     user: ManagedUser,
-    body: Partial<Pick<ManagedUser, "name" | "phone" | "role" | "active">>,
+    body: Partial<Pick<ManagedUser, "name" | "phone" | "role" | "active" | "email">>,
     successMessage: string,
   ) {
     if (isPending(user.id)) return null;
@@ -195,8 +205,11 @@ export function UserManagementClient({
       });
 
       if (!response.ok) {
+        // 409 de correo duplicado: el API responde en inglés, se traduce.
+        const conflict = "email" in body ? emailConflictMessage(response.status) : null;
         toast.error("No se pudo guardar el cambio", {
-          description: await readErrorMessage(response, "Intenta de nuevo en unos segundos."),
+          description:
+            conflict ?? (await readErrorMessage(response, "Intenta de nuevo en unos segundos.")),
         });
         return null;
       }
@@ -254,6 +267,52 @@ export function UserManagementClient({
       setDraftPhone(updated.phone ?? "");
     } else {
       setDraftPhone(user.phone ?? "");
+    }
+  }
+
+  async function handleEmailBlur(user: ManagedUser) {
+    const normalized = normalizeEmailInput(draftEmail);
+
+    if (normalized === user.email.toLowerCase()) {
+      setDraftEmail(user.email);
+      setEmailError(null);
+      return;
+    }
+
+    if (!normalized || !isValidEmailInput(normalized)) {
+      setEmailError(EMAIL_VALIDATION_MESSAGE);
+      return;
+    }
+
+    const isSelf = user.id === currentUserId;
+    const message = isSelf
+      ? `Vas a cambiar tu correo a ${normalized}. Tendrás que volver a iniciar sesión y el correo anterior dejará de servir para entrar.`
+      : `${user.name} tendrá que volver a iniciar sesión con ${normalized}. El correo anterior deja de servir para entrar.`;
+    if (!window.confirm(message)) {
+      setDraftEmail(user.email);
+      setEmailError(null);
+      return;
+    }
+
+    const updated = await patchUser(
+      user,
+      { email: normalized },
+      `Correo de ${user.name} actualizado a ${normalized}.`,
+    );
+    if (updated) {
+      setDraftEmail(updated.email);
+      setEmailError(null);
+      if (isSelf) {
+        try {
+          await apiFetchClient("/auth/logout", { method: "POST" });
+        } finally {
+          clearSessionClient();
+          router.push("/login");
+          router.refresh();
+        }
+      }
+    } else {
+      setDraftEmail(user.email);
     }
   }
 
@@ -341,9 +400,36 @@ export function UserManagementClient({
     {
       key: "email",
       header: "Email",
-      render: (user) => (
-        <span className="block truncate font-mono text-[11.5px] text-[#3a4658]">{user.email}</span>
-      ),
+      render: (user) => {
+        if (editingUserId !== user.id) {
+          return (
+            <span className="block truncate font-mono text-[11.5px] text-[#3a4658]">
+              {user.email}
+            </span>
+          );
+        }
+
+        return (
+          <div className="min-w-0">
+            <Input
+              type="email"
+              className={cn("font-mono text-[11.5px]", emailError && "border-[#ee1c25] border-[1.5px]")}
+              value={draftEmail}
+              onChange={(event) => {
+                setEmailError(null);
+                setDraftEmail(event.target.value);
+              }}
+              onBlur={() => void handleEmailBlur(user)}
+              disabled={isPending(user.id)}
+              title={EMAIL_VALIDATION_MESSAGE}
+              aria-label={`Correo de ${user.name}`}
+            />
+            {emailError ? (
+              <div className="mt-0.5 text-[10px] font-semibold text-[#b42318]">{emailError}</div>
+            ) : null}
+          </div>
+        );
+      },
     },
     {
       key: "phone",
@@ -532,7 +618,7 @@ export function UserManagementClient({
               <DropdownMenuItem onClick={cancelEdit}>Terminar edición</DropdownMenuItem>
             ) : (
               <DropdownMenuItem onClick={() => startEdit(user)}>
-                Editar nombre y teléfono
+                Editar datos
               </DropdownMenuItem>
             )}
             {SELLER_ROLES.has(user.role) ? (
