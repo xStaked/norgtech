@@ -2,15 +2,16 @@ import {
   CommercialExpenseCategory,
   CommercialExpenseStatus,
 } from "@prisma/client";
+// Fuente compartida con los soportes de pago de facturas. Se reexporta con el
+// nombre historico para no romper los imports del modulo de gastos.
+import {
+  SUPPORT_FILE_ALLOWED_MIME_TYPES,
+  SUPPORT_FILE_MAX_BYTES,
+} from "../../shared/support-file.constants";
 
-export const EXPENSE_SUPPORT_MAX_BYTES = 10 * 1024 * 1024;
+export const EXPENSE_SUPPORT_MAX_BYTES = SUPPORT_FILE_MAX_BYTES;
 
-export const EXPENSE_SUPPORT_ALLOWED_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/webp",
-  "application/pdf",
-] as const;
+export const EXPENSE_SUPPORT_ALLOWED_MIME_TYPES = SUPPORT_FILE_ALLOWED_MIME_TYPES;
 
 export const expenseStatusTransitions: Record<
   CommercialExpenseStatus,

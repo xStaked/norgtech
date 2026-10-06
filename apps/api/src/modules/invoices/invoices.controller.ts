@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -20,6 +21,10 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
+import {
+  SUPPORT_FILE_ALLOWED_MIME_TYPES,
+  SUPPORT_FILE_MAX_BYTES,
+} from "../../shared/support-file.constants";
 import { InvoicesService } from "./invoices.service";
 import { CreateInvoiceDto } from "./dto/create-invoice.dto";
 import { ListInvoicesDto } from "./dto/list-invoices.dto";
@@ -44,6 +49,22 @@ const validationPipe = new ValidationPipe({
   whitelist: true,
   forbidNonWhitelisted: true,
 });
+
+function assertPaymentSupportMimeType(
+  _req: unknown,
+  file: Express.Multer.File,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+): void {
+  if (
+    !SUPPORT_FILE_ALLOWED_MIME_TYPES.includes(
+      file.mimetype as (typeof SUPPORT_FILE_ALLOWED_MIME_TYPES)[number],
+    )
+  ) {
+    callback(new BadRequestException("Unsupported payment support content type"), false);
+    return;
+  }
+  callback(null, true);
+}
 
 function sanitizeDownloadFileName(fileName: string): string {
   const sanitized = fileName
@@ -116,7 +137,11 @@ export class InvoicesController {
   @UseInterceptors(
     FileInterceptor("support", {
       storage: memoryStorage(),
-      limits: { fileSize: 10 * 1024 * 1024 },
+      limits: { fileSize: SUPPORT_FILE_MAX_BYTES },
+      // Misma allowlist que el servicio: un cliente que bypasee el filtro de
+      // Multer (o un bypass de proxy) chocaria de nuevo con la validacion antes
+      // del upload.
+      fileFilter: assertPaymentSupportMimeType,
     }),
   )
   createPayment(
