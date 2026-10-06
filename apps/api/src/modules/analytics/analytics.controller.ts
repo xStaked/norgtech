@@ -13,6 +13,7 @@ import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { AnalyticsExportThrottleGuard } from "./analytics-export-throttle.guard";
 import { AnalyticsFiltersQueryDto } from "./dto/analytics-filters.query.dto";
 import { CsvColumn, resolveAsOf, resolveFilters, toCsv } from "./analytics.shared";
 import { FunnelService } from "./funnel.service";
@@ -82,9 +83,13 @@ const CSV_COLUMNS: Record<string, CsvColumn<Row>[]> = {
  * `comercial` entra a las mismas 4 pantallas pero solo con lo suyo, porque
  * `resolveFilters` le fuerza `sellerUserId` a su propio id (§2.4). Los demas
  * roles no entran.
+ *
+ * El `format=csv|pdf` de estas mismas rutas es la exportacion cara (build de
+ * CSV/PDF en memoria); AnalyticsExportThrottleGuard la martillea con el limite
+ * fino `analyticsCsv` SIN tocar la navegacion JSON del comercial.
  */
 @Controller("analytics")
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard, AnalyticsExportThrottleGuard)
 @Roles("administrador", "director_comercial", "comercial")
 export class AnalyticsController {
   constructor(

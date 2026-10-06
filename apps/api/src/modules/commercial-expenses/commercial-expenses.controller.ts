@@ -14,6 +14,7 @@ import {
 } from "@nestjs/common";
 import { FileInterceptor } from "@nestjs/platform-express";
 import { memoryStorage } from "multer";
+import { Throttle } from "@nestjs/throttler";
 import type { Response } from "express";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
@@ -23,6 +24,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { EXPENSE_SUPPORT_MAX_BYTES } from "./commercial-expense-constants";
 import { CommercialExpenseExtractionService } from "./commercial-expense-extraction.service";
 import { CommercialExpensesService } from "./commercial-expenses.service";
+import { RATE_LIMITS } from "../whatsapp/rate-limits.constants";
 import { CreateCommercialExpenseDto } from "./dto/create-commercial-expense.dto";
 import { ListCommercialExpensesDto } from "./dto/list-commercial-expenses.dto";
 import { UpdateCommercialExpenseStatusDto } from "./dto/update-commercial-expense-status.dto";
@@ -62,6 +64,11 @@ export class CommercialExpensesController {
   ) {}
 
   @Roles(...expenseRoles)
+  // Throttle fino (fase 3): el gasto con soporte dispara OCR + modelo de
+  // visión por documento. La entrada manual (sin archivo) comparte la ruta;
+  // el límite generoso del mapa de constantes no la corta (llenar un formulario
+  // toma >5s por gasto).
+  @Throttle({ default: { ...RATE_LIMITS.expenseOcr } })
   @Post()
   @UseInterceptors(
     FileInterceptor("support", {
@@ -126,6 +133,8 @@ export class CommercialExpensesController {
   }
 
   @Roles(...expenseRoles)
+  // Throttle fino (fase 3): extractSupport es CPU + modelo de visión puro.
+  @Throttle({ default: { ...RATE_LIMITS.expenseOcr } })
   @Post("extract-support")
   @UseInterceptors(
     FileInterceptor("support", {
