@@ -16,5 +16,5 @@ export const ROLE_GROUPS = {
   RETURNS_WRITERS: ["administrador", "promotor", "director_comercial", "facturacion", "comercial"],
   LOGISTICS: ["administrador", "promotor", "logistica"],
   ADMIN_AND_DIRECTOR: ["administrador", "promotor", "director_comercial"], // Empresas y Zonas (RBAC-01)
-  ADMIN_ONLY: ["administrador", "promotor"],
+  ADMIN_ONLY: ["administrador"],
 } as const satisfies Record<string, readonly UserRole[]>;

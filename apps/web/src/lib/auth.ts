@@ -149,9 +149,10 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
 
 /**
  * Repartir cartera es de direccion: un comercial se queda unicamente los
- * clientes que crea el mismo, y no puede reasignarlos ni activarlos. Espeja las
- * guardas de CustomersService.create/update — si aqui se muestra el campo y
- * alla se rechaza, el usuario llena un formulario que solo sabe dar 403.
+ * clientes que crea el mismo, y no puede reasignarlos ni activarlos. El
+ * promotor reparte y reasigna como un administrador. Espeja las guardas de
+ * CustomersService.create/update — si aqui se muestra el campo y alla se
+ * rechaza, el usuario llena un formulario que solo sabe dar 403.
  */
 export function canAssignCustomers(role: UserRole | null): boolean {
   return role === "administrador" || role === "promotor" || role === "director_comercial";

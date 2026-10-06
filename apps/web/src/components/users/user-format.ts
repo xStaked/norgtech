@@ -14,7 +14,7 @@ const AVATAR_COLORS = [
 
 export const ROLE_COLORS: Record<UserRole, string> = {
   administrador: "#0c2c44",
-  promotor: "#0f5c8a",
+  promotor: "#6d4ff0",
   director_comercial: "#0f5c8a",
   comercial: "#167c4a",
   tecnico: "#1d6e7e",
