@@ -82,6 +82,29 @@ def test_tecnico_no_ve_pedidos_gastos_ni_cartera():
         assert forbidden not in names
 
 
+def test_promotor_analytics_own_only():
+    tools = tools_for_role("promotor", ALL_TOOLS)
+    names = {t.name for t in tools}
+    assert "get_analytics" in names
+    assert "compare_analytics" in names
+    assert "get_team_goals" not in names
+
+
+def test_promotor_ve_toda_la_operacion_menos_metas_del_equipo():
+    names = {t.name for t in tools_for_role("promotor", ALL_TOOLS)}
+    # Como admin en lo operativo: clientes, pedidos, gastos, cartera y ventas.
+    assert {"create_order", "create_expense", "get_cartera", "get_sales_summary"} <= names
+    # Su propia meta sí; la del equipo no.
+    assert "get_seller_goal_progress" in names
+    assert "get_team_goals" not in names
+
+
+def test_promotor_prompt_alcance_operacion_total_y_analitica_propia():
+    prompt = role_prompt("promotor")
+    assert "PROMOTOR" in prompt
+    assert "tus ventas" in prompt
+
+
 def test_rol_desconocido_cae_a_solo_lectura():
     names = {t.name for t in tools_for_role("facturacion", ALL_TOOLS)}
     assert names == {"search_customers", "get_customer_summary", "get_agenda"}

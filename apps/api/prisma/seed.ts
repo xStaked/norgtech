@@ -16,6 +16,7 @@ const user_comercial = "904198ef-ab19-40d0-92f0-8622b06569b8";
 const user_tecnico = "760c715a-d52c-4450-a068-ca84decc58ec";
 const user_facturacion = "a5ee2979-5a55-45a5-be7b-10deefefcb6a";
 const user_logistica = "e405b989-5227-4da7-9bba-639225125d0d";
+const user_promotor = "bd93b568-05a3-4590-a044-50a4f9999151";
 
 // El segmento es solo una etiqueta, espejo de Customer.customerType.
 const segment_distribuidor = "ed8440f7-2768-4ac3-8986-b362917f194e";
@@ -84,6 +85,7 @@ async function main() {
     { id: user_tecnico, name: "Andres Rojas", email: "tecnico@norgtech.com", phone: "+573001000004", password: "Tecnico123!", role: UserRole.tecnico },
     { id: user_facturacion, name: "Diana Vargas", email: "facturacion@norgtech.com", phone: "+573001000005", password: "Facturacion123!", role: UserRole.facturacion },
     { id: user_logistica, name: "Pedro Gomez", email: "logistica@norgtech.com", phone: "+573001000006", password: "Logistica123!", role: UserRole.logistica },
+    { id: user_promotor, name: "Sofia Herrera", email: "promotor@norgtech.com", phone: "+573001000007", password: "Promotor123!", role: UserRole.promotor },
   ];
 
   for (const user of users) {
@@ -400,7 +402,7 @@ async function main() {
   }
 
   console.log("✅ Seed completado con exito.");
-  console.log("   - 6 usuarios");
+  console.log("   - 7 usuarios");
   console.log("   - 2 empresas");
   console.log("   - 6 zonas");
   console.log("   - 2 segmentos");

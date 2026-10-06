@@ -72,8 +72,8 @@ async def list_my_customers(
     NO uses search_customers para esto: esa busca por nombre o NIT y necesita un
     término. Nunca digas que no tienes acceso a la lista de clientes.
 
-    A dirección (administrador, director comercial) le devuelve todos los
-    clientes activos, porque no tiene cartera propia.
+    A dirección (administrador, director comercial) y al promotor les devuelve
+    todos los clientes activos, porque no tienen cartera propia acotada.
 
     Args:
         limit: Cuántos devolver como máximo (por defecto 20).
@@ -82,13 +82,14 @@ async def list_my_customers(
         JSON con id, nombre, nit, ciudad, telefono y vendedor de cada cliente,
         más el total de la cartera.
     """
-    # El API no acota /customers al vendedor que pregunta (findAll solo filtra
-    # si le mandan assignedToUserId), asi que el alcance lo pone Nora: el id
-    # sale del JWT, no de lo que diga el modelo.
+    # El API acota /customers al vendedor que pregunta cuando es comercial
+    # (customers.service findAll fuerza `assignedToUserId` a su propio id;
+    # promotor ve todo como admin). El filtro de abajo queda como defensa en
+    # profundidad: el id sale del JWT, no de lo que diga el modelo.
     from ..roles import role_from_token, user_id_from_token
 
     params: dict = {}
-    if role_from_token(auth_token) not in ("administrador", "director_comercial"):
+    if role_from_token(auth_token) not in ("administrador", "director_comercial", "promotor"):
         user_id = user_id_from_token(auth_token)
         if not user_id:
             return (
