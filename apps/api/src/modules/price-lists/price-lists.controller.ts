@@ -28,7 +28,7 @@ export class PriceListsController {
   constructor(private readonly priceListsService: PriceListsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Get()
   findAll(@Query(listQueryPipe) query: IncludeInactiveQueryDto) {
     return this.priceListsService.findAll(query.includeInactive);
@@ -37,7 +37,7 @@ export class PriceListsController {
   // Ruta fija ANTES de `:id`: si va después, "last-sold" cae en findOne
   // como si fuera un id de lista.
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Get("last-sold")
   findLastSoldPrice(
     @Query("customerId") customerId?: string,
@@ -50,7 +50,7 @@ export class PriceListsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.priceListsService.findOne(id);
@@ -59,7 +59,7 @@ export class PriceListsController {
   // Cambiar un precio cambia lo que se le cotiza al cliente: solo admin y
   // dirección comercial, igual que crear productos.
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Put(":id/items")
   upsertItem(
     @CurrentUser() user: AuthUser,
@@ -72,7 +72,7 @@ export class PriceListsController {
   // Aprobar una lista libera sus precios en cotizaciones: solo admin y
   // dirección comercial, igual que cambiar precios.
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Patch(":id/approval")
   updateApproval(
     @Param("id") id: string,

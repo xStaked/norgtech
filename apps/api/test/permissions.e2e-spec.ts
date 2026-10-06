@@ -2,10 +2,11 @@ import { UserRole } from "@prisma/client";
 import { ROLE_GROUPS } from "../src/modules/auth/permissions";
 
 describe("ROLE_GROUPS (permissions matrix)", () => {
-  it("ADMIN_AND_DIRECTOR contains exactly administrador + director_comercial (RBAC-01)", () => {
+  it("ADMIN_AND_DIRECTOR contains administrador + director_comercial + promotor (RBAC-01; plan rol-promotor)", () => {
     expect(ROLE_GROUPS.ADMIN_AND_DIRECTOR).toEqual([
       UserRole.administrador,
       UserRole.director_comercial,
+      UserRole.promotor,
     ]);
   });
 

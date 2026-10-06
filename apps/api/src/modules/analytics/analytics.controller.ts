@@ -80,9 +80,9 @@ const CSV_COLUMNS: Record<string, CsvColumn<Row>[]> = {
  * Analitica: 4 pantallas, un solo juego de filtros (docs/analytics-spec.md).
  *
  * ACCESO: `administrador` y `director_comercial` ven la operacion completa; un
- * `comercial` entra a las mismas 4 pantallas pero solo con lo suyo, porque
- * `resolveFilters` le fuerza `sellerUserId` a su propio id (§2.4). Los demas
- * roles no entran.
+ * `comercial` y un `promotor` entran a las mismas 4 pantallas pero solo con
+ * lo suyo, porque `resolveFilters` les fuerza `sellerUserId` a su propio id
+ * (§2.4). Los demas roles no entran.
  *
  * El `format=csv|pdf` de estas mismas rutas es la exportacion cara (build de
  * CSV/PDF en memoria); AnalyticsExportThrottleGuard la martillea con el limite
@@ -90,7 +90,7 @@ const CSV_COLUMNS: Record<string, CsvColumn<Row>[]> = {
  */
 @Controller("analytics")
 @UseGuards(JwtAuthGuard, RolesGuard, AnalyticsExportThrottleGuard)
-@Roles("administrador", "director_comercial", "comercial")
+@Roles("administrador", "director_comercial", "comercial", "promotor")
 export class AnalyticsController {
   constructor(
     private readonly salesService: SalesService,

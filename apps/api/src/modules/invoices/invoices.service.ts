@@ -498,7 +498,11 @@ export class InvoicesService {
   }
 
   private isControlRole(role: string) {
-    return ["administrador", "director_comercial", "facturacion"].includes(role);
+    // Plan rol-promotor: el promotor es rol de control
+    // (cambia status y registra pagos) como admin.
+    return ["administrador", "director_comercial", "facturacion", "promotor"].includes(
+      role,
+    );
   }
 
   private calculateDueDate(issueDate: Date, paymentDays: number | null): Date {

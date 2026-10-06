@@ -15,7 +15,7 @@ export class DashboardController {
   ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica")
+  @Roles("administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica", "promotor")
   @Get("summary")
   getSummary(
     @CurrentUser() user: AuthUser,
@@ -25,7 +25,10 @@ export class DashboardController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  // Plan rol-promotor: el promotor entra al panel avanzado
+  // ACOTADO A SI MISMO (getCommercialAdvancedSummary le fuerza
+  // el alcance, igual que al comercial): es desempeño propio.
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Get("commercial-advanced")
   getCommercialAdvanced(
     @CurrentUser() user: AuthUser,

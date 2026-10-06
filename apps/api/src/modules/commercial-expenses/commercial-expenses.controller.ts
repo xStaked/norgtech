@@ -35,6 +35,8 @@ const expenseRoles = [
   "director_comercial",
   "comercial",
   "facturacion",
+  // Plan rol-promotor: gestiona gastos como admin.
+  "promotor",
 ] as const;
 
 const validationPipe = new ValidationPipe({
@@ -162,7 +164,9 @@ export class CommercialExpensesController {
     return this.commercialExpensesService.update(user, id, dto);
   }
 
-  @Roles("administrador", "director_comercial", "facturacion")
+  // Plan rol-promotor: cambio de status es accion
+  // de control (isControlRole la incluye).
+  @Roles("administrador", "director_comercial", "facturacion", "promotor")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,

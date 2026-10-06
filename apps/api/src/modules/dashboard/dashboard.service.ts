@@ -281,7 +281,11 @@ export class DashboardService {
     toQuery?: string,
   ) {
     const { from, to, days } = this.resolveWindow(daysQuery, fromQuery, toQuery);
-    const isSellerScoped = user.role === UserRole.comercial;
+    // Plan rol-promotor: el promotor ve este panel acotado a
+    // SI MISMO, igual que el comercial (es desempeño/analitica
+    // propia, no de la operación completa).
+    const isSellerScoped =
+      user.role === UserRole.comercial || user.role === UserRole.promotor;
     // La cartera (clientes dormidos) SI es un concepto de asignacion: son "mis
     // clientes", los tenga o no atendidos otro vendedor en un pedido suelto.
     const customerScope = isSellerScoped ? { assignedToUserId: user.id } : {};

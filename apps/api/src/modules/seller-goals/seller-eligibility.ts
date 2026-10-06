@@ -12,6 +12,9 @@ import { UserRole } from "@prisma/client";
 export const SELLER_ROLES: UserRole[] = [
   UserRole.comercial,
   UserRole.director_comercial,
+  // Plan rol-promotor: sus ventas se le atribuyen a el,
+  // base de "lo propio" (metas propias, progreso propio).
+  UserRole.promotor,
 ];
 
 /** Vendedor elegible = rol de venta Y usuario activo. */

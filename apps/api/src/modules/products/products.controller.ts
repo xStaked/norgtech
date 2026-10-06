@@ -31,7 +31,7 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -47,21 +47,21 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Get()
   findAll(@Query(listQueryPipe) query: ListProductsQueryDto) {
     return this.productsService.findAll(query.includeInactive, query.customerId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.productsService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Get(":id/price-for-customer/:customerId")
   getPriceForCustomer(
     @Param("id") id: string,
@@ -72,7 +72,7 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Patch(":id")
   update(
     @CurrentUser() user: AuthUser,
@@ -83,7 +83,7 @@ export class ProductsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Post(":id/presentations")
   addPresentation(@Param("id") id: string, @Body(bodyPipe) dto: CreateProductPresentationDto) {
     return this.productsService.addPresentation(id, dto);
@@ -95,7 +95,7 @@ export class ProductPresentationsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Patch(":id")
   update(@Param("id") id: string, @Body(bodyPipe) dto: UpdateProductPresentationDto) {
     return this.productsService.updatePresentation(id, dto);

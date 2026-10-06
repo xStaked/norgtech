@@ -11,7 +11,7 @@ export class CreditController {
   constructor(private readonly creditService: CreditService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Get("customers/:customerId/summary")
   getCustomerCreditSummary(
     @CurrentUser() user: AuthUser,
@@ -21,7 +21,7 @@ export class CreditController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Get("dashboard/alerts")
   getDashboardAlerts(
     @CurrentUser() user: AuthUser,

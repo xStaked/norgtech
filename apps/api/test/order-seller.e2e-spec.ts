@@ -25,6 +25,7 @@ describe("Order seller attribution (GOAL-02)", () => {
   const ADMIN = MOCK_USERS[UserRole.administrador];
   const ANA = MOCK_USERS[UserRole.comercial];
   const DIRECTOR = MOCK_USERS[UserRole.director_comercial];
+  const PROMOTOR = MOCK_USERS[UserRole.promotor];
   const LOGISTICA = MOCK_USERS[UserRole.logistica];
 
   /** Seller por rol pero inactivo: no debe ser elegible ni aparecer en la lista. */
@@ -314,7 +315,9 @@ describe("Order seller attribution (GOAL-02)", () => {
         .expect(200);
 
       const ids = res.body.map((u: { id: string }) => u.id).sort();
-      expect(ids).toEqual([ANA.id, DIRECTOR.id].sort());
+      // Plan rol-promotor: el promotor es vendedor elegible
+      // (SELLER_ROLES), asi que aparece en el selector.
+      expect(ids).toEqual([ANA.id, DIRECTOR.id, PROMOTOR.id].sort());
 
       // Ni inactivos ni roles no vendedores.
       expect(ids).not.toContain(INACTIVE_SELLER.id);

@@ -41,7 +41,7 @@ export class SellerGoalsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Get()
   findAllByUser(
     @CurrentUser() user: AuthUser,
@@ -51,7 +51,7 @@ export class SellerGoalsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Get("progress")
   getProgress(
     @CurrentUser() user: AuthUser,

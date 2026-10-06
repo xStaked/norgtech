@@ -55,6 +55,7 @@ export class WhatsAppWebhookController {
   "tecnico",
   "facturacion",
   "logistica",
+  "promotor",
 )
 export class WhatsAppController {
   constructor(private readonly whatsAppService: WhatsAppService) {}

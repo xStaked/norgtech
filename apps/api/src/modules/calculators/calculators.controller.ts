@@ -11,7 +11,7 @@ export class CalculatorsController {
   constructor(private readonly calculatorsService: CalculatorsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "tecnico")
+  @Roles("administrador", "director_comercial", "comercial", "tecnico", "promotor")
   @Post("roi")
   calculateROI(
     @Body(
@@ -30,7 +30,7 @@ export class CalculatorsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "tecnico")
+  @Roles("administrador", "director_comercial", "comercial", "tecnico", "promotor")
   @Post("costs")
   calculateCosts(
     @Body(

@@ -27,7 +27,7 @@ export class VisitsController {
   constructor(private readonly visitsService: VisitsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -43,7 +43,7 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Get()
   findAll(
     @CurrentUser() user: AuthUser,
@@ -75,14 +75,14 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Get(":id")
   findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.visitsService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -99,7 +99,7 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Patch(":id/complete")
   complete(
     @CurrentUser() user: AuthUser,
@@ -116,7 +116,7 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Patch(":id")
   update(
     @CurrentUser() user: AuthUser,
@@ -133,7 +133,7 @@ export class VisitsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Delete(":id")
   remove(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.visitsService.remove(user, id);

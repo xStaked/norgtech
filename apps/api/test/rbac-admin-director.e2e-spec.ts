@@ -13,19 +13,22 @@ import {
 } from "./helpers/login-as";
 
 /**
- * RBAC-01..03: `administrador` and `director_comercial` must both be able to
- * write to Empresas (companies) and Zonas (zones). Every other role must be
- * rejected with 403. This spec is expected to FAIL before companies/zones
- * controllers are widened from `@Roles("administrador")` to
+ * RBAC-01..03: `administrador`, `director_comercial` and `promotor`
+ * (plan rol-promotor) must be able to write to Empresas (companies)
+ * and Zonas (zones). Every other role must be rejected with 403.
+ * This spec is expected to FAIL before companies/zones controllers
+ * are widened from `@Roles("administrador")` to
  * `@Roles(...ROLE_GROUPS.ADMIN_AND_DIRECTOR)`.
  */
-describe("RBAC: companies & zones admin+director", () => {
+describe("RBAC: companies & zones admin+director+promotor", () => {
   let app: INestApplication;
   let moduleRef: TestingModule;
 
   const ALLOWED_ROLES: UserRole[] = [
     UserRole.administrador,
     UserRole.director_comercial,
+    // Plan rol-promotor: gestiona empresas y zonas como admin.
+    UserRole.promotor,
   ];
 
   const FORBIDDEN_ROLES: UserRole[] = ALL_ROLES.filter(

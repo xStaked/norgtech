@@ -24,7 +24,7 @@ export class FollowUpTasksController {
   constructor(private readonly followUpTasksService: FollowUpTasksService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -40,7 +40,7 @@ export class FollowUpTasksController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Get()
   async findAll(
     @CurrentUser() user: AuthUser,
@@ -70,14 +70,14 @@ export class FollowUpTasksController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Get(":id")
   findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.followUpTasksService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -94,7 +94,7 @@ export class FollowUpTasksController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "promotor")
   @Patch(":id/complete")
   complete(
     @CurrentUser() user: AuthUser,
