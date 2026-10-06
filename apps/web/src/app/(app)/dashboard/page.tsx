@@ -143,10 +143,7 @@ export default async function DashboardPage({
     ? await sellerGoalsResponse.json()
     : null) as SellerGoalsSummary | null;
 
-  const emailLocal = user?.email?.split("@")[0]?.split(/[._-]/)[0] ?? "";
-  const greetingName = emailLocal
-    ? emailLocal.charAt(0).toUpperCase() + emailLocal.slice(1)
-    : "Daniel";
+  const greetingName = user?.name?.split(" ")[0]?.trim() || "Daniel";
   const today = new Date().toLocaleDateString("es-CO", {
     weekday: "long",
     day: "numeric",

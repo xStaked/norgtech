@@ -96,6 +96,17 @@ export class DashboardService {
    */
   async getSummary(user: AuthUser, companyId?: string) {
     const now = new Date();
+    const isSellerScoped = user.role === UserRole.comercial;
+    // Alcance comercial (misma regla que cada listado): el comercial solo ve
+    // numeros de su cartera o asignados a el. Sin esto los KPIs agregaban TODA
+    // la operacion para cualquier comercial.
+    const customerScope = isSellerScoped ? { assignedToUserId: user.id } : {};
+    const assignedOrPortfolio = isSellerScoped
+      ? { OR: [{ assignedToUserId: user.id }, { customer: { assignedToUserId: user.id } }] }
+      : {};
+    const orderScope = isSellerScoped
+      ? { OR: [{ sellerUserId: user.id }, { customer: { assignedToUserId: user.id } }] }
+      : {};
 
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -122,11 +133,13 @@ export class DashboardService {
       this.prisma.quote.count({
         where: {
           status: { in: ["abierta", "en_negociacion"] },
+          ...(isSellerScoped ? { customer: customerScope } : {}),
         },
       }),
       this.prisma.opportunity.aggregate({
         where: {
           stage: { notIn: ["venta_cerrada", "perdida"] },
+          ...assignedOrPortfolio,
         },
         _sum: { estimatedValue: true },
       }),
@@ -134,17 +147,20 @@ export class DashboardService {
         where: {
           stage: "venta_cerrada",
           closedAt: { gte: thirtyDaysAgo },
+          ...assignedOrPortfolio,
         },
       }),
       this.prisma.order.count({
         where: {
           status: { not: "entregado" },
           ...(companyId ? { companyId } : {}),
+          ...orderScope,
         },
       }),
       this.prisma.visit.count({
         where: {
           scheduledAt: { gte: startOfWeek, lte: endOfWeek },
+          ...assignedOrPortfolio,
         },
       }),
       // PENDIENTE = abierta y AUN NO vencida.
@@ -154,18 +170,20 @@ export class DashboardService {
         where: {
           status: { notIn: FOLLOW_UP_TASK_SETTLED_STATUSES },
           dueAt: { gte: now },
+          ...assignedOrPortfolio,
         },
       }),
       // VENCIDA se deriva con la regla compartida (src/shared/overdue.ts), no
       // leyendo la columna `status=vencida`: no hay scheduler que la escriba, asi
       // que ese contador solo veia filas del difunto markOverdue.
       this.prisma.followUpTask.count({
-        where: followUpTaskOverdueWhere(now),
+        where: { ...followUpTaskOverdueWhere(now), ...assignedOrPortfolio },
       }),
       this.prisma.visit.count({
         where: {
           scheduledAt: { gte: todayStart, lte: todayEnd },
           status: VisitStatus.programada,
+          ...assignedOrPortfolio,
         },
       }),
       // DASH-03: la cola se llena porque create() ya asigna al creador por
@@ -193,6 +211,8 @@ export class DashboardService {
         include: { customer: true },
       }),
       this.prisma.auditLog.findMany({
+        // Un comercial solo ve su propia actividad reciente, no la de todos.
+        where: isSellerScoped ? { actorUserId: user.id } : undefined,
         orderBy: { createdAt: "desc" },
         take: 10,
       }),

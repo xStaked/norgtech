@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -67,20 +68,51 @@ export class OpportunitiesService {
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
+    return customer;
   }
 
-  findAll() {
+  findAll(user: AuthUser) {
+    // Un comercial solo ve las oportunidades de su cartera (cliente asignado)
+    // o asignadas a el. `assignedToUserId` rara vez se setea en create, asi
+    // que el criterio de cartera es el que realmente acota.
+    const where: Prisma.OpportunityWhereInput = {};
+    if (user.role === "comercial") {
+      where.OR = [{ assignedToUserId: user.id }, { customer: { assignedToUserId: user.id } }];
+    }
     return this.prisma.opportunity.findMany({
+      where,
       include: { customer: true },
       orderBy: { createdAt: "desc" },
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.opportunity.findUnique({
+  async findOne(user: AuthUser, id: string) {
+    const opportunity = await this.prisma.opportunity.findUnique({
       where: { id },
       include: { customer: true },
     });
+    if (
+      opportunity &&
+      user.role === "comercial" &&
+      opportunity.assignedToUserId !== user.id &&
+      opportunity.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a esta oportunidad");
+    }
+    return opportunity;
+  }
+
+  private assertCanAccess(
+    user: AuthUser,
+    opportunity: { assignedToUserId: string | null; customer?: { assignedToUserId?: string | null } | null },
+  ) {
+    if (
+      user.role === "comercial" &&
+      opportunity.assignedToUserId !== user.id &&
+      opportunity.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a esta oportunidad");
+    }
   }
 
   private isTransitionAllowed(
@@ -98,7 +130,11 @@ export class OpportunitiesService {
     >,
     client: Prisma.TransactionClient,
   ) {
-    await this.assertCustomerExists(dto.customerId);
+    const customer = await this.assertCustomerExists(dto.customerId);
+    // Un comercial solo abre oportunidades para su cartera.
+    if (user.role === "comercial" && customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a este cliente");
+    }
 
     const opportunity = await client.opportunity.create({
       data: {
@@ -141,11 +177,13 @@ export class OpportunitiesService {
   ) {
     const opportunity = await client.opportunity.findUnique({
       where: { id: opportunityId },
+      include: { customer: { select: { assignedToUserId: true } } },
     });
 
     if (!opportunity) {
       throw new NotFoundException("Opportunity not found");
     }
+    this.assertCanAccess(user, opportunity);
 
     if (!this.isTransitionAllowed(opportunity.stage, stage)) {
       throw new BadRequestException("Invalid opportunity stage transition");

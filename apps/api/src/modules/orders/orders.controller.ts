@@ -63,8 +63,12 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
   @Get()
-  findAll(@Query("status") status?: OrderStatus, @Query("companyId") companyId?: string) {
-    return this.ordersService.findAll(status, companyId);
+  findAll(
+    @CurrentUser() user: AuthUser,
+    @Query("status") status?: OrderStatus,
+    @Query("companyId") companyId?: string,
+  ) {
+    return this.ordersService.findAll(user, status, companyId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
@@ -77,15 +81,19 @@ export class OrdersController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.ordersService.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.ordersService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
   @Get(":id/export")
-  async exportClientFormat(@Param("id") id: string, @Res() response: Response) {
-    const workbook = await this.ordersService.exportClientFormat(id);
+  async exportClientFormat(
+    @CurrentUser() user: AuthUser,
+    @Param("id") id: string,
+    @Res() response: Response,
+  ) {
+    const workbook = await this.ordersService.exportClientFormat(user, id);
     response.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

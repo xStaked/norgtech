@@ -57,25 +57,28 @@ export class VisitsController {
     const hasFilters = status || today || thisWeek || overdue || assignedToMe || customerId;
 
     if (hasFilters) {
-      return this.visitsService.findWithFilters({
-        status,
-        today: today === "true",
-        thisWeek: thisWeek === "true",
-        overdue: overdue === "true",
-        assignedToMe: assignedToMe === "true",
-        userId: user.id,
-        customerId,
-      });
+      return this.visitsService.findWithFilters(
+        {
+          status,
+          today: today === "true",
+          thisWeek: thisWeek === "true",
+          overdue: overdue === "true",
+          assignedToMe: assignedToMe === "true",
+          userId: user.id,
+          customerId,
+        },
+        user,
+      );
     }
 
-    return this.visitsService.findAll();
+    return this.visitsService.findAll(user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.visitsService.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.visitsService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -56,15 +56,15 @@ export class QuotesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "facturacion")
   @Get()
-  findAll() {
-    return this.quotesService.findAll();
+  findAll(@CurrentUser() user: AuthUser) {
+    return this.quotesService.findAll(user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "facturacion")
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.quotesService.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.quotesService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

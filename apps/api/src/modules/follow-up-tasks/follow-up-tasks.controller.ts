@@ -53,24 +53,27 @@ export class FollowUpTasksController {
     const hasFilters = status || dueToday || overdue || assignedToMe || thisWeek;
 
     if (hasFilters) {
-      return this.followUpTasksService.findWithFilters({
-        status,
-        dueToday: dueToday === "true",
-        overdue: overdue === "true",
-        assignedToMe: assignedToMe === "true",
-        thisWeek: thisWeek === "true",
-        userId: user.id,
-      });
+      return this.followUpTasksService.findWithFilters(
+        {
+          status,
+          dueToday: dueToday === "true",
+          overdue: overdue === "true",
+          assignedToMe: assignedToMe === "true",
+          thisWeek: thisWeek === "true",
+          userId: user.id,
+        },
+        user,
+      );
     }
 
-    return this.followUpTasksService.findAll();
+    return this.followUpTasksService.findAll(user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.followUpTasksService.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.followUpTasksService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

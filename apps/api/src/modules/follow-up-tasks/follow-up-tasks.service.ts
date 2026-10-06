@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -77,11 +78,13 @@ export class FollowUpTasksService {
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.followUpTask.findUnique({
         where: { id: taskId },
+        include: { customer: { select: { assignedToUserId: true } } },
       });
 
       if (!task) {
         throw new NotFoundException("Follow-up task not found");
       }
+      this.assertCanAccess(user, task);
 
       if (!this.isStatusTransitionAllowed(task.status, dto.status)) {
         throw new BadRequestException("Invalid follow-up task status transition");
@@ -130,11 +133,13 @@ export class FollowUpTasksService {
     return this.prisma.$transaction(async (tx) => {
       const task = await tx.followUpTask.findUnique({
         where: { id: taskId },
+        include: { customer: { select: { assignedToUserId: true } } },
       });
 
       if (!task) {
         throw new NotFoundException("Follow-up task not found");
       }
+      this.assertCanAccess(user, task);
 
       if (task.status !== FollowUpTaskStatus.pendiente) {
         throw new BadRequestException("Only pending tasks can be completed");
@@ -180,7 +185,31 @@ export class FollowUpTasksService {
     });
   }
 
-  async findWithFilters(filters: FollowUpTaskFilters) {
+  /**
+   * Alcance comercial: sus tareas asignadas o las de su cartera. Se aplica
+   * SIEMPRE al listado sin filtros y se ANDea con los filtros cuando los hay.
+   */
+  private comercialScope(user: AuthUser): Prisma.FollowUpTaskWhereInput | null {
+    if (user.role !== "comercial") return null;
+    return {
+      OR: [{ assignedToUserId: user.id }, { customer: { assignedToUserId: user.id } }],
+    };
+  }
+
+  private assertCanAccess(
+    user: AuthUser,
+    task: { assignedToUserId: string | null; customer?: { assignedToUserId?: string | null } | null },
+  ) {
+    if (
+      user.role === "comercial" &&
+      task.assignedToUserId !== user.id &&
+      task.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a esta tarea");
+    }
+  }
+
+  async findWithFilters(filters: FollowUpTaskFilters, user?: AuthUser) {
     const now = new Date();
     const where: Prisma.FollowUpTaskWhereInput = {};
 
@@ -206,6 +235,14 @@ export class FollowUpTasksService {
       where.dueAt = { gte: start, lte: end };
     }
 
+    // El scoping comercial se ANDea: no se le cuelan ajenos con filtros.
+    if (user) {
+      const scope = this.comercialScope(user);
+      if (scope) {
+        where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), scope];
+      }
+    }
+
     const tasks = await this.prisma.followUpTask.findMany({
       where,
       include: { customer: true },
@@ -215,9 +252,11 @@ export class FollowUpTasksService {
     return tasks.map((task) => this.withDerivedState(task, now));
   }
 
-  async findAll() {
+  async findAll(user?: AuthUser) {
     const now = new Date();
+    const scope = user ? this.comercialScope(user) : null;
     const tasks = await this.prisma.followUpTask.findMany({
+      where: scope ?? undefined,
       include: { customer: true },
       orderBy: { dueAt: "asc" },
     });
@@ -225,12 +264,15 @@ export class FollowUpTasksService {
     return tasks.map((task) => this.withDerivedState(task, now));
   }
 
-  async findOne(id: string) {
+  async findOne(user: AuthUser, id: string) {
     const task = await this.prisma.followUpTask.findUnique({
       where: { id },
       include: { customer: true },
     });
 
+    if (task && user.role === "comercial") {
+      this.assertCanAccess(user, task);
+    }
     return task ? this.withDerivedState(task, new Date()) : task;
   }
 
@@ -253,6 +295,7 @@ export class FollowUpTasksService {
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
+    return customer;
   }
 
   private async assertOpportunityExists(opportunityId: string) {
@@ -285,7 +328,11 @@ export class FollowUpTasksService {
     },
     client: Prisma.TransactionClient,
   ) {
-    await this.assertCustomerExists(dto.customerId);
+    const customer = await this.assertCustomerExists(dto.customerId);
+    // Un comercial solo crea tareas para su cartera.
+    if (user.role === "comercial" && customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a este cliente");
+    }
 
     if (dto.opportunityId) {
       await this.assertOpportunityExists(dto.opportunityId);

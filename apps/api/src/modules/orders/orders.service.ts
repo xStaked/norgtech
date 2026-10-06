@@ -1,4 +1,4 @@
-import { BadRequestException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, forwardRef, Inject, Injectable, NotFoundException } from "@nestjs/common";
 import { InvoiceStatus, NotificationType, OrderStatus, Prisma, UserRole } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
@@ -83,6 +83,10 @@ export class OrdersService {
 
   async create(user: AuthUser, dto: CreateOrderDto) {
     const customer = await this.loadCustomerOrThrow(dto.customerId);
+    // Un comercial solo vende a su cartera.
+    if (user.role === "comercial" && customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a este cliente");
+    }
     // La empresa que factura la define el cliente. Quien no la manda (Nora por
     // WhatsApp) la hereda; quien la manda sigue validandose contra el cliente.
     const companyId = dto.companyId || customer.companyId;
@@ -419,10 +423,23 @@ export class OrdersService {
     throw new BadRequestException("Unable to generate invoice number");
   }
 
-  findAll(status?: OrderStatus, companyId?: string) {
+  findAll(user: AuthUser, status?: OrderStatus, companyId?: string) {
     const where: Prisma.OrderWhereInput = {};
     if (status) where.status = status;
     if (companyId) where.companyId = companyId;
+    // Un comercial solo ve sus pedidos: los que vendio el (sellerUserId) o los
+    // de su cartera (cliente asignado). Cubre pedidos creados por logistica
+    // para su cliente (resolveSellerUserId los atribuye a el) y legados con
+    // sellerUserId NULL. Espejo de CustomersService.findAll e
+    // InvoicesService.buildWhere.
+    if (user.role === "comercial") {
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        {
+          OR: [{ sellerUserId: user.id }, { customer: { assignedToUserId: user.id } }],
+        },
+      ];
+    }
     return this.prisma.order.findMany({
       where,
       include: { customer: true, opportunity: true, items: true, company: true, customerZone: { include: { zone: true } } },
@@ -430,8 +447,8 @@ export class OrdersService {
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.order.findUnique({
+  async findOne(user: AuthUser, id: string) {
+    const order = await this.prisma.order.findUnique({
       where: { id },
       include: {
         customer: true,
@@ -448,14 +465,42 @@ export class OrdersService {
         customerZone: { include: { zone: true, assignedTo: { select: { id: true, name: true } } } },
       },
     });
+    // Defensa en profundidad del listado: un comercial que adivine el id no
+    // lee el pedido de otro por URL directa.
+    if (
+      order &&
+      user.role === "comercial" &&
+      order.sellerUserId !== user.id &&
+      order.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a este pedido");
+    }
+    return order;
+  }
+
+  private assertCanAccessOrder(
+    user: AuthUser,
+    order: { sellerUserId: string | null; customer?: { assignedToUserId?: string | null } | null },
+  ) {
+    if (
+      user.role === "comercial" &&
+      order.sellerUserId !== user.id &&
+      order.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a este pedido");
+    }
   }
 
   async updateStatus(user: AuthUser, orderId: string, dto: UpdateOrderStatusDto) {
     return this.prisma.$transaction(async (tx) => {
-      const order = await tx.order.findUnique({ where: { id: orderId } });
+      const order = await tx.order.findUnique({
+        where: { id: orderId },
+        include: { customer: { select: { assignedToUserId: true } } },
+      });
       if (!order) {
         throw new NotFoundException("Order not found");
       }
+      this.assertCanAccessOrder(user, order);
 
       if (!this.isTransitionAllowed(order.status, dto.status)) {
         throw new BadRequestException("Invalid order status transition");
@@ -602,12 +647,13 @@ export class OrdersService {
   async createBillingRequest(user: AuthUser, orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { items: true },
+      include: { items: true, customer: { select: { assignedToUserId: true } } },
     });
 
     if (!order) {
       throw new NotFoundException("Order not found");
     }
+    this.assertCanAccessOrder(user, order);
 
     // BILL-04: la solicitud de facturacion se ABRE cuando el pedido esta en
     // orden_facturacion; procesarla es lo que lo avanza a facturado. Antes la
@@ -904,15 +950,16 @@ export class OrdersService {
     return result;
   }
 
-  async exportClientFormat(orderId: string) {
+  async exportClientFormat(user: AuthUser, orderId: string) {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { items: true },
+      include: { items: true, customer: { select: { assignedToUserId: true } } },
     });
 
     if (!order) {
       throw new NotFoundException("Order not found");
     }
+    this.assertCanAccessOrder(user, order);
 
     return this.orderXlsxExportService.generate(order);
   }

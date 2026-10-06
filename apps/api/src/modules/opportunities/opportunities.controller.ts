@@ -57,14 +57,14 @@ export class OpportunitiesController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get()
-  findAll() {
-    return this.opportunitiesService.findAll();
+  findAll(@CurrentUser() user: AuthUser) {
+    return this.opportunitiesService.findAll(user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "comercial", "director_comercial", "tecnico")
   @Get(":id")
-  findOne(@Param("id") id: string) {
-    return this.opportunitiesService.findOne(id);
+  findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
+    return this.opportunitiesService.findOne(user, id);
   }
 }

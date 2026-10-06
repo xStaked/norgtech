@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from "@nestjs/common";
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
@@ -26,6 +27,16 @@ export class QuotesService {
     const opportunityId = dto.opportunityId?.trim() || null;
 
     const customer = await this.loadCustomerOrThrow(dto.customerId);
+    // Un comercial solo cotiza a su cartera.
+    if (user.role === "comercial") {
+      const owner = await this.prisma.customer.findUnique({
+        where: { id: dto.customerId },
+        select: { assignedToUserId: true },
+      });
+      if (owner?.assignedToUserId !== user.id) {
+        throw new ForbiddenException("No tienes acceso a este cliente");
+      }
+    }
     if (opportunityId) {
       await this.assertOpportunityExists(opportunityId);
     }
@@ -84,25 +95,53 @@ export class QuotesService {
     });
   }
 
-  findAll() {
+  findAll(user: AuthUser) {
+    // Quote no tiene vendedor propio: la cartera la define el cliente. Espejo
+    // de InvoicesService.buildWhere.
+    const where: Prisma.QuoteWhereInput = {};
+    if (user.role === "comercial") {
+      where.customer = { assignedToUserId: user.id };
+    }
     return this.prisma.quote.findMany({
+      where,
       include: { customer: true, opportunity: true, items: true },
       orderBy: { createdAt: "desc" },
     });
   }
 
-  findOne(id: string) {
-    return this.prisma.quote.findUnique({
+  async findOne(user: AuthUser, id: string) {
+    const quote = await this.prisma.quote.findUnique({
       where: { id },
       include: { customer: true, opportunity: true, items: true },
     });
+    if (
+      quote &&
+      user.role === "comercial" &&
+      quote.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a esta cotización");
+    }
+    return quote;
+  }
+
+  private assertCanAccess(
+    user: AuthUser,
+    quote: { customer?: { assignedToUserId?: string | null } | null },
+  ) {
+    if (user.role === "comercial" && quote.customer?.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a esta cotización");
+    }
   }
 
   async updateStatus(user: AuthUser, quoteId: string, dto: UpdateQuoteStatusDto) {
-    const quote = await this.prisma.quote.findUnique({ where: { id: quoteId } });
+    const quote = await this.prisma.quote.findUnique({
+      where: { id: quoteId },
+      include: { customer: { select: { assignedToUserId: true } } },
+    });
     if (!quote) {
       throw new NotFoundException("Quote not found");
     }
+    this.assertCanAccess(user, quote);
 
     const previousState = auditState(quote);
 
@@ -127,12 +166,16 @@ export class QuotesService {
   async createBillingRequest(user: AuthUser, quoteId: string) {
     const quote = await this.prisma.quote.findUnique({
       where: { id: quoteId },
-      include: { items: true, customer: true },
+      include: {
+        items: true,
+        customer: true,
+      },
     });
 
     if (!quote) {
       throw new NotFoundException("Quote not found");
     }
+    this.assertCanAccess(user, quote);
 
     if (quote.status !== "cerrada") {
       throw new BadRequestException("Billing request can only be created from closed quotes");

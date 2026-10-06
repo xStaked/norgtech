@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -105,11 +106,13 @@ export class VisitsService {
     return this.prisma.$transaction(async (tx) => {
       const visit = await tx.visit.findUnique({
         where: { id: visitId },
+        include: { customer: { select: { assignedToUserId: true } } },
       });
 
       if (!visit) {
         throw new NotFoundException("Visit not found");
       }
+      this.assertCanAccess(user, visit);
 
       if (!this.isStatusTransitionAllowed(visit.status, dto.status)) {
         throw new BadRequestException("Invalid visit status transition");
@@ -158,11 +161,13 @@ export class VisitsService {
     return this.prisma.$transaction(async (tx) => {
       const visit = await tx.visit.findUnique({
         where: { id: visitId },
+        include: { customer: { select: { assignedToUserId: true } } },
       });
 
       if (!visit) {
         throw new NotFoundException("Visit not found");
       }
+      this.assertCanAccess(user, visit);
 
       if (visit.status !== VisitStatus.programada) {
         throw new BadRequestException("Only scheduled visits can be completed");
@@ -218,11 +223,13 @@ export class VisitsService {
     return this.prisma.$transaction(async (tx) => {
       const visit = await tx.visit.findUnique({
         where: { id: visitId },
+        include: { customer: { select: { assignedToUserId: true } } },
       });
 
       if (!visit) {
         throw new NotFoundException("Visit not found");
       }
+      this.assertCanAccess(user, visit);
 
       if (dto.customerId !== undefined) {
         await this.assertCustomerExists(dto.customerId);
@@ -269,11 +276,15 @@ export class VisitsService {
 
   async remove(user: AuthUser, visitId: string) {
     return this.prisma.$transaction(async (tx) => {
-      const visit = await tx.visit.findUnique({ where: { id: visitId } });
+      const visit = await tx.visit.findUnique({
+        where: { id: visitId },
+        include: { customer: { select: { assignedToUserId: true } } },
+      });
 
       if (!visit) {
         throw new NotFoundException("Visit not found");
       }
+      this.assertCanAccess(user, visit);
 
       const [reportCount, expenseCount] = await Promise.all([
         tx.executiveReport.count({ where: { visitId } }),
@@ -303,7 +314,31 @@ export class VisitsService {
     });
   }
 
-  async findWithFilters(filters: VisitFilters) {
+  /**
+   * Alcance comercial: sus visitas asignadas o las de su cartera. Se aplica
+   * SIEMPRE al listado sin filtros y se ANDea con los filtros cuando los hay.
+   */
+  private comercialScope(user: AuthUser): Prisma.VisitWhereInput | null {
+    if (user.role !== "comercial") return null;
+    return {
+      OR: [{ assignedToUserId: user.id }, { customer: { assignedToUserId: user.id } }],
+    };
+  }
+
+  private assertCanAccess(
+    user: AuthUser,
+    visit: { assignedToUserId: string | null; customer?: { assignedToUserId?: string | null } | null },
+  ) {
+    if (
+      user.role === "comercial" &&
+      visit.assignedToUserId !== user.id &&
+      visit.customer?.assignedToUserId !== user.id
+    ) {
+      throw new ForbiddenException("No tienes acceso a esta visita");
+    }
+  }
+
+  async findWithFilters(filters: VisitFilters, user?: AuthUser) {
     const now = new Date();
     const where: Prisma.VisitWhereInput = {};
 
@@ -333,6 +368,15 @@ export class VisitsService {
       where.scheduledAt = { gte: start, lte: end };
     }
 
+    // El scoping comercial se ANDea: un comercial con ?assignedToMe=true sigue
+    // viendo solo lo suyo, y con otros filtros no se le cuelan ajenos.
+    if (user) {
+      const scope = this.comercialScope(user);
+      if (scope) {
+        where.AND = [...(where.AND ? (Array.isArray(where.AND) ? where.AND : [where.AND]) : []), scope];
+      }
+    }
+
     const visits = await this.prisma.visit.findMany({
       where,
       include: { customer: true },
@@ -342,9 +386,11 @@ export class VisitsService {
     return visits.map((visit) => this.withDerivedState(visit, now));
   }
 
-  async findAll() {
+  async findAll(user?: AuthUser) {
     const now = new Date();
+    const scope = user ? this.comercialScope(user) : null;
     const visits = await this.prisma.visit.findMany({
+      where: scope ?? undefined,
       include: { customer: true },
       orderBy: { scheduledAt: "asc" },
     });
@@ -352,7 +398,7 @@ export class VisitsService {
     return visits.map((visit) => this.withDerivedState(visit, now));
   }
 
-  async findOne(id: string) {
+  async findOne(user: AuthUser, id: string) {
     const visit = await this.prisma.visit.findUnique({
       where: { id },
       include: {
@@ -365,6 +411,9 @@ export class VisitsService {
       },
     });
 
+    if (visit && user.role === "comercial") {
+      this.assertCanAccess(user, visit);
+    }
     return visit ? this.withDerivedState(visit, new Date()) : visit;
   }
 
@@ -387,6 +436,7 @@ export class VisitsService {
     if (!customer) {
       throw new NotFoundException("Customer not found");
     }
+    return customer;
   }
 
   private async assertOpportunityExists(opportunityId: string) {
@@ -431,7 +481,11 @@ export class VisitsService {
     },
     client: Prisma.TransactionClient,
   ) {
-    await this.assertCustomerExists(dto.customerId);
+    const customer = await this.assertCustomerExists(dto.customerId);
+    // Un comercial solo agenda visitas para su cartera.
+    if (user.role === "comercial" && customer.assignedToUserId !== user.id) {
+      throw new ForbiddenException("No tienes acceso a este cliente");
+    }
 
     if (dto.opportunityId) {
       await this.assertOpportunityExists(dto.opportunityId);
