@@ -55,9 +55,10 @@ _RESTRICTED: dict[str, set[str]] = {
     "get_analytics": {"administrador", "director_comercial", "comercial", "promotor"},
     # Pega al mismo endpoint que get_analytics, solo que dos veces.
     "compare_analytics": {"administrador", "director_comercial", "comercial", "promotor"},
-    # ReportsController.
-    "list_reports": {"administrador", "director_comercial", "tecnico"},
-    "generate_report_from_visit": {"administrador", "director_comercial", "tecnico"},
+    # ReportsController: direccion, tecnico y promotor (sin scoping por
+    # vendedor en el service: son reportes de visitas, no desempeño).
+    "list_reports": {"administrador", "director_comercial", "tecnico", "promotor"},
+    "generate_report_from_visit": {"administrador", "director_comercial", "tecnico", "promotor"},
     # DashboardController.getSellerGoals: metas de TODO el equipo.
     "get_team_goals": {"administrador", "director_comercial"},
 }

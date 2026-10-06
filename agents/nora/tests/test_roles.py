@@ -94,6 +94,9 @@ def test_promotor_ve_toda_la_operacion_menos_metas_del_equipo():
     names = {t.name for t in tools_for_role("promotor", ALL_TOOLS)}
     # Como admin en lo operativo: clientes, pedidos, gastos, cartera y ventas.
     assert {"create_order", "create_expense", "get_cartera", "get_sales_summary"} <= names
+    # Reportes ejecutivos tambien: el API los permite a promotor sin scoping
+    # por vendedor (son reportes de visitas, no desempeño).
+    assert {"list_reports", "generate_report_from_visit"} <= names
     # Su propia meta sí; la del equipo no.
     assert "get_seller_goal_progress" in names
     assert "get_team_goals" not in names
