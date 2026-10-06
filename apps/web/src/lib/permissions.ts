@@ -1,4 +1,6 @@
-// Debe mantenerse en sync con apps/api/src/modules/auth/permissions.ts
+// El tipo UserRole debe mantenerse alineado con apps/api/src/modules/auth/permissions.ts.
+// Los ROLE_GROUPS son propios del consumidor web y difieren del API a propósito
+// (aquí promotor acompaña permisos de nivel admin).
 
 export type UserRole =
   | "administrador"

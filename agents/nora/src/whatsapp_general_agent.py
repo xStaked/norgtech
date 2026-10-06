@@ -33,7 +33,12 @@ _DIRECCION_ROLES = {"administrador", "director_comercial"}
 
 def whatsapp_addendum(role: str | None) -> str:
     """Addendum del canal WhatsApp; solo cambia a quién dice que tiene enfrente."""
-    quien = "alguien de dirección" if role in _DIRECCION_ROLES else "un comercial del equipo"
+    if role in _DIRECCION_ROLES:
+        quien = "alguien de dirección"
+    elif role == "promotor":
+        quien = "un promotor del equipo"
+    else:
+        quien = "un comercial del equipo"
     return (
         "\n\n## Canal: WhatsApp\n"
         f"Estás hablando con {quien} por WhatsApp. Responde en texto "
