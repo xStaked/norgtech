@@ -52,13 +52,16 @@ Excepciones (ve solo lo propio, como comercial):
 ## 4. Frontend (web Next.js)
 
 - `lib/auth.ts`: `promotor` en `USER_ROLES` + `ROLE_LABELS` ("Promotor").
-  `moduleAccess`: promotor junto a admin en todos los módulos EXCEPTO `/analytics`.
+  `moduleAccess`: promotor junto a admin en todos los módulos INCLUIDO `/analytics`
+  (la API lo acota a sí mismo, igual que al comercial).
   `canCreate` y `canAssignCustomers`: como admin.
 - `lib/theme.ts` nav (`requiredRoles`), `lib/route-guards.ts`, `middleware.ts`:
   promotor junto a admin en cada entrada correspondiente.
-- Dashboard (`(app)/dashboard/page.tsx`): oculta `SellerGoalsDashboard` y
-  cualquier widget de desempeño ajeno para promotor; resto igual que admin.
-  Ruta `/analytics`: bloqueada para promotor (guard + sin entrada en nav).
+- Dashboard (`(app)/dashboard/page.tsx`): oculta `SellerGoalsDashboard` para
+  promotor (desempeño ajeno); `CommercialAdvancedDashboard` lo muestra acotado
+  a sí mismo por la API; resto igual que admin.
+- Ruta `/analytics`: accesible para promotor pero acotada a sí mismo por la API
+  (el `sellerUserId` que mande se ignora).
 
 ## 5. Nora (agente WhatsApp, Python)
 
