@@ -6,6 +6,7 @@ import {
   envelope,
   percent,
   previousYearRange,
+  resolveAsOf,
   resolveFilters,
   returnWhere,
   toCsv,
@@ -22,6 +23,7 @@ import { AuthUser } from "../src/modules/auth/types/authenticated-request";
 
 const admin: AuthUser = { id: "u-admin", email: "a@x.co", role: UserRole.administrador };
 const seller: AuthUser = { id: "u-seller", email: "s@x.co", role: UserRole.comercial };
+const promotor: AuthUser = { id: "u-promotor", email: "p@x.co", role: UserRole.promotor };
 
 describe("Analitica · reglas compartidas", () => {
   describe("rango y zona horaria", () => {
@@ -61,6 +63,21 @@ describe("Analitica · reglas compartidas", () => {
 
     it("un administrador si puede mirar a un vendedor concreto", () => {
       expect(resolveFilters({ sellerUserId: "u-otro" }, admin).sellerUserId).toBe("u-otro");
+    });
+
+    it("un promotor queda acotado a si mismo aunque pida el id de otro (plan rol-promotor)", () => {
+      const filters = resolveFilters({ sellerUserId: "u-otro" }, promotor);
+      expect(filters.sellerUserId).toBe("u-promotor");
+    });
+
+    it("la envoltura del promotor devuelve el filtro APLICADO, no el pedido", () => {
+      const filters = resolveFilters({ sellerUserId: "u-otro" }, promotor);
+      expect(envelope(filters).filters.sellerUserId).toBe("u-promotor");
+    });
+
+    it("el forzado del promotor tambien aplica en la foto de cartera (resolveAsOf lo hereda)", () => {
+      const { sellerUserId } = resolveAsOf({ sellerUserId: "u-otro" }, promotor);
+      expect(sellerUserId).toBe("u-promotor");
     });
   });
 

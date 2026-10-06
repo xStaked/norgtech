@@ -290,6 +290,22 @@ describe("Commissions ledger (liquidacion)", () => {
       expect(ledger[0].invoice.invoiceNumber).toBe("FV-1");
     });
 
+    it("forces sellerUserId to the authenticated promotor, ignoring the query param (plan rol-promotor)", async () => {
+      const promotorId = MOCK_USERS[UserRole.promotor].id;
+      const token = await loginAs(app, UserRole.promotor);
+
+      const response = await request(app.getHttpServer())
+        .get(`/commissions?sellerUserId=${otherSellerId}`)
+        .set(authHeader(token))
+        .expect(200);
+
+      const where = whereCaptures[0] as { sellerUserId?: string };
+      expect(where.sellerUserId).toBe(promotorId);
+
+      // El seed no tiene filas del promotor: ninguna fila ajena se cuela.
+      expect(response.body).toEqual([]);
+    });
+
     it("lets an administrador see every seller and filter by sellerUserId", async () => {
       const token = await loginAs(app, UserRole.administrador);
 
@@ -408,6 +424,15 @@ describe("Commissions ledger (liquidacion)", () => {
 
     it("rejects comercial with 403 (only admin/director liquidate)", async () => {
       const token = await loginAs(app, UserRole.comercial);
+
+      await request(app.getHttpServer())
+        .patch("/commissions/commission-1/paid")
+        .set(authHeader(token))
+        .expect(403);
+    });
+
+    it("rejects promotor with 403 on mark-paid (read-only, plan rol-promotor)", async () => {
+      const token = await loginAs(app, UserRole.promotor);
 
       await request(app.getHttpServer())
         .patch("/commissions/commission-1/paid")

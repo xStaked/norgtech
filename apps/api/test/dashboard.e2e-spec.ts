@@ -124,6 +124,16 @@ describe("Dashboard advanced commercial summary", () => {
         role: UserRole.comercial,
         active: true,
       },
+      {
+        // Plan rol-promotor: entra al panel avanzado ACOTADO A SI MISMO,
+        // igual que el comercial. Sin pedidos propios en la ventana: su
+        // panel sale vacio mientras el admin ve la operacion completa.
+        id: "promotor-1",
+        name: "Paola Promotora",
+        email: "paola@norgtech.local",
+        role: UserRole.promotor,
+        active: true,
+      },
     ];
 
     const customers = [
@@ -381,16 +391,26 @@ describe("Dashboard advanced commercial summary", () => {
           };
         }) => {
           const request = context.switchToHttp().getRequest();
+          const roleHeader = request.headers["x-test-role"];
           const role =
-            request.headers["x-test-role"] === UserRole.comercial
+            roleHeader === UserRole.comercial
               ? UserRole.comercial
-              : UserRole.administrador;
-          const sub = role === UserRole.comercial ? "seller-1" : "admin-user-id";
-          request.user = {
-            sub,
-            email: role === UserRole.comercial ? "laura@norgtech.local" : "admin@norgtech.local",
-            role,
-          };
+              : roleHeader === UserRole.promotor
+                ? UserRole.promotor
+                : UserRole.administrador;
+          const sub =
+            role === UserRole.comercial
+              ? "seller-1"
+              : role === UserRole.promotor
+                ? "promotor-1"
+                : "admin-user-id";
+          const email =
+            role === UserRole.comercial
+              ? "laura@norgtech.local"
+              : role === UserRole.promotor
+                ? "paola@norgtech.local"
+                : "admin@norgtech.local";
+          request.user = { sub, email, role };
           return true;
         },
       })
@@ -534,6 +554,23 @@ describe("Dashboard advanced commercial summary", () => {
     expect(crossSoldCustomer).toBeDefined();
     expect(crossSoldCustomer.revenue).toBe(500);
     expect(crossSoldCustomer.orders).toBe(1);
+  });
+
+  // Plan rol-promotor: el promotor entra al panel avanzado ACOTADO A SI
+  // MISMO, igual que el comercial (es desempeno propio, no la operacion
+  // completa). Paola no vendio nada en la ventana: su panel sale vacio
+  // mientras el admin ve los 3 pedidos / 3500.
+  it("scopes advanced aggregates to the promotor himself, like a comercial (plan rol-promotor)", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/dashboard/commercial-advanced?days=30")
+      .set("Authorization", "Bearer test-token")
+      .set("x-test-role", UserRole.promotor)
+      .expect(200);
+
+    expect(response.body.totals).toMatchObject({ orders: 0, revenue: 0 });
+    expect(response.body.bySeller).toEqual([]);
+    // Ni un solo numero ajeno se cuela: el admin ve 3500 en la misma ventana.
+    expect(response.body.totals.revenue).not.toBe(3500);
   });
 
   // RET-02: las devoluciones no se filtraban por companyId mientras los pedidos
