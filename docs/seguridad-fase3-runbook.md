@@ -23,6 +23,11 @@ credenciales; la recomendada es la firma del cuerpo crudo:
    secreto. La comparación va en tiempo constante
    (hash a digests de longitud fija + `timingSafeEqual`).
 
+Costo de memoria de `rawBody: true`: cada request JSON/URL-encoded retiene
+además el cuerpo crudo en memoria (una copia extra en `req.rawBody`); los
+uploads multipart no pasan por ahí (los maneja Multer), pero no suba el
+límite de payload de los webhooks sin considerar ese costo.
+
 Variable de entorno de la API (`apps/api/.env`):
 
 ```
@@ -50,7 +55,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST \
   -H 'Content-Type: application/json' \
   -H "X-Kapso-Signature: sha256=$SIG" \
   -d "$BODY" https://<api-host>/whatsapp/webhooks/kapso
-# Con firma válida --> 200
+# Con firma válida --> 201 (POST creado; supertest y Nest responden 201)
 # Sin credenciales en modo strict --> 401 "Kapso webhook authentication failed"
 ```
 
@@ -158,7 +163,7 @@ veces, no solo del lado del input:
    `assertSupportFile` en `commercial-expense-extraction.service.ts`, que
    además valida tamaño): rechazo con 400. Los PDF no van a OCR; la extracción
    con modelo de visión solo procesa los 3 tipos de imagen
-   (`isImageMimeType` en `commercial-expense-extraction.provider.ts:204-209`).
+   (`isImageMimeType` en `commercial-expense-extraction.provider.ts:202-208`).
 
 Si algún día se necesita un tipo nuevo (p. ej. `heic` desde WhatsApp):
 agregarlo primero en `shared/support-file.constants.ts` y en los puntos de
@@ -190,7 +195,8 @@ documentos que el browser cargue desde la API). Puntos a vigilar en ops:
 ## 7. Audit de dependencias (contexto de esta fase)
 
 Resultado del gate `pnpm audit --prod` tras las correcciones aplicadas en
-esta fase (bumps minor/patch con suites verdes): **0 critical, 0 low; queda
+esta fase (bumps minor/patch con suites en 677/679, 2 stale pre-fase3):
+**0 critical, 0 low; queda
 1 high + 1 moderate, documentados aquí porque el fix requiere bump mayor y
 el plan de la fase prohíbe majors:**
 
@@ -210,6 +216,11 @@ Correcciones de versión aplicadas (ver el `pnpm-lock.yaml` de este commit):
 | `body-parser` | 2.2.2 → 2.3.0 | 1 low: un `limit` inválido deshabilitaba silenciosamente el corte de tamaño |
 | `brace-expansion` | 1.1.14/2.1.1/5.0.5 → 1.1.21/2.1.7/5.0.12 | highs: expansión exponencial de `{}` que bloquea el thread (~90 bytes) |
 | `shadcn` (apps/web) | dependencies → devDependencies | es la CLI que genera componentes; su árbol entero (hono, fast-uri, nanoid, browserslist, postcss…) sale del audit de prod |
+
+Ojo en el build de web: shadcn ahora es devDependency, así que un
+`pnpm install --prod` + `next build` fallaría por el `@import` CSS
+(`globals.css` importa `shadcn/tailwind.css`, que se resuelve en build time,
+no en runtime): instalar apps/web con devDependencies incluidas.
 
 Re-ejecute `pnpm audit --prod --json` en cada corte, y para aceptar el gate
 exija 0 critical y solo los highs documentados de esta sección.

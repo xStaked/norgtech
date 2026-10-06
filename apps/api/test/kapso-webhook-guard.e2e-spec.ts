@@ -164,9 +164,24 @@ describe("KapsoWebhookGuard", () => {
         .send(kapsoEvent)
         .expect(201);
 
+      // Firma malformada cuyo valor ES el secreto: si el log ecoara el valor
+      // del header, aquí se filtraría el secreto. La guardia debe abstraerlo.
+      await request(app.getHttpServer())
+        .post("/whatsapp/webhooks/kapso")
+        .set("Content-Type", "application/json")
+        .set(SIGNATURE_HEADER, KAPSO_WEBHOOK_SECRET)
+        .send(rawEvent)
+        .expect(201);
+
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("Kapso webhook"),
       );
+      // Ningún warn puede contener el secreto (ni el valor de los headers).
+      for (const call of warnSpy.mock.calls) {
+        expect(call[0]).toEqual(
+          expect.not.stringContaining(KAPSO_WEBHOOK_SECRET),
+        );
+      }
     } finally {
       warnSpy.mockRestore();
       // ConfigService.set escribe process.env con String(undefined): limpiarlo.
