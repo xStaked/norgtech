@@ -22,6 +22,12 @@ function matchesOrderWhere(order: Record<string, any>, where?: Record<string, an
 
   for (const [key, value] of Object.entries(where)) {
     switch (key) {
+      case "status": {
+        // getSummary cuenta activos (`status: { not: "entregado" }`): sin este
+        // caso el stub estricto lanzaria y el resumen no se podria probar.
+        if (value.not !== undefined && order.status === value.not) return false;
+        break;
+      }
       case "orderDate": {
         if (value.gte && order.orderDate < value.gte) return false;
         if (value.lte && order.orderDate > value.lte) return false;
@@ -219,6 +225,38 @@ describe("Dashboard advanced commercial summary", () => {
         customer: customers[1],
         customerZone: { zone: { name: "Cundinamarca" } },
       },
+      // Plan rol-promotor: pedido PROPIO de la promotora, fuera de la ventana
+      // movil de 30 dias para no mover los totales del admin: su panel
+      // days=30 sale vacio (no ve lo ajeno) y el rango explicito de abril la
+      // muestra solo a ella (si ve lo suyo).
+      {
+        id: "order-promotor-apr",
+        customerId: "customer-1",
+        orderDate: new Date("2026-04-10T00:00:00.000Z"),
+        zone: "Antioquia",
+        total: 800,
+        subtotal: 672,
+        status: "recibido",
+        sellerUserId: "promotor-1",
+        companyId: "company-a",
+        customer: customers[0],
+        customerZone: { zone: { name: "Antioquia" } },
+      },
+      // Contrapeso ajeno en el MISMO abril: sin otro pedido en el rango, el
+      // test positivo no discriminaria (acotado o no, veria lo mismo).
+      {
+        id: "order-april-s1",
+        customerId: "customer-2",
+        orderDate: new Date("2026-04-15T00:00:00.000Z"),
+        zone: "Cundinamarca",
+        total: 600,
+        subtotal: 504,
+        status: "recibido",
+        sellerUserId: "seller-1",
+        companyId: "company-b",
+        customer: customers[1],
+        customerZone: { zone: { name: "Cundinamarca" } },
+      },
     ];
 
     const orderItems = [
@@ -265,6 +303,28 @@ describe("Dashboard advanced commercial summary", () => {
         totalWithTax: 700,
         subtotal: 590,
         order: orders[2],
+      },
+      {
+        id: "item-promotor-apr",
+        orderId: "order-promotor-apr",
+        productId: "product-fast",
+        productSnapshotName: "Fertilizante Plus",
+        productSnapshotSku: "FERT-001",
+        quantity: 8,
+        totalWithTax: 800,
+        subtotal: 672,
+        order: orders[4],
+      },
+      {
+        id: "item-april-s1",
+        orderId: "order-april-s1",
+        productId: "product-fast",
+        productSnapshotName: "Fertilizante Plus",
+        productSnapshotSku: "FERT-001",
+        quantity: 6,
+        totalWithTax: 600,
+        subtotal: 504,
+        order: orders[5],
       },
     ];
     // RET-02: una devolucion no tiene companyId propio; la empresa se deriva de
@@ -326,7 +386,10 @@ describe("Dashboard advanced commercial summary", () => {
       order: {
         findMany: async ({ where }: { where?: Record<string, any> } = {}) =>
           orders.filter((order) => matchesOrderWhere(order, where)),
-        count: async () => 0,
+        // getSummary cuenta con el MISMO where (status + alcance): un stub en
+        // 0 haria pasar un resumen vacio como si el acotado funcionara.
+        count: async ({ where }: { where?: Record<string, any> } = {}) =>
+          orders.filter((order) => matchesOrderWhere(order, where)).length,
       },
       orderItem: {
         findMany: async ({ where }: { where?: Record<string, any> } = {}) =>
@@ -571,6 +634,62 @@ describe("Dashboard advanced commercial summary", () => {
     expect(response.body.bySeller).toEqual([]);
     // Ni un solo numero ajeno se cuela: el admin ve 3500 en la misma ventana.
     expect(response.body.totals.revenue).not.toBe(3500);
+  });
+
+  // Plan rol-promotor: su pedido propio de abril (fuera de la ventana movil)
+  // demuestra en POSITIVO que el acotado la deja ver lo SUYO: mismo rango,
+  // numeros solo suyos. El pedido ajeno de seller-1 en el mismo abril es el
+  // contrapeso: sin acotado veria 2 pedidos / 1400.
+  it("shows the promotor her own data in an explicit range (plan rol-promotor)", async () => {
+    const response = await request(app.getHttpServer())
+      .get("/dashboard/commercial-advanced?from=2026-04-01&to=2026-04-30")
+      .set("Authorization", "Bearer test-token")
+      .set("x-test-role", UserRole.promotor)
+      .expect(200);
+
+    expect(response.body.totals).toMatchObject({
+      orders: 1,
+      revenue: 800,
+      returns: 0,
+      netRevenue: 800,
+      units: 8,
+      customers: 1,
+      products: 1,
+    });
+    expect(response.body.bySeller).toEqual([
+      expect.objectContaining({
+        sellerId: "promotor-1",
+        sellerName: "Paola Promotora",
+        orders: 1,
+        revenue: 800,
+        returns: 0,
+        netRevenue: 800,
+      }),
+    ]);
+    expect(response.body.byZone).toEqual([
+      expect.objectContaining({ zone: "Antioquia", orders: 1, revenue: 800 }),
+    ]);
+  });
+
+  // Plan rol-promotor: el resumen GENERAL sigue siendo admin-wide para el
+  // promotor (es operacion, no desempeno): ve los mismos activos que el admin
+  // — su pedido de abril incluido, porque aqui nada se acota por vendedor.
+  it("keeps the general summary admin-wide for the promotor (plan rol-promotor)", async () => {
+    const adminResponse = await request(app.getHttpServer())
+      .get("/dashboard/summary")
+      .set("Authorization", "Bearer test-token")
+      .expect(200);
+
+    const response = await request(app.getHttpServer())
+      .get("/dashboard/summary")
+      .set("Authorization", "Bearer test-token")
+      .set("x-test-role", UserRole.promotor)
+      .expect(200);
+
+    // 5 activos: los 3 de mayo + los 2 de abril (el entregado no cuenta
+    // para nadie). Identico al admin: aqui NO hay acotado propio.
+    expect(adminResponse.body.activeOrders).toBe(5);
+    expect(response.body.activeOrders).toBe(adminResponse.body.activeOrders);
   });
 
   // RET-02: las devoluciones no se filtraban por companyId mientras los pedidos

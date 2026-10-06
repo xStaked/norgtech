@@ -176,6 +176,19 @@ describe("Commissions ledger (liquidacion)", () => {
     return true;
   }
 
+  /**
+   * Ultima captura del where de `commission.findMany`: a prueba de
+   * reordenamientos o GETs extra (el login no captura). Falla explicito si el
+   * request no llego a prisma, en vez de leer una captura rancia.
+   */
+  function lastWhere<T>(): T {
+    const captured = whereCaptures[whereCaptures.length - 1];
+    if (!captured) {
+      throw new Error("sin capturas de where: el GET no llego a prisma");
+    }
+    return captured as T;
+  }
+
   beforeAll(async () => {
     const prismaStub = {
       user: {
@@ -271,7 +284,7 @@ describe("Commissions ledger (liquidacion)", () => {
         .set(authHeader(token))
         .expect(200);
 
-      const where = whereCaptures[0] as { sellerUserId?: string };
+      const where = lastWhere<{ sellerUserId?: string }>();
       expect(where.sellerUserId).toBe(sellerId);
 
       const ledger = response.body as Array<{
@@ -299,7 +312,7 @@ describe("Commissions ledger (liquidacion)", () => {
         .set(authHeader(token))
         .expect(200);
 
-      const where = whereCaptures[0] as { sellerUserId?: string };
+      const where = lastWhere<{ sellerUserId?: string }>();
       expect(where.sellerUserId).toBe(promotorId);
 
       // El seed no tiene filas del promotor: ninguna fila ajena se cuela.
@@ -322,7 +335,7 @@ describe("Commissions ledger (liquidacion)", () => {
       expect(filtered.body).toHaveLength(1);
       expect(filtered.body[0].id).toBe("commission-2");
 
-      const where = whereCaptures[1] as { sellerUserId?: string };
+      const where = lastWhere<{ sellerUserId?: string }>();
       expect(where.sellerUserId).toBe(otherSellerId);
     });
 
@@ -338,9 +351,9 @@ describe("Commissions ledger (liquidacion)", () => {
         response.body.map((item: { id: string }) => item.id).sort(),
       ).toEqual(["commission-1", "commission-2", "commission-3", "commission-4"]);
 
-      const where = whereCaptures[0] as {
+      const where = lastWhere<{
         payment?: { paymentDate?: { gte?: Date; lte?: Date } };
-      };
+      }>();
       expect(where.payment?.paymentDate?.gte?.toISOString()).toBe(
         "2026-06-01T05:00:00.000Z",
       );
