@@ -10,6 +10,10 @@ import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { R2StorageService } from "../../shared/r2-storage.service";
 import {
+  SUPPORT_FILE_ALLOWED_MIME_TYPES,
+  SUPPORT_FILE_MAX_BYTES,
+} from "../../shared/support-file.constants";
+import {
   computeInvoiceStatus,
   invoiceBalance,
   invoiceStatusTransitions,
@@ -232,6 +236,21 @@ export class InvoicesService {
 
     let uploaded: { bucket: string; objectKey: string } | undefined;
     if (file) {
+      // Defensa en profundidad (fase 3): el fileFilter de Multer ya rechaza
+      // MIME/size, pero el servicio revalida antes del upload. Un bypass del
+      // controller no sube contenido no autorizado al bucket.
+      if (
+        !SUPPORT_FILE_ALLOWED_MIME_TYPES.includes(
+          file.mimetype as (typeof SUPPORT_FILE_ALLOWED_MIME_TYPES)[number],
+        )
+      ) {
+        throw new BadRequestException("Unsupported payment support content type");
+      }
+
+      if (file.size > SUPPORT_FILE_MAX_BYTES) {
+        throw new BadRequestException("Payment support exceeds maximum size");
+      }
+
       uploaded = await this.storage.uploadFile({
         prefix: "payment-supports/",
         fileName: file.originalname,

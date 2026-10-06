@@ -55,9 +55,12 @@ export const ALLOWLIST_OPEN: AllowlistedEndpoint[] = [
   {
     method: "POST",
     path: "/whatsapp/webhooks/kapso",
-    // SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.
+    // Cerrado en fase 3 (antes era la brecha deferida del 2026-07-16): ahora
+    // lo autentica KapsoWebhookGuard (HMAC X-Kapso-Signature o token
+    // X-Webhook-Token, modos strict/warn) — mecanismo de auth no-RBAC, esta
+    // entrada legitima que el sweep lo conte como abierto por diseño.
     reason:
-      "SECURITY FINDING (deferred by user 2026-07-16): Kapso webhook currently has NO guard. ServiceTokenGuard exists but is unapplied; applying it may break the live Kapso integration until the token header is confirmed. Allowlisted to keep the sweep green as a regression gate for NEW gaps — this is a known, tracked hole, not an approval.",
+      "Kapso webhook guarded by KapsoWebhookGuard (HMAC/token, non-RBAC auth) — public by design like /auth/login",
   },
   {
     method: "PATCH",

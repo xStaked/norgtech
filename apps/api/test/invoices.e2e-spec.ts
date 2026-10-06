@@ -20,6 +20,7 @@ describe("Invoices", () => {
   const auditLogs: Array<Record<string, unknown>> = [];
   const invoices: Array<Record<string, unknown>> = [];
   const payments: Array<Record<string, unknown>> = [];
+  const supportUploads: Array<{ fileName: string; contentType: string; sizeBytes: number }> = [];
 
   const users = [
     {
@@ -299,7 +300,14 @@ describe("Invoices", () => {
     };
 
     const storageStub = {
-      uploadFile: async () => ({ bucket: "test-bucket", objectKey: "test-key" }),
+      uploadFile: async (input: {
+        fileName: string;
+        contentType: string;
+        sizeBytes: number;
+      }) => {
+        supportUploads.push(input);
+        return { bucket: "test-bucket", objectKey: "test-key" };
+      },
       deleteObject: async () => undefined,
     };
 
@@ -325,6 +333,21 @@ describe("Invoices", () => {
       .post("/auth/login")
       .send({ email, password: "Admin123*" });
     return res.body.accessToken;
+  }
+
+  // Factura emitida (nunca pagada) para poder adjuntarle un soporte de pago.
+  async function createInvoiceForSupport(token: string) {
+    const res = await request(app.getHttpServer())
+      .post("/invoices")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        companyId: "company-1",
+        customerId: "customer-1",
+        subtotal: 100000,
+        taxAmount: 19000,
+        totalAmount: 119000,
+      });
+    return res.body;
   }
 
   it("should create an invoice", async () => {
@@ -485,6 +508,98 @@ describe("Invoices", () => {
     expect(response.status).toBe(201);
     expect(response.body.payment.amount).toBeDefined();
     expect(response.body.invoice.status).toBe("pagada");
+  });
+
+  it("should accept payment support upload with image/png content type", async () => {
+    const token = await getToken("admin@norgtech.local");
+    const invoice = (await createInvoiceForSupport(token)) as Record<string, unknown>;
+    const uploadsBefore = supportUploads.length;
+
+    const response = await request(app.getHttpServer())
+      .post("/invoices/payments")
+      .set("Authorization", `Bearer ${token}`)
+      .field("invoiceId", String(invoice.id))
+      .field("amount", "40000")
+      .field("method", PaymentMethod.transferencia)
+      .attach("support", Buffer.from("fake png body"), {
+        filename: "soporte.png",
+        contentType: "image/png",
+      });
+
+    expect(response.status).toBe(201);
+    const uploaded = supportUploads[uploadsBefore];
+    expect(uploaded?.contentType).toBe("image/png");
+    expect(uploaded?.fileName).toBe("soporte.png");
+  });
+
+  it("should accept payment support upload with application/pdf content type", async () => {
+    const token = await getToken("admin@norgtech.local");
+    const invoice = (await createInvoiceForSupport(token)) as Record<string, unknown>;
+    const uploadsBefore = supportUploads.length;
+
+    const response = await request(app.getHttpServer())
+      .post("/invoices/payments")
+      .set("Authorization", `Bearer ${token}`)
+      .field("invoiceId", String(invoice.id))
+      .field("amount", "40000")
+      .field("method", PaymentMethod.transferencia)
+      .attach("support", Buffer.from("%PDF-1.4 fake pdf"), {
+        filename: "soporte.pdf",
+        contentType: "application/pdf",
+      });
+
+    expect(response.status).toBe(201);
+    const uploaded = supportUploads[uploadsBefore];
+    expect(uploaded?.contentType).toBe("application/pdf");
+    expect(uploaded?.fileName).toBe("soporte.pdf");
+  });
+
+  // jpeg y webp completan la allowlist de imágenes junto a png y pdf
+  // (shared/support-file.constants.ts): los 4 tipos aceptados tienen caso.
+  it.each([
+    { filename: "soporte.jpg", contentType: "image/jpeg", body: "fake jpeg body" },
+    { filename: "soporte.webp", contentType: "image/webp", body: "fake webp body" },
+  ])(
+    "should accept payment support upload with $contentType content type",
+    async ({ filename, contentType, body }) => {
+      const token = await getToken("admin@norgtech.local");
+      const invoice = (await createInvoiceForSupport(token)) as Record<string, unknown>;
+      const uploadsBefore = supportUploads.length;
+
+      const response = await request(app.getHttpServer())
+        .post("/invoices/payments")
+        .set("Authorization", `Bearer ${token}`)
+        .field("invoiceId", String(invoice.id))
+        .field("amount", "40000")
+        .field("method", PaymentMethod.transferencia)
+        .attach("support", Buffer.from(body), { filename, contentType });
+
+      expect(response.status).toBe(201);
+      const uploaded = supportUploads[uploadsBefore];
+      expect(uploaded?.contentType).toBe(contentType);
+      expect(uploaded?.fileName).toBe(filename);
+    },
+  );
+
+  it("should reject payment support with disallowed content type (text/plain)", async () => {
+    const token = await getToken("admin@norgtech.local");
+    const invoice = (await createInvoiceForSupport(token)) as Record<string, unknown>;
+    const uploadsBefore = supportUploads.length;
+
+    const response = await request(app.getHttpServer())
+      .post("/invoices/payments")
+      .set("Authorization", `Bearer ${token}`)
+      .field("invoiceId", String(invoice.id))
+      .field("amount", "40000")
+      .field("method", PaymentMethod.transferencia)
+      .attach("support", Buffer.from("contenidos maliciosos"), {
+        filename: "soporte.txt",
+        contentType: "text/plain",
+      });
+
+    expect(response.status).toBe(400);
+    // El archivo rechazado no debe llegar jamas al storage.
+    expect(supportUploads.length).toBe(uploadsBefore);
   });
 
   it("should get invoice summary", async () => {

@@ -16,6 +16,7 @@ import { AuthUser } from "../auth/types/authenticated-request";
 import { CreateOrderDto } from "../orders/dto/create-order.dto";
 import { CreateInternalNoteDto } from "./dto/create-internal-note.dto";
 import { KapsoWebhookDto } from "./dto/kapso-webhook.dto";
+import { KapsoWebhookGuard } from "./kapso-webhook.guard";
 import { ProcessOrderAutomationDto } from "./dto/process-order-automation.dto";
 import { SendWhatsAppMessageDto } from "./dto/send-whatsapp-message.dto";
 import { UpdateConversationDto } from "./dto/update-conversation.dto";
@@ -26,7 +27,12 @@ import { WhatsAppService } from "./whatsapp.service";
 export class WhatsAppWebhookController {
   constructor(private readonly kapsoWebhookService: KapsoWebhookService) {}
 
+  // Fase 3 seguridad: antes un endpoint público sin auth (brecha documentada
+  // en docs/seguridad-brechas.md). KapsoWebhookGuard exige HMAC del rawBody
+  // (X-Kapso-Signature) o token compartido (X-Webhook-Token); el ValidationPipe
+  // se mantiene como estaba.
   @Post("kapso")
+  @UseGuards(KapsoWebhookGuard)
   receiveKapsoWebhook(
     @Body(
       new ValidationPipe({

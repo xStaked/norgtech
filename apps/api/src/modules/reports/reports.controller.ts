@@ -10,12 +10,14 @@ import {
   ValidationPipe,
 } from "@nestjs/common";
 import type { Response } from "express";
+import { Throttle } from "@nestjs/throttler";
 import { CurrentUser } from "../auth/decorators/current-user.decorator";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { JwtAuthGuard } from "../auth/jwt-auth.guard";
 import { RolesGuard } from "../auth/roles.guard";
 import { AuthUser } from "../auth/types/authenticated-request";
 import { GenerateReportDto } from "./dto/generate-report.dto";
+import { RATE_LIMITS } from "../whatsapp/rate-limits.constants";
 import { ReportsService } from "./reports.service";
 
 @Controller("reports")
@@ -59,6 +61,10 @@ export class ReportsController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("administrador", "director_comercial", "tecnico")
+  // Throttle fino (fase 3): el render del PDF es costoso por request. El
+  // guard global cuenta la petición antes que el handler, así que el 429
+  // aparece aunque el reporte no exista.
+  @Throttle({ default: { ...RATE_LIMITS.reportsPdf } })
   @Get(":id/pdf")
   async downloadPdf(@Param("id") id: string, @Res() res: Response) {
     const pdfBuffer = await this.reportsService.generatePdf(id);
