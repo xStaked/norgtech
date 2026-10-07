@@ -57,6 +57,11 @@ export class QuotesService {
       unitPrice: line.unitPrice,
       subtotal: line.subtotal,
       notes: dto.items[index].notes,
+      priceSource: line.priceSource ?? (line.priceListName ? "price_list" : "base_price"),
+      priceListIdSnapshot: line.priceListId ?? null,
+      priceListNameSnapshot: line.priceListName ?? null,
+      currencySnapshot: line.currency ?? customer.currency ?? "COP",
+      taxPercentSnapshot: line.taxPercent,
     }));
 
     const subtotal = pricing.subtotal;
@@ -71,6 +76,7 @@ export class QuotesService {
           validUntil: dto.validUntil ? new Date(dto.validUntil) : null,
           subtotal,
           total,
+          currencySnapshot: customer.currency ?? "COP",
           createdBy: user.id,
           updatedBy: user.id,
           items: {

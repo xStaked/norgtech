@@ -130,5 +130,11 @@ describe("Seller-scoped special pricing", () => {
       .expect(201);
     expect(preview.body.total).toBe(Number(created.body.total));
     expect(preview.body.lines[0].unitPrice).toBe(80);
+    expect(created.body.currencySnapshot).toBe("COP");
+    const [item] = created.body.items;
+    expect(item.priceSource).toBe("special_price_list");
+    expect(item.priceListNameSnapshot).toBe("Especial VIOS");
+    expect(item.currencySnapshot).toBe("COP");
+    expect(Number(item.unitPrice)).toBe(80);
   });
 });

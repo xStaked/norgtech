@@ -779,6 +779,7 @@ model Quote {
   notes           String?
   subtotal        Decimal          @db.Decimal(14, 2)
   total           Decimal          @db.Decimal(14, 2)
+  currencySnapshot String          @default("COP")
   createdBy       String
   updatedBy       String
   createdAt       DateTime         @default(now())
@@ -809,6 +810,11 @@ model QuoteItem {
   unitPrice           Decimal  @db.Decimal(14, 2)
   subtotal            Decimal  @db.Decimal(14, 2)
   notes               String?
+  priceSource         String?  @default("legacy")
+  priceListIdSnapshot String?
+  priceListNameSnapshot String?
+  currencySnapshot    String?  @default("COP")
+  taxPercentSnapshot  Decimal? @db.Decimal(5, 2)
   quote               Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
   product             Product? @relation(fields: [productId], references: [id])
 }
@@ -903,6 +909,7 @@ model Order {
   sourceConversationId       String?
   subtotal                   Decimal               @db.Decimal(14, 2)
   total                      Decimal               @db.Decimal(14, 2)
+  currencySnapshot           String                @default("COP")
   createdBy                  String
   updatedBy                  String
   companyId                  String
@@ -955,6 +962,10 @@ model OrderItem {
   subtotal             Decimal  @db.Decimal(14, 2)
   notes                String?
   needsResolution      Boolean  @default(false)
+  priceSource          String?  @default("legacy")
+  priceListIdSnapshot  String?
+  priceListNameSnapshot String?
+  currencySnapshot     String?  @default("COP")
   order                Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product              Product? @relation(fields: [productId], references: [id])
 }
@@ -1165,6 +1176,7 @@ model Invoice {
   creditNoteTotal Decimal          @default(0) @db.Decimal(14, 2)
   status          InvoiceStatus    @default(emitida)
   notes           String?
+  currencySnapshot String         @default("COP")
   createdBy       String
   updatedBy       String
   companyId       String
