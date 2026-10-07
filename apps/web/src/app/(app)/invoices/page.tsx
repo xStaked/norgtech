@@ -36,6 +36,7 @@ interface Invoice {
   totalPaid: string;
   status: string;
   company: { id: string; name: string; prefix: string } | null;
+  currencySnapshot?: string | null;
 }
 
 interface InvoiceRow {
@@ -51,6 +52,7 @@ interface InvoiceRow {
   status: string;
   companyName: string | null;
   companyPrefix: string | null;
+  currency: string;
 }
 
 const statusLabels: Record<string, string> = {
@@ -83,7 +85,10 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-function formatCurrency(amount: number) {
+function formatCurrency(amount: number, currency: string = "COP") {
+  if (currency === "USD") {
+    return `US$ ${amount.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return currencyFormatter.format(amount);
 }
 
@@ -140,13 +145,13 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
     key: "totalAmount",
     header: "Total",
     align: "right",
-    render: (row) => formatCurrency(row.totalAmount),
+    render: (row) => formatCurrency(row.totalAmount, row.currency),
   },
   {
     key: "totalPaid",
     header: "Pagado",
     align: "right",
-    render: (row) => formatCurrency(row.totalPaid),
+    render: (row) => formatCurrency(row.totalPaid, row.currency),
   },
   {
     key: "balance",
@@ -154,7 +159,7 @@ const columns: readonly DataTableColumn<InvoiceRow>[] = [
     align: "right",
     render: (row) => (
       <strong style={{ color: row.balance > 0 ? "#ef4444" : "#22c55e" }}>
-        {formatCurrency(row.balance)}
+        {formatCurrency(row.balance, row.currency)}
       </strong>
     ),
   },
@@ -221,13 +226,20 @@ export default async function InvoicesPage({
     status: invoice.status,
     companyName: invoice.company?.name ?? null,
     companyPrefix: invoice.company?.prefix ?? null,
+    currency: invoice.currencySnapshot ?? "COP",
   }));
 
   // El estado ya viene filtrado del API; la busqueda recorta aqui.
   const filtered = applyFilters(rows, params, {
     search: (row) => [row.invoiceNumber, row.customerName, row.companyName],
   });
-  const totalBalance = filtered.reduce((sum, row) => sum + row.balance, 0);
+  const balanceByCurrency = filtered.reduce<Record<string, number>>((acc, row) => {
+    acc[row.currency] = (acc[row.currency] ?? 0) + row.balance;
+    return acc;
+  }, {});
+  const totalBalanceLabel = Object.entries(balanceByCurrency)
+    .map(([currency, amount]) => `${formatCurrency(amount, currency)} ${currency}`)
+    .join(" · ");
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -294,7 +306,7 @@ export default async function InvoicesPage({
         ]}
         shown={filtered.length}
         noun="facturas"
-        summaryExtra={`Saldo pendiente: ${formatCurrency(totalBalance)}`}
+        summaryExtra={`Saldo pendiente: ${totalBalanceLabel || formatCurrency(0)}`}
       />
 
       <SectionCard

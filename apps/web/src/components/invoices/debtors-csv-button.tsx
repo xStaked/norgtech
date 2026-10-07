@@ -17,6 +17,7 @@ function escapeCell(value: string): string {
 function buildCsv(rows: DebtorRow[]): string {
   const header = [
     "Cliente",
+    "Moneda",
     "Saldo",
     "Vigente",
     "1-30",
@@ -28,6 +29,7 @@ function buildCsv(rows: DebtorRow[]): string {
   const lines = rows.map((row) =>
     [
       escapeCell(row.customerName),
+      row.currency,
       toCsvDecimal(row.balance),
       toCsvDecimal(row.current),
       toCsvDecimal(row.d1_30),

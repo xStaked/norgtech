@@ -10,6 +10,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { formatPrice } from "@/lib/catalog";
 
 interface Customer {
   id: string;
@@ -32,6 +33,9 @@ interface QuoteItem {
   discountPercent: string | null;
   subtotal: string;
   notes: string | null;
+  priceSource?: string | null;
+  priceListNameSnapshot?: string | null;
+  currencySnapshot?: string | null;
 }
 
 interface Quote {
@@ -39,12 +43,19 @@ interface Quote {
   status: string;
   subtotal: string;
   total: string;
+  currencySnapshot?: string | null;
   notes: string | null;
   validUntil: string | null;
   customer: Customer | null;
   opportunity: Opportunity | null;
   items: QuoteItem[];
   createdAt: string;
+}
+
+function priceSourceLabel(source?: string | null): string {
+  if (source === "special_price_list") return "Precio especial";
+  if (source === "price_list") return "Lista general";
+  return "Precio base";
 }
 
 const statusLabels: Record<string, string> = {
@@ -60,12 +71,6 @@ const statusTones: Record<string, CrmStatusTone> = {
   cerrada: "success",
   perdida: "danger",
 };
-
-const currencyFormatter = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
-});
 
 const dateFormatter = new Intl.DateTimeFormat("es-CO", {
   day: "2-digit",
@@ -104,26 +109,37 @@ const quoteItemColumns: readonly DataTableColumn<QuoteItem>[] = [
     // Show the discount that produced this price, otherwise the saved unitPrice
     // looks arbitrary next to the catalog's base price (QUO-03).
     render: (item) => {
+      const currency = item.currencySnapshot ?? "COP";
       const discount = Number(item.discountPercent ?? 0);
       if (!(discount > 0) || !item.originalUnitPrice) {
-        return formatCurrency(item.unitPrice);
+        return formatPrice(item.unitPrice, currency) || "—";
       }
       return (
         <span className="inline-flex items-center gap-1.5">
           <span className="text-muted-foreground line-through">
-            {formatCurrency(item.originalUnitPrice)}
+            {formatPrice(item.originalUnitPrice, currency)}
           </span>
-          <span>{formatCurrency(item.unitPrice)}</span>
+          <span>{formatPrice(item.unitPrice, currency)}</span>
           <span className="text-xs text-emerald-600">-{discount.toFixed(2)}%</span>
         </span>
       );
     },
   },
   {
+    key: "source",
+    header: "Origen",
+    render: (item) => (
+      <span style={{ fontSize: 12, color: "#44556e" }}>
+        {priceSourceLabel(item.priceSource)}
+        {item.priceListNameSnapshot ? ` · ${item.priceListNameSnapshot}` : ""}
+      </span>
+    ),
+  },
+  {
     key: "subtotal",
     header: "Subtotal",
     align: "right",
-    render: (item) => <strong>{formatCurrency(item.subtotal)}</strong>,
+    render: (item) => <strong>{formatPrice(item.subtotal, item.currencySnapshot ?? "COP") || "—"}</strong>,
   },
 ] as const;
 
@@ -179,6 +195,7 @@ export default async function QuoteDetailPage({
             value: quote.validUntil ? formatDate(quote.validUntil) : "Sin fecha definida",
           },
           { label: "Creada", value: formatDate(quote.createdAt) },
+          { label: "Moneda", value: quote.currencySnapshot ?? "COP" },
         ]}
         aside={
           <div
@@ -187,8 +204,8 @@ export default async function QuoteDetailPage({
               gap: 12,
             }}
           >
-            <InlineMetric label="Subtotal" value={formatCurrency(quote.subtotal)} tone="info" />
-            <InlineMetric label="Total" value={formatCurrency(quote.total)} tone="success" />
+            <InlineMetric label="Subtotal" value={formatPrice(quote.subtotal, quote.currencySnapshot ?? "COP")} tone="info" />
+            <InlineMetric label="Total" value={formatPrice(quote.total, quote.currencySnapshot ?? "COP")} tone="success" />
             <InlineMetric
               label="Ítems"
               value={quote.items.length.toLocaleString("es-CO")}
@@ -246,7 +263,7 @@ export default async function QuoteDetailPage({
             Total cotizado
           </span>
           <strong style={{ fontSize: 28, lineHeight: 1, color: "#0c2c44" }}>
-            {formatCurrency(quote.total)}
+            {formatPrice(quote.total, quote.currencySnapshot ?? "COP")}
           </strong>
         </div>
 
@@ -257,10 +274,6 @@ export default async function QuoteDetailPage({
       </SectionCard>
     </div>
   );
-}
-
-function formatCurrency(value: string) {
-  return currencyFormatter.format(Number(value));
 }
 
 function formatNumber(value: string) {

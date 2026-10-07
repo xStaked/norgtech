@@ -17,6 +17,7 @@ interface AccountingInvoiceApiItem {
   totalAmount: string | number;
   creditNoteTotal?: string | number | null;
   payments?: Array<{ paymentDate: string; amount: string | number }> | null;
+  currencySnapshot?: string | null;
 }
 
 interface TaxTableRow {
@@ -33,29 +34,32 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-function formatCurrency(amount: number) {
+function formatCurrency(amount: number, currency: string = "COP") {
+  if (currency === "USD") {
+    return `US$ ${amount.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return currencyFormatter.format(amount);
 }
 
-const columns: readonly DataTableColumn<TaxTableRow>[] = [
+const makeColumns = (currency: string): readonly DataTableColumn<TaxTableRow>[] => [
   { key: "rate", header: "Concepto", render: (row) => row.rate },
   {
     key: "base",
     header: "Base",
     align: "right",
-    render: (row) => formatCurrency(row.base),
+    render: (row) => formatCurrency(row.base, currency),
   },
   {
     key: "tax",
     header: "Impuesto",
     align: "right",
-    render: (row) => formatCurrency(row.tax),
+    render: (row) => formatCurrency(row.tax, currency),
   },
   {
     key: "total",
     header: "Total",
     align: "right",
-    render: (row) => <strong>{formatCurrency(row.total)}</strong>,
+    render: (row) => <strong>{formatCurrency(row.total, currency)}</strong>,
   },
   {
     key: "count",
@@ -64,6 +68,8 @@ const columns: readonly DataTableColumn<TaxTableRow>[] = [
     render: (row) => row.count.toLocaleString("es-CO"),
   },
 ] as const;
+
+const columns = makeColumns("COP");
 
 function isDay(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -97,8 +103,12 @@ export default async function AccountingPage({
     totalAmount: invoice.totalAmount,
     creditNoteTotal: invoice.creditNoteTotal,
     payments: invoice.payments,
+    currency: invoice.currencySnapshot ?? "COP",
   }));
-  const summary = summarizeAccounting(input, from, to);
+  const copInput = input.filter((inv) => (inv.currency ?? "COP") !== "USD");
+  const usdInput = input.filter((inv) => (inv.currency ?? "COP") === "USD");
+  const summary = summarizeAccounting(copInput, from, to);
+  const usdSummary = summarizeAccounting(usdInput, from, to);
 
   const rows: TaxTableRow[] = [
     {
@@ -169,7 +179,7 @@ export default async function AccountingPage({
       </form>
 
       <SectionCard
-        title="Ventas por tarifa"
+        title="Ventas por tarifa · COP"
         description="La tarifa se infiere por factura desde el impuesto: con impuesto va a 5%, sin impuesto a 0%. El CSV trae este resumen con pagos y notas."
         actions={<AccountingCsvButton summary={summary} from={from} to={to} />}
       >
@@ -185,6 +195,37 @@ export default async function AccountingPage({
           }
         />
       </SectionCard>
+
+      {usdInput.length > 0 ? (
+        <SectionCard
+          title="Ventas por tarifa · USD"
+          description="Facturas en dólares, sin mezclar con pesos. Mismos criterios que COP."
+        >
+          <DataTable
+            columns={makeColumns("USD")}
+            rows={[
+              {
+                rate: "Ventas IVA 0% · USD",
+                base: usdSummary.salesByTax.rate0.base,
+                tax: usdSummary.salesByTax.rate0.tax,
+                total: usdSummary.salesByTax.rate0.total,
+                count: usdSummary.salesByTax.rate0.count,
+              },
+              {
+                rate: "Ventas IVA 5% · USD",
+                base: usdSummary.salesByTax.rate5.base,
+                tax: usdSummary.salesByTax.rate5.tax,
+                total: usdSummary.salesByTax.rate5.total,
+                count: usdSummary.salesByTax.rate5.count,
+              },
+            ]}
+            getRowKey={(row) => row.rate}
+            emptyState={
+              <EmptyState title="Sin ventas USD" description="No hay facturas en dólares en el periodo." />
+            }
+          />
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

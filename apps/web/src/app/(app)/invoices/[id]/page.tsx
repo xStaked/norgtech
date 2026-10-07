@@ -51,6 +51,7 @@ interface Invoice {
   status: string;
   notes: string | null;
   payments: InvoicePayment[];
+  currencySnapshot?: string | null;
 }
 
 const statusLabels: Record<string, string> = {
@@ -84,7 +85,10 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-function formatCurrency(amount: number) {
+function formatCurrency(amount: number, currency: string | null = "COP") {
+  if (currency === "USD") {
+    return `US$ ${amount.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return currencyFormatter.format(amount);
 }
 
@@ -192,25 +196,29 @@ export default async function InvoiceDetailPage({
         <SectionCard title="Totales">
           <div className="grid gap-2 text-sm">
             <div className="flex justify-between">
+              <span className="text-muted-foreground">Moneda</span>
+              <span>{invoice.currencySnapshot ?? "COP"}</span>
+            </div>
+            <div className="flex justify-between">
               <span className="text-muted-foreground">Subtotal</span>
-              <span>{formatCurrency(Number(invoice.subtotal))}</span>
+              <span>{formatCurrency(Number(invoice.subtotal), invoice.currencySnapshot)}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">IVA</span>
-              <span>{formatCurrency(Number(invoice.taxAmount))}</span>
+              <span>{formatCurrency(Number(invoice.taxAmount), invoice.currencySnapshot)}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
               <span className="text-muted-foreground">Total</span>
-              <strong>{formatCurrency(totalAmount)}</strong>
+              <strong>{formatCurrency(totalAmount, invoice.currencySnapshot)}</strong>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Pagado</span>
-              <span className="text-success">{formatCurrency(totalPaid)}</span>
+              <span className="text-success">{formatCurrency(totalPaid, invoice.currencySnapshot)}</span>
             </div>
             <div className="flex justify-between border-t pt-2">
               <span className="text-muted-foreground">Saldo</span>
               <strong className={balance > 0 ? "text-destructive" : "text-success"}>
-                {formatCurrency(balance)}
+                {formatCurrency(balance, invoice.currencySnapshot)}
               </strong>
             </div>
           </div>
