@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ButtonLink } from "@/components/ui/button-link";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ListFilters } from "@/components/ui/list-filters";
@@ -7,6 +8,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
 import { applyFilters, optionsFrom, type SearchParams } from "@/lib/list-filter";
 import {
   PRICE_LIST_KIND_LABEL,
@@ -95,8 +97,22 @@ export default async function PriceListsPage({
   searchParams: Promise<SearchParams>;
 }) {
   const params = await searchParams;
-  const response = await apiFetch("/price-lists");
+  const [response, user, specialRes] = await Promise.all([
+    apiFetch("/price-lists"),
+    getCurrentUser(),
+    apiFetch("/special-price-lists"),
+  ]);
   const lists = (response.ok ? await response.json() : []) as PriceListApiItem[];
+  const specialLists = (specialRes.ok ? await specialRes.json().catch(() => []) : []) as Array<{
+    id: string;
+    name: string;
+    ownerUserId: string;
+    active: boolean;
+    revisions: Array<{ id: string; status: string; active: boolean }>;
+  }>;
+  const role = user?.role ?? null;
+  const canManage = role === "administrador" || role === "director_comercial" || role === "promotor";
+  const canSpecial = canManage || role === "comercial";
 
   const rows: PriceListRow[] = lists.map((list) => ({
     id: list.id,
@@ -120,7 +136,21 @@ export default async function PriceListsPage({
       <PageHeader
         eyebrow="Catálogo"
         title={`Listas de precios · ${rows.length}`}
-        description="Consulta qué precio aplica por presentación en cada lista. Solo lectura: las listas se crean por importación y los precios se editan desde Productos."
+        description="Administra listas generales y revisa listas especiales con precios por cliente."
+        actions={
+          <>
+            {canManage ? (
+              <ButtonLink href="/price-lists/new" variant="primary">
+                Nueva lista
+              </ButtonLink>
+            ) : null}
+            {canSpecial ? (
+              <ButtonLink href="/price-lists/special/new" variant="secondary">
+                Subir lista especial
+              </ButtonLink>
+            ) : null}
+          </>
+        }
       />
 
       <ListFilters
@@ -148,11 +178,44 @@ export default async function PriceListsPage({
           emptyState={
             <EmptyState
               title="No hay listas de precios"
-              description="Las listas se crean importando el Excel oficial desde el API."
+              description="Crea la primera lista general desde Nueva lista."
             />
           }
         />
       </SectionCard>
+
+      {canSpecial ? (
+        <SectionCard
+          title="Listas especiales"
+          description="Precios negociados por cliente y presentación. Solo aplican al comercial propietario cuando están aprobadas."
+        >
+          {specialLists.length === 0 ? (
+            <EmptyState
+              title="Sin listas especiales"
+              description="Sube tu primera lista especial para revisión."
+            />
+          ) : (
+            <ul style={{ display: "grid", gap: 8, margin: 0, padding: 0, listStyle: "none" }}>
+              {specialLists.map((list) => (
+                <li key={list.id}>
+                  <Link
+                    href={`/price-lists/special/${list.id}`}
+                    style={{ color: "#0f5c8a", fontWeight: 700, textDecoration: "none" }}
+                  >
+                    {list.name}
+                  </Link>{" "}
+                  <StatusBadge tone={list.active ? "success" : "neutral"}>
+                    {list.active ? "Activa" : "Inactiva"}
+                  </StatusBadge>{" "}
+                  <span style={{ fontSize: 12, color: "#6b7787" }}>
+                    {list.revisions?.[0]?.status ?? ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
+      ) : null}
     </div>
   );
 }

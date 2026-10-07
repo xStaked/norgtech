@@ -102,22 +102,23 @@ git commit -m "feat(api): manage general and special price lists"
 
 **Files:**
 - Modify: `apps/web/src/app/(app)/price-lists/page.tsx`, `apps/web/src/app/(app)/price-lists/[id]/page.tsx`
-- Create: `apps/web/src/app/(app)/price-lists/new/page.tsx`, `apps/web/src/app/(app)/price-lists/[id]/edit/page.tsx`, `apps/web/src/app/(app)/price-lists/special/new/page.tsx`
-- Create: `apps/web/src/components/price-lists/price-list-form.tsx`, `special-price-list-form.tsx`, `price-list-actions.tsx`, `special-price-list-review-actions.tsx`
+- Create: `apps/web/src/app/(app)/price-lists/new/page.tsx`, `apps/web/src/app/(app)/price-lists/[id]/edit/page.tsx`, `apps/web/src/app/(app)/price-lists/special/new/page.tsx`, `apps/web/src/app/(app)/price-lists/special/[id]/page.tsx`, `apps/web/src/app/(app)/price-lists/special/[id]/edit/page.tsx`
+- Create: `apps/web/src/components/price-lists/price-list-form.tsx`, `price-list-item-form.tsx`, `special-price-list-form.tsx`, `price-list-actions.tsx`, `special-price-list-review-actions.tsx`
+- Modify: `apps/web/src/lib/route-guards.ts`
 - Test: `apps/web/tests/e2e/price-lists-management.spec.ts`
 
 **Interfaces:**
 - Consumes: APIs de Task 2; selects existentes para clientes, productos y presentaciones.
 - Produces: CRUD general y captura/revisión especial integrados bajo `/price-lists`.
 
-- [ ] **Step 1: Escribir E2E fallidos** para admin crea/clona/desactiva una lista general; comercial añade dos clientes con distinto precio para el mismo producto/presentación y envía; moneda viene bloqueada por cliente; usuario autorizado corrige una rechazada y reenvía.
+- [ ] **Step 1: Escribir E2E fallidos** `manager can create edit clone and deactivate a general price list`, `manager can edit an item price from list detail`, `commercial submits customer-specific prices with inherited currency`, `commercial can edit and resubmit a rejected revision`, `manager reviews special list from its detail`, and direct-URL redirects for roles without general/special write access.
 - [ ] **Step 2: Ejecutar el spec con API/Web disponibles y confirmar los fallos**
 
 Run: `pnpm --filter @norgtech/web exec playwright test tests/e2e/price-lists-management.spec.ts`
 Expected: FAIL por acciones y formularios inexistentes.
 
-- [ ] **Step 3: Implementar acciones de lista general** en índice/detalle y formularios con errores de API visibles; no ofrecer eliminación física.
-- [ ] **Step 4: Implementar formulario/revisión especial** con una fila por cliente + presentación + precios existentes; mostrar moneda del cliente sin control editable; separar enviar, aprobar y rechazar por rol/estado.
+- [ ] **Step 3: Implementar acciones de lista general** en índice/detalle, formulario de metadata y editor de precio por presentación; al crear o clonar la lista queda inactiva hasta activación explícita. No ofrecer eliminación física.
+- [ ] **Step 4: Implementar flujo especial** con carga de filas cliente + presentación + precios; mostrar moneda del cliente sin control editable. Añadir detalle de lista, edición de revisiones borrador/rechazadas, envío y aprobación/rechazo según rol/estado.
 - [ ] **Step 5: Ejecutar E2E y build web; commit**
 
 Run: `pnpm --filter @norgtech/web exec playwright test tests/e2e/price-lists-management.spec.ts` y `pnpm --filter @norgtech/web build`
