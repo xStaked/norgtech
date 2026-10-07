@@ -69,9 +69,11 @@ git commit -m "feat(api): submit customer-specific special prices"
 ### Task 2: API CRUD general y ciclo de aprobación especial
 
 **Files:**
-- Modify: `apps/api/src/modules/price-lists/price-lists.controller.ts`, `price-lists.service.ts`
+- Modify: `apps/api/src/modules/price-lists/price-lists.controller.ts`, `price-lists.service.ts`, `special-price-lists.controller.ts`, `special-price-lists.service.ts`
+- Modify: `apps/api/prisma/schema.prisma`
+- Create: `apps/api/prisma/migrations/<generated_timestamp>_special_price_list_active/migration.sql`
 - Create: `apps/api/src/modules/price-lists/dto/create-price-list.dto.ts`, `update-price-list.dto.ts`, `clone-price-list.dto.ts`
-- Create: `apps/api/src/modules/price-lists/dto/create-special-price-list.dto.ts`, `update-special-price-list-revision.dto.ts`
+- Create: `apps/api/src/modules/price-lists/dto/create-special-price-list.dto.ts`, `update-special-price-list.dto.ts`, `update-special-price-list-revision.dto.ts`
 - Modify: `apps/api/test/price-lists-special.e2e-spec.ts`
 - Create: `apps/api/test/price-lists-management.e2e-spec.ts`
 
@@ -79,18 +81,20 @@ git commit -m "feat(api): submit customer-specific special prices"
 - Consumes: modelos de Task 1; `AuditService`; `AuthUser`.
 - Produces: `POST/PATCH /price-lists`, `POST /price-lists/:id/clone`, `PUT /price-lists/:id/items` existente; endpoints `POST/GET /special-price-lists`, `GET/PATCH /special-price-lists/:id`, `POST /special-price-lists/:id/revisions`, `POST /special-price-lists/:id/revisions/:revisionId/submit` y `PATCH .../:revisionId/approval`.
 
-- [ ] **Step 1: Escribir pruebas fallidas** `admin can create clone edit and deactivate a general list`, `commercial can submit and read only owned special lists`, `commercial can correct and resubmit a rejected revision`, `only admin director and promotor can review`, y `deactivation never deletes list items`. Assert HTTP status, owner, estado, auditoría y que la revisión previa activa queda intacta.
+- [ ] **Step 1: Escribir pruebas fallidas** `admin creates a general list inactive until explicitly activated`, `commercial cannot create a general list`, `promotor clones a general list without assigning its customers`, `director deactivates a general list without deleting its prices`, `commercial can read only owned special lists`, `commercial can correct a rejected revision and resubmit it`, `only administrator director and promotor can review a special revision`, y `manager deactivates a special list without deleting its revision or prices`. Assert HTTP status, owner, estado, auditoría y que la revisión previa activa queda intacta.
 - [ ] **Step 2: Ejecutar los dos specs para confirmar los fallos**
 
 Run: `pnpm --filter @norgtech/api exec jest --config ./test/jest-e2e.json --runInBand test/price-lists-management.e2e-spec.ts test/price-lists-special.e2e-spec.ts`
 Expected: FAIL en rutas/permisos aún no implementados.
 
-- [ ] **Step 3: Implementar DTOs, validación y servicios.** La lista general nueva o clonada inicia inactiva; activar una lista general la deja disponible para pricing. Clonar copia metadata/ítems, requiere nombre único y no copia clientes asignados. Desactivar conserva datos.
-- [ ] **Step 4: Implementar ciclo especial transaccional.** El servidor fija propietario al crear; moneda se resuelve desde cada Customer; el comercial solo modifica borradores/rechazadas propias. La aprobación activa la nueva revisión en la misma transacción que su auditoría y reemplaza las entradas activas previas de cada combinación propietario + cliente + presentación; una revisión rechazada no cambia los precios activos.
-- [ ] **Step 5: Correr ambos specs y commit**
+- [ ] **Step 3: Agregar `active` a SpecialPriceList** y su migración aditiva; validar/generar Prisma sin conectar a la base compartida.
+- [ ] **Step 4: Implementar DTOs, validación y servicios generales.** La lista general nueva o clonada inicia inactiva; activar una lista general la deja disponible para pricing. Clonar copia metadata/ítems, requiere nombre único y no copia clientes asignados. Desactivar conserva datos.
+- [ ] **Step 5: Implementar ciclo especial transaccional.** El servidor fija propietario al crear; moneda se resuelve desde cada Customer; el comercial solo modifica borradores/rechazadas propias. La aprobación activa la nueva revisión en la misma transacción que su auditoría y reemplaza las entradas activas previas de cada combinación propietario + cliente + presentación; una revisión rechazada no cambia los precios activos. Desactivar conserva revisiones/ítems, pero apaga sus entradas activas; reactivar valida que ninguna otra lista especial haya tomado esas combinaciones.
+- [ ] **Step 6: Correr ambos specs y commit**
 
 ```bash
 git add apps/api/src/modules/price-lists apps/api/test/price-lists-management.e2e-spec.ts apps/api/test/price-lists-special.e2e-spec.ts
+git add apps/api/prisma/schema.prisma apps/api/prisma/migrations/*_special_price_list_active/migration.sql
 git commit -m "feat(api): manage general and special price lists"
 ```
 

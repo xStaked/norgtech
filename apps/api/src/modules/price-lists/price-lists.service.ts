@@ -1,9 +1,12 @@
-import { Injectable, NotFoundException } from "@nestjs/common";
-import { PriceListStatus } from "@prisma/client";
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from "@nestjs/common";
+import { PriceListStatus, Prisma } from "@prisma/client";
 import { PrismaService } from "../../prisma/prisma.service";
 import { auditState } from "../audit/audit-state";
 import { AuditService } from "../audit/audit.service";
 import { AuthUser } from "../auth/types/authenticated-request";
+import { ClonePriceListDto } from "./dto/clone-price-list.dto";
+import { CreatePriceListDto } from "./dto/create-price-list.dto";
+import { UpdatePriceListDto } from "./dto/update-price-list.dto";
 import { UpsertPriceListItemDto } from "./dto/upsert-price-list-item.dto";
 
 @Injectable()
@@ -12,6 +15,146 @@ export class PriceListsService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
   ) {}
+
+  async create(user: AuthUser, dto: CreatePriceListDto) {
+    const name = dto.name.trim();
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const list = await tx.priceList.create({
+          data: {
+            name,
+            kind: dto.kind,
+            currency: dto.currency,
+            ...(dto.country?.trim() ? { country: dto.country.trim() } : {}),
+            active: false,
+            status: PriceListStatus.borrador,
+          },
+          include: { items: true, customers: true },
+        });
+
+        await this.auditService.record(
+          {
+            entityType: "PriceList",
+            entityId: list.id,
+            action: "price_list.created",
+            actorUserId: user.id,
+            nextState: auditState(list),
+          },
+          tx,
+        );
+
+        return list;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("Ya existe una lista con ese nombre");
+      }
+      throw error;
+    }
+  }
+
+  async update(user: AuthUser, id: string, dto: UpdatePriceListDto) {
+    const before = await this.prisma.priceList.findUnique({ where: { id } });
+    if (!before) {
+      throw new NotFoundException("Lista de precios no encontrada");
+    }
+
+    const data = {
+      ...(dto.name !== undefined && { name: dto.name.trim() }),
+      ...(dto.kind !== undefined && { kind: dto.kind }),
+      ...(dto.currency !== undefined && { currency: dto.currency }),
+      ...(dto.country !== undefined && { country: dto.country?.trim() || null }),
+      ...(dto.active !== undefined && { active: dto.active }),
+      ...(dto.active === true && { status: PriceListStatus.aprobada }),
+    };
+    if (Object.keys(data).length === 0) {
+      throw new BadRequestException("Debes enviar al menos un campo para actualizar");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const updated = await tx.priceList.update({
+          where: { id },
+          data,
+          include: { items: true, customers: true },
+        });
+        await this.auditService.record(
+          {
+            entityType: "PriceList",
+            entityId: id,
+            action: dto.active === false ? "price_list.deactivated" : "price_list.updated",
+            actorUserId: user.id,
+            previousState: auditState(before),
+            nextState: auditState(updated),
+          },
+          tx,
+        );
+        return updated;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("Ya existe una lista con ese nombre");
+      }
+      throw error;
+    }
+  }
+
+  async clone(user: AuthUser, id: string, dto: ClonePriceListDto) {
+    const source = await this.prisma.priceList.findUnique({
+      where: { id },
+      include: { items: true },
+    });
+    if (!source) {
+      throw new NotFoundException("Lista de precios no encontrada");
+    }
+
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const clone = await tx.priceList.create({
+          data: {
+            name: dto.name.trim(),
+            kind: source.kind,
+            currency: source.currency,
+            country: source.country,
+            active: false,
+            status: PriceListStatus.borrador,
+            items: {
+              create: source.items.map((item) => ({
+                presentationId: item.presentationId,
+                priceSinIva: item.priceSinIva,
+                priceConIva: item.priceConIva,
+                taxPercent: item.taxPercent,
+                priceSinIva2: item.priceSinIva2,
+                priceConIva2: item.priceConIva2,
+                priceSinIva3: item.priceSinIva3,
+                priceConIva3: item.priceConIva3,
+              })),
+            },
+          },
+          include: { items: true, customers: true },
+        });
+
+        await this.auditService.record(
+          {
+            entityType: "PriceList",
+            entityId: clone.id,
+            action: "price_list.cloned",
+            actorUserId: user.id,
+            previousState: auditState({ sourcePriceListId: source.id, name: source.name }),
+            nextState: auditState(clone),
+          },
+          tx,
+        );
+
+        return clone;
+      });
+    } catch (error) {
+      if (isUniqueConstraintError(error)) {
+        throw new ConflictException("Ya existe una lista con ese nombre");
+      }
+      throw error;
+    }
+  }
 
   /**
    * Índice de listas. Muchas no tienen clientes asignados y eso es normal: las
@@ -233,4 +376,8 @@ function priceSnapshot(item: {
     priceSinIva3: item.priceSinIva3,
     priceConIva3: item.priceConIva3,
   };
+}
+
+function isUniqueConstraintError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 }
