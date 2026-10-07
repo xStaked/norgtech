@@ -286,6 +286,10 @@ model User {
   sellerGoals                   SellerGoal[]
   commissionRules               CommissionRule[]
   commissions                   Commission[]
+  ownedSpecialPriceLists        SpecialPriceList[] @relation("SpecialPriceListOwner")
+  specialPriceEntries           SpecialPriceListItem[] @relation("SpecialPriceListItemOwner")
+  createdSpecialPriceRevisions SpecialPriceListRevision[] @relation("SpecialPriceRevisionCreator")
+  reviewedSpecialPriceRevisions SpecialPriceListRevision[] @relation("SpecialPriceRevisionReviewer")
   refreshTokens                 RefreshToken[]
   passwordResetTokens           PasswordResetToken[]
   notifications                 Notification[]
@@ -564,6 +568,8 @@ model Customer {
   purchaseBudget        Decimal?               @db.Decimal(14, 2)
   priceListId           String?
   priceList             PriceList?             @relation(fields: [priceListId], references: [id])
+  specialPriceMemberships SpecialPriceListCustomer[]
+  specialPriceItems       SpecialPriceListItem[] @relation("SpecialPriceListItemCustomer")
 
   @@index([companyId])
 }
@@ -639,6 +645,7 @@ model ProductPresentation {
   updatedAt  DateTime        @updatedAt
   product    Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
   priceItems PriceListItem[]
+  specialPriceItems SpecialPriceListItem[]
 
   @@unique([productId, empaque])
 }
@@ -692,6 +699,74 @@ enum PriceListStatus {
   en_revision
   aprobada
   rechazada
+}
+
+// Una lista especial pertenece a un solo usuario, pero agrupa clientes y
+// precios distintos por cliente/presentación. Las revisiones aprobadas quedan
+// como snapshot; solo una revisión por lista puede estar activa.
+model SpecialPriceList {
+  id          String                     @id @default(cuid())
+  name        String
+  ownerUserId String
+  createdAt   DateTime                   @default(now())
+  updatedAt   DateTime                   @updatedAt
+  owner       User                       @relation("SpecialPriceListOwner", fields: [ownerUserId], references: [id])
+  revisions   SpecialPriceListRevision[]
+
+  @@unique([ownerUserId, name])
+}
+
+model SpecialPriceListRevision {
+  id                  String                   @id @default(cuid())
+  specialPriceListId  String
+  revision            Int
+  status              PriceListStatus          @default(en_revision)
+  active              Boolean                  @default(false)
+  createdByUserId     String
+  reviewedByUserId    String?
+  rejectionReason     String?
+  createdAt           DateTime                 @default(now())
+  updatedAt           DateTime                 @updatedAt
+  specialPriceList    SpecialPriceList         @relation(fields: [specialPriceListId], references: [id], onDelete: Cascade)
+  createdBy           User                     @relation("SpecialPriceRevisionCreator", fields: [createdByUserId], references: [id])
+  reviewedBy          User?                    @relation("SpecialPriceRevisionReviewer", fields: [reviewedByUserId], references: [id])
+  customers           SpecialPriceListCustomer[]
+  items               SpecialPriceListItem[] @relation("SpecialPriceListRevisionItems")
+
+  @@unique([specialPriceListId, revision])
+  @@index([specialPriceListId, active])
+  @@index([status, active])
+}
+
+model SpecialPriceListCustomer {
+  revisionId String
+  customerId String
+  revision   SpecialPriceListRevision @relation(fields: [revisionId], references: [id], onDelete: Cascade)
+  customer   Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@id([revisionId, customerId])
+}
+
+// La divisa se toma siempre de Customer; el comercial no puede enviarla ni
+// modificarla. Una fila identifica el precio de una presentación para un
+// cliente específico dentro de una revisión.
+model SpecialPriceListItem {
+  id               String                  @id @default(cuid())
+  revisionId       String
+  ownerUserId      String
+  customerId       String
+  presentationId  String
+  active           Boolean                 @default(false)
+  priceSinIva      Decimal?                @db.Decimal(14, 2)
+  priceConIva      Decimal?                @db.Decimal(14, 2)
+  taxPercent       Decimal?                @db.Decimal(5, 2)
+  revision         SpecialPriceListRevision @relation("SpecialPriceListRevisionItems", fields: [revisionId], references: [id], onDelete: Cascade)
+  owner            User                    @relation("SpecialPriceListItemOwner", fields: [ownerUserId], references: [id])
+  customer         Customer                 @relation("SpecialPriceListItemCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  presentation    ProductPresentation      @relation(fields: [presentationId], references: [id], onDelete: Restrict)
+
+  @@unique([revisionId, customerId, presentationId])
+  @@index([customerId, presentationId])
 }
 
 model Quote {
