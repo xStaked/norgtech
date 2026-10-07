@@ -26,6 +26,7 @@ export class QuotesController {
   @Roles("administrador", "comercial", "director_comercial", "promotor")
   @Post("preview")
   preview(
+    @CurrentUser() user: AuthUser,
     @Body(
       new ValidationPipe({
         whitelist: true,
@@ -34,7 +35,7 @@ export class QuotesController {
     )
     dto: PreviewQuoteDto,
   ) {
-    return this.quotesService.preview(dto);
+    return this.quotesService.preview(dto, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

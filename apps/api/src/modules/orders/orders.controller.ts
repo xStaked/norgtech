@@ -33,6 +33,7 @@ export class OrdersController {
   @Roles("administrador", "comercial", "director_comercial", "logistica", "promotor")
   @Post("preview")
   preview(
+    @CurrentUser() user: AuthUser,
     @Body(
       new ValidationPipe({
         whitelist: true,
@@ -41,7 +42,7 @@ export class OrdersController {
     )
     dto: PreviewOrderDto,
   ) {
-    return this.ordersService.preview(dto);
+    return this.ordersService.preview(dto, user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

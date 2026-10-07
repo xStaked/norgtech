@@ -76,9 +76,16 @@ export class OrdersService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async preview(dto: PreviewOrderDto) {
+  async preview(dto: PreviewOrderDto, user?: AuthUser) {
     const customer = await this.loadCustomerOrThrow(dto.customerId);
-    return this.pricingService.buildPreview(customer, dto.items, "order");
+    const sellerUserId = user
+      ? await this.resolveSellerUserId(
+          user,
+          { sellerUserId: undefined } as unknown as CreateOrderDto,
+          customer,
+        )
+      : null;
+    return this.pricingService.buildPreview(customer, dto.items, "order", sellerUserId ?? user?.id ?? null);
   }
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -128,7 +135,7 @@ export class OrdersService {
     // Price first, then gate: for catalog lines priceLines() derives unitPrice
     // from product.basePrice and ignores dto's unitPrice, so checking credit
     // against the DTO would guard a number the client controls.
-    const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "order", sellerUserId);
 
     // Se valida contra el TOTAL (con IVA), no el subtotal: es lo que termina en
     // invoice.totalAmount y lo que la exposicion suma (order.total). Validar el
@@ -707,7 +714,7 @@ export class OrdersService {
       }
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        select: { customerId: true },
+        select: { customerId: true, sellerUserId: true },
       });
       if (!order) {
         throw new NotFoundException("Order not found");
@@ -736,6 +743,7 @@ export class OrdersService {
           },
         ],
         "order",
+        order.sellerUserId,
       );
       const line = pricing.rawItems[0];
 

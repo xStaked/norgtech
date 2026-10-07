@@ -18,9 +18,9 @@ export class QuotesService {
     private readonly pricingService: PricingService,
   ) {}
 
-  async preview(dto: PreviewQuoteDto) {
+  async preview(dto: PreviewQuoteDto, user?: AuthUser) {
     const customer = await this.loadCustomerOrThrow(dto.customerId);
-    return this.pricingService.buildPreview(customer, dto.items, "quote");
+    return this.pricingService.buildPreview(customer, dto.items, "quote", user?.id ?? null);
   }
 
   async create(user: AuthUser, dto: CreateQuoteDto) {
@@ -41,7 +41,7 @@ export class QuotesService {
       await this.assertOpportunityExists(opportunityId);
     }
 
-    const pricing = await this.pricingService.priceLines(customer, dto.items, "quote");
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "quote", user.id);
 
     const itemsWithSnapshot = pricing.rawItems.map((line, index) => ({
       productId: line.productId,
