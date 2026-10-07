@@ -1,4 +1,4 @@
-/** Aging de deudores: agrupa saldos por cliente en buckets por dias de mora. */
+/** Aging de deudores: agrupa saldos por cliente y moneda en buckets por dias de mora. */
 
 export interface AgingInvoice {
   id: string;
@@ -10,11 +10,13 @@ export interface AgingInvoice {
   dueDate: string;
   status: string;
   invoiceNumber: string;
+  currency?: string | null;
 }
 
 export interface DebtorRow {
   customerId: string;
   customerName: string;
+  currency: string;
   balance: number;
   current: number;
   d1_30: number;
@@ -43,11 +45,14 @@ export function bucketAging(invoices: AgingInvoice[], asOfISO: string): DebtorRo
       Number(inv.creditNoteTotal ?? 0);
     if (balance <= 0) continue;
 
-    let row = byCustomer.get(inv.customerId);
+    const currency = inv.currency ?? "COP";
+    const key = `${inv.customerId}|${currency}`;
+    let row = byCustomer.get(key);
     if (!row) {
       row = {
         customerId: inv.customerId,
         customerName: inv.customerName,
+        currency,
         balance: 0,
         current: 0,
         d1_30: 0,
@@ -56,7 +61,7 @@ export function bucketAging(invoices: AgingInvoice[], asOfISO: string): DebtorRo
         d90plus: 0,
         oldestDueDate: inv.dueDate,
       };
-      byCustomer.set(inv.customerId, row);
+      byCustomer.set(key, row);
     }
 
     row.balance += balance;
@@ -70,5 +75,5 @@ export function bucketAging(invoices: AgingInvoice[], asOfISO: string): DebtorRo
     else row.d90plus += balance;
   }
 
-  return [...byCustomer.values()];
+  return [...byCustomer.values()].sort((a, b) => b.balance - a.balance);
 }

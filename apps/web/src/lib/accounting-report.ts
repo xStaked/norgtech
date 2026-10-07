@@ -14,6 +14,7 @@ export interface AccountingInvoice {
   totalAmount: string | number;
   creditNoteTotal?: string | number | null;
   payments?: AccountingPayment[] | null;
+  currency?: string | null;
 }
 
 export interface TaxBucket {

@@ -76,9 +76,16 @@ export class OrdersService {
     private readonly notifications: NotificationsService,
   ) {}
 
-  async preview(dto: PreviewOrderDto) {
+  async preview(dto: PreviewOrderDto, user?: AuthUser) {
     const customer = await this.loadCustomerOrThrow(dto.customerId);
-    return this.pricingService.buildPreview(customer, dto.items, "order");
+    const sellerUserId = user
+      ? await this.resolveSellerUserId(
+          user,
+          { sellerUserId: undefined } as unknown as CreateOrderDto,
+          customer,
+        )
+      : null;
+    return this.pricingService.buildPreview(customer, dto.items, "order", sellerUserId ?? user?.id ?? null);
   }
 
   async create(user: AuthUser, dto: CreateOrderDto) {
@@ -128,7 +135,43 @@ export class OrdersService {
     // Price first, then gate: for catalog lines priceLines() derives unitPrice
     // from product.basePrice and ignores dto's unitPrice, so checking credit
     // against the DTO would guard a number the client controls.
-    const pricing = await this.pricingService.priceLines(customer, dto.items, "order");
+    const pricing = await this.pricingService.priceLines(customer, dto.items, "order", sellerUserId);
+
+    if (dto.sourceQuoteId) {
+      const sourceQuote = await this.prisma.quote.findUnique({
+        where: { id: dto.sourceQuoteId },
+        include: { items: true },
+      });
+      if (sourceQuote && sourceQuote.customerId === dto.customerId && Array.isArray((sourceQuote as { items?: unknown }).items)) {
+        const byProduct = new Map(
+          sourceQuote.items.map((qi) => [`${qi.productId ?? "custom"}|${qi.presentationSnapshot ?? ""}`, qi]),
+        );
+        for (let i = 0; i < pricing.rawItems.length; i += 1) {
+          const line = pricing.rawItems[i];
+          const dtoItem = dto.items[i];
+          const keyByDto = `${dtoItem.productId ?? "custom"}|${dtoItem.presentation?.trim() || line.productPresentation || ""}`;
+          const keyByLine = `${line.productId ?? "custom"}|${line.productPresentation ?? ""}`;
+          const quoted = byProduct.get(keyByDto) ?? byProduct.get(keyByLine);
+          if (quoted && line.productId && quoted.productId === line.productId) {
+            const preservedUnit = new Prisma.Decimal(quoted.unitPrice);
+            line.unitPrice = preservedUnit;
+            line.priceSource = (quoted.priceSource as unknown as typeof line.priceSource) ?? line.priceSource;
+            line.priceListId = quoted.priceListIdSnapshot ?? line.priceListId;
+            line.priceListName = quoted.priceListNameSnapshot ?? line.priceListName;
+            line.currency = quoted.currencySnapshot ?? line.currency;
+            line.productPresentation = quoted.presentationSnapshot ?? line.productPresentation;
+            line.subtotal = line.chargedQty.times(preservedUnit).toDecimalPlaces(2);
+            line.totalWithTax = line.subtotal.plus(line.taxAmount.times(line.quantity)).toDecimalPlaces(2);
+          }
+        }
+        const recomputedSubtotal = pricing.rawItems.reduce((s, l) => s.plus(l.subtotal), new Prisma.Decimal(0));
+        const recomputedTax = pricing.rawItems.reduce((s, l) => s.plus(l.taxAmount.times(l.quantity)), new Prisma.Decimal(0));
+        const recomputedTotal = pricing.rawItems.reduce((s, l) => s.plus(l.totalWithTax), new Prisma.Decimal(0));
+        pricing.subtotal = recomputedSubtotal;
+        pricing.taxAmount = recomputedTax;
+        pricing.total = recomputedTotal;
+      }
+    }
 
     // Se valida contra el TOTAL (con IVA), no el subtotal: es lo que termina en
     // invoice.totalAmount y lo que la exposicion suma (order.total). Validar el
@@ -170,6 +213,10 @@ export class OrdersService {
           subtotal: line.subtotal,
           notes: line.notes,
           needsResolution: false,
+          priceSource: line.priceSource ?? (line.priceListName ? "price_list" : "base_price"),
+          priceListIdSnapshot: line.priceListId ?? null,
+          priceListNameSnapshot: line.priceListName ?? null,
+          currencySnapshot: line.currency ?? customer.currency ?? "COP",
         };
       }
       const customProductName = item.productName?.trim() || null;
@@ -193,6 +240,10 @@ export class OrdersService {
         subtotal: line.subtotal,
         notes: line.notes,
         needsResolution: item.needsResolution ?? false,
+        priceSource: line.priceSource ?? "base_price",
+        priceListIdSnapshot: line.priceListId ?? null,
+        priceListNameSnapshot: line.priceListName ?? null,
+        currencySnapshot: line.currency ?? customer.currency ?? "COP",
       };
     });
 
@@ -226,6 +277,7 @@ export class OrdersService {
           receiverPhone: dto.receiverPhone || dto.requesterPhone || null,
           receiverRole: dto.receiverRole || dto.requesterRole || null,
           invoiceFilingPlace: dto.invoiceFilingPlace || dispatchAddressSnapshot,
+          currencySnapshot: customer.currency ?? "COP",
           approvalStatus: dto.approvalStatus || null,
           approvalReason: dto.approvalReason || null,
           approvalName: dto.approvalName || null,
@@ -361,6 +413,7 @@ export class OrdersService {
               totalPaid: 0,
               status: InvoiceStatus.emitida,
               notes: `Generada desde pedido ${order.orderNumber ?? order.id}`,
+              currencySnapshot: order.currencySnapshot ?? order.customer.currency ?? "COP",
               createdBy: user.id,
               updatedBy: user.id,
             },
@@ -707,7 +760,7 @@ export class OrdersService {
       }
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        select: { customerId: true },
+        select: { customerId: true, sellerUserId: true },
       });
       if (!order) {
         throw new NotFoundException("Order not found");
@@ -736,6 +789,7 @@ export class OrdersService {
           },
         ],
         "order",
+        order.sellerUserId,
       );
       const line = pricing.rawItems[0];
 

@@ -13,17 +13,19 @@ export interface PricingCustomer {
   segment: PricingCustomerSegment | null;
   /** Lista de precios negociada. Si existe, gana sobre basePrice + descuento. */
   priceListId?: string | null;
+  currency?: string | null;
 }
 
 /**
  * De dónde salió el precio:
  * - `price_list`: precio negociado del cliente. Es final, no lleva descuento.
+ * - `special_price_list`: precio especial aprobado del comercial propietario.
  * - `base_price`: no hay lista (o el producto no está en ella) → basePrice
  *   con el descuento de segmento condicionado a la meta, como siempre.
  * - `ambiguous`: hay lista y el producto tiene varias presentaciones con
  *   precio en ella. Quien cotiza debe elegir cuál; `options` las trae.
  */
-export type PriceSource = "price_list" | "base_price" | "ambiguous";
+export type PriceSource = "price_list" | "special_price_list" | "base_price" | "ambiguous";
 
 export interface PricingItemInput {
   productId?: string | null;
@@ -56,6 +58,9 @@ export interface PricedLine {
   productId: string | null;
   /** Lista de la que salió el precio; null si vino de basePrice. */
   priceListName: string | null;
+  priceListId?: string | null;
+  priceSource?: PriceSource | null;
+  currency?: string | null;
   /** Empaque cotizado, cuando el precio salió de una lista. */
   presentation: string | null;
   originalUnitPrice: number | null;

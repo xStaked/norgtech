@@ -20,11 +20,13 @@ interface DebtorsInvoiceApiItem {
   totalPaid: string | number;
   creditNoteTotal?: string | number | null;
   status: string;
+  currencySnapshot?: string | null;
 }
 
 interface DebtorTableRow {
   customerId: string;
   customerName: string;
+  currency: string;
   balance: number;
   current: number;
   d1_30: number;
@@ -41,7 +43,10 @@ const currencyFormatter = new Intl.NumberFormat("es-CO", {
   maximumFractionDigits: 0,
 });
 
-function formatCurrency(amount: number) {
+function formatCurrency(amount: number, currency: string = "COP") {
+  if (currency === "USD") {
+    return `US$ ${amount.toLocaleString("es-CO", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
   return currencyFormatter.format(amount);
 }
 
@@ -64,7 +69,7 @@ const columns: readonly DataTableColumn<DebtorTableRow>[] = [
     align: "right",
     render: (row) => (
       <strong style={{ color: row.balance > 0 ? "#ef4444" : "#22c55e" }}>
-        {formatCurrency(row.balance)}
+        {formatCurrency(row.balance, row.currency)} {row.currency}
       </strong>
     ),
   },
@@ -72,31 +77,31 @@ const columns: readonly DataTableColumn<DebtorTableRow>[] = [
     key: "current",
     header: "Vigente",
     align: "right",
-    render: (row) => formatCurrency(row.current),
+    render: (row) => formatCurrency(row.current, row.currency),
   },
   {
     key: "d1_30",
     header: "1-30",
     align: "right",
-    render: (row) => formatCurrency(row.d1_30),
+    render: (row) => formatCurrency(row.d1_30, row.currency),
   },
   {
     key: "d31_60",
     header: "31-60",
     align: "right",
-    render: (row) => formatCurrency(row.d31_60),
+    render: (row) => formatCurrency(row.d31_60, row.currency),
   },
   {
     key: "d61_90",
     header: "61-90",
     align: "right",
-    render: (row) => formatCurrency(row.d61_90),
+    render: (row) => formatCurrency(row.d61_90, row.currency),
   },
   {
     key: "d90plus",
     header: "+90",
     align: "right",
-    render: (row) => formatCurrency(row.d90plus),
+    render: (row) => formatCurrency(row.d90plus, row.currency),
   },
   {
     key: "oldestDueDate",
@@ -126,6 +131,7 @@ export default async function DebtorsPage({
     dueDate: invoice.dueDate,
     status: invoice.status,
     invoiceNumber: invoice.invoiceNumber,
+    currency: invoice.currencySnapshot ?? "COP",
   }));
 
   const rows: DebtorTableRow[] = bucketAging(agingInput, asOf)
@@ -140,11 +146,15 @@ export default async function DebtorsPage({
     match: { mora: (row) => row.mora },
   });
 
-  const totalBalance = filtered.reduce((sum, row) => sum + row.balance, 0);
-  const totalOverdue = filtered.reduce(
-    (sum, row) => sum + row.d1_30 + row.d31_60 + row.d61_90 + row.d90plus,
-    0,
-  );
+  const totalByCurrency = (pick: (row: DebtorTableRow) => number) => {
+    const acc: Record<string, number> = {};
+    for (const row of filtered) acc[row.currency] = (acc[row.currency] ?? 0) + pick(row);
+    return Object.entries(acc)
+      .map(([currency, amount]) => `${formatCurrency(amount, currency)} ${currency}`)
+      .join(" · ");
+  };
+  const totalBalance = totalByCurrency((row) => row.balance);
+  const totalOverdue = totalByCurrency((row) => row.d1_30 + row.d31_60 + row.d61_90 + row.d90plus);
 
   return (
     <div style={{ display: "grid", gap: 24 }}>
@@ -168,17 +178,12 @@ export default async function DebtorsPage({
         />
         <StatCard
           label="Saldo pendiente"
-          value={formatCurrency(rows.reduce((sum, row) => sum + row.balance, 0))}
+          value={totalByCurrency((row) => row.balance) || formatCurrency(0)}
           tone="warning"
         />
         <StatCard
           label="En mora"
-          value={formatCurrency(
-            rows.reduce(
-              (sum, row) => sum + row.d1_30 + row.d31_60 + row.d61_90 + row.d90plus,
-              0,
-            ),
-          )}
+          value={totalByCurrency((row) => row.d1_30 + row.d31_60 + row.d61_90 + row.d90plus) || formatCurrency(0)}
           tone="danger"
         />
       </div>
@@ -198,7 +203,7 @@ export default async function DebtorsPage({
         shown={filtered.length}
         total={rows.length}
         noun="deudores"
-        summaryExtra={`Saldo pendiente: ${formatCurrency(totalBalance)} · En mora: ${formatCurrency(totalOverdue)}`}
+        summaryExtra={`Saldo pendiente: ${totalBalance} · En mora: ${totalOverdue}`}
       />
 
       <SectionCard

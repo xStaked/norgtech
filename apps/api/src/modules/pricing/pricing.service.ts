@@ -56,6 +56,9 @@ interface RawPricedLine {
   productPresentation?: string | null;
   /** Lista de la que salió el precio, o null si vino de basePrice. */
   priceListName?: string | null;
+  priceListId?: string | null;
+  priceSource?: PriceSource;
+  currency?: string | null;
 }
 
 export interface PriceLinesResult {
@@ -194,6 +197,40 @@ export class PricingService {
   }
 
   /**
+   * Precio especial aprobado para este vendedor, cliente y presentación.
+   * Solo aplica si la revisión está aprobada y activa y la lista está activa.
+   * Sin seller, sin coincidencia o con revisión pendiente → null (fallback general).
+   */
+  private async resolveSpecialPrice(
+    sellerUserId: string | null | undefined,
+    customerId: string,
+    hint: { presentationId?: string | null; productId?: string | null },
+  ) {
+    if (!sellerUserId || !hint.presentationId) {
+      return null;
+    }
+    const match = await this.prisma.specialPriceListItem.findFirst({
+      where: {
+        ownerUserId: sellerUserId,
+        customerId,
+        presentationId: hint.presentationId,
+        active: true,
+        revision: { status: "aprobada", active: true },
+        // La lista padre también debe seguir activa; si se desactiva, el precio deja de aplicar.
+      },
+      include: {
+        customer: { select: { currency: true } },
+        presentation: { select: { empaque: true, form: true, productId: true } },
+        revision: { select: { specialPriceList: { select: { id: true, name: true, active: true } } } },
+      },
+    });
+    if (!match) return null;
+    if (!match.revision.specialPriceList.active) return null;
+    if (hint.productId && match.presentation.productId !== hint.productId) return null;
+    return match;
+  }
+
+  /**
    * Ítems de la lista del cliente para este producto, reducidos por lo que se
    * sepa de la presentación. Escalera, de más a menos explícito:
    *
@@ -288,6 +325,7 @@ export class PricingService {
     customer: PricingCustomer,
     items: PricingItemInput[],
     mode: PricingMode,
+    sellerUserId?: string | null,
   ): Promise<PriceLinesResult> {
     const { discountPercent: effectiveDiscount, meetsGoal, salesYTD, goalThreshold } =
       await this.resolveSegmentDiscount(customer);
@@ -318,6 +356,46 @@ export class PricingService {
           });
           if (!product) {
             throw new NotFoundException(`Product ${item.productId} not found`);
+          }
+
+          const special = await this.resolveSpecialPrice(sellerUserId, customer.id, {
+            presentationId: item.presentationId,
+            productId: item.productId,
+          });
+
+          if (special && special.priceSinIva !== null) {
+            const basePrice = new Prisma.Decimal(special.priceSinIva);
+            const unitPriceRounded = basePrice.toDecimalPlaces(2);
+            const lineTax =
+              mode === "order" && item.taxPercent === undefined && special.taxPercent !== null
+                ? new Prisma.Decimal(special.taxPercent).toDecimalPlaces(2)
+                : taxPercent;
+            const taxAmount = unitPriceRounded.times(lineTax).dividedBy(100).toDecimalPlaces(2);
+            const subtotal = chargedQty.times(unitPriceRounded).toDecimalPlaces(2);
+            const totalWithTax = subtotal.plus(taxAmount.times(quantity)).toDecimalPlaces(2);
+            return {
+              productId: item.productId,
+              productSnapshotName: product.name,
+              productSnapshotSku: product.sku,
+              unit: product.unit,
+              quantity: item.quantity,
+              originalUnitPrice: basePrice,
+              discountPercent: new Prisma.Decimal(0),
+              bonusPercent: bonus,
+              bonusQty,
+              chargedQty,
+              unitPrice: unitPriceRounded,
+              taxPercent: lineTax,
+              taxAmount,
+              subtotal,
+              totalWithTax,
+              notes: item.notes,
+              productPresentation: special.presentation.empaque ?? product.presentation ?? null,
+              priceListName: special.revision.specialPriceList.name,
+              priceListId: special.revision.specialPriceList.id,
+              priceSource: "special_price_list" as PriceSource,
+              currency: special.customer.currency,
+            };
           }
 
           const listItem = await this.requireSingleListMatch(customer, product, item);
@@ -370,6 +448,9 @@ export class PricingService {
             productPresentation:
               listItem?.presentation.empaque ?? product.presentation ?? null,
             priceListName: listItem?.priceList.name ?? null,
+            priceListId: listItem ? customer.priceListId ?? null : null,
+            priceSource: (listItem ? "price_list" : "base_price") as PriceSource,
+            currency: customer.currency ?? listItem?.priceList.currency ?? null,
           };
         }
 
@@ -433,12 +514,16 @@ export class PricingService {
     customer: PricingCustomer,
     items: PricingItemInput[],
     mode: PricingMode,
+    sellerUserId?: string | null,
   ): Promise<PricingPreview> {
-    const result = await this.priceLines(customer, items, mode);
+    const result = await this.priceLines(customer, items, mode, sellerUserId);
 
     const lines: PricedLine[] = result.rawItems.map((line) => ({
       productId: line.productId,
       priceListName: line.priceListName ?? null,
+      priceListId: line.priceListId ?? null,
+      priceSource: line.priceSource ?? null,
+      currency: line.currency ?? null,
       presentation: line.productPresentation ?? null,
       originalUnitPrice: line.originalUnitPrice ? line.originalUnitPrice.toNumber() : null,
       discountPercent: line.discountPercent ? line.discountPercent.toNumber() : 0,

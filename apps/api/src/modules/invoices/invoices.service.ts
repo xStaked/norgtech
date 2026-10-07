@@ -116,6 +116,7 @@ export class InvoicesService {
               totalPaid: 0,
               status: "emitida",
               notes: dto.notes || null,
+              currencySnapshot: customer.currency ?? "COP",
               createdBy: user.id,
               updatedBy: user.id,
             },

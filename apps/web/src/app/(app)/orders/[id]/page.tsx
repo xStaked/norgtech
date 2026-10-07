@@ -39,6 +39,9 @@ interface OrderItem {
   taxAmount: string;
   totalWithTax: string;
   notes: string | null;
+  priceSource?: string | null;
+  priceListNameSnapshot?: string | null;
+  currencySnapshot?: string | null;
 }
 
 interface BillingRequest {
@@ -102,7 +105,14 @@ interface Order {
   billingRequests: BillingRequest[];
   assignedLogisticsUser: LogisticsUser | null;
   seller: { id: string; name: string } | null;
+  currencySnapshot?: string | null;
   createdAt: string;
+}
+
+function priceSourceLabel(source?: string | null): string {
+  if (source === "special_price_list") return "Precio especial";
+  if (source === "price_list") return "Lista general";
+  return "Precio base";
 }
 
 const statusLabels: Record<string, string> = {
@@ -269,6 +279,10 @@ export default async function OrderDetailPage({
                         {item.presentationSnapshot || item.presentation || item.unit}
                       </div>
                     )}
+                    <div className="mt-0.5 text-[11px] text-[#6b7787]">
+                      {priceSourceLabel(item.priceSource)}
+                      {item.priceListNameSnapshot ? ` · ${item.priceListNameSnapshot}` : ""}
+                    </div>
                     {item.notes && (
                       <div className="mt-0.5 text-[11.5px] text-[#9aa3b1]">{item.notes}</div>
                     )}
@@ -277,9 +291,9 @@ export default async function OrderDetailPage({
                   <span className="text-center tabular-nums">
                     {Number(item.quantity).toLocaleString("es-CO")}
                   </span>
-                  <span className="text-right tabular-nums">{money(Number(item.unitPrice))}</span>
+                  <span className="text-right tabular-nums">{money(Number(item.unitPrice), item.currencySnapshot ?? order.currencySnapshot ?? "COP")}</span>
                   <span className="text-right font-semibold tabular-nums text-[#0c2c44]">
-                    {money(Number(item.subtotal))}
+                    {money(Number(item.subtotal), item.currencySnapshot ?? order.currencySnapshot ?? "COP")}
                   </span>
                 </div>
               ))}
@@ -287,12 +301,12 @@ export default async function OrderDetailPage({
 
             {/* totals */}
             <div className="mt-3 ml-auto w-full max-w-[260px] text-[12.5px]">
-              <SummaryLine label="Subtotal" value={money(Number(order.subtotal))} />
-              <SummaryLine label="IVA" value={money(itemTaxTotal)} />
+              <SummaryLine label={`Subtotal (${order.currencySnapshot ?? "COP"})`} value={money(Number(order.subtotal), order.currencySnapshot ?? "COP")} />
+              <SummaryLine label="IVA" value={money(itemTaxTotal, order.currencySnapshot ?? "COP")} />
               <div className="mt-1.5 flex items-center justify-between border-t border-[#f0f2f6] pt-2">
                 <span className="font-semibold text-[#0c2c44]">Total</span>
                 <span className="text-[16px] font-extrabold tabular-nums text-[#167c4a]">
-                  {money(totalWithTax || Number(order.total))}
+                  {money(totalWithTax || Number(order.total), order.currencySnapshot ?? "COP")}
                 </span>
               </div>
             </div>
@@ -559,9 +573,10 @@ function SummaryLine({ label, value }: { label: string; value: string }) {
   );
 }
 
-function money(value: number) {
-  return `$${value.toLocaleString("es-CO", {
+function money(value: number, currency: string | null = "COP") {
+  const amount = value.toLocaleString("es-CO", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 2,
-  })}`;
+  });
+  return currency === "USD" ? `US$ ${amount}` : `$${amount}`;
 }

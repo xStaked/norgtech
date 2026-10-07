@@ -48,6 +48,8 @@ const roleRestrictedRoutes: readonly RoleRestrictedRoute[] = [
   { prefix: "/zones", isAllowed: (role) => canAccess(role, "/zones") },
   { prefix: "/analytics", isAllowed: (role) => canAccess(role, "/analytics") },
   { prefix: "/reports", isAllowed: (role) => canAccess(role, "/reports") },
+  { prefix: "/price-lists/special", isAllowed: (role) => isSpecialPriceListRole(role) },
+  { prefix: "/price-lists/new", isAllowed: (role) => isPriceListManager(role) },
   { prefix: "/price-lists", isAllowed: (role) => canAccess(role, "/price-lists") },
   { prefix: "/users", isAllowed: (role) => canAccess(role, "/users") },
   // ---------------------------------------------------------------------------
@@ -83,6 +85,26 @@ export function matchesPrefix(pathname: string, prefix: string) {
   return pathname === prefix || pathname.startsWith(`${prefix}/`);
 }
 
+function isPriceListManager(role: UserRole | null): boolean {
+  return role === "administrador" || role === "director_comercial" || role === "promotor";
+}
+
+function isSpecialPriceListRole(role: UserRole | null): boolean {
+  return (
+    role === "administrador" ||
+    role === "director_comercial" ||
+    role === "promotor" ||
+    role === "comercial"
+  );
+}
+
+function isGeneralPriceListEdit(pathname: string): boolean {
+  if (!pathname.startsWith("/price-lists/") || pathname.startsWith("/price-lists/special")) {
+    return false;
+  }
+  return /^\/price-lists\/[^/]+\/edit$/.test(pathname);
+}
+
 /**
  * Pure decision function for the role-based route guard.
  * Returns the path to redirect to, or null if the request should proceed.
@@ -98,6 +120,10 @@ export function resolveRoleRedirect(pathname: string, role: UserRole | null): st
 
   if (!role) {
     return "/login";
+  }
+
+  if (isGeneralPriceListEdit(pathname) && !isPriceListManager(role)) {
+    return "/dashboard?forbidden=1";
   }
 
   const restriction = roleRestrictedRoutes.find((route) => matchesPrefix(pathname, route.prefix));

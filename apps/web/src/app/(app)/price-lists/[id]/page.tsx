@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ButtonLink } from "@/components/ui/button-link";
+import { PriceListActions } from "@/components/price-lists/price-list-actions";
+import { PriceListItemForm } from "@/components/price-lists/price-list-item-form";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DetailSection } from "@/components/ui/detail-section";
@@ -9,6 +11,7 @@ import { SectionCard } from "@/components/ui/section-card";
 import { StatusBadge } from "@/components/ui/status-badge";
 import type { CrmStatusTone } from "@/components/ui/theme";
 import { apiFetch } from "@/lib/api.server";
+import { getCurrentUser } from "@/lib/auth.server";
 import {
   PRICE_LIST_KIND_LABEL,
   formatPrice,
@@ -70,11 +73,25 @@ export default async function PriceListDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const response = await apiFetch(`/price-lists/${id}`);
+  const [response, currentUser, productsRes] = await Promise.all([
+    apiFetch(`/price-lists/${id}`),
+    getCurrentUser(),
+    apiFetch("/products"),
+  ]);
 
   if (!response.ok) {
     notFound();
   }
+  const role = currentUser?.role ?? null;
+  const canManage = role === "administrador" || role === "director_comercial" || role === "promotor";
+  const products = (productsRes.ok ? await productsRes.json().catch(() => []) : []) as Array<{
+    id: string;
+    name: string;
+    presentations?: Array<{ id: string; empaque: string }>;
+  }>;
+  const presentationOptions = products.flatMap((p) =>
+    (p.presentations ?? []).map((pres) => ({ id: pres.id, empaque: pres.empaque, productName: p.name })),
+  );
 
   // El historial vive en AuditLog (`price_list.item_upserted`). Solo
   // admin/dirección lo pueden leer: para el resto la página sigue igual.
@@ -159,11 +176,18 @@ export default async function PriceListDetailPage({
       <PageHeader
         eyebrow="Catálogo · Lista de precios"
         title={title}
-        description={`${PRICE_LIST_KIND_LABEL[list.kind] ?? list.kind} · ${priceListContext(listRef)} · ${rows.length.toLocaleString("es-CO")} ítems. Solo lectura.`}
+        description={`${PRICE_LIST_KIND_LABEL[list.kind] ?? list.kind} · ${priceListContext(listRef)} · ${rows.length.toLocaleString("es-CO")} ítems.`}
         actions={
-          <ButtonLink href="/price-lists" variant="secondary">
-            Volver a listas
-          </ButtonLink>
+          <>
+            {canManage ? (
+              <ButtonLink href={`/price-lists/${list.id}/edit`} variant="secondary">
+                Editar lista
+              </ButtonLink>
+            ) : null}
+            <ButtonLink href="/price-lists" variant="secondary">
+              Volver a listas
+            </ButtonLink>
+          </>
         }
       />
 
@@ -198,7 +222,8 @@ export default async function PriceListDetailPage({
 
       <SectionCard
         title="Precios por presentación"
-        description="Precios tal cual la importación oficial. Para corregir un precio, edita el producto."
+        description="Precios vigentes de la lista. Agrega o corrige precios desde aquí."
+        actions={canManage ? <PriceListItemForm listId={list.id} presentations={presentationOptions} /> : undefined}
       >
         <DataTable
           columns={columns}
@@ -212,6 +237,12 @@ export default async function PriceListDetailPage({
           }
         />
       </SectionCard>
+
+      {canManage ? (
+        <SectionCard title="Administración" description="Clonar crea una copia inactiva sin clientes. Desactivar conserva precios e historial.">
+          <PriceListActions listId={list.id} listName={list.name} active={list.active} />
+        </SectionCard>
+      ) : null}
 
       <p style={{ fontSize: 12, color: "#6b7787", margin: 0 }}>
         <StatusBadge tone={kindTones[list.kind]}>{PRICE_LIST_KIND_LABEL[list.kind] ?? list.kind}</StatusBadge>{" "}
