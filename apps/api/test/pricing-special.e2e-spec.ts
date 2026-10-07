@@ -4,6 +4,7 @@ import { UserRole } from "@prisma/client";
 import request from "supertest";
 import { AppModule } from "../src/app.module";
 import { PrismaService } from "../src/prisma/prisma.service";
+import { CreditService } from "../src/modules/credit/credit.service";
 import { findMockUserByEmail, loginAs, refreshTokenStub } from "./helpers/login-as";
 
 describe("Seller-scoped special pricing", () => {
@@ -14,6 +15,12 @@ describe("Seller-scoped special pricing", () => {
   const customerId = "customer-special-1";
   const productId = "product-special-1";
   const presentationId = "pres-special-1";
+  const companyId = "company-special-1";
+
+  let specialSinIva = 80;
+  const storedQuotes = new Map<string, Record<string, any>>();
+  let nextQuoteId = 1;
+  let nextOrderId = 1;
 
   beforeAll(async () => {
     const prismaStub: Record<string, any> = {
@@ -29,7 +36,7 @@ describe("Seller-scoped special pricing", () => {
       customer: {
         findUnique: async ({ where: { id } }: { where: { id: string } }) =>
           id === customerId
-            ? { id, priceListId: "general-list-1", currency: "COP", segment: null, assignedToUserId: ownerId }
+            ? { id, priceListId: "general-list-1", currency: "COP", segment: null, assignedToUserId: ownerId, companyId, displayName: "Cliente especial", taxId: null, address: null }
             : null,
       },
       product: {
@@ -38,7 +45,11 @@ describe("Seller-scoped special pricing", () => {
             ? { id, name: "Producto especial", sku: "SKU-SP-1", unit: "bolsa", basePrice: 120, presentation: null }
             : null,
       },
-      order: { aggregate: async () => ({ _sum: { total: 0 } }) },
+      order: { aggregate: async () => ({ _sum: { total: 0 } }), findMany: async () => [] },
+      company: {
+        findUnique: async ({ where: { id } }: { where: { id: string } }) =>
+          id === companyId ? { id, name: "Norgtech", prefix: "NOR", isActive: true } : null,
+      },
       priceListItem: {
         findMany: async () => [
           {
@@ -58,7 +69,7 @@ describe("Seller-scoped special pricing", () => {
           if (where.customerId !== customerId || where.presentationId !== presentationId) return null;
           if (!where.active) return null;
           return {
-            priceSinIva: 80,
+            priceSinIva: specialSinIva,
             priceConIva: 84,
             taxPercent: 5,
             customer: { currency: "COP" },
@@ -67,13 +78,27 @@ describe("Seller-scoped special pricing", () => {
           };
         },
       },
-      quote: { create: async () => { throw new Error("must run in tx"); } },
+      quote: {
+        create: async () => { throw new Error("must run in tx"); },
+        findUnique: async ({ where: { id } }: { where: { id: string } }) => storedQuotes.get(id) ?? null,
+      },
       auditLog: { create: async ({ data }: { data: Record<string, unknown> }) => ({ id: "audit-1", ...data }) },
     };
     prismaStub.$transaction = async (cb: (tx: any) => Promise<unknown>) =>
       cb({
         quote: {
-          create: async ({ data }: { data: Record<string, any> }) => ({ id: "quote-1", ...data, items: data.items.create }),
+          create: async ({ data }: { data: Record<string, any> }) => {
+            const id = `quote-${nextQuoteId++}`;
+            const created = { id, ...data, items: (data.items.create as Array<Record<string, any>>).map((item, i) => ({ id: `qi-${id}-${i}`, ...item })) };
+            storedQuotes.set(id, created);
+            return created;
+          },
+        },
+        order: {
+          create: async ({ data }: { data: Record<string, any> }) => {
+            const id = `order-${nextOrderId++}`;
+            return { id, status: "recibido", ...data, items: (data.items.create as Array<Record<string, any>>).map((item, i) => ({ id: `oi-${id}-${i}`, ...item })) };
+          },
         },
         auditLog: prismaStub.auditLog,
       });
@@ -81,6 +106,8 @@ describe("Seller-scoped special pricing", () => {
     const moduleRef: TestingModule = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(PrismaService)
       .useValue(prismaStub)
+      .overrideProvider(CreditService)
+      .useValue({ assertCreditLimit: async () => undefined })
       .compile();
     app = moduleRef.createNestApplication();
     await app.init();
@@ -98,7 +125,7 @@ describe("Seller-scoped special pricing", () => {
       .send({ customerId, items: [{ productId, presentationId, quantity: 2, unitPrice: 0 }] })
       .expect(201);
     const [line] = res.body.lines;
-    expect(line.unitPrice).toBe(80);
+    expect(line.unitPrice).toBe(specialSinIva);
     expect(line.priceSource).toBe("special_price_list");
     expect(line.priceListName).toBe("Especial VIOS");
   });
@@ -129,12 +156,39 @@ describe("Seller-scoped special pricing", () => {
       .send(payload)
       .expect(201);
     expect(preview.body.total).toBe(Number(created.body.total));
-    expect(preview.body.lines[0].unitPrice).toBe(80);
+    expect(preview.body.lines[0].unitPrice).toBe(specialSinIva);
     expect(created.body.currencySnapshot).toBe("COP");
     const [item] = created.body.items;
     expect(item.priceSource).toBe("special_price_list");
     expect(item.priceListNameSnapshot).toBe("Especial VIOS");
     expect(item.currencySnapshot).toBe("COP");
-    expect(Number(item.unitPrice)).toBe(80);
+    expect(Number(item.unitPrice)).toBe(specialSinIva);
+  });
+
+  it("order created from quote preserves its approved unit price after list update", async () => {
+    const token = await loginAs(app, UserRole.comercial);
+    const payload = { customerId, items: [{ productId, presentationId, quantity: 1, unitPrice: 0 }] };
+    const quoted = await request(app.getHttpServer())
+      .post("/quotes")
+      .set("Authorization", `Bearer ${token}`)
+      .send(payload)
+      .expect(201);
+    const approvedPrice = Number(quoted.body.items[0].unitPrice);
+
+    specialSinIva = approvedPrice + 10;
+
+    const ordered = await request(app.getHttpServer())
+      .post("/orders")
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        customerId,
+        companyId,
+        sourceQuoteId: quoted.body.id,
+        items: [{ productId, presentationId, quantity: 1, unitPrice: 0 }],
+      })
+      .expect(201);
+    expect(Number(ordered.body.items[0].unitPrice)).toBe(approvedPrice);
+    expect(ordered.body.items[0].priceSource).toBe("special_price_list");
+    specialSinIva = 80;
   });
 });
