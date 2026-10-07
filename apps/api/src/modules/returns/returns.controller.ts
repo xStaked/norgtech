@@ -22,6 +22,8 @@ const returnRoles = [
   "director_comercial",
   "facturacion",
   "comercial",
+  // Plan rol-promotor: gestiona devoluciones como admin.
+  "promotor",
 ] as const;
 
 const validationPipe = new ValidationPipe({

@@ -29,7 +29,8 @@ const listQueryPipe = new ValidationPipe({ transform: true, whitelist: true });
 
 @Controller("users")
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles("administrador")
+// Plan rol-promotor: el promotor gestiona usuarios como admin.
+@Roles("administrador", "promotor")
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
@@ -48,6 +49,7 @@ export class UsersController {
    */
   // tecnico y facturacion se suman por el filtro "Vendedor" del listado de
   // clientes: ven GET /customers, asi que necesitan la lista para filtrarla.
+  // El promotor tambien: es vendedor elegible (SELLER_ROLES) y crea pedidos.
   @Roles(
     "administrador",
     "comercial",
@@ -55,6 +57,7 @@ export class UsersController {
     "logistica",
     "tecnico",
     "facturacion",
+    "promotor",
   )
   @Get("sellers")
   findSellers() {
@@ -66,7 +69,7 @@ export class UsersController {
    * roles que `PATCH /orders/:id/logistics`, quien edita elige a quien atiende.
    * Tambien antes de cualquier @Get(":id").
    */
-  @Roles("administrador", "logistica")
+  @Roles("administrador", "logistica", "promotor")
   @Get("logistics")
   findLogisticsUsers() {
     return this.usersService.findLogisticsUsers();

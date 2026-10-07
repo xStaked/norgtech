@@ -9,7 +9,7 @@ export class AuditController {
   constructor(private readonly auditService: AuditService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Get()
   findMany(
     @Query("entityType") entityType?: string,

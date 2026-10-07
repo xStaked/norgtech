@@ -23,7 +23,7 @@ export class QuotesController {
   constructor(private readonly quotesService: QuotesService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial")
+  @Roles("administrador", "comercial", "director_comercial", "promotor")
   @Post("preview")
   preview(
     @Body(
@@ -38,7 +38,7 @@ export class QuotesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial")
+  @Roles("administrador", "comercial", "director_comercial", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -54,21 +54,21 @@ export class QuotesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "facturacion")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "promotor")
   @Get()
   findAll(@CurrentUser() user: AuthUser) {
     return this.quotesService.findAll(user);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "facturacion")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "promotor")
   @Get(":id")
   findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.quotesService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial")
+  @Roles("administrador", "comercial", "director_comercial", "promotor")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -85,7 +85,7 @@ export class QuotesController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial")
+  @Roles("administrador", "comercial", "director_comercial", "promotor")
   @Post(":id/billing-request")
   createBillingRequest(
     @CurrentUser() user: AuthUser,

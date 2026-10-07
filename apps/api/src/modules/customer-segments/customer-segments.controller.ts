@@ -25,7 +25,7 @@ export class CustomerSegmentsController {
   ) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -52,6 +52,7 @@ export class CustomerSegmentsController {
     "tecnico",
     "facturacion",
     "logistica",
+    "promotor",
   )
   @Get()
   findAll() {
@@ -59,14 +60,14 @@ export class CustomerSegmentsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.customerSegmentsService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Patch(":id")
   update(
     @CurrentUser() user: AuthUser,
@@ -83,7 +84,7 @@ export class CustomerSegmentsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Delete(":id")
   remove(@Param("id") id: string) {
     return this.customerSegmentsService.remove(id);

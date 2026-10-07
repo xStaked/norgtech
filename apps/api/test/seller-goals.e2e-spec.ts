@@ -54,6 +54,18 @@ describe("SellerGoals", () => {
       active: true,
     },
     {
+      // Rol promotor (plan rol-promotor, Task 2): usuario que inició
+      // sesión para probar que lee SOLO sus metas. Distinto de
+      // "other-seller-id", el vendedor ajeno cuyas metas debe
+      // ver denegadas (403).
+      id: "promotor-user-id",
+      name: "Promotor",
+      email: "promotor@norgtech.local",
+      passwordHash,
+      role: UserRole.promotor,
+      active: true,
+    },
+    {
       id: "inactive-seller-id",
       name: "Inactive Seller",
       email: "inactive-seller@norgtech.local",
@@ -848,6 +860,101 @@ describe("SellerGoals", () => {
 
       expect(response.body.periodType).toBe("mensual");
       expect(response.body.periodValue).toBe("2026-07");
+    });
+  });
+
+  // Plan rol-promotor (Task 2): el promotor entra a la lectura de
+  // metas, pero el service (`ensureCanRead`) solo le deja ver las
+  // SUYAS. La escritura (create/update/delete) sigue siendo
+  // admin+director: WRITE_ROLES NO incluye a promotor.
+  describe("promotor role (plan rol-promotor)", () => {
+    let promotorToken: string;
+
+    beforeAll(async () => {
+      const login = await request(globalThis.__APP__)
+        .post("/auth/login")
+        .send({ email: "promotor@norgtech.local", password: "Admin123*" })
+        .expect(200);
+      promotorToken = login.body.accessToken;
+    });
+
+    it("reads her own seller goals", async () => {
+      await request(globalThis.__APP__)
+        .post("/users/promotor-user-id/seller-goals")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          periodType: "mensual",
+          periodValue: "2026-06",
+          targetAmount: 100000000,
+        })
+        .expect(201);
+
+      const response = await request(globalThis.__APP__)
+        .get("/users/promotor-user-id/seller-goals")
+        .set("Authorization", `Bearer ${promotorToken}`)
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ userId: "promotor-user-id" }),
+        ]),
+      );
+    });
+
+    it("is forbidden from reading another seller's goals", async () => {
+      await request(globalThis.__APP__)
+        .get("/users/other-seller-id/seller-goals")
+        .set("Authorization", `Bearer ${promotorToken}`)
+        .expect(403);
+    });
+
+    it("reads her own goal progress", async () => {
+      await request(globalThis.__APP__)
+        .post("/users/promotor-user-id/seller-goals")
+        .set("Authorization", `Bearer ${globalThis.__ADMIN_TOKEN__}`)
+        .send({
+          periodType: "mensual",
+          periodValue: "2026-06",
+          targetAmount: 100000000,
+        })
+        .expect(201);
+
+      const response = await request(globalThis.__APP__)
+        .get(
+          "/users/promotor-user-id/seller-goals/progress?periodType=mensual&periodValue=2026-06",
+        )
+        .set("Authorization", `Bearer ${promotorToken}`)
+        .expect(200);
+
+      expect(response.body.userId).toBe("promotor-user-id");
+    });
+
+    it("is forbidden from another seller's goal progress", async () => {
+      await request(globalThis.__APP__)
+        .get(
+          "/users/other-seller-id/seller-goals/progress?periodType=mensual&periodValue=2026-06",
+        )
+        .set("Authorization", `Bearer ${promotorToken}`)
+        .expect(403);
+    });
+
+    it("cannot create seller goals (write stays admin+director)", async () => {
+      await request(globalThis.__APP__)
+        .post("/users/promotor-user-id/seller-goals")
+        .set("Authorization", `Bearer ${promotorToken}`)
+        .send({
+          periodType: "mensual",
+          periodValue: "2026-07",
+          targetAmount: 50000000,
+        })
+        .expect(403);
+    });
+
+    it("is denied the whole-team seller goals dashboard", async () => {
+      await request(globalThis.__APP__)
+        .get("/dashboard/seller-goals?periodType=mensual&periodValue=2026-06")
+        .set("Authorization", `Bearer ${promotorToken}`)
+        .expect(403);
     });
   });
 });

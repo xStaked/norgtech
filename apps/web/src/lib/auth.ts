@@ -6,6 +6,7 @@ export const SESSION_REFRESH_PATH = "/session/refresh";
 
 export type UserRole =
   | "administrador"
+  | "promotor"
   | "director_comercial"
   | "comercial"
   | "tecnico"
@@ -14,6 +15,7 @@ export type UserRole =
 
 export const USER_ROLES: readonly UserRole[] = [
   "administrador",
+  "promotor",
   "director_comercial",
   "comercial",
   "tecnico",
@@ -23,6 +25,7 @@ export const USER_ROLES: readonly UserRole[] = [
 
 export const ROLE_LABELS: Record<UserRole, string> = {
   administrador: "Administrador",
+  promotor: "Promotor",
   director_comercial: "Director comercial",
   comercial: "Comercial",
   tecnico: "Técnico",
@@ -101,41 +104,42 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
   if (!role) return false;
 
   const moduleAccess: Record<string, readonly UserRole[]> = {
-    "/dashboard": ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
-    "/agenda": ["administrador", "director_comercial", "comercial", "tecnico"],
-    "/whatsapp": ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
-    "/nora": ["administrador", "director_comercial", "comercial", "tecnico"],
-    "/visits": ["administrador", "director_comercial", "comercial", "tecnico"],
-    "/expenses": ["administrador", "director_comercial", "comercial", "facturacion"],
-    "/follow-ups": ["administrador", "director_comercial", "comercial", "tecnico"],
-    "/customers": ["administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
-    "/opportunities": ["administrador", "director_comercial", "comercial"],
-    "/quotes": ["administrador", "director_comercial", "comercial", "facturacion"],
-    "/orders": ["administrador", "director_comercial", "comercial", "facturacion", "logistica"],
-    "/billing-requests": ["administrador", "director_comercial", "facturacion"],
-    "/invoices": ["administrador", "director_comercial", "facturacion", "comercial"],
-    "/returns": ["administrador", "director_comercial", "facturacion", "comercial"],
-    "/products": ["administrador", "director_comercial", "comercial"],
-    "/price-lists": ["administrador", "director_comercial", "comercial", "facturacion"],
+    "/dashboard": ["administrador", "promotor", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
+    "/agenda": ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
+    "/whatsapp": ["administrador", "promotor", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
+    "/nora": ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
+    "/visits": ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
+    "/expenses": ["administrador", "promotor", "director_comercial", "comercial", "facturacion"],
+    "/follow-ups": ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
+    "/customers": ["administrador", "promotor", "director_comercial", "comercial", "tecnico", "facturacion", "logistica"],
+    "/opportunities": ["administrador", "promotor", "director_comercial", "comercial"],
+    "/quotes": ["administrador", "promotor", "director_comercial", "comercial", "facturacion"],
+    "/orders": ["administrador", "promotor", "director_comercial", "comercial", "facturacion", "logistica"],
+    "/billing-requests": ["administrador", "promotor", "director_comercial", "facturacion"],
+    "/invoices": ["administrador", "promotor", "director_comercial", "facturacion", "comercial"],
+    "/returns": ["administrador", "promotor", "director_comercial", "facturacion", "comercial"],
+    "/products": ["administrador", "promotor", "director_comercial", "comercial"],
+    "/price-lists": ["administrador", "promotor", "director_comercial", "comercial", "facturacion"],
     // Liquidacion de comisiones: direccion ve todas y puede liquidar; un
     // comercial entra a ver solo las suyas (el back le fuerza sellerUserId a su
     // id, espejo de @Roles del CommissionsLedgerController). tecnico,
     // facturacion y logistica no participan.
     // 2026-10-06: modulo OCULTO del front (pantalla/eliminada); la API sigue
     // viva mientras el negocio define la logica de liquidacion.
-    "/reports": ["administrador", "director_comercial", "tecnico"],
+    "/reports": ["administrador", "promotor", "director_comercial", "tecnico"],
     // D5 / C-WEB-8: revisión de pedidos la gobierna el requiredRoles del nav
-    // (theme.ts): solo adm y fac. Sin esta entrada canAccess daba false y el
-    // guard ni siquiera la miraba (cualquier rol con sesión entraba por URL).
-    "/orders/review": ["administrador", "facturacion"],
+    // (theme.ts): adm, promotor y fac. Sin esta entrada canAccess daba false y
+    // el guard ni siquiera la miraba (cualquier rol con sesión entraba por URL).
+    "/orders/review": ["administrador", "promotor", "facturacion"],
     // Direccion ve la operacion completa; un comercial entra a las mismas
     // pantallas pero el back le fuerza `sellerUserId` a su propio id. Espeja el
     // @Roles de AnalyticsController — si aqui se abre y alla no, el usuario
     // entra a una pantalla que solo sabe devolver 403.
-    "/analytics": ["administrador", "director_comercial", "comercial"],
-    "/users": ["administrador"],
-    "/companies": ["administrador", "director_comercial"],
-    "/zones": ["administrador", "director_comercial"],
+    // Promotor entra igual que comercial: el back le fuerza su propio id.
+    "/analytics": ["administrador", "promotor", "director_comercial", "comercial"],
+    "/users": ["administrador", "promotor"],
+    "/companies": ["administrador", "promotor", "director_comercial"],
+    "/zones": ["administrador", "promotor", "director_comercial"],
   };
 
   const allowedRoles = moduleAccess[moduleHref];
@@ -145,31 +149,32 @@ export function canAccess(role: UserRole | null, moduleHref: string): boolean {
 
 /**
  * Repartir cartera es de direccion: un comercial se queda unicamente los
- * clientes que crea el mismo, y no puede reasignarlos ni activarlos. Espeja las
- * guardas de CustomersService.create/update — si aqui se muestra el campo y
- * alla se rechaza, el usuario llena un formulario que solo sabe dar 403.
+ * clientes que crea el mismo, y no puede reasignarlos ni activarlos. El
+ * promotor reparte y reasigna como un administrador. Espeja las guardas de
+ * CustomersService.create/update — si aqui se muestra el campo y alla se
+ * rechaza, el usuario llena un formulario que solo sabe dar 403.
  */
 export function canAssignCustomers(role: UserRole | null): boolean {
-  return role === "administrador" || role === "director_comercial";
+  return role === "administrador" || role === "promotor" || role === "director_comercial";
 }
 
 export function canCreate(role: UserRole | null, entity: "customer" | "opportunity" | "quote" | "visit" | "expense" | "followUp" | "order" | "billingRequest" | "invoice" | "returns" | "report" | "product"): boolean {
   if (!role) return false;
 
   const createAccess: Record<typeof entity, readonly UserRole[]> = {
-    customer: ["administrador", "director_comercial", "comercial"],
-    opportunity: ["administrador", "director_comercial", "comercial"],
-    quote: ["administrador", "director_comercial", "comercial"],
-    visit: ["administrador", "director_comercial", "comercial", "tecnico"],
-    expense: ["administrador", "director_comercial", "comercial"],
-    followUp: ["administrador", "director_comercial", "comercial", "tecnico"],
-    order: ["administrador", "director_comercial", "comercial", "logistica"],
-    billingRequest: ["administrador", "director_comercial", "facturacion"],
-    invoice: ["administrador", "director_comercial", "facturacion"],
-    returns: ["administrador", "director_comercial", "facturacion", "comercial"],
-    report: ["administrador", "director_comercial", "tecnico"],
+    customer: ["administrador", "promotor", "director_comercial", "comercial"],
+    opportunity: ["administrador", "promotor", "director_comercial", "comercial"],
+    quote: ["administrador", "promotor", "director_comercial", "comercial"],
+    visit: ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
+    expense: ["administrador", "promotor", "director_comercial", "comercial"],
+    followUp: ["administrador", "promotor", "director_comercial", "comercial", "tecnico"],
+    order: ["administrador", "promotor", "director_comercial", "comercial", "logistica"],
+    billingRequest: ["administrador", "promotor", "director_comercial", "facturacion"],
+    invoice: ["administrador", "promotor", "director_comercial", "facturacion"],
+    returns: ["administrador", "promotor", "director_comercial", "facturacion", "comercial"],
+    report: ["administrador", "promotor", "director_comercial", "tecnico"],
     // Espeja el @Roles del backend en products.controller.
-    product: ["administrador", "director_comercial"],
+    product: ["administrador", "promotor", "director_comercial"],
   };
 
   return createAccess[entity].includes(role);

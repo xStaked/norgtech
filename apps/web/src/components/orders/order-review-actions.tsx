@@ -36,7 +36,7 @@ interface OrderReviewActionsProps {
   items: ReviewItem[];
 }
 
-const reviewRoles = ["administrador", "facturacion"] as const;
+const reviewRoles = ["administrador", "promotor", "facturacion"] as const;
 
 export function OrderReviewActions({ orderId, approvalStatus, items }: OrderReviewActionsProps) {
   const router = useRouter();

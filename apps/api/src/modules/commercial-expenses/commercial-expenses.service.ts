@@ -60,6 +60,8 @@ const controlRoles: UserRole[] = [
   UserRole.administrador,
   UserRole.director_comercial,
   UserRole.facturacion,
+  // Plan rol-promotor: rol de control sobre gastos ajenos.
+  UserRole.promotor,
 ];
 
 const commercialExpenseInclude = {

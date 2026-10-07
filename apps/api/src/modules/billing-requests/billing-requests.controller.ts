@@ -24,21 +24,21 @@ export class BillingRequestsController {
   constructor(private readonly billingRequestsService: BillingRequestsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "facturacion", "promotor")
   @Get()
   findAll(@Query("status") status?: BillingRequestStatus, @Query("companyId") companyId?: string) {
     return this.billingRequestsService.findAll(status, companyId);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "facturacion", "promotor")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.billingRequestsService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "facturacion", "promotor")
   @Post()
   createDirect(
     @CurrentUser() user: AuthUser,
@@ -54,7 +54,7 @@ export class BillingRequestsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "facturacion", "promotor")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,

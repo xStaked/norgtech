@@ -36,12 +36,16 @@ const invoiceRoles = [
   "director_comercial",
   "facturacion",
   "comercial",
+  // Plan rol-promotor: gestiona facturacion como admin,
+  // sin analitica ajena.
+  "promotor",
 ] as const;
 
 const controlRoles = [
   "administrador",
   "director_comercial",
   "facturacion",
+  "promotor",
 ] as const;
 
 const validationPipe = new ValidationPipe({

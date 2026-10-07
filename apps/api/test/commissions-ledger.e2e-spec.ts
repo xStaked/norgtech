@@ -176,6 +176,19 @@ describe("Commissions ledger (liquidacion)", () => {
     return true;
   }
 
+  /**
+   * Ultima captura del where de `commission.findMany`: a prueba de
+   * reordenamientos o GETs extra (el login no captura). Falla explicito si el
+   * request no llego a prisma, en vez de leer una captura rancia.
+   */
+  function lastWhere<T>(): T {
+    const captured = whereCaptures[whereCaptures.length - 1];
+    if (!captured) {
+      throw new Error("sin capturas de where: el GET no llego a prisma");
+    }
+    return captured as T;
+  }
+
   beforeAll(async () => {
     const prismaStub = {
       user: {
@@ -271,7 +284,7 @@ describe("Commissions ledger (liquidacion)", () => {
         .set(authHeader(token))
         .expect(200);
 
-      const where = whereCaptures[0] as { sellerUserId?: string };
+      const where = lastWhere<{ sellerUserId?: string }>();
       expect(where.sellerUserId).toBe(sellerId);
 
       const ledger = response.body as Array<{
@@ -290,6 +303,22 @@ describe("Commissions ledger (liquidacion)", () => {
       expect(ledger[0].invoice.invoiceNumber).toBe("FV-1");
     });
 
+    it("forces sellerUserId to the authenticated promotor, ignoring the query param (plan rol-promotor)", async () => {
+      const promotorId = MOCK_USERS[UserRole.promotor].id;
+      const token = await loginAs(app, UserRole.promotor);
+
+      const response = await request(app.getHttpServer())
+        .get(`/commissions?sellerUserId=${otherSellerId}`)
+        .set(authHeader(token))
+        .expect(200);
+
+      const where = lastWhere<{ sellerUserId?: string }>();
+      expect(where.sellerUserId).toBe(promotorId);
+
+      // El seed no tiene filas del promotor: ninguna fila ajena se cuela.
+      expect(response.body).toEqual([]);
+    });
+
     it("lets an administrador see every seller and filter by sellerUserId", async () => {
       const token = await loginAs(app, UserRole.administrador);
 
@@ -306,7 +335,7 @@ describe("Commissions ledger (liquidacion)", () => {
       expect(filtered.body).toHaveLength(1);
       expect(filtered.body[0].id).toBe("commission-2");
 
-      const where = whereCaptures[1] as { sellerUserId?: string };
+      const where = lastWhere<{ sellerUserId?: string }>();
       expect(where.sellerUserId).toBe(otherSellerId);
     });
 
@@ -322,9 +351,9 @@ describe("Commissions ledger (liquidacion)", () => {
         response.body.map((item: { id: string }) => item.id).sort(),
       ).toEqual(["commission-1", "commission-2", "commission-3", "commission-4"]);
 
-      const where = whereCaptures[0] as {
+      const where = lastWhere<{
         payment?: { paymentDate?: { gte?: Date; lte?: Date } };
-      };
+      }>();
       expect(where.payment?.paymentDate?.gte?.toISOString()).toBe(
         "2026-06-01T05:00:00.000Z",
       );
@@ -408,6 +437,15 @@ describe("Commissions ledger (liquidacion)", () => {
 
     it("rejects comercial with 403 (only admin/director liquidate)", async () => {
       const token = await loginAs(app, UserRole.comercial);
+
+      await request(app.getHttpServer())
+        .patch("/commissions/commission-1/paid")
+        .set(authHeader(token))
+        .expect(403);
+    });
+
+    it("rejects promotor with 403 on mark-paid (read-only, plan rol-promotor)", async () => {
+      const token = await loginAs(app, UserRole.promotor);
 
       await request(app.getHttpServer())
         .patch("/commissions/commission-1/paid")

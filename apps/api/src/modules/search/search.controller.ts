@@ -11,7 +11,7 @@ export class SearchController {
   constructor(private readonly searchService: SearchService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica")
+  @Roles("administrador", "director_comercial", "comercial", "tecnico", "facturacion", "logistica", "promotor")
   @Get()
   search(@CurrentUser() user: AuthUser, @Query("q") q = "") {
     return this.searchService.search(user, q);

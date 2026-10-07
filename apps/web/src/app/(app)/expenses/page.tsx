@@ -111,7 +111,7 @@ function countByStatus(rows: ExpenseRow[], status: string) {
 }
 
 function canExportExpenses(role: UserRole | null) {
-  return role === "administrador" || role === "director_comercial" || role === "facturacion";
+  return role === "administrador" || role === "promotor" || role === "director_comercial" || role === "facturacion";
 }
 
 const columns: readonly DataTableColumn<ExpenseRow>[] = [

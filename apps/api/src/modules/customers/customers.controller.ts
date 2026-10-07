@@ -27,7 +27,7 @@ export class CustomersController {
   constructor(private readonly customersService: CustomersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial")
+  @Roles("administrador", "comercial", "director_comercial", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -43,7 +43,7 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica", "promotor")
   @Get()
   findAll(
     @CurrentUser() user: AuthUser,
@@ -53,14 +53,14 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "tecnico", "facturacion", "logistica", "promotor")
   @Get(":id")
   findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.customersService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Patch(":id")
   update(
     @CurrentUser() user: AuthUser,
@@ -84,6 +84,7 @@ export class CustomersController {
     "tecnico",
     "facturacion",
     "logistica",
+    "promotor",
   )
   // B-API-1: la lectura de zonas sigue la regla de la matriz para leer un
   // cliente (los 6 roles, customers/[id]/page.tsx la pinta) y la consume el
@@ -95,7 +96,7 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Post(":id/zones")
   assignZone(
     @Param("id") id: string,
@@ -105,7 +106,7 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Patch(":id/zones/:customerZoneId")
   updateZone(
     @Param("id") id: string,
@@ -116,7 +117,7 @@ export class CustomersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Delete(":id/zones/:customerZoneId")
   removeZone(
     @Param("id") id: string,

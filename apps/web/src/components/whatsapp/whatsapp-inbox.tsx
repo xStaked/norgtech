@@ -39,7 +39,8 @@ export function WhatsAppInbox({
   const role = getUserRoleFromToken(token);
   const isAgent = role != null && UNICANAL_AGENT_ROLE_SET.has(role);
   // Los unicos roles que no atienden son los supervisores (administrador,
-  // director_comercial): no hay tercera categoria.
+  // promotor, director_comercial): no hay tercera categoria. Promotor es
+  // supervisor por omision: no esta en UNICANAL_AGENT_ROLE_SET.
   const isSupervisor = role != null && !isAgent;
   const myUserId = token ? ((decodeJwtPayload(token)?.sub as string | undefined) ?? null) : null;
 

@@ -19,7 +19,13 @@ const WRITE_ROLES: UserRole[] = [
 ];
 // Liquidacion: los vendedores consultan las suyas; el resto de roles no
 // participa (matriz Frente 0, espeja el @Roles del CommissionsLedgerController).
-const READ_ROLES: UserRole[] = [...WRITE_ROLES, UserRole.comercial];
+// `promotor` lee como comercial: solo sus propias filas (findCommissions
+// se lo fuerza), plan rol-promotor.
+const READ_ROLES: UserRole[] = [
+  ...WRITE_ROLES,
+  UserRole.comercial,
+  UserRole.promotor,
+];
 const PERIOD_TYPES = ["mensual", "trimestral", "anual"];
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -372,7 +378,9 @@ export class CommissionsService {
     }
 
     const sellerUserId =
-      user.role === UserRole.comercial
+      // Un comercial o promotor SIEMPRE ve solo las suyas, mande
+      // lo que mande (mismo patron que resolveFilters en analitica).
+      user.role === UserRole.comercial || user.role === UserRole.promotor
         ? user.id
         : filters.sellerUserId || undefined;
 

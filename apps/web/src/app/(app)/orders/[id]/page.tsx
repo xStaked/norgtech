@@ -168,7 +168,7 @@ export default async function OrderDetailPage({
   const user = await getCurrentUser();
   const role = user?.role ?? null;
 
-  const canEditLogistics = role === "administrador" || role === "logistica";
+  const canEditLogistics = role === "administrador" || role === "promotor" || role === "logistica";
   const nextAction = nextStatusMap[order.status]
     ? `Siguiente acción válida: Avanzar a ${statusLabels[nextStatusMap[order.status]]}`
     : "Pedido completado";

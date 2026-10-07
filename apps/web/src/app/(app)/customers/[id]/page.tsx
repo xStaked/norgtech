@@ -14,7 +14,7 @@ import { CustomerZonesManager } from "@/components/customers/customer-zones-mana
 import { NoraContextLauncher } from "@/components/nora/nora-context-launcher";
 import { apiFetch } from "@/lib/api.server";
 import { getCurrentUser } from "@/lib/auth.server";
-import { canCreate } from "@/lib/auth";
+import { canAssignCustomers, canCreate } from "@/lib/auth";
 
 interface Contact {
   id: string;
@@ -412,7 +412,7 @@ export default async function CustomerDetailPage({
       <CustomerZonesManager
         customerId={id}
         zones={customerZones}
-        canAssign={userRole === "administrador" || userRole === "director_comercial"}
+        canAssign={canAssignCustomers(userRole)}
       />
     </div>
   );

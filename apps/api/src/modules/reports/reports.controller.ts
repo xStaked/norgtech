@@ -25,7 +25,7 @@ export class ReportsController {
   constructor(private readonly reportsService: ReportsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "tecnico")
+  @Roles("administrador", "director_comercial", "tecnico", "promotor")
   @Post("from-visit/:visitId")
   generateFromVisit(
     @CurrentUser() user: AuthUser,
@@ -42,7 +42,7 @@ export class ReportsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "tecnico")
+  @Roles("administrador", "director_comercial", "tecnico", "promotor")
   @Get()
   findAll(
     @Query("customerId") customerId?: string,
@@ -53,14 +53,14 @@ export class ReportsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "tecnico")
+  @Roles("administrador", "director_comercial", "tecnico", "promotor")
   @Get(":id")
   findOne(@Param("id") id: string) {
     return this.reportsService.findOne(id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "tecnico")
+  @Roles("administrador", "director_comercial", "tecnico", "promotor")
   // Throttle fino (fase 3): el render del PDF es costoso por request. El
   // guard global cuenta la petición antes que el handler, así que el 429
   // aparece aunque el reporte no exista.

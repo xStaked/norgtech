@@ -120,12 +120,12 @@ function formatBytes(sizeBytes: number) {
 }
 
 function canReview(role: string | null) {
-  return role === "administrador" || role === "director_comercial" || role === "facturacion";
+  return role === "administrador" || role === "promotor" || role === "director_comercial" || role === "facturacion";
 }
 
 function canEditExpense(userId: string | null, role: string | null, expense: CommercialExpense) {
   if (expense.status !== "pendiente" && expense.status !== "requiere_correccion") return false;
-  if (role === "administrador" || role === "director_comercial" || role === "facturacion") return true;
+  if (role === "administrador" || role === "promotor" || role === "director_comercial" || role === "facturacion") return true;
   return userId === expense.submittedBy.id;
 }
 

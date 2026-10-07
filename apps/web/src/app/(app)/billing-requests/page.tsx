@@ -111,7 +111,7 @@ export default async function BillingRequestsPage({
   }>;
 
   const role = user?.role ?? null;
-  const canAct = role === "administrador" || role === "director_comercial" || role === "facturacion";
+  const canAct = role === "administrador" || role === "promotor" || role === "director_comercial" || role === "facturacion";
 
   const rows: BillingRequestRow[] = billingRequests.map((billingRequest) => ({
     id: billingRequest.id,

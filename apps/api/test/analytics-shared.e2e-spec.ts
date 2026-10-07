@@ -1,16 +1,30 @@
-import { BadRequestException } from "@nestjs/common";
+import { BadRequestException, INestApplication } from "@nestjs/common";
+import { Test, TestingModule } from "@nestjs/testing";
 import { UserRole } from "@prisma/client";
+import request from "supertest";
+import { AppModule } from "../src/app.module";
+import { PrismaService } from "../src/prisma/prisma.service";
 import {
   bucketKey,
   bucketsBetween,
   envelope,
   percent,
   previousYearRange,
+  resolveAsOf,
   resolveFilters,
+  ResolvedFilters,
   returnWhere,
   toCsv,
 } from "../src/modules/analytics/analytics.shared";
+import { SalesService } from "../src/modules/analytics/sales.service";
 import { AuthUser } from "../src/modules/auth/types/authenticated-request";
+import {
+  authHeader,
+  findMockUserByEmail,
+  loginAs,
+  MOCK_USERS,
+  refreshTokenStub,
+} from "./helpers/login-as";
 
 /**
  * Reglas transversales de analitica (docs/analytics-spec.md §2).
@@ -22,6 +36,7 @@ import { AuthUser } from "../src/modules/auth/types/authenticated-request";
 
 const admin: AuthUser = { id: "u-admin", email: "a@x.co", role: UserRole.administrador };
 const seller: AuthUser = { id: "u-seller", email: "s@x.co", role: UserRole.comercial };
+const promotor: AuthUser = { id: "u-promotor", email: "p@x.co", role: UserRole.promotor };
 
 describe("Analitica · reglas compartidas", () => {
   describe("rango y zona horaria", () => {
@@ -61,6 +76,21 @@ describe("Analitica · reglas compartidas", () => {
 
     it("un administrador si puede mirar a un vendedor concreto", () => {
       expect(resolveFilters({ sellerUserId: "u-otro" }, admin).sellerUserId).toBe("u-otro");
+    });
+
+    it("un promotor queda acotado a si mismo aunque pida el id de otro (plan rol-promotor)", () => {
+      const filters = resolveFilters({ sellerUserId: "u-otro" }, promotor);
+      expect(filters.sellerUserId).toBe("u-promotor");
+    });
+
+    it("la envoltura del promotor devuelve el filtro APLICADO, no el pedido", () => {
+      const filters = resolveFilters({ sellerUserId: "u-otro" }, promotor);
+      expect(envelope(filters).filters.sellerUserId).toBe("u-promotor");
+    });
+
+    it("el forzado del promotor tambien aplica en la foto de cartera (resolveAsOf lo hereda)", () => {
+      const { sellerUserId } = resolveAsOf({ sellerUserId: "u-otro" }, promotor);
+      expect(sellerUserId).toBe("u-promotor");
     });
   });
 
@@ -139,5 +169,74 @@ describe("Analitica · reglas compartidas", () => {
       ]);
       expect(csv).toBe('﻿Cliente;Total\n"AV""SA";12.5');
     });
+  });
+});
+
+/**
+ * Nivel HTTP (plan rol-promotor): probar `resolveFilters` puro no basta; este
+ * bloque demuestra que el endpoint EXISTE para promotor (guards reales), que
+ * el controller le pasa EL USUARIO AUTENTICADO al forzado (no el query) y que
+ * la respuesta trae el filtro aplicado para que el front lo pinte.
+ *
+ * AppModule completo con Prisma stubeado (mismo patron que
+ * commissions-ledger) + SalesService espiado que devuelve la envoltura real.
+ */
+describe("Analitica HTTP · promotor acotado a si mismo", () => {
+  let app: INestApplication;
+  let moduleRef: TestingModule;
+  let salesFilters: ResolvedFilters[];
+
+  beforeAll(async () => {
+    salesFilters = [];
+    const prismaStub = {
+      user: {
+        findUnique: async ({ where }: { where: { email?: string; id?: string } }) => {
+          if (where.email) return findMockUserByEmail(where.email);
+          if (where.id) {
+            const found = Object.values(MOCK_USERS).find((user) => user.id === where.id);
+            return found ? { ...found } : null;
+          }
+          return null;
+        },
+      },
+      refreshToken: refreshTokenStub(),
+    };
+
+    moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+      .overrideProvider(PrismaService)
+      .useValue(prismaStub)
+      .overrideProvider(SalesService)
+      .useValue({
+        getSales: async (filters: ResolvedFilters) => {
+          salesFilters.push(filters);
+          return { ...envelope(filters), csvRows: [] };
+        },
+      })
+      .compile();
+
+    app = moduleRef.createNestApplication();
+    await app.init();
+  });
+
+  afterAll(async () => {
+    if (app) {
+      await app.close();
+    }
+  });
+
+  it("GET /analytics/sales?sellerUserId=<ajeno> devuelve 200 con sellerUserId forzado al propio id", async () => {
+    const ownId = MOCK_USERS[UserRole.promotor].id;
+    const otherId = MOCK_USERS[UserRole.comercial].id;
+    const token = await loginAs(app, UserRole.promotor);
+
+    const response = await request(app.getHttpServer())
+      .get(`/analytics/sales?sellerUserId=${otherId}`)
+      .set(authHeader(token))
+      .expect(200);
+
+    // Lo que el front pinta: el filtro APLICADO, no el pedido.
+    expect(response.body.filters.sellerUserId).toBe(ownId);
+    // Lo que el service recibio: el forzado llego intacto.
+    expect(salesFilters[salesFilters.length - 1]?.sellerUserId).toBe(ownId);
   });
 });

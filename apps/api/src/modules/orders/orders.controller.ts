@@ -30,7 +30,7 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "logistica", "promotor")
   @Post("preview")
   preview(
     @Body(
@@ -45,7 +45,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "logistica", "promotor")
   @Post()
   create(
     @CurrentUser() user: AuthUser,
@@ -61,7 +61,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica", "promotor")
   @Get()
   findAll(
     @CurrentUser() user: AuthUser,
@@ -72,21 +72,21 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "facturacion")
+  @Roles("administrador", "facturacion", "promotor")
   @Get("review-queue")
   findReviewQueue() {
     return this.ordersService.findReviewQueue();
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica", "promotor")
   @Get(":id")
   findOne(@CurrentUser() user: AuthUser, @Param("id") id: string) {
     return this.ordersService.findOne(user, id);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "logistica", "promotor")
   @Get(":id/export")
   async exportClientFormat(
     @CurrentUser() user: AuthUser,
@@ -103,7 +103,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "logistica")
+  @Roles("administrador", "comercial", "director_comercial", "logistica", "promotor")
   @Patch(":id/status")
   updateStatus(
     @CurrentUser() user: AuthUser,
@@ -120,7 +120,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "logistica")
+  @Roles("administrador", "logistica", "promotor")
   @Patch(":id/logistics")
   updateLogistics(
     @CurrentUser() user: AuthUser,
@@ -137,7 +137,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "facturacion")
+  @Roles("administrador", "facturacion", "promotor")
   @Patch(":id/approve")
   approveOrder(
     @CurrentUser() user: AuthUser,
@@ -147,7 +147,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "facturacion")
+  @Roles("administrador", "facturacion", "promotor")
   @Patch(":id/reject")
   rejectOrder(
     @CurrentUser() user: AuthUser,
@@ -159,7 +159,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "facturacion")
+  @Roles("administrador", "facturacion", "promotor")
   @Patch(":id/items/:itemId/resolve")
   resolveItem(
     @CurrentUser() user: AuthUser,
@@ -172,7 +172,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "comercial", "director_comercial", "facturacion")
+  @Roles("administrador", "comercial", "director_comercial", "facturacion", "promotor")
   @Post(":id/billing-request")
   createBillingRequest(
     @CurrentUser() user: AuthUser,
@@ -182,7 +182,7 @@ export class OrdersController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "facturacion", "promotor")
   @Post(":id/invoice")
   createInvoiceFromOrder(
     @CurrentUser() user: AuthUser,

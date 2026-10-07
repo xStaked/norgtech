@@ -17,7 +17,7 @@ from typing import Optional
 # Roles que usan el toolset completo. Entre ellos la diferencia es el ALCANCE de
 # los datos, y eso ya lo aplica el API (dashboard.service isSellerScoped,
 # invoices where assignedToUserId, etc.), no la lista de tools.
-_FULL_ROLES = {"administrador", "director_comercial", "comercial"}
+_FULL_ROLES = {"administrador", "director_comercial", "comercial", "promotor"}
 
 # Roles que solo ven un subconjunto. Tecnico entra a /nora, pero no a pedidos,
 # gastos, oportunidades ni productos: clientes (lectura), visitas, seguimientos
@@ -50,13 +50,15 @@ _ROLE_ALLOWLIST: dict[str, set[str]] = {
 # que termina en 403.
 _RESTRICTED: dict[str, set[str]] = {
     # AnalyticsController: direccion ve la operacion completa; un comercial
-    # entra pero el API le fuerza `sellerUserId` a su propio id.
-    "get_analytics": {"administrador", "director_comercial", "comercial"},
+    # entra pero el API le fuerza `sellerUserId` a su propio id. El promotor
+    # entra igual de acotado a si mismo (analytics.shared resolveFilters).
+    "get_analytics": {"administrador", "director_comercial", "comercial", "promotor"},
     # Pega al mismo endpoint que get_analytics, solo que dos veces.
-    "compare_analytics": {"administrador", "director_comercial", "comercial"},
-    # ReportsController.
-    "list_reports": {"administrador", "director_comercial", "tecnico"},
-    "generate_report_from_visit": {"administrador", "director_comercial", "tecnico"},
+    "compare_analytics": {"administrador", "director_comercial", "comercial", "promotor"},
+    # ReportsController: direccion, tecnico y promotor (sin scoping por
+    # vendedor en el service: son reportes de visitas, no desempeño).
+    "list_reports": {"administrador", "director_comercial", "tecnico", "promotor"},
+    "generate_report_from_visit": {"administrador", "director_comercial", "tecnico", "promotor"},
     # DashboardController.getSellerGoals: metas de TODO el equipo.
     "get_team_goals": {"administrador", "director_comercial"},
 }
@@ -93,6 +95,17 @@ _PROMPT_BY_ROLE: dict[str, str] = {
         "oportunidades, y no ve ventas, metas ni cartera. Si te pide algo de "
         "eso, no lo intentes: dilo en una frase y sugiere pedirselo a su "
         "comercial o a direccion comercial."
+    ),
+    "promotor": (
+        "El usuario es PROMOTOR. Ve toda la operacion como un administrador: "
+        "todos los clientes, pedidos, cotizaciones y cartera, sin filtro por "
+        "vendedor. La excepcion es la analitica y el desempeño "
+        "(get_analytics, compare_analytics, get_seller_goal_progress): ahi "
+        "solo ve SU propia gestion mes a mes —ventas, cartera, embudo y "
+        "desempeño— asi que habla en primera persona ('tus ventas', 'tu "
+        "meta'), igual que con un comercial. NO ve metas del equipo "
+        "(get_team_goals) ni cifras de otros vendedores: si las pide, dile "
+        "que eso lo ve direccion comercial."
     ),
 }
 

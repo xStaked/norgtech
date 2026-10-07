@@ -63,9 +63,9 @@ export function shiftDays(date: string, days: number): string {
 /**
  * Normaliza los query params y aplica el forzado por rol.
  *
- * `sellerUserId` NO se toma del query para un comercial: se fuerza al usuario
- * autenticado. Devolvemos el valor aplicado (no el pedido) para que el front
- * pueda pintar la barra de filtros con lo que realmente se uso.
+ * `sellerUserId` NO se toma del query para un comercial o promotor: se fuerza
+ * al usuario autenticado. Devolvemos el valor aplicado (no el pedido) para
+ * que el front pueda pintar la barra de filtros con lo que realmente se uso.
  */
 export function resolveFilters(
   query: AnalyticsFiltersQueryDto,
@@ -92,9 +92,14 @@ export function resolveFilters(
     toDate,
     currency: query.currency ?? "COP",
     companyId: query.companyId ?? null,
-    // Un comercial solo se ve a si mismo, mande lo que mande: este forzado es
-    // lo UNICO que acota sus 4 pantallas (§2.4).
-    sellerUserId: user.role === "comercial" ? user.id : query.sellerUserId ?? null,
+    // Un comercial o promotor solo se ve a si mismo, mande lo que
+    // mande: este forzado es lo UNICO que acota sus 4 pantallas
+    // (§2.4). El promotor entra por el plan rol-promotor con el
+    // mismo alcance que el comercial.
+    sellerUserId:
+      user.role === "comercial" || user.role === "promotor"
+        ? user.id
+        : query.sellerUserId ?? null,
     zoneId: query.zoneId ?? null,
     segmentId: query.segmentId ?? null,
     granularity: query.granularity ?? "month",

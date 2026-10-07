@@ -182,6 +182,14 @@ def test_comercial_conserva_su_apertura_y_no_trae_el_bloque_de_direccion():
     assert "NO hagas tú la resta" not in system
 
 
+def test_promotor_tiene_apertura_propia_y_no_trae_bloque_de_direccion():
+    system = _to_messages(_req(auth=_token("promotor")))[0].content
+
+    assert "Estás hablando con un promotor del equipo por WhatsApp" in system
+    assert "un comercial del equipo" not in system
+    assert "Dirección por WhatsApp" not in system
+
+
 def test_extract_executed_entity_from_create_visit_tool_message():
     payload = {"id": "visit-1", "summary": "Visita seguimiento"}
     msg = ToolMessage(

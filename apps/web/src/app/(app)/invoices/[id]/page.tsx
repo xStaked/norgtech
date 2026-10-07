@@ -94,7 +94,7 @@ function isOverdue(dueDate: string, status: string) {
 }
 
 function isControlRole(role: UserRole | null) {
-  return role === "administrador" || role === "director_comercial" || role === "facturacion";
+  return role === "administrador" || role === "promotor" || role === "director_comercial" || role === "facturacion";
 }
 
 export default async function InvoiceDetailPage({

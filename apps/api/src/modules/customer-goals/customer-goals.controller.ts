@@ -24,7 +24,7 @@ export class CustomerGoalsController {
   constructor(private readonly customerGoalsService: CustomerGoalsService) {}
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Post(":id/goals")
   create(
     @CurrentUser() user: AuthUser,
@@ -48,6 +48,7 @@ export class CustomerGoalsController {
     "tecnico",
     "facturacion",
     "logistica",
+    "promotor",
   )
   @Get(":id/goals")
   findAllByCustomer(@CurrentUser() user: AuthUser, @Param("id") customerId: string) {
@@ -55,7 +56,7 @@ export class CustomerGoalsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial", "comercial")
+  @Roles("administrador", "director_comercial", "comercial", "promotor")
   @Patch(":id/goals/:goalId")
   update(
     @CurrentUser() user: AuthUser,
@@ -73,7 +74,7 @@ export class CustomerGoalsController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles("administrador", "director_comercial")
+  @Roles("administrador", "director_comercial", "promotor")
   @Delete(":id/goals/:goalId")
   remove(
     @Param("id") customerId: string,
@@ -90,6 +91,7 @@ export class CustomerGoalsController {
     "tecnico",
     "facturacion",
     "logistica",
+    "promotor",
   )
   @Get(":id/goal-progress")
   getProgress(

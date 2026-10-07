@@ -20,7 +20,7 @@ import { RATE_LIMITS } from "./rate-limits.constants";
 export class NoraAgentController {
   constructor(private readonly execution: NoraExpenseExecutionService) {}
 
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Post("expenses")
   async createExpense(
     @CurrentUser() user: AuthUser,
@@ -38,7 +38,7 @@ export class NoraAgentController {
   // The broad @Roles list is safe here: the routing service always mints a token
   // scoped to the expense's submitter before calling this endpoint, and
   // CommercialExpensesService.update enforces submitter-or-control-role ownership.
-  @Roles("administrador", "director_comercial", "comercial", "facturacion")
+  @Roles("administrador", "director_comercial", "comercial", "facturacion", "promotor")
   @Patch("expenses/:id")
   async updateExpense(
     @CurrentUser() user: AuthUser,

@@ -169,6 +169,8 @@ describe("RBAC coverage sweep", () => {
     });
 
     if (!found) throw new Error("GET :id/zones no encontrado en CustomersController");
+    // Plan rol-promotor: promotor lee zonas de un cliente
+    // como el resto de roles de la matriz.
     expect((found as { roles: string[] | undefined }).roles).toEqual([
       "administrador",
       "director_comercial",
@@ -176,6 +178,7 @@ describe("RBAC coverage sweep", () => {
       "tecnico",
       "facturacion",
       "logistica",
+      "promotor",
     ]);
   });
 });

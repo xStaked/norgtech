@@ -357,3 +357,12 @@ def test_compare_analytics_cruza_las_filas_de_la_seccion():
     assert [f["clave"] for f in payload["filas"]] == ["Carlos", "Beto", "Ana"]
     assert payload["filas_totales"] == 3
     assert payload["truncado"] is False
+
+
+def test_prompt_analitica_otro_vendedor_solo_direccion():
+    # Fija las frases de alcance para que no vuelvan a decir "solo dirección"
+    # a secas ni a mandar a un comercial/promotor a consultar otro vendedor.
+    from src.prompts.system import NORA_SYSTEM_PROMPT
+
+    assert "comercial y promotor solo la propia" in NORA_SYSTEM_PROMPT
+    assert "solo dirección; un comercial o promotor solo consulta lo propio" in NORA_SYSTEM_PROMPT

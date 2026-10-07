@@ -12,6 +12,9 @@ export const UNICANAL_AGENT_ROLES: readonly UserRole[] = [
 export const UNICANAL_SUPERVISOR_ROLES: readonly UserRole[] = [
   UserRole.administrador,
   UserRole.director_comercial,
+  // Plan rol-promotor: supervisor del unicanal (ve toda la operacion
+  // de WhatsApp, no atiende ni recibe ruteo de atencion).
+  UserRole.promotor,
 ];
 
 export function isSupervisor(role: UserRole): boolean {

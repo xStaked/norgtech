@@ -28,8 +28,8 @@ const nextStatusMap: Record<string, string> = {
   en_transito: "entregado",
 };
 
-const advanceRoles = ["administrador", "director_comercial", "comercial", "logistica"];
-const billRoles = ["administrador", "director_comercial", "facturacion"];
+const advanceRoles = ["administrador", "promotor", "director_comercial", "comercial", "logistica"];
+const billRoles = ["administrador", "promotor", "director_comercial", "facturacion"];
 
 export function OrderActions({ orderId, currentStatus }: OrderActionsProps) {
   const router = useRouter();
