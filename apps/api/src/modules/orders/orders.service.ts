@@ -104,7 +104,16 @@ export class OrdersService {
       throw new NotFoundException("Company not found or inactive");
     }
     if (customer.companyId !== companyId) {
-      throw new BadRequestException("Order company does not match customer company");
+      // El cliente ya define su empresa facturadora: si llega otra, el pedido
+      // quedaria descuadrado con sus facturas. Decir cual es la correcta evita
+      // que el usuario tenga que adivinar entre las empresas del sistema.
+      const customerCompany = await this.prisma.company.findUnique({
+        where: { id: customer.companyId },
+        select: { name: true },
+      });
+      throw new BadRequestException(
+        `La empresa del pedido no coincide con la del cliente. ${customer.displayName} pertenece a ${customerCompany?.name ?? "otra empresa"}; selecciona esa empresa facturadora.`,
+      );
     }
     if (dto.customerZoneId) {
       const customerZone = await this.prisma.customerZone.findUnique({

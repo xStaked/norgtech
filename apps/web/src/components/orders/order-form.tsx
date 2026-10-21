@@ -26,6 +26,7 @@ interface Product {
 interface Customer {
   id: string;
   displayName: string;
+  company?: { id: string; name: string };
 }
 
 interface Opportunity {
@@ -97,6 +98,10 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   const [customerZones, setCustomerZones] = useState<Array<{ id: string; zone: { name: string }; assignedTo: { name: string } | null }>>([]);
   const [selectedCustomerId, setSelectedCustomerId] = useState("");
+  // La empresa facturadora la define el cliente (el backend rechaza cualquier
+  // otra). Se mantiene en estado para seleccionarla sola al elegir cliente y
+  // no obligar al usuario a recordar a que empresa pertenece cada uno.
+  const [companyId, setCompanyId] = useState("");
   // Oportunidad/cotizacion origen: el backend rechaza con 400 si no pertenecen
   // al cliente del pedido (ORD-08). Se filtran por el cliente seleccionado para
   // no ofrecer opciones invalidas, y se controlan por estado para poder limpiar
@@ -150,6 +155,17 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
     [quotes, selectedCustomerId],
   );
 
+  // Si ya hay empresa elegida, el cliente solo puede salir de esa empresa. Sin
+  // empresa se muestran todos, para que quien conoce al cliente pueda empezar
+  // por ahi y la empresa se autoseleccione.
+  const visibleCustomers = useMemo(
+    () =>
+      companyId
+        ? customers.filter((c) => c.company?.id === companyId)
+        : customers,
+    [companyId, customers],
+  );
+
   // Si el cliente cambia despues de elegir origen, la seleccion previa deja de
   // ser valida: se limpia en vez de enviarse y provocar el 400 del backend.
   useEffect(() => {
@@ -168,6 +184,26 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
 
   function addItem() {
     setItems([...items, emptyItem()]);
+  }
+
+  function handleCustomerChange(customerId: string) {
+    setSelectedCustomerId(customerId);
+    const customer = customers.find((c) => c.id === customerId);
+    // Sin cliente no hay empresa valida que preseleccionar.
+    setCompanyId(customer?.company?.id ?? "");
+  }
+
+  function handleCompanyChange(nextCompanyId: string) {
+    setCompanyId(nextCompanyId);
+    if (!nextCompanyId || !selectedCustomerId) return;
+
+    const selected = customers.find((c) => c.id === selectedCustomerId);
+    // Cambiar a otra empresa deja huerfano al cliente ya elegido: se limpia
+    // (y con el, zonas, credito, oportunidad y cotizacion) en vez de enviar
+    // un pedido que el backend va a rechazar.
+    if (selected?.company?.id !== nextCompanyId) {
+      setSelectedCustomerId("");
+    }
   }
 
   function removeItem(index: number) {
@@ -250,7 +286,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
     }));
 
     const body = {
-      companyId: formValue(formData, "companyId"),
+      companyId: companyId || undefined,
       customerZoneId: optionalString(formData.get("customerZoneId")),
       customerId: formValue(formData, "customerId"),
       sellerUserId: optionalString(formData.get("sellerUserId")),
@@ -347,7 +383,17 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
       <FormSection title="Encabezado del pedido">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Empresa facturadora *" htmlFor="companyId">
-            <CompanySelect name="companyId" required />
+            <CompanySelect
+              name="companyId"
+              required
+              value={companyId}
+              onChange={handleCompanyChange}
+            />
+            {!companyId && (
+              <p className="text-xs text-muted-foreground">
+                Se selecciona automáticamente al elegir el cliente
+              </p>
+            )}
           </Field>
           {customerZones.length > 0 && (
             <Field label="Zona de despacho" htmlFor="customerZoneId">
@@ -372,13 +418,26 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
               name="customerId"
               required
               value={selectedCustomerId}
-              onValueChange={setSelectedCustomerId}
+              onValueChange={handleCustomerChange}
               searchPlaceholder="Buscar cliente…"
               options={[
                 { value: "", label: "Seleccionar cliente" },
-                ...customers.map((c) => ({ value: c.id, label: c.displayName })),
+                ...visibleCustomers.map((c) => ({
+                  value: c.id,
+                  label: c.displayName,
+                  // Sin empresa seleccionada la empresa es el dato que ayuda a
+                  // distinguir clientes; con filtro activo seria repetitivo.
+                  ...(companyId ? {} : { meta: c.company?.name }),
+                })),
               ]}
             />
+            {companyId && !selectedCustomerId && (
+              <p className="text-xs text-muted-foreground">
+                {visibleCustomers.length === 0
+                  ? "Esta empresa no tiene clientes disponibles."
+                  : "Mostrando solo clientes de la empresa seleccionada."}
+              </p>
+            )}
             {creditSummary && creditSummary.availableCredit != null && (
               <div
                 style={{

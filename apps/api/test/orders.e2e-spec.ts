@@ -997,7 +997,8 @@ describe("Orders", () => {
       });
 
     expect(response.status).toBe(400);
-    expect(response.body.message).toContain("customer company");
+    expect(response.body.message).toContain("no coincide con la del cliente");
+    expect(response.body.message).toContain("Nortech");
   });
 
   it("snapshots the billing company name from company, not the customer, when omitted", async () => {

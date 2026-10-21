@@ -57,7 +57,7 @@ test("el detalle muestra el vendedor elegido en el formulario", async ({ page, r
 
   // CompanySelect se puebla por fetch: el trigger queda deshabilitado hasta que
   // llegan las empresas, asi que el click de chooseOption ya espera por ellas.
-  await chooseOption(page, selectByName(page, "companyId"), { index: 0 });
+  await chooseOption(page, selectByName(page, "companyId"), { label: "Norgtech" });
   await chooseOption(page, selectByName(page, "customerId"), { label: "La Economia" });
   await chooseOption(page, selectByName(page, "sellerUserId"), { label: SELLER });
 
