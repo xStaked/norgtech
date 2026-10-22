@@ -1,6 +1,7 @@
 import { AccountingCsvButton } from "@/components/invoices/accounting-csv-button";
 import { Button } from "@/components/ui/button";
 import { DataTable, type DataTableColumn } from "@/components/ui/data-table";
+import { DatePicker } from "@/components/ui/date-picker";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { SectionCard } from "@/components/ui/section-card";
@@ -165,14 +166,14 @@ export default async function AccountingPage({
         method="get"
         style={{ display: "flex", alignItems: "end", gap: 12, flexWrap: "wrap" }}
       >
-        <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600 }}>
-          Desde
-          <input type="date" name="from" defaultValue={from} max={today} />
-        </label>
-        <label style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600 }}>
-          Hasta
-          <input type="date" name="to" defaultValue={to} max={today} />
-        </label>
+        <div style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600, minWidth: 170 }}>
+          <label htmlFor="accounting-from">Desde</label>
+          <DatePicker id="accounting-from" name="from" defaultValue={from} max={today} />
+        </div>
+        <div style={{ display: "grid", gap: 4, fontSize: 12, fontWeight: 600, minWidth: 170 }}>
+          <label htmlFor="accounting-to">Hasta</label>
+          <DatePicker id="accounting-to" name="to" defaultValue={to} max={today} />
+        </div>
         <Button type="submit" variant="outline">
           Aplicar
         </Button>

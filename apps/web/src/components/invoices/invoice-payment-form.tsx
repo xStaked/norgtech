@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -122,8 +123,12 @@ export function InvoicePaymentForm({
           <Input name="reference" type="text" placeholder="TRX-12345" />
         </div>
         <div className="grid gap-1">
-          <Label>Fecha de pago</Label>
-          <Input name="paymentDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+          <Label htmlFor="paymentDate">Fecha de pago</Label>
+          <DatePicker
+            id="paymentDate"
+            name="paymentDate"
+            defaultValue={new Date().toISOString().slice(0, 10)}
+          />
         </div>
       </div>
 

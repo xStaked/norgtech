@@ -7,6 +7,7 @@ import { apiFetchClient } from "@/lib/api.client";
 import { formatMoney, formatPercent } from "@/lib/pricing-preview";
 import { usePricingPreview } from "@/lib/use-pricing-preview";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -200,8 +201,8 @@ export function QuoteForm({ customers, opportunities, products }: QuoteFormProps
       </div>
 
       <div className="grid gap-1">
-        <Label>Válida hasta</Label>
-        <Input name="validUntil" type="date" />
+        <Label htmlFor="validUntil">Válida hasta</Label>
+        <DatePicker id="validUntil" name="validUntil" />
       </div>
 
       <Separator className="my-2" />

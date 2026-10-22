@@ -35,6 +35,54 @@ async function loginAsAdmin(page: Page) {
   await expect(page).toHaveURL(/\/dashboard$/);
 }
 
+const MONTH_NAMES = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+async function pickDate(page: Page, label: string, iso: string) {
+  await page.getByLabel(label).click();
+
+  const [year, month, day] = iso.split("-").map(Number);
+  const monthTitle = new Intl.DateTimeFormat("es-CO", {
+    timeZone: "UTC",
+    month: "long",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month - 1, 15)));
+
+  const currentTitle = (await page.getByTestId("date-picker-month").textContent())?.trim() ?? "";
+  const [currentMonthName, currentYearText] = currentTitle.split(" de ");
+  const currentMonth = MONTH_NAMES.indexOf(currentMonthName) + 1;
+  const currentYear = Number(currentYearText);
+  const monthDiff = (year - currentYear) * 12 + (month - currentMonth);
+
+  if (monthDiff !== 0) {
+    const arrow = monthDiff < 0 ? "Mes anterior" : "Mes siguiente";
+    for (let i = 0; i < Math.abs(monthDiff); i++) {
+      await page.getByRole("button", { name: arrow }).click();
+    }
+  }
+  await expect(page.getByTestId("date-picker-month")).toHaveText(monthTitle);
+
+  const dayLabel = new Intl.DateTimeFormat("es-CO", {
+    timeZone: "UTC",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(Date.UTC(year, month - 1, day)));
+  await page.getByRole("button", { name: dayLabel }).click();
+}
+
 test("create order and view logistics section", async ({ page, request }) => {
   await waitForBackend(request);
   const token = await getAdminToken(request);
@@ -77,7 +125,7 @@ test("create order and view logistics section", async ({ page, request }) => {
   await page.goto("/orders/new");
   await chooseOption(page, selectByName(page, "customerId"), { label: customer.displayName });
   await page.getByLabel("Orden de compra").fill("OC-E2E-001");
-  await page.getByLabel("Fecha del pedido").fill("2026-05-22");
+  await pickDate(page, "Fecha del pedido", "2026-05-22");
   await page.getByLabel("Direccion para despacho").fill("Calle 123 #45-67");
   await page.getByLabel("Solicitante", { exact: true }).fill("Juan Perez");
   await chooseOption(page, page.getByTestId("product-select"), { label: product.name });
@@ -91,7 +139,7 @@ test("create order and view logistics section", async ({ page, request }) => {
   await expect(page.getByRole("heading", { name: "Logística" })).toBeVisible();
 
   await page.getByRole("button", { name: "Editar" }).click();
-  await page.locator('input[type="date"]').fill("2026-05-15");
+  await pickDate(page, "Fecha del pedido", "2026-05-15");
   await page.getByRole("button", { name: "Guardar" }).click();
 
   // Verify we returned to view mode (Editar button visible again)
@@ -141,7 +189,7 @@ test("advance order status and create billing request", async ({ page, request }
 
   await page.goto("/orders/new");
   await chooseOption(page, selectByName(page, "customerId"), { label: customer.displayName });
-  await page.getByLabel("Fecha del pedido").fill("2026-05-22");
+  await pickDate(page, "Fecha del pedido", "2026-05-22");
   await page.getByLabel("Solicitante", { exact: true }).fill("Ana Gomez");
   await chooseOption(page, page.getByTestId("product-select"), { label: product.name });
   await page.getByRole("button", { name: "Guardar pedido" }).click();

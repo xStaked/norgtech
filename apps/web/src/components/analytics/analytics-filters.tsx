@@ -3,6 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Calendar, Info } from "lucide-react";
 import type { AnalyticsFilterOptions, FilterOption } from "@/lib/analytics";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select } from "@/components/ui/select";
 
 /**
@@ -86,22 +87,20 @@ export function AnalyticsFilters({
       {mode === "range" ? (
         <div className="flex items-center gap-2 rounded-lg border border-input bg-card px-2.5 py-1">
           <Calendar className="h-[15px] w-[15px] text-primary" aria-hidden="true" />
-          <input
-            type="date"
+          <DatePicker
+            variant="inline"
             aria-label="Desde"
-            className="bg-transparent text-[12.5px] font-semibold tabular-nums outline-none"
             value={range.from}
             max={range.to}
-            onChange={(event) => setParams({ from: event.target.value })}
+            onChange={(from) => setParams({ from })}
           />
           <span className="text-muted-foreground">–</span>
-          <input
-            type="date"
+          <DatePicker
+            variant="inline"
             aria-label="Hasta"
-            className="bg-transparent text-[12.5px] font-semibold tabular-nums outline-none"
             value={range.to}
             min={range.from}
-            onChange={(event) => setParams({ to: event.target.value })}
+            onChange={(to) => setParams({ to })}
           />
         </div>
       ) : (
@@ -110,12 +109,11 @@ export function AnalyticsFilters({
           <span className="text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground">
             Al
           </span>
-          <input
-            type="date"
+          <DatePicker
+            variant="inline"
             aria-label="Fecha de corte"
-            className="bg-transparent text-[12.5px] font-semibold tabular-nums outline-none"
             value={asOf ?? range.to}
-            onChange={(event) => setParams({ asOf: event.target.value })}
+            onChange={(value) => setParams({ asOf: value })}
           />
         </div>
       )}

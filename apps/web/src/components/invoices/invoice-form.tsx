@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetchClient } from "@/lib/api.client";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -141,12 +142,16 @@ export function InvoiceForm({
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="grid gap-1">
-          <Label>Fecha de emision</Label>
-          <Input name="issueDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} />
+          <Label htmlFor="issueDate">Fecha de emision</Label>
+          <DatePicker
+            id="issueDate"
+            name="issueDate"
+            defaultValue={new Date().toISOString().slice(0, 10)}
+          />
         </div>
         <div className="grid gap-1">
-          <Label>Fecha de vencimiento</Label>
-          <Input name="dueDate" type="date" />
+          <Label htmlFor="dueDate">Fecha de vencimiento</Label>
+          <DatePicker id="dueDate" name="dueDate" />
         </div>
       </div>
 

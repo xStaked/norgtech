@@ -7,8 +7,10 @@ import { CalendarDaysIcon, ChevronDownIcon, ChevronLeftIcon, ChevronRightIcon } 
 import { cn } from "@/lib/utils";
 import {
   addMonths,
+  daysInMonth,
   formatDateShort,
   formatMonthTitle,
+  isoFromParts,
   monthGrid,
   parseIsoDate,
   todayIso,
@@ -40,6 +42,14 @@ export interface DatePickerProps {
   size?: keyof typeof TRIGGER_SIZE;
   disabled?: boolean;
   required?: boolean;
+  /** Límites ISO inclusivos: las fechas fuera del rango no se pueden elegir. */
+  min?: string;
+  max?: string;
+  /**
+   * `inline` quita borde e iconos para usar el picker dentro de una barra de
+   * filtros que ya tiene su propio contenedor visual.
+   */
+  variant?: "default" | "inline";
   className?: string;
   "aria-label"?: string;
   "data-testid"?: string;
@@ -57,6 +67,9 @@ export function DatePicker({
   size = "sm",
   disabled = false,
   required = false,
+  min,
+  max,
+  variant = "default",
   className,
   "aria-label": ariaLabel,
   "data-testid": testId,
@@ -72,6 +85,35 @@ export function DatePicker({
 
   const selected = current ? parseIsoDate(current) : null;
   const today = todayIso();
+
+  const isOutOfRange = (iso: string) =>
+    Boolean((min && iso < min) || (max && iso > max));
+
+  const clampToRange = (iso: string) => {
+    if (min && iso < min) return min;
+    if (max && iso > max) return max;
+    return iso;
+  };
+
+  // Solo se bloquea el salto cuando el mes vecino completo queda fuera del
+  // rango; si tiene algún día válido, se deja navegar.
+  const canGoPrevious = (year: number, month: number) => {
+    if (!min) return true;
+    const previous = addMonths(year, month, -1);
+    const end = isoFromParts(
+      previous.year,
+      previous.month,
+      daysInMonth(previous.year, previous.month),
+    );
+    return !end || end >= min;
+  };
+
+  const canGoNext = (year: number, month: number) => {
+    if (!max) return true;
+    const next = addMonths(year, month, 1);
+    const start = isoFromParts(next.year, next.month, 1);
+    return !start || start <= max;
+  };
 
   const commit = (iso: string) => {
     if (!isControlled) setInternalValue(iso);
@@ -90,7 +132,8 @@ export function DatePicker({
       onOpenChange={(next) => {
         if (next) {
           const anchor =
-            (current ? parseIsoDate(current) : null) ?? parseIsoDate(todayIso());
+            parseIsoDate(clampToRange(current || todayIso())) ??
+            parseIsoDate(todayIso());
           if (anchor) setView({ year: anchor.year, month: anchor.month });
         }
         setOpen(next);
@@ -111,29 +154,51 @@ export function DatePicker({
         // clases de estado disabled del sistema apliquen, el atributo va aquí.
         data-disabled={disabled ? "" : undefined}
         className={cn(
-          "group/trigger flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-input bg-transparent px-2.5 text-left transition-colors outline-none dark:bg-input/30",
-          "hover:not-data-disabled:border-[#c7d3df] hover:not-data-disabled:bg-muted/60",
-          "focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/10",
-          "data-[popup-open]:border-primary data-[popup-open]:ring-3 data-[popup-open]:ring-primary/10",
-          "data-disabled:cursor-not-allowed data-disabled:bg-muted data-disabled:text-muted-foreground data-disabled:opacity-70",
-          "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/10",
-          TRIGGER_SIZE[size],
+          "group/trigger flex w-full min-w-0 items-center text-left transition-colors outline-none",
+          variant === "inline"
+            ? cn(
+                "h-6 w-auto cursor-pointer gap-1 rounded-md bg-transparent px-0 text-[12.5px] font-semibold tabular-nums",
+                "text-foreground hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/40",
+                "data-disabled:cursor-not-allowed data-disabled:opacity-50",
+              )
+            : cn(
+                "gap-2.5 rounded-lg border border-input bg-transparent px-2.5 dark:bg-input/30",
+                "hover:not-data-disabled:border-[#c7d3df] hover:not-data-disabled:bg-muted/60",
+                "focus-visible:border-primary focus-visible:ring-3 focus-visible:ring-primary/10",
+                "data-[popup-open]:border-primary data-[popup-open]:ring-3 data-[popup-open]:ring-primary/10",
+                "data-disabled:cursor-not-allowed data-disabled:bg-muted data-disabled:text-muted-foreground data-disabled:opacity-70",
+                "aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/10",
+                TRIGGER_SIZE[size],
+              ),
           className,
         )}
       >
-        <CalendarDaysIcon aria-hidden="true" className="size-[13px] shrink-0 text-muted-foreground" />
-        <span
-          className={cn(
-            "min-w-0 flex-1 truncate tabular-nums",
-            selected ? "font-semibold text-foreground" : "text-muted-foreground",
-          )}
-        >
-          {selected ? formatDateShort(current) : placeholder}
-        </span>
-        <ChevronDownIcon
-          aria-hidden="true"
-          className="size-[15px] shrink-0 text-muted-foreground transition-transform group-data-[popup-open]/trigger:rotate-180"
-        />
+        {variant === "inline" ? (
+          <span
+            className={cn(
+              "min-w-0 flex-1 truncate tabular-nums",
+              !selected && "text-muted-foreground",
+            )}
+          >
+            {selected ? formatDateShort(current) : placeholder}
+          </span>
+        ) : (
+          <>
+            <CalendarDaysIcon aria-hidden="true" className="size-[13px] shrink-0 text-muted-foreground" />
+            <span
+              className={cn(
+                "min-w-0 flex-1 truncate tabular-nums",
+                selected ? "font-semibold text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {selected ? formatDateShort(current) : placeholder}
+            </span>
+            <ChevronDownIcon
+              aria-hidden="true"
+              className="size-[15px] shrink-0 text-muted-foreground transition-transform group-data-[popup-open]/trigger:rotate-180"
+            />
+          </>
+        )}
       </Popover.Trigger>
 
       <Popover.Portal>
@@ -146,18 +211,23 @@ export function DatePicker({
               <button
                 type="button"
                 aria-label="Mes anterior"
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-[#f2f6fa] hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-accent/15"
+                disabled={!view || !canGoPrevious(view.year, view.month)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-[#f2f6fa] hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:hover:bg-accent/15"
                 onClick={() => view && setView(addMonths(view.year, view.month, -1))}
               >
                 <ChevronLeftIcon className="size-[15px]" />
               </button>
-              <div className="min-w-0 truncate text-[12.5px] font-bold text-foreground">
+              <div
+                data-testid="date-picker-month"
+                className="min-w-0 truncate text-[12.5px] font-bold text-foreground"
+              >
                 {view ? formatMonthTitle(view.year, view.month) : ""}
               </div>
               <button
                 type="button"
                 aria-label="Mes siguiente"
-                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-[#f2f6fa] hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-accent/15"
+                disabled={!view || !canGoNext(view.year, view.month)}
+                className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors outline-none hover:bg-[#f2f6fa] hover:text-foreground focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:hover:bg-accent/15"
                 onClick={() => view && setView(addMonths(view.year, view.month, 1))}
               >
                 <ChevronRightIcon className="size-[15px]" />
@@ -177,11 +247,16 @@ export function DatePicker({
 
             {/* Grilla fija de 42 celdas (6 semanas): la altura no salta entre meses. */}
             <div className="grid grid-cols-7 gap-y-0.5">
-              {cells.map((cell) =>
-                cell.inMonth ? (
+              {cells.map((cell) => {
+                if (!cell.inMonth) {
+                  return <span key={cell.iso} aria-hidden="true" className="h-7" />;
+                }
+                const outOfRange = isOutOfRange(cell.iso);
+                return (
                   <button
                     key={cell.iso}
                     type="button"
+                    disabled={outOfRange}
                     aria-label={
                       cell.iso === today
                         ? `Hoy, ${formatDateShort(cell.iso)}${cell.iso === current ? ", seleccionada" : ""}`
@@ -192,7 +267,7 @@ export function DatePicker({
                     aria-current={cell.iso === today ? "date" : undefined}
                     className={cn(
                       "flex h-7 cursor-pointer items-center justify-center rounded-md text-[12px] tabular-nums transition-colors outline-none select-none",
-                      "hover:bg-[#f2f6fa] focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-accent/15",
+                      "hover:bg-[#f2f6fa] focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:text-muted-foreground/35 dark:hover:bg-accent/15",
                       cell.iso === current
                         ? "bg-primary font-bold text-primary-foreground"
                         : cn(
@@ -204,16 +279,15 @@ export function DatePicker({
                   >
                     {cell.day}
                   </button>
-                ) : (
-                  <span key={cell.iso} aria-hidden="true" className="h-7" />
-                ),
-              )}
+                );
+              })}
             </div>
 
             <div className="mt-1 flex items-center justify-between border-t border-border pt-1">
               <button
                 type="button"
-                className="inline-flex items-center rounded-md px-1.5 py-1 text-[11.5px] font-bold text-primary transition-colors outline-none hover:bg-[#f2f6fa] focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-accent/15"
+                disabled={isOutOfRange(today)}
+                className="inline-flex items-center rounded-md px-1.5 py-1 text-[11.5px] font-bold text-primary transition-colors outline-none hover:bg-[#f2f6fa] focus-visible:ring-2 focus-visible:ring-primary/40 disabled:pointer-events-none disabled:opacity-40 dark:hover:bg-accent/15"
                 onClick={() => commit(todayIso())}
               >
                 Hoy

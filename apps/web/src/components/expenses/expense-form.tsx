@@ -4,6 +4,7 @@ import { formValue } from "@/lib/utils";
 import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -281,13 +282,13 @@ export function ExpenseForm({ customers, visits, initialValues }: ExpenseFormPro
       <input type="hidden" name="extractionModel" value={extractionModel} />
 
       <div className="grid gap-1">
-        <Label>Fecha *</Label>
-        <Input
+        <Label htmlFor="expenseDate">Fecha *</Label>
+        <DatePicker
+          id="expenseDate"
           name="expenseDate"
-          type="date"
           required
           value={expenseDate}
-          onChange={(event) => setExpenseDate(event.target.value)}
+          onChange={setExpenseDate}
         />
       </div>
 

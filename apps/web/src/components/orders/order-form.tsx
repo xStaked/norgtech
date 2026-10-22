@@ -14,6 +14,7 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { CompanySelect } from "@/components/companies/company-select";
+import { DatePicker } from "@/components/ui/date-picker";
 
 interface Product {
   id: string;
@@ -476,10 +477,10 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             <Input id="purchaseOrderNumber" name="purchaseOrderNumber" />
           </Field>
           <Field label="Fecha del pedido" htmlFor="orderDate">
-            <Input id="orderDate" name="orderDate" type="date" />
+            <DatePicker id="orderDate" name="orderDate" />
           </Field>
           <Field label="Fecha de entrega solicitada" htmlFor="requestedDeliveryDate">
-            <Input id="requestedDeliveryDate" name="requestedDeliveryDate" type="date" />
+            <DatePicker id="requestedDeliveryDate" name="requestedDeliveryDate" />
           </Field>
           <Field label="Empresa facturadora" htmlFor="billingCompanyNameSnapshot">
             <Input id="billingCompanyNameSnapshot" name="billingCompanyNameSnapshot" />
@@ -781,7 +782,7 @@ export function OrderForm({ customers, opportunities, products, quotes }: OrderF
             <Input id="approvalName" name="approvalName" />
           </Field>
           <Field label="Fecha de revision" htmlFor="reviewDate">
-            <Input id="reviewDate" name="reviewDate" type="date" />
+            <DatePicker id="reviewDate" name="reviewDate" />
           </Field>
           <Field label="Elaboro" htmlFor="preparedByName">
             <Input id="preparedByName" name="preparedByName" />
