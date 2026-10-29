@@ -554,7 +554,11 @@ export class WhatsAppService {
     }
     this.assertCanAccess(user, conversation);
 
-    return this.orderAutomation.process(user, conversationId, dto);
+    // Un pedido que crea un COMERCIAL nace valido (se sube como pedido y no
+    // espera aprobacion); el resto sigue yendo a la cola de revision.
+    return this.orderAutomation.process(user, conversationId, dto, {
+      sendToReview: user.role !== UserRole.comercial,
+    });
   }
 
   async createOrderFromCase(user: AuthUser, conversationId: string, caseId: string) {
@@ -633,7 +637,17 @@ export class WhatsAppService {
       };
     }
 
-    const result = await this.orderAutomation.process(user, conversationId, dto);
+    // Quien abrio el caso decide si el pedido nace valido: si lo abrio un
+    // COMERCIAL desde su WhatsApp, el pedido se sube como pedido y no espera
+    // aprobacion de nadie. Los casos que abre un cliente externo (createdByUserId
+    // null) siguen pasando por la cola de revision antes de facturar.
+    const createdByComercial = await this.isCreatedByComercial(
+      noraCase.createdByUserId,
+    );
+
+    const result = await this.orderAutomation.process(user, conversationId, dto, {
+      sendToReview: !createdByComercial,
+    });
 
     if (result.decision !== "created") {
       const resetCase = await this.noraCaseService.updateCase(caseId, {
@@ -682,7 +696,10 @@ export class WhatsAppService {
     try {
       await this.sendAgentReply(
         conversationId,
-        this.stringValue(createdResult.reply) ?? "Pedido creado y enviado a revision.",
+        this.stringValue(createdResult.reply) ??
+          (createdByComercial
+            ? "Listo, cree el pedido."
+            : "Pedido creado y enviado a revision."),
       );
     } catch (error) {
       replyDelivery = {
@@ -692,6 +709,24 @@ export class WhatsAppService {
     }
 
     return { ...result, case: updatedCase, replyDelivery };
+  }
+
+  /**
+   * El caso lo abrio un comercial (no un cliente externo) y por lo tanto el
+   * pedido nace valido. Los casos que abre el agente de clientes no tienen
+   * createdByUserId: esos si pasan por la cola de revision.
+   */
+  private async isCreatedByComercial(userId: string | null) {
+    if (!userId) {
+      return false;
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true, active: true },
+    });
+
+    return user?.active === true && user.role === UserRole.comercial;
   }
 
   async getNoraConversationContext(conversationId: string) {

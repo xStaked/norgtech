@@ -1547,7 +1547,9 @@ describe("WhatsApp inbox", () => {
     );
   });
 
-  it("creates a review order from a ready Nora order case", async () => {
+  it("creates a valid order from a ready order case opened by a comercial", async () => {
+    // El caso lo abrio un COMERCIAL (createdByUserId = sales-user-id, rol
+    // comercial): el pedido NACE VALIDO, no queda pendiente de revision.
     const outboundCountBefore = messages.filter(
       (message) => String(message.direction) === WhatsAppMessageDirection.outbound,
     ).length;
@@ -1560,7 +1562,7 @@ describe("WhatsApp inbox", () => {
 
     expect(response.body.decision).toBe("created");
     expect(response.body.order).toEqual(
-      expect.objectContaining({ approvalStatus: "en_revision" }),
+      expect.objectContaining({ approvalStatus: null }),
     );
     expect(response.body.case.status).toBe("executed");
     expect(response.body.case.executedEntityType).toBe("Order");
@@ -1572,7 +1574,7 @@ describe("WhatsApp inbox", () => {
       expect.objectContaining({
         conversationId: "conversation-1",
         direction: WhatsAppMessageDirection.outbound,
-        body: expect.stringContaining("Recibimos tu pedido"),
+        body: expect.stringContaining("Listo, cree el pedido"),
         deliveryStatus: "sent",
       }),
     );
@@ -1586,6 +1588,61 @@ describe("WhatsApp inbox", () => {
         status: WhatsAppConversationStatus.resuelto,
       }),
     );
+  });
+
+  it("creates a review order from a ready order case opened by a client", async () => {
+    // El caso lo abrio el agente de CLIENTES (createdByUserId null): el pedido
+    // si tiene que pasar por la cola de revision antes de facturar.
+    const clientCase = {
+      id: "case-order-from-client",
+      conversationId: "conversation-1",
+      parentCaseId: null,
+      type: "order",
+      status: "ready_for_review",
+      extractedData: {
+        customerId: "customer-1",
+        companyRef: "Norgtech",
+        customerZoneId: "customer-zone-1",
+        items: [{ productRef: "FERT-001", quantity: 3 }],
+      },
+      missingFields: [],
+      attachments: [],
+      proposal: null,
+      lastQuestion: null,
+      riskLevel: "high",
+      createdByUserId: null,
+      approvedByUserId: null,
+      executedEntityType: null,
+      executedEntityId: null,
+      createdAt: new Date("2026-06-21T16:40:00.000Z"),
+      updatedAt: new Date("2026-06-21T16:40:00.000Z"),
+    };
+    noraCases.unshift(clientCase);
+
+    try {
+      const response = await request(app.getHttpServer())
+        .post("/whatsapp/conversations/conversation-1/cases/case-order-from-client/create-order")
+        .set("Authorization", `Bearer ${adminToken}`)
+        .send({})
+        .expect(201);
+
+      expect(response.body.decision).toBe("created");
+      expect(response.body.order).toEqual(
+        expect.objectContaining({ approvalStatus: "en_revision" }),
+      );
+      expect(messages).toContainEqual(
+        expect.objectContaining({
+          conversationId: "conversation-1",
+          direction: WhatsAppMessageDirection.outbound,
+          body: expect.stringContaining("Recibimos tu pedido"),
+        }),
+      );
+    } finally {
+      const index = noraCases.findIndex((item) => item.id === clientCase.id);
+      if (index !== -1) {
+        noraCases.splice(index, 1);
+      }
+    }
   });
 
   it("does not create a duplicate order from an already executed Nora order case", async () => {
@@ -1725,7 +1782,7 @@ describe("WhatsApp inbox", () => {
 
       expect(response.body.decision).toBe("created");
       expect(response.body.order).toEqual(
-        expect.objectContaining({ approvalStatus: "en_revision" }),
+        expect.objectContaining({ approvalStatus: null }),
       );
       expect(response.body.case.status).toBe("executed");
       expect(response.body.replyDelivery).toEqual(

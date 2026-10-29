@@ -2,6 +2,7 @@ import json
 from langchain_core.tools import tool
 from langgraph.prebuilt import InjectedState
 from .nestjs_client import NestJSClient, NestJSAPIError
+from ..roles import role_from_token
 from typing import Annotated, Optional
 
 # Por WhatsApp el agente es stateless y NestJS solo le reenvia role+body de los
@@ -284,6 +285,7 @@ async def preview_order(
 async def create_order(
     customer_id: str,
     items: list[dict],
+    conversation_id: Annotated[Optional[str], InjectedState("conversation_id")],
     auth_token: Annotated[str, InjectedState("auth_token")],
     company_id: Optional[str] = None,
     customer_zone_id: Optional[str] = None,
@@ -292,8 +294,15 @@ async def create_order(
     notes: Optional[str] = None,
 ) -> str:
     """
-    Crea un nuevo pedido en el CRM. El pedido queda en revisión (en_revision) para
-    que lo valide la persona encargada antes de facturación.
+    Crea un nuevo pedido en el CRM.
+
+    QUIÉN LO PIDE decide si el pedido queda pendiente de revisión:
+    - Un comercial por WhatsApp (conversation_id presente y rol "comercial"): el
+      pedido NACE VÁLIDO — se sube como pedido, sin cola de revisión y sin
+      esperar que alguien lo apruebe.
+    - Cualquier otro caso (cliente externo, administrador, director comercial,
+      promotor, o el chat del portal): el pedido se crea en revisión para que
+      lo valide la persona encargada antes de facturación.
 
     IMPORTANTE: Antes de llamar esta herramienta DEBES:
     1. Identificar el cliente con search_customers EN ESTE MISMO TURNO (pide nombre
@@ -334,8 +343,14 @@ async def create_order(
     payload = {
         "customerId": customer_id,
         "items": normalized_items,
-        "approvalStatus": "en_revision",
     }
+    # Un pedido que crea un COMERCIAL por WhatsApp NACE VALIDO: se sube como
+    # pedido y no espera aprobacion de nadie. El resto (cliente externo,
+    # administrador, director comercial, promotor y el chat del portal) sigue
+    # pasando por la cola de revision antes de facturar.
+    directo = bool(conversation_id) and role_from_token(auth_token) == "comercial"
+    if not directo:
+        payload["approvalStatus"] = "en_revision"
     # La empresa la hereda el CRM del cliente; solo se manda si el usuario la fijó.
     if company_id:
         payload["companyId"] = company_id
@@ -354,6 +369,12 @@ async def create_order(
         order_id = result.get("id", "desconocido")
         total = result.get("total", "desconocido")
         status = result.get("status", "recibido")
+        if directo:
+            return (
+                f"Pedido creado exitosamente. "
+                f"ID: {order_id}, Estado: {status}, Total: ${total}. "
+                f"Detalle completo: {json.dumps(result, ensure_ascii=False)}"
+            )
         return (
             f"Pedido creado exitosamente y enviado a revisión. "
             f"ID: {order_id}, Estado: {status}, Total: ${total}. "

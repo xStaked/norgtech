@@ -134,6 +134,41 @@ VISIT_DELETE_PROMPT = (
 )
 
 
+def _order_prompt(role: str | None) -> str:
+    """Regla de pedidos por WhatsApp; depende de quién lo pide.
+
+    Solo el rol comercial crea el pedido directo: se sube como pedido y no
+    espera aprobacion de nadie. Los demas roles (administrador, director
+    comercial, promotor) y los clientes lo dejan en revision.
+    """
+    if role == "comercial":
+        return (
+            "\n\n## Pedidos por WhatsApp\n"
+            "Cuando te piden un pedido, el pedido se crea DIRECTO: se sube como "
+            "pedido al CRM y NO queda pendiente de revisión ni esperando que "
+            "alguien lo apruebe antes de facturar. No le digas que quedó en "
+            "revisión, ni que alguien lo va a validar. Confírmale el pedido con "
+            "su número, productos, cantidades y total.\n"
+            "El flujo es el de siempre: pregunta el cliente (search_customers), "
+            "los productos (search_products) y la zona (get_customer_zones), "
+            "muestra el resumen con preview_order y espera su confirmación antes "
+            "de llamar create_order. Esa confirmación es la del COMERCIAL, no una "
+            "aprobación posterior de alguien más."
+        )
+
+    return (
+        "\n\n## Pedidos por WhatsApp\n"
+        "Cuando te piden un pedido, el pedido se crea y queda EN REVISIÓN: lo "
+        "valida la persona encargada antes de facturar. Confírmale el pedido con "
+        "su número, productos, cantidades y total, y menciona que quedó "
+        "pendiente de revisión.\n"
+        "El flujo es el de siempre: pregunta el cliente (search_customers), los "
+        "productos (search_products) y la zona (get_customer_zones), muestra el "
+        "resumen con preview_order y espera su confirmación antes de llamar "
+        "create_order."
+    )
+
+
 class _GeneralState(TypedDict):
     messages: Annotated[list, add_messages]
     auth_token: str
@@ -358,6 +393,7 @@ def _to_messages(request: WhatsAppAgentRequest) -> list:
     system_prompt = (
         NORA_SYSTEM_PROMPT
         + whatsapp_addendum(role)
+        + _order_prompt(role)
         + VISIT_FLOW_PROMPT
         + VISIT_DELETE_PROMPT
         + CUSTOMER_EDIT_PROMPT
@@ -397,6 +433,11 @@ def _extract_executed_entity(messages: list) -> dict | None:
             return {"type": "Customer", "id": data["id"]}
         if msg.name == "create_visit":
             return {"type": "Visit", "id": data["id"]}
+        # El pedido que crea el comercial por WhatsApp es real y ya esta en el
+        # CRM: sin esto el log de acciones queda como "proposed" y no se sabe
+        # que pedido se creo.
+        if msg.name == "create_order":
+            return {"type": "Order", "id": data["id"]}
     return None
 
 

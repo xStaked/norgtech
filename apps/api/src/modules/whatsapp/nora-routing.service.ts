@@ -1772,10 +1772,18 @@ export class NoraRoutingService {
       };
     }
 
+    // Un pedido que pide un COMERCIAL NACE VALIDO: se sube como pedido y no
+    // espera aprobacion de nadie. El resto (cliente externo, administrador,
+    // director comercial, promotor) sigue pasando por la cola de revision
+    // antes de facturar.
+    const initiatedByComercial =
+      "userRole" in sender && sender.userRole === UserRole.comercial;
+
     return this.orderAutomation.process(
       actor,
       conversationId,
       candidate,
+      { sendToReview: !initiatedByComercial },
     ) as Promise<AutomationRoutingResult>;
   }
 

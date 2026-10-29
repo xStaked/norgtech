@@ -74,7 +74,7 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
         )
         return response.model_dump()
 
-    proposals = [_proposal_for_action(action) for action in plan.actions]
+    proposals = [_proposal_for_action(action, request) for action in plan.actions]
     proposals = [proposal for proposal in proposals if proposal is not None]
     is_order_confirmation_turn = bool(
         request.open_case
@@ -112,7 +112,21 @@ def route_whatsapp_message(payload: dict[str, Any] | WhatsAppRouteRequest) -> di
     return response.model_dump()
 
 
-def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
+def _approval_status_for(request: WhatsAppRouteRequest | None) -> str | None:
+    """Solo el rol comercial crea el pedido directo; el resto va a revision.
+
+    Un pedido que pide un COMERCIAL nace valido (se sube como pedido y no
+    espera aprobacion de nadie). El que nace de un cliente externo, o de otro
+    rol del equipo, si tiene que pasar por la cola de revision.
+    """
+    role = request.user.role if request and request.user else None
+    return None if role == "comercial" else "en_revision"
+
+
+def _proposal_for_action(
+    action: PlannedAction,
+    request: WhatsAppRouteRequest | None = None,
+) -> NoraProposal | None:
     if action.domain == "orders" and action.action in (
         "create_draft",
         "resolve_and_create_from_whatsapp",
@@ -138,7 +152,7 @@ def _proposal_for_action(action: PlannedAction) -> NoraProposal | None:
                 "items": items,
                 "notes": action.fields.get("notes"),
                 "sourceConversationId": action.fields.get("source_conversation_id"),
-                "approvalStatus": "en_revision",
+                "approvalStatus": _approval_status_for(request),
             },
             requires_human_review=True,
         )

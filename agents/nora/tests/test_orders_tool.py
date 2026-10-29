@@ -1,9 +1,19 @@
 import asyncio
+import base64
 import json
 from unittest.mock import AsyncMock, patch
 
 from src.tools.orders import get_companies, get_customer_zones, preview_order, create_order
 from src.tools.nestjs_client import NestJSAPIError
+
+
+def _token(role: str = "comercial", sub: str = "u1") -> str:
+    """JWT falso (sin firma valida), igual que en test_roles.py."""
+
+    def seg(obj: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(obj).encode()).decode().rstrip("=")
+
+    return f"Bearer {seg({'alg': 'HS256'})}.{seg({'sub': sub, 'role': role})}.firma"
 
 
 def test_get_companies_lists_active_with_id_name_prefix():
@@ -73,6 +83,7 @@ def _order_items():
 
 
 def test_create_order_sends_company_and_en_revision():
+    """El chat del portal (sin conversation_id) sigue yendo a revision."""
     fake_client = AsyncMock()
     fake_client.post = AsyncMock(return_value={"id": "ord_1", "status": "recibido", "total": 2000})
 
@@ -81,6 +92,7 @@ def test_create_order_sends_company_and_en_revision():
             create_order.ainvoke({
                 "customer_id": "cus_1",
                 "items": _order_items(),
+                "conversation_id": None,
                 "company_id": "co_1",
                 "auth_token": "Bearer scoped",
             })
@@ -93,6 +105,51 @@ def test_create_order_sends_company_and_en_revision():
     assert "customerZoneId" not in payload  # no se pasó zona
     assert payload["items"][0] == {"productId": "p_1", "quantity": 2.0, "unitPrice": 1000.0}
     assert "ord_1" in result
+    assert "revisión" in result
+
+
+def test_create_order_de_un_comercial_por_whatsapp_nace_valido():
+    """Un comercial por WhatsApp sube el pedido directo: sin cola de revision."""
+    fake_client = AsyncMock()
+    fake_client.post = AsyncMock(return_value={"id": "ord_w1", "status": "recibido", "total": 2000})
+
+    with patch("src.tools.orders.NestJSClient", return_value=fake_client):
+        result = asyncio.run(
+            create_order.ainvoke({
+                "customer_id": "cus_1",
+                "items": _order_items(),
+                "conversation_id": "conv_1",
+                "auth_token": _token("comercial"),
+            })
+        )
+
+    _, payload = fake_client.post.await_args.args
+    assert "approvalStatus" not in payload
+    assert "revisión" not in result
+    assert "ord_w1" in result
+
+
+def test_create_order_de_otro_rol_por_whatsapp_sigue_en_revision():
+    """Administrador/director/promotor por WhatsApp siguen pasando por revision."""
+    for role in ("administrador", "director_comercial", "promotor"):
+        fake_client = AsyncMock()
+        fake_client.post = AsyncMock(
+            return_value={"id": "ord_r1", "status": "recibido", "total": 2000}
+        )
+
+        with patch("src.tools.orders.NestJSClient", return_value=fake_client):
+            result = asyncio.run(
+                create_order.ainvoke({
+                    "customer_id": "cus_1",
+                    "items": _order_items(),
+                    "conversation_id": "conv_1",
+                    "auth_token": _token(role),
+                })
+            )
+
+        _, payload = fake_client.post.await_args.args
+        assert payload["approvalStatus"] == "en_revision", role
+        assert "revisión" in result
 
 
 def test_create_order_includes_zone_when_provided():
@@ -104,6 +161,7 @@ def test_create_order_includes_zone_when_provided():
             create_order.ainvoke({
                 "customer_id": "cus_1",
                 "items": _order_items(),
+                "conversation_id": None,
                 "company_id": "co_1",
                 "customer_zone_id": "cz_1",
                 "auth_token": "Bearer scoped",
@@ -123,6 +181,7 @@ def test_create_order_omits_company_so_crm_uses_customer_company():
             create_order.ainvoke({
                 "customer_id": "cus_1",
                 "items": _order_items(),
+                "conversation_id": None,
                 "auth_token": "Bearer scoped",
             })
         )
@@ -141,6 +200,7 @@ def test_create_order_asks_to_research_customer_when_id_is_stale():
             create_order.ainvoke({
                 "customer_id": "cus_inventado",
                 "items": _order_items(),
+                "conversation_id": None,
                 "auth_token": "Bearer scoped",
             })
         )
@@ -187,6 +247,7 @@ def test_create_order_accepts_zero_unit_price():
             create_order.ainvoke({
                 "customer_id": "cus_1",
                 "items": [{"product_id": "p_free", "quantity": 5, "unit_price": 0}],
+                "conversation_id": None,
                 "company_id": "co_1",
                 "auth_token": "Bearer scoped",
             })

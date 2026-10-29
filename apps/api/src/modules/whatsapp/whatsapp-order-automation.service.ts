@@ -43,11 +43,22 @@ export class WhatsAppOrderAutomationService {
     private readonly ordersService: OrdersService,
   ) {}
 
+  /**
+   * Crea el pedido a partir de un candidato de WhatsApp.
+   *
+   * `sendToReview` decide si el pedido nace en la cola de revisión:
+   * - false (lo pide una persona del equipo): el pedido NACE VÁLIDO, se sube
+   *   como pedido y no espera que alguien lo apruebe.
+   * - true (lo pide un cliente externo): el pedido queda pendiente de que lo
+   *   valide la persona encargada antes de facturación.
+   */
   async process(
     user: AuthUser,
     conversationId: string,
     dto: ProcessOrderAutomationDto,
+    options?: { sendToReview?: boolean },
   ) {
+    const sendToReview = options?.sendToReview ?? true;
     const conversation = await this.prisma.whatsAppConversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -124,7 +135,7 @@ export class WhatsAppOrderAutomationService {
       requesterPhone: conversation.phone,
       deliveryInstructions: dto.deliveryInstructions,
       notes: dto.notes,
-      approvalStatus: "en_revision",
+      ...(sendToReview && { approvalStatus: "en_revision" }),
       items: resolvedItems.map(({ candidate, product }) =>
         product
           ? {
@@ -173,7 +184,7 @@ export class WhatsAppOrderAutomationService {
         decision: "created" satisfies AutomationDecision,
         order,
         summary,
-        reply: this.createdReply(order.orderNumber, summary.items),
+        reply: this.createdReply(order.orderNumber, summary.items, sendToReview),
       };
     } catch (error) {
       return {
@@ -343,9 +354,17 @@ export class WhatsAppOrderAutomationService {
   // El numero va en la confirmacion porque es la unica referencia que el
   // cliente puede citarle despues a Nora ("como va el NT-042"): sin el, el
   // pedido existe con consecutivo y el cliente no lo conoce.
-  private createdReply(orderNumber: string | null, items: Array<{ name: string }>) {
+  private createdReply(
+    orderNumber: string | null,
+    items: Array<{ name: string }>,
+    sendToReview: boolean,
+  ) {
     const productNames = items.map((item) => item.name).join(", ");
     const ref = orderNumber ? ` Tu numero de pedido es ${orderNumber}.` : "";
+    if (!sendToReview) {
+      // Lo creo el equipo: el pedido ya esta arriba, no hay nada que aprobar.
+      return `Listo, cree el pedido.${ref} Productos: ${productNames}.`;
+    }
     return `Recibimos tu pedido y queda en revision.${ref} Productos: ${productNames}.`;
   }
 

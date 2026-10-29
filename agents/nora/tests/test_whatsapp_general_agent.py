@@ -199,3 +199,25 @@ def test_extract_executed_entity_from_create_visit_tool_message():
     )
 
     assert _extract_executed_entity([msg]) == {"type": "Visit", "id": "visit-1"}
+
+
+def test_extract_executed_entity_from_create_order_tool_message():
+    payload = {"id": "order-1", "orderNumber": "NT-001", "status": "recibido"}
+    msg = ToolMessage(
+        content=f"Pedido creado exitosamente. Detalle completo: {json.dumps(payload)}",
+        tool_call_id="tc_1",
+        name="create_order",
+    )
+
+    assert _extract_executed_entity([msg]) == {"type": "Order", "id": "order-1"}
+
+
+def test_el_comercial_crea_el_pedido_directo_y_el_resto_lo_deja_en_revision():
+    comercial = _to_messages(_req(auth=_token("comercial")))[0].content
+    assert "se crea DIRECTO" in comercial
+    assert "NO queda pendiente de revisión" in comercial
+
+    for role in ("administrador", "director_comercial", "promotor"):
+        system = _to_messages(_req(auth=_token(role)))[0].content
+        assert "queda EN REVISIÓN" in system, role
+        assert "se crea DIRECTO" not in system, role
